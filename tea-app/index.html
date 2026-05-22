@@ -1,0 +1,3412 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tea-app</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --w:#ffffff;--off:#f2f2f2;--light:#e0e0e0;--mid:#aaaaaa;
+  --muted:#777777;--dark:#333333;--black:#000000;
+  --b:1.5px solid #aaaaaa;--bh:1.5px solid #000000;--r:4px;
+  --fs:1;
+}
+html{font-size:calc(16px * var(--fs))}
+html.dark{
+  --w:#000000;--off:#111111;--light:#222222;--mid:#555555;
+  --muted:#888888;--dark:#cccccc;--black:#ffffff;
+  --b:1.5px solid #555555;--bh:1.5px solid #ffffff;
+}
+html.dark body{background:var(--w);color:var(--black)}
+html.dark .btn-play.is-running{background:var(--black);border-color:var(--black)}
+html.dark .btn-play.is-running svg{stroke:var(--w)}
+html.dark .check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+html.dark .check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+html.dark .check-item.checked .check-mark{border-color:var(--black)}
+html.dark .lib-item.active{background:var(--black);border-color:var(--black)}
+html.dark .lib-item.active .lib-item-name{color:var(--w)}
+html.dark .lib-item.active .lib-item-del svg{stroke:var(--mid)}
+html.dark .lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+html.dark .unit-btn.active{background:var(--black);color:var(--w)}
+html.dark .status-chip.brewing{background:var(--black);color:var(--w);border-color:var(--black)}
+html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){html.dark .btn-lib.primary:hover{background:var(--dark)}}
+@media(hover:hover){html.dark .btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+html.dark input[type="range"]::-webkit-slider-thumb{background:var(--w)}
+
+/* dark mode toggle button */
+#darkToggle{font-size:1rem;width:34px;height:34px;border:var(--bh);border-radius:50%;background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
+@media(hover:hover){#darkToggle:hover{background:var(--light)}}
+
+/* JSONBin sync */
+.sync-group{display:flex;align-items:center;gap:.15rem}
+.btn-sync{font-size:.85rem;width:32px;height:32px;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s;font-family:'DM Mono',monospace}
+@media(hover:hover){.btn-sync:hover{background:var(--light)}}
+.btn-sync:active{background:var(--light)}
+.btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
+@media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
+#statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
+.jb-field{display:flex;flex-direction:column;gap:.3rem}
+.jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
+.jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
+#importModal.from-cloud .jb-import-hide{display:none!important}
+
+/* export/import buttons in lib panel */
+.lib-io{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.1rem}
+.btn-io{flex:1;font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .4rem;cursor:pointer;text-align:center;white-space:nowrap}
+.btn-io:active{background:var(--off);border-color:var(--dark)}
+@media(hover:hover){.btn-io:hover{background:var(--off);border-color:var(--dark)}}
+
+/* modal overlay for export/import */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
+html.dark .modal-bg{background:rgba(255,255,255,.25)}
+.modal-bg.open{display:flex}
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
+.modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+.dup-name-tag{font-size:.68rem;padding:.05rem .28rem;background:rgba(0,0,0,.08);border-radius:3px;color:var(--muted);margin-left:auto;white-space:nowrap;flex-shrink:0}
+.dup-act-row{display:flex;gap:.3rem;padding:.2rem .5rem .1rem}
+.dup-act-btn{font-family:'DM Sans',sans-serif;font-size:.74rem;padding:.15rem .4rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--dark)}
+@media(hover:hover){.dup-act-btn:hover{background:var(--light)}}
+.dup-act-btn.active{background:var(--black);color:var(--w);border-color:var(--black)}
+.merge-diff-row{display:flex;align-items:baseline;gap:.45rem;font-size:.8rem;padding:.1rem 0}
+.merge-diff-key{color:var(--muted);min-width:88px;flex-shrink:0;font-size:.75rem}
+.merge-diff-old{color:var(--muted);text-decoration:line-through;font-family:'DM Mono',monospace}
+.merge-diff-new{color:var(--black);font-weight:500;font-family:'DM Mono',monospace}
+.merge-log-item{display:flex;align-items:center;gap:.42rem;padding:.25rem .4rem;border:var(--b);border-radius:var(--r);font-size:.78rem;cursor:pointer;user-select:none}
+.merge-log-item.sel{background:var(--off)}
+.merge-log-date{font-family:'DM Mono',monospace;color:var(--muted);flex-shrink:0;font-size:.72rem}
+.merge-log-setup{color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
+@media(hover:hover){.modal-item:hover{background:var(--off)}}
+.modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
+.modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
+@media(hover:hover){.modal-btn:hover{background:var(--light)}}
+.modal-btn.primary{background:var(--black);color:var(--w)}
+@media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
+.modal-btn.danger{border-color:#c0392b;color:#c0392b}
+@media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
+html{-webkit-text-size-adjust:100%;overflow-x:clip}
+body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
+
+.app{
+  padding:1.25rem 1.25rem 1.5rem;
+  display:grid;grid-template-columns:210px minmax(0,1fr) 330px;
+  gap:1.25rem;
+  overflow-x:clip;
+  max-width:1480px;
+  margin:0 auto;
+}
+
+/* HEADER */
+header{
+  position:sticky;top:0;z-index:50;background:var(--w);
+  display:flex;align-items:baseline;
+  justify-content:space-between;
+  padding:.9rem 1.25rem .85rem;
+  border-bottom:2.5px solid var(--black);flex-wrap:wrap;gap:.5rem;
+}
+.brand{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.brand h1{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:600;color:var(--black);letter-spacing:-.02em;line-height:1}
+.header-sep{font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:var(--mid);display:none}
+.header-tea-name{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:500;color:var(--dark);font-style:italic;display:none;letter-spacing:-.01em}
+.header-right{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+
+.btn-sm{font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.38rem .8rem;cursor:pointer;transition:background .08s;letter-spacing:.02em}
+.btn-sm:active{background:var(--light)}
+@media(hover:hover){.btn-sm:hover{background:var(--light)}}
+.btn-sm.danger:active{background:var(--black);color:var(--w)}
+@media(hover:hover){.btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+
+/* CARDS */
+.card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1rem 1.15rem;overflow:hidden;position:relative}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:var(--black);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.7rem;padding-bottom:.4rem;border-bottom:1.5px solid var(--black)}
+.card-title-text svg{display:block;stroke:var(--black);width:17px;height:17px}
+
+/* LIBRARY */
+.library-panel{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:.75rem}
+.lib-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1;position:relative}
+.lib-item{display:flex;align-items:center;gap:.35rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer}
+.lib-item:active{background:var(--off);border-color:var(--mid)}
+@media(hover:hover){.lib-item:hover{background:var(--off);border-color:var(--mid)}}
+.lib-item.active{background:var(--black);border-color:var(--black)}
+.lib-item.active .lib-item-name{color:var(--w)}
+.lib-item-name{flex:1;font-size:.85rem;color:var(--black);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-item-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0}
+.lib-item.active .lib-item-del{opacity:.55}
+@media(hover:hover){.lib-item:hover .lib-item-del{opacity:.55}}
+@media(hover:hover){.lib-item-del:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+.lib-item-del svg{width:10px;height:10px;stroke:var(--w);fill:none;stroke-width:2.5;stroke-linecap:round}
+.lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+.lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
+.lib-cat-header{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.55rem .55rem .1rem;margin-top:.1rem}
+.lib-cat-header:first-child{margin-top:0;padding-top:.1rem}
+.lib-sort-btn{background:none;border:var(--bh);border-radius:var(--r);padding:.18rem .42rem;font-family:'DM Sans',sans-serif;font-size:.68rem;color:var(--muted);cursor:pointer;line-height:1.3;letter-spacing:.03em;transition:background .12s,color .12s}
+@media(hover:hover){.lib-sort-btn:hover{background:var(--off);color:var(--black)}}
+.lib-sort-btn.active{background:var(--black);color:var(--w);border-color:var(--black)}
+.lib-controls-row{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}
+.lib-seller-filter{font-family:'DM Sans',sans-serif;font-size:.68rem;color:var(--muted);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.18rem .32rem;cursor:pointer;outline:none;max-width:100%;appearance:none;-webkit-appearance:none;display:none}
+.lib-seller-filter.has-options{display:block}
+.lib-seller-filter.active{color:var(--black);border-color:var(--black)}
+.btn-lib{width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.42rem .6rem;cursor:pointer;text-align:center;letter-spacing:.02em}
+.btn-lib:active{background:var(--light)}
+@media(hover:hover){.btn-lib:hover{background:var(--light)}}
+.btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+.btn-lib.primary:active{background:var(--dark)}
+@media(hover:hover){.btn-lib.primary:hover{background:var(--dark)}}
+
+/* MAIN */
+.main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:1rem}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
+.field{display:flex;flex-direction:column;gap:.3rem}
+.field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none}
+.field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.field select{cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .6rem center;padding-right:1.8rem}
+input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--black);border-radius:1px;outline:none;cursor:pointer;margin:.35rem 0}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--w);border:2.5px solid var(--black);cursor:pointer}
+
+/* CHECKS */
+.checks-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.check-item{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;padding:.42rem .72rem .42rem .5rem;border-radius:var(--r);border:var(--bh);background:var(--w);font-size:.85rem;color:var(--dark)}
+.check-item:active{background:var(--off)}
+@media(hover:hover){.check-item:hover{background:var(--off)}}
+.check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+.check-box{width:17px;height:17px;border:2px solid var(--mid);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--w)}
+.check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+.check-mark{width:9px;height:6px;border-left:2px solid var(--black);border-bottom:2px solid var(--black);transform:rotate(-45deg) translateY(-1px);opacity:0}
+.check-item.checked .check-mark{opacity:1}
+
+/* POUR CONTROL */
+.pour-chips{display:none;margin-top:.4rem;gap:.28rem;align-items:center;flex-wrap:wrap}
+.pour-chips.visible{display:flex}
+.pour-chip{font-size:.73rem;padding:.22rem .55rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--dark);cursor:pointer}
+.pour-chip:active{background:var(--off)}
+@media(hover:hover){.pour-chip:hover:not(.active){background:var(--off)}}
+.pour-chip.active{background:var(--black);color:var(--w);border-color:var(--black)}
+.pour-chip:disabled{opacity:.3;cursor:default}
+/* RINSE SETTINGS */
+.rinse-settings{display:none;margin-top:.7rem;padding:.65rem .85rem;background:var(--off);border:var(--b);border-radius:var(--r);gap:.75rem;align-items:center;flex-wrap:wrap}
+.rinse-settings.visible{display:flex}
+.rinse-label{font-size:.8rem;font-weight:500;color:var(--dark);min-width:95px}
+.rinse-field{display:flex;align-items:center;gap:.35rem;font-size:.8rem;color:var(--muted)}
+.rinse-field input{font-family:'DM Mono',monospace;font-size:.85rem;width:56px;text-align:center;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.24rem .25rem;outline:none}
+.rinse-field input:focus{outline:2px solid var(--black);outline-offset:1px}
+
+/* STEEPS */
+.steeps-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem}
+.btn-add{font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .65rem;cursor:pointer}
+.btn-add:active{background:var(--light)}
+@media(hover:hover){.btn-add:hover{background:var(--light)}}
+.steep-list{display:flex;flex-direction:column;gap:.45rem}
+.steep-row{display:grid;grid-template-columns:24px 1fr 62px 54px 52px 32px 24px;align-items:center;gap:.45rem;background:var(--w);border:var(--b);border-radius:var(--r);padding:.58rem .82rem}
+@media(hover:hover){.steep-row:hover{border-color:var(--dark)}}
+.steep-row.active{border:var(--bh);background:var(--off)}
+.steep-row.done-row{opacity:.4}
+.steep-row.rinse-row{background:var(--off);border-style:dashed;border-color:var(--dark)}
+.steep-row.rinse-row.active{border-style:solid;border-color:var(--black)}
+.steep-row.cool-row{background:var(--off);border-style:dashed;border-color:var(--mid)}
+.steep-row.cool-row.active{border-style:solid;border-color:var(--black)}
+.progress-bar-wrap{grid-column:1/-1;height:2px;background:var(--light);overflow:hidden;display:none;margin-top:-2px}
+.progress-bar-wrap.visible{display:block}
+.progress-bar{height:100%;background:var(--black);transition:width 1s linear}
+.steep-num{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--mid);text-align:center}
+.steep-row.active .steep-num,.steep-row.rinse-row .steep-num{color:var(--black);font-weight:700}
+.steep-label-wrap{display:flex;align-items:center;gap:.3rem;min-width:0}
+.steep-label{font-size:.82rem;color:var(--dark)}
+.steep-time-input{font-family:'DM Mono',monospace;font-size:.86rem;width:100%;text-align:center;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.24rem .15rem;outline:none}
+.steep-time-input:focus{outline:2px solid var(--black);outline-offset:1px}
+.steep-temp-input{font-family:'DM Mono',monospace;font-size:.82rem;width:100%;text-align:center;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.24rem .1rem;outline:none}
+.steep-temp-input:focus{outline:2px solid var(--black);outline-offset:1px;color:var(--black)}
+.steep-temp-input:not(:placeholder-shown){color:var(--black);border-color:var(--dark)}
+.field input:placeholder-shown:not(:focus),input.le-inp:placeholder-shown:not(:focus){background:var(--off);border-color:var(--light)}
+.timer-display{font-family:'DM Mono',monospace;font-size:1rem;font-weight:700;color:var(--black);text-align:center}
+.timer-display.done-time{color:var(--mid);text-decoration:line-through;font-weight:400}
+.btn-play{font-size:0;width:32px;height:32px;border-radius:50%;border:var(--bh);background:var(--w);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.btn-play:active{background:var(--light)}
+@media(hover:hover){.btn-play:hover{background:var(--light)}}
+.btn-play svg{width:12px;height:12px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.btn-play.is-running{background:var(--black)}
+.btn-play.is-running svg{stroke:var(--w)}
+.btn-play.is-done svg{stroke:var(--mid)}
+.btn-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.15}
+.btn-del:active{opacity:1;background:var(--light)}
+@media(hover:hover){.btn-del:hover{opacity:1;background:var(--light)}}
+.btn-del svg{width:11px;height:11px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
+
+/* STATUS CHIP */
+.status-chip{display:inline-flex;align-items:center;gap:.38rem;font-size:.7rem;font-weight:500;letter-spacing:.07em;text-transform:uppercase;padding:.22rem .58rem;border-radius:3px;border:var(--bh);color:var(--dark);background:var(--w);font-family:'DM Sans',sans-serif}
+.status-chip.brewing{background:var(--black);color:var(--w);border-color:var(--black)}
+.status-chip.done{background:var(--off)}
+.dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+/* no pulse animation on e-ink – use simple blink */
+.dot.pulse{animation:blink 2s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* NOTES */
+.notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.card-controls{position:absolute;top:.4rem;right:.5rem;display:flex;align-items:center;gap:.15rem;z-index:2}
+textarea{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:1.8;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.7rem .75rem;outline:none;resize:none;flex:1;min-height:220px}
+textarea:focus{outline:2px solid var(--black);outline-offset:1px}
+textarea::placeholder{color:var(--mid)}
+
+/* UNIT TOGGLE */
+.unit-toggle{display:flex;border:var(--bh);border-radius:var(--r);overflow:hidden}
+.unit-btn{padding:.28rem .55rem;background:var(--w);color:var(--muted);border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.76rem}
+.unit-btn.active{background:var(--black);color:var(--w)}
+
+/* RESPONSIVE */
+@media(max-width:1020px){
+  .app{grid-template-columns:185px 1fr;padding:1rem 1rem 1.5rem}
+  .notes-panel{grid-column:1/-1;grid-row:2}
+}
+@media(max-width:820px){
+  .app{grid-template-columns:1fr;padding:1rem .85rem;gap:.85rem}
+  .library-panel,.main-panel,.notes-panel{grid-column:1!important;grid-row:auto!important}
+  .setup-grid{grid-template-columns:1fr 1fr}
+  header{flex-direction:column;align-items:flex-start;gap:.35rem;padding:.65rem .85rem .65rem}
+  .brand h1{font-size:1.5rem}
+  .header-tea-name,.header-sep{font-size:1.15rem}
+  .header-right{gap:.4rem}
+  /* Lib panel horizontal on mobile */
+  .lib-card{flex-direction:column}
+  #libList{display:flex;flex-wrap:wrap;gap:.3rem}
+  .lib-item{flex:0 0 auto;max-width:calc(50% - .15rem)}
+  /* Steeps: temp on a sub-row on mobile */
+  .col-header-temp{display:none}
+  .steep-row{grid-template-columns:22px minmax(0,1fr) 54px 46px 28px 20px;gap:.3rem .32rem;padding:.48rem .5rem;grid-template-rows:auto auto}
+  .steep-temp-wrapper{grid-column:2/5;grid-row:2}
+  .steep-temp-input{font-size:.76rem;padding:.18rem .25rem;border-color:var(--mid)}
+  .steep-temp-input::placeholder{font-size:.74rem}
+  .progress-bar-wrap{grid-row:3}
+  /* Notes shorter */
+  textarea{min-height:100px}
+}
+@media(max-width:400px){
+  .app{padding:.75rem .65rem;gap:.7rem}
+  .setup-grid{grid-template-columns:1fr}
+  .checks-row{gap:.35rem}
+  .check-item{font-size:.8rem;padding:.35rem .6rem .35rem .42rem}
+  .steep-row{grid-template-columns:18px minmax(0,1fr) 50px 42px 26px 18px;gap:.26rem .28rem;padding:.42rem .42rem}
+}
+
+/* NOTES TABS */
+.notes-tabs{display:flex;border-bottom:var(--bh);margin-bottom:.75rem;gap:0}
+.notes-tab{font-family:'DM Sans',sans-serif;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:.4rem .85rem;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .1s}
+.notes-tab.active{color:var(--black);border-bottom-color:var(--black)}
+@media(hover:hover){.notes-tab:hover:not(.active){color:var(--dark)}}
+.notes-pane{display:none;flex-direction:column;flex:1;min-height:0;gap:.55rem}
+.notes-pane.active{display:flex}
+
+/* SESSION LOG */
+.log-toolbar{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.btn-log{font-family:'DM Sans',sans-serif;font-size:.8rem;font-weight:500;padding:.4rem .75rem;border:var(--bh);border-radius:var(--r);background:var(--black);color:var(--w);cursor:pointer}
+.btn-log:active{background:var(--dark)}
+@media(hover:hover){.btn-log:hover{background:var(--dark)}}
+html.dark .btn-log{background:var(--black);color:var(--w)}
+.log-count{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace}
+.log-list{display:flex;flex-direction:column;gap:.65rem;overflow-y:auto;flex:1;min-height:0;touch-action:pan-y}
+.log-entry{border:var(--b);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.log-entry-head{padding:.5rem .7rem;background:var(--off);border-bottom:var(--b);display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
+.log-entry-meta{display:flex;flex-direction:column;gap:.18rem;min-width:0}
+.log-entry-date{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.log-entry-setup{font-size:.78rem;color:var(--dark);line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.log-entry-del{width:22px;height:22px;border:none;background:none;cursor:pointer;flex-shrink:0;opacity:.3;display:flex;align-items:center;justify-content:center;border-radius:3px}
+@media(hover:hover){.log-entry-del:hover{opacity:1;background:var(--light)}}
+.log-entry-del svg{width:11px;height:11px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
+.log-entry textarea{width:100%;font-family:'DM Sans',sans-serif;font-size:.83rem;line-height:1.65;color:var(--black);background:var(--w);border:none;outline:none;resize:none;overflow-y:hidden;padding:.55rem .7rem;min-height:60px}
+.log-entry textarea::placeholder{color:var(--mid)}
+.log-entry textarea:focus{background:var(--off)}
+.log-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.2rem 0}
+
+/* dirty / undo */
+.btn-lib.dirty{background:var(--w);color:var(--black);border:var(--bh);font-weight:600}
+.btn-lib.dirty::before{content:'! ';color:var(--black)}
+.btn-sm.dirty{font-weight:700}
+.btn-sm.dirty::before{content:'! '}
+.btn-sm.saved{color:var(--muted);border-color:var(--light);pointer-events:none}
+#undoBtn,#redoBtn{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.33rem .65rem;cursor:pointer;transition:all .1s;letter-spacing:.02em}
+@media(hover:hover){#undoBtn:not(:disabled):hover,#redoBtn:not(:disabled):hover{background:var(--light);color:var(--black);border-color:var(--dark)}}
+#undoBtn:disabled,#redoBtn:disabled{opacity:.3;cursor:default}
+
+/* FONT SIZE CONTROL */
+.fs-ctrl{display:flex;align-items:center;border:var(--bh);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.fs-btn{width:28px;height:28px;border:none;background:var(--w);color:var(--black);cursor:pointer;font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fs-btn:active{background:var(--light)}
+@media(hover:hover){.fs-btn:hover{background:var(--light)}}
+.fs-val{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);padding:0 .3rem;border-left:var(--b);border-right:var(--b);line-height:28px;white-space:nowrap;min-width:36px;text-align:center}
+
+/* EXPAND / FULLSCREEN PANEL */
+.card-title{display:flex;align-items:center;gap:.3rem;flex-wrap:nowrap}
+.expand-btn{width:18px;height:18px;border:var(--b);border-radius:2px;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45;transition:opacity .15s;margin-left:.2rem}
+.expand-btn:active{opacity:1;background:var(--off)}
+@media(hover:hover){.expand-btn:hover{opacity:1;background:var(--off)}}
+.expand-btn svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel-expanded{position:fixed!important;inset:0!important;z-index:80;border-radius:0!important;overflow-y:auto;padding:1.1rem 1.3rem!important;background:var(--w)!important;border:none!important;display:flex;flex-direction:column}
+.notes-card.panel-expanded{overflow:hidden}
+.panel-expanded .expand-btn{opacity:1}
+/* Escape hint */
+.expand-esc{font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;margin-left:.4rem;letter-spacing:.04em}
+
+/* PER-PANEL FONT SIZE */
+.pfs-ctrl{display:flex;align-items:center;gap:0;margin-left:.3rem;flex-shrink:0}
+.pfs-btn{width:15px;height:15px;border:var(--b);background:none;color:var(--black);cursor:pointer;font-size:.68rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45}
+.pfs-btn:first-child{border-radius:2px 0 0 2px}
+.pfs-btn:last-child{border-radius:0 2px 2px 0;border-left:none}
+.pfs-btn:active{background:var(--off);opacity:1}
+@media(hover:hover){.pfs-btn:hover{background:var(--off);opacity:1}}
+.pfs-val{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted);padding:0 .12rem;border-top:var(--b);border-bottom:var(--b);line-height:17px;min-width:22px;text-align:center;white-space:nowrap}
+.card-title-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* TEMPLATES */
+.lib-section{margin-top:.5rem;padding-top:.5rem;border-top:var(--b)}
+.lib-section-hd{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem;display:flex;align-items:center;justify-content:space-between}
+.tpl-item{display:flex;align-items:center;gap:.3rem;padding:.35rem .5rem;border-radius:var(--r);border:1.5px solid transparent;font-size:.82rem;color:var(--black);cursor:pointer}
+@media(hover:hover){.tpl-item:hover{background:var(--off);border-color:var(--mid)}}
+.tpl-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tpl-del{width:18px;height:18px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.2;flex-shrink:0;border-radius:2px}
+@media(hover:hover){.tpl-del:hover{opacity:1;background:var(--light)}}
+.tpl-del svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
+.tpl-rename{width:18px;height:18px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.2;flex-shrink:0;border-radius:2px;font-size:.75rem;color:var(--black)}
+@media(hover:hover){.tpl-rename:hover{opacity:1;background:var(--light)}}
+.tpl-empty{font-size:.78rem;color:var(--muted);font-style:italic;padding:.1rem}
+.arch-section-hd{cursor:pointer;user-select:none}
+@media(hover:hover){.arch-section-hd:hover{color:var(--black)}}
+.arch-item{cursor:default!important;opacity:.75}
+@media(hover:hover){.arch-item:hover{opacity:1;background:var(--off);border-color:var(--mid)}}
+.arch-date{font-size:.65rem;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;white-space:nowrap;cursor:pointer;border-radius:2px;padding:.03rem .12rem}
+@media(hover:hover){.arch-date:hover{background:var(--light);color:var(--dark)}}
+.arch-btn{width:20px;height:20px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.3;flex-shrink:0;border-radius:2px;font-size:.8rem;color:var(--black)}
+@media(hover:hover){.arch-btn:hover{opacity:1;background:var(--light)}}
+.arch-item .lib-item-name{cursor:pointer}
+@media(hover:hover){.arch-item .lib-item-name:hover{text-decoration:underline}}
+/* template name modal */
+#tplNameModal .modal{max-width:340px}
+#tplNameInput{width:100%;font-family:'DM Sans',sans-serif;font-size:.95rem;padding:.45rem .65rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)}
+#tplNameInput:focus{outline:2px solid var(--black);outline-offset:1px}
+/* template apply / rename modals */
+.tpl-field-row{display:flex;align-items:center;gap:.45rem;padding:.28rem .4rem;border-radius:3px;cursor:pointer;user-select:none}
+@media(hover:hover){.tpl-field-row:hover{background:var(--off)}}
+.tpl-field-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.tpl-field-lbl{font-size:.82rem;min-width:85px;flex-shrink:0}
+.tpl-field-val{font-family:'DM Mono',monospace;font-size:.73rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+#tplRenameInput{width:100%;font-family:'DM Sans',sans-serif;font-size:.95rem;padding:.45rem .65rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)}
+#tplRenameInput:focus{outline:2px solid var(--black);outline-offset:1px}
+
+/* LOG ENTRY EDIT MODAL */
+.le-chk{display:flex;align-items:center;gap:.32rem;font-size:.83rem;color:var(--dark);cursor:pointer;user-select:none;padding:.2rem .4rem;border-radius:var(--r);border:var(--b)}
+@media(hover:hover){.le-chk:hover{background:var(--off)}}
+.le-chk input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);cursor:pointer;flex-shrink:0}
+.le-chk.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+.le-steep-row{display:flex;align-items:center;gap:.3rem}
+.le-steep-num{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--muted);min-width:16px;text-align:right}
+.le-unit{font-size:.78rem;color:var(--muted);flex-shrink:0}
+.le-steep-del{width:18px;height:18px;border:none;background:none;cursor:pointer;opacity:.35;font-size:.85rem;display:flex;align-items:center;justify-content:center;border-radius:2px;flex-shrink:0;color:var(--black)}
+@media(hover:hover){.le-steep-del:hover{opacity:1;background:var(--light)}}
+.le-inp{font-family:'DM Mono',monospace;font-size:.85rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .3rem;text-align:center;outline:none;width:58px}
+.le-inp:focus{outline:2px solid var(--black);outline-offset:1px}
+.le-inp[type=number]::-webkit-inner-spin-button,.le-inp[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+.le-inp[type=number]{-moz-appearance:textfield;appearance:textfield}
+
+/* LOG ENTRY ACTION BUTTONS */
+.log-entry-actions{display:flex;gap:.3rem;padding:.4rem .7rem;border-top:var(--b);border-bottom:var(--b);flex-wrap:wrap;background:var(--off)}
+.log-act-btn{font-family:'DM Sans',sans-serif;font-size:.72rem;padding:.25rem .5rem;border:var(--b);border-radius:3px;background:var(--w);color:var(--dark);cursor:pointer;white-space:nowrap}
+.log-act-btn:active{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.log-act-btn:hover{background:var(--black);color:var(--w);border-color:var(--black)}}
+.log-act-btn:disabled{opacity:.45;cursor:default}
+.log-no-data{font-size:.7rem;color:var(--muted);font-style:italic}
+
+/* Mobile temp sub-row styling */
+@media(max-width:820px){
+  .steep-temp-wrapper{grid-column:2/5;grid-row:2;display:flex;align-items:center;gap:.3rem}
+  .steep-temp-label{font-size:.65rem;color:var(--muted);white-space:nowrap;letter-spacing:.04em;text-transform:uppercase}
+}
+
+/* Desktop: wrapper transparent, input full size */
+@media(min-width:681px){
+  .steep-temp-wrapper{display:contents}
+  .steep-temp-label{display:none}
+}
+
+/* MOBILE LIB TOGGLE */
+#libToggleBtn{display:inline-flex;align-items:center;font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.35rem .7rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;white-space:nowrap}
+.library-panel.lib-hidden{display:none!important}
+/* NEW MENU DROPDOWN */
+.new-menu{position:fixed;background:var(--w);border:var(--bh);border-radius:var(--r);z-index:200;min-width:160px;flex-direction:column;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.new-menu-item{background:none;border:none;padding:.38rem .72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.8rem;text-align:left;color:var(--black);white-space:nowrap;width:100%;border-radius:0}
+@media(hover:hover){.new-menu-item:hover{background:var(--off)}}
+.new-menu-sep{height:1px;background:var(--light);margin:.2rem 0}
+/* Header mobile wrap */
+@media(max-width:820px){
+  header{flex-wrap:wrap;row-gap:.5rem;padding-bottom:.85rem}
+  .header-right{flex-wrap:wrap;gap:.35rem}
+}
+
+/* WARM ROW */
+.warm-row{cursor:pointer}
+@media(hover:hover){.warm-row:hover{background:var(--off)}}
+.warm-check-box{width:17px;height:17px;border:2px solid var(--mid);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--w)}
+.warm-done .warm-check-box{background:var(--black);border-color:var(--black)}
+.warm-check-mark{width:9px;height:6px;border-left:2px solid var(--w);border-bottom:2px solid var(--w);transform:rotate(-45deg) translateY(-1px);opacity:0}
+.warm-done .warm-check-mark{opacity:1}
+.warm-label{font-size:.85rem;color:var(--dark)}
+.warm-done .warm-label{text-decoration:line-through;color:var(--muted)}
+
+/* STEEP TAGS (sítko / přikrýt) */
+.steep-tags{display:flex;gap:.28rem;font-family:'DM Mono',monospace;font-size:.62rem;align-items:center}
+.steep-tag-on{color:var(--dark)}
+.steep-tag-off{color:var(--mid);text-decoration:line-through}
+.steep-tag-sep{color:var(--light)}
+
+/* TOUCH DEVICE TWEAKS — better visibility for delete buttons on touch */
+@media(hover:none){
+  .btn-del{opacity:.6}
+  .lib-item:not(.active) .lib-item-del{opacity:.45}
+  .tpl-del,.tpl-rename{opacity:.55}
+  .log-entry-del,.le-steep-del,.arch-btn{opacity:.55}
+}
+
+/* Inputs that get programmatic .select() — allow easy user re-select */
+#tplNameInput,#tplRenameInput{-webkit-user-select:all;user-select:all}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Tea-app</h1>
+    <span class="header-sep" id="headerSep">—</span>
+    <span class="header-tea-name" id="headerTeaName"></span>
+  </div>
+  <div class="header-right">
+    <span id="statusMsg"></span>
+    <div class="sync-group">
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="nahrát data do cloudu (JSONBin)">↑</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
+    </div>
+    <div class="fs-ctrl" title="velikost písma">
+      <button class="fs-btn" onclick="changeFs(-1)" title="zmenšit písmo">−</button>
+      <span class="fs-val" id="fsVal">100%</span>
+      <button class="fs-btn" onclick="changeFs(1)" title="zvětšit písmo">+</button>
+    </div>
+    <button id="darkToggle" onclick="toggleDark()" title="přepnout tmavý/světlý režim">☀</button>
+    <button id="libToggleBtn" onclick="toggleLibPanel()" title="knihovna">☰</button>
+    <button id="undoBtn" onclick="undo()" disabled title="zpět (Ctrl+Z)">↩</button>
+    <button id="redoBtn" onclick="redo()" disabled title="vpřed (Ctrl+Y)">↪</button>
+    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automaticky ukládat změny do knihovny">
+      <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
+      ⟳
+    </label>
+    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="uložit změny do knihovny">✓</button>
+    <div style="position:relative;display:inline-flex">
+      <button class="btn-sm" onclick="toggleNewMenu(event)" title="nové/ uložit jako">+</button>
+      <div id="newMenu" class="new-menu" style="display:none">
+        <button class="new-menu-item" onclick="newSession();closeNewMenu()">nové sezení</button>
+        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">uložit jako nový</button>
+        <div class="new-menu-sep"></div>
+        <button class="new-menu-item" onclick="openTplNameModal();closeNewMenu()">uložit jako šablonu</button>
+      </div>
+    </div>
+    <button class="btn-sm danger" onclick="clearStorage()" title="smazat">✕</button>
+
+  </div>
+</header>
+<div class="app">
+
+<div class="library-panel">
+  <div class="lib-card" id="panel-library">
+    <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-library">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-library')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
+    <div class="card-title"><span class="card-title-text" title="knihovna"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span></div>
+    <div class="lib-controls-row">
+      <button id="libSortBtn" class="lib-sort-btn" onclick="toggleLibGroupCat()" title="řadit dle kategorie">dle kat.</button>
+      <select id="libSellerFilter" class="lib-seller-filter" onchange="renderLibrary()" title="filtrovat dle prodejce"></select>
+      <select id="libLocationFilter" class="lib-seller-filter" onchange="renderLibrary()" title="filtrovat dle místa"></select>
+    </div>
+    <div id="libList"></div>
+    <div class="lib-io" style="margin-top:.45rem;padding-top:.45rem;border-top:var(--b)">
+      <button class="btn-io" onclick="openExportModal()">↑ export</button>
+      <button class="btn-io" onclick="openImportModal()">↓ import</button>
+    </div>
+    <!-- Templates section -->
+    <div class="lib-section">
+      <div class="lib-section-hd">
+        <span>šablony přípravy</span>
+      </div>
+      <div id="tplList"></div>
+    </div>
+    <!-- Archive section -->
+    <div class="lib-section">
+      <div class="lib-section-hd arch-section-hd" onclick="toggleArchiveSection()">
+        <span>archiv <span id="archiveCount" style="font-weight:400"></span></span>
+        <span id="archiveToggleIcon" style="font-size:.65rem">▼</span>
+      </div>
+      <div id="archiveList" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Template name modal -->
+<div class="modal-bg" id="tplNameModal">
+  <div class="modal">
+    <h2>Nová šablona</h2>
+    <p>Šablona uloží teplotu, nádobu, množství čaje, checkboxy a nálevy — bez názvu (kategorii ukládá). Lze ji pak použít pro jakýkoli čaj.</p>
+    <input id="tplNameInput" type="text" placeholder="Název šablony (např. Gongfu 4×)" maxlength="60"
+      onkeydown="if(event.key==='Enter')saveTplFromModal()" />
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('tplNameModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="saveTplFromModal()">uložit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template apply modal -->
+<div class="modal-bg" id="tplApplyModal">
+  <div class="modal" style="max-width:400px">
+    <h2 id="tplApplyTitle">Šablona</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Zaškrtni části které chceš aplikovat na aktuální nastavení.</p>
+    <div id="tplApplyFields" style="display:flex;flex-direction:column;gap:.1rem;margin:.3rem 0"></div>
+    <div class="modal-row" style="margin-top:.55rem;flex-wrap:wrap;gap:.4rem">
+      <button class="modal-btn primary" onclick="applySelectedFromTemplate()">použít vybrané</button>
+      <button class="modal-btn" onclick="overwriteTemplate()">přepsat šablonu</button>
+      <button class="modal-btn" onclick="closeModal('tplApplyModal')">zrušit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template rename modal -->
+<div class="modal-bg" id="tplRenameModal">
+  <div class="modal" style="max-width:340px">
+    <h2>Přejmenovat šablonu</h2>
+    <input id="tplRenameInput" type="text" placeholder="Nový název" maxlength="60"
+      onkeydown="if(event.key==='Enter')saveTplRename()" />
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('tplRenameModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="saveTplRename()">uložit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export modal -->
+<div class="modal-bg" id="exportModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Export</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Čaje z knihovny</p>
+    <div class="modal-list" id="exportList"></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Šablony přípravy</p>
+    <div class="modal-list" id="exportTplList"></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archivované čaje</p>
+    <div class="modal-list" id="exportArchList"></div>
+    <div style="margin-top:.8rem">
+      <label style="font-size:.78rem;color:var(--muted)">Název souboru</label>
+      <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
+    </div>
+    <div class="modal-row" style="margin-top:.5rem">
+      <button class="modal-btn" onclick="selectAllExport()">vybrat vše</button>
+      <button class="modal-btn" onclick="closeModal('exportModal')">zrušit</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do JSONBin</button>
+      <button class="modal-btn primary" onclick="doExport()">stáhnout JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export copy fallback modal -->
+<div class="modal-bg" id="exportCopyModal">
+  <div class="modal" style="max-width:520px">
+    <h2>Zkopírovat JSON</h2>
+    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Stažení se nezdařilo. Zkopíruj obsah níže a ulož jako soubor .json.</p>
+    <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
+    <div class="modal-row">
+      <button class="modal-btn primary" onclick="copyExportText()">📋 kopírovat</button>
+      <button class="modal-btn" onclick="closeModal('exportCopyModal')">zavřít</button>
+    </div>
+  </div>
+</div>
+
+<!-- Archive preview modal -->
+<div class="modal-bg" id="archPreviewModal" onclick="if(event.target===this)closeModal('archPreviewModal')">
+  <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;gap:.75rem">
+    <div style="display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;justify-content:space-between">
+      <h2 id="apm-name"></h2>
+      <span id="apm-cat" style="font-size:.8rem;color:var(--muted);font-style:italic"></span>
+    </div>
+    <div id="apm-archived" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></div>
+    <div id="apm-setup" style="background:var(--off);border:var(--b);border-radius:var(--r);padding:.65rem .85rem;font-size:.8rem;line-height:1.75;white-space:pre-wrap;font-family:'DM Mono',monospace;color:var(--dark)"></div>
+    <div id="apm-notes-wrap">
+      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem">Poznámky</div>
+      <div id="apm-notes" style="font-size:.83rem;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:var(--black)"></div>
+    </div>
+    <div id="apm-logs-wrap">
+      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.4rem">Zápisky <span id="apm-log-count"></span></div>
+      <div id="apm-log-list" style="display:flex;flex-direction:column;gap:.4rem;max-height:260px;overflow-y:auto"></div>
+    </div>
+    <div class="modal-row" style="flex-wrap:wrap">
+      <button class="modal-btn primary" id="apm-dup-btn">+ duplikovat do knihovny</button>
+      <button class="modal-btn" id="apm-restore-btn">↑ obnovit do knihovny</button>
+      <button class="modal-btn" id="apm-asnew-btn">← načíst jako nový</button>
+      <button class="modal-btn" onclick="closeModal('archPreviewModal')">zavřít</button>
+    </div>
+  </div>
+</div>
+
+<!-- Merge preview modal -->
+<div class="modal-bg" id="mergePreviewModal" style="z-index:110">
+  <div class="modal" style="max-width:480px">
+    <h2 id="mergePreviewTitle">Sloučit</h2>
+    <div id="mergePreviewBody"></div>
+    <div class="modal-row" style="margin-top:.6rem">
+      <button class="modal-btn" onclick="closeModal('mergePreviewModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="confirmMergeConfig()">potvrdit výběr</button>
+    </div>
+  </div>
+</div>
+
+<!-- Library picker modal (for "sloučit s čajem...") -->
+<div class="modal-bg" id="libPickModal" style="z-index:120">
+  <div class="modal" style="max-width:380px">
+    <h2>Sloučit s čajem z knihovny</h2>
+    <div class="modal-list" id="libPickList" style="max-height:320px;overflow-y:auto"></div>
+    <div class="modal-row" style="margin-top:.5rem">
+      <button class="modal-btn" onclick="closeModal('libPickModal')">zrušit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="modal-bg" id="importModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Import</h2>
+    <p class="jb-import-hide">Vyber JSON soubor exportovaný z Tea-app. Čaje se stejným názvem lze přejmenovat nebo sloučit.</p>
+    <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
+    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">nebo vlož obsah JSON:</p>
+    <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"teas":[...],"templates":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
+    <div id="importTeaSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Čaje</p>
+      <div id="importFilterRow" style="display:none;margin:.2rem 0 .35rem;gap:.5rem;align-items:center">
+        <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.78rem;color:var(--muted)">
+          <input type="checkbox" id="importFilterChanged" checked style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="applyImportFilter()" />
+          skrýt beze změn
+        </label>
+        <span id="importFilterHint" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></span>
+      </div>
+      <div id="importBulkControls" style="display:none;margin-bottom:.5rem;padding:.5rem .65rem;background:var(--off);border-radius:var(--r)">
+        <div style="font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.4rem">hromadně pro duplicity</div>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.25rem">
+          <button class="dup-act-btn" id="bulk-btn-rename" onclick="bulkImportAction('rename')">přejmenovat vše</button>
+          <button class="dup-act-btn" id="bulk-btn-merge" onclick="bulkImportAction('merge')">sloučit zápisky vše</button>
+        </div>
+        <div id="importBulkMergeOpts" style="display:none;flex-direction:column;gap:.3rem;margin-top:.3rem;padding-top:.3rem;border-top:1px solid var(--light)">
+          <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+            <button class="dup-act-btn active" id="bulk-mn-keep" onclick="bulkSetNotesAction('keep-existing')">zachovat obecné</button>
+            <button class="dup-act-btn" id="bulk-mn-use" onclick="bulkSetNotesAction('use-import')">z importu</button>
+            <button class="dup-act-btn" id="bulk-mn-both" onclick="bulkSetNotesAction('merge-both')">spojit obě</button>
+          </div>
+          <label style="font-size:.79rem;display:flex;align-items:center;gap:.4rem;cursor:pointer">
+            <input type="checkbox" id="bulk-apply-settings" style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="bulkApplySettingsToggle()" />
+            přepsat nastavení čaje u všech
+          </label>
+        </div>
+      </div>
+      <div class="modal-list" id="importList"></div>
+    </div>
+    <div id="importTplSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Šablony</p>
+      <div class="modal-list" id="importTplList"></div>
+    </div>
+    <div id="importArchSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Archivované čaje</p>
+      <div class="modal-list" id="importArchList"></div>
+    </div>
+    <div class="modal-row" id="importActions" style="display:none">
+      <button class="modal-btn" onclick="closeModal('importModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="doImport()">importovat vybrané</button>
+    </div>
+    <div class="modal-row" id="importCancel">
+      <button class="modal-btn" onclick="closeModal('importModal')">zavřít</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log entry edit modal -->
+<div class="modal-bg" id="logEditModal">
+  <div class="modal" style="max-width:440px">
+    <h2 id="leModalTitle">Parametry přípravy</h2>
+    <div style="display:flex;flex-direction:column;gap:.55rem">
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+        <div class="field" style="flex:1;min-width:140px">
+          <label>množství</label>
+          <div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap">
+            <input class="le-inp" type="text" inputmode="decimal" id="le-amt" style="width:52px" placeholder=" " />
+            <span class="le-unit">g</span>
+            <span style="font-size:.75rem;color:var(--mid)">/</span>
+            <input class="le-inp" type="text" inputmode="decimal" id="le-amttsp" style="width:52px" placeholder=" " />
+            <span class="le-unit">lžičky</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>teplota</label>
+          <div style="display:flex;align-items:center;gap:.3rem">
+            <input class="le-inp" type="number" id="le-temp" min="40" max="100" step="5" style="width:55px" />
+            <span class="le-unit">°C</span>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>nádoba</label>
+        <div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap">
+          <input class="le-inp" type="text" id="le-vtype" style="width:90px;font-family:'DM Sans',sans-serif;text-align:left" />
+          <input class="le-inp" type="number" id="le-vml" min="10" max="2000" step="10" style="width:58px" />
+          <span class="le-unit">ml</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>příprava</label>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          <label class="le-chk"><input type="checkbox" id="le-chkWarm" /> nahřát</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkRinse" onchange="updateLeRinseRow()" /> oplach</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkSieve" /> sítko</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkCover" /> přikrýt</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkThermometer" onchange="updateLeCoolRow()" /> teploměr</label>
+        </div>
+      </div>
+      <div id="le-rinse-row" style="display:none;gap:.35rem;align-items:center;flex-wrap:wrap">
+        <span style="font-size:.78rem;color:var(--muted);min-width:48px">oplach</span>
+        <input class="le-inp" type="number" id="le-rsec" min="3" max="120" step="1" style="width:52px" />
+        <span class="le-unit">s</span>
+        <input class="le-inp" type="number" id="le-rtemp" min="40" max="100" step="5" placeholder=" " style="width:52px" />
+        <span class="le-unit">°C</span>
+      </div>
+      <div id="le-cool-row" style="display:none;gap:.28rem;align-items:center;flex-wrap:wrap">
+        <span style="font-size:.78rem;color:var(--muted);min-width:48px">chlazení</span>
+        <button class="pour-chip" onclick="setLeCoolPours(0)">konvice</button>
+        <button class="pour-chip" onclick="setLeCoolPours(1)">1× džbánek</button>
+        <button class="pour-chip" onclick="setLeCoolPours(2)">2× nádoba</button>
+      </div>
+      <div class="field">
+        <label>nálevy</label>
+        <div id="le-steeps-body" style="display:flex;flex-direction:column;gap:.28rem;margin-bottom:.3rem"></div>
+        <button class="btn-add" onclick="leAddSteep()">+ nálev</button>
+      </div>
+    </div>
+    <div class="modal-row" style="margin-top:.6rem">
+      <button class="modal-btn" onclick="closeModal('logEditModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="saveCurrentEdit()">uložit</button>
+    </div>
+  </div>
+</div>
+
+<div class="main-panel">
+  <div class="card" id="panel-settings">
+    <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-settings',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-settings">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-settings',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-settings')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
+    <div class="card-title"><span class="card-title-text" title="nastavení"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="18" r="2.5" fill="currentColor" stroke="none"/></svg></span></div>
+    <div class="setup-grid">
+      <div class="field">
+        <label>název čaje</label>
+        <input type="text" id="teaName" placeholder="Tie Guan Yin, Pu-erh…" />
+      </div>
+      <div class="field">
+        <label>kategorie</label>
+        <select id="teaCategory">
+          <option value="">—</option>
+          <option value="zelený">zelený</option>
+          <option value="bílý">bílý</option>
+          <option value="DJ FF">DJ FF</option>
+          <option value="oolong">oolong</option>
+          <option value="červený / černý">červený / černý</option>
+          <option value="tmavý / pu-erh">tmavý / pu-erh</option>
+          <option value="bylinkový">bylinkový</option>
+          <option value="ostatní">ostatní</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>prodejce</label>
+        <input type="text" id="teaSeller" placeholder="Pu-erh shop, čajovna…" />
+      </div>
+      <div class="field">
+        <label>místo</label>
+        <input type="text" id="teaLocation" placeholder="doma, práce…" />
+      </div>
+      <div class="field">
+        <label>množství</label>
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:.22rem">
+            <input type="text" inputmode="decimal" id="teaAmount" placeholder=" " style="max-width:60px" />
+            <span style="font-size:.8rem;color:var(--muted);font-weight:500">g</span>
+          </div>
+          <span style="font-size:.75rem;color:var(--mid)">/</span>
+          <div style="display:flex;align-items:center;gap:.22rem">
+            <input type="text" inputmode="decimal" id="teaAmountTsp" placeholder=" " style="max-width:70px" />
+            <span style="font-size:.8rem;color:var(--muted);font-weight:500">lžičky</span>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="grid-column:1/-1">
+        <label>nádoba</label>
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <input type="text" id="vesselType" value="gaiwan" placeholder="gaiwan" style="max-width:110px" />
+          <input type="number" id="vesselMl" value="50" min="10" max="2000" step="10" style="max-width:65px" oninput="updatePer100()" />
+          <span style="font-size:.8rem;color:var(--muted);font-weight:500">ml</span>
+          <span id="per100note" style="font-size:.75rem;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap"></span>
+        </div>
+      </div>
+      <div class="field">
+        <label>teplota</label>
+        <div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:.22rem">
+            <input type="number" id="tempRange" min="40" max="100" value="80" step="5" style="max-width:70px" />
+            <span style="font-size:.8rem;color:var(--muted);font-weight:500">°C</span>
+          </div>
+          <span id="coolGuide" style="font-size:.75rem;color:var(--muted);font-family:'DM Mono',monospace;display:none"></span>
+        </div>
+        <div class="pour-chips" id="pourControl">
+          <span style="font-size:.73rem;color:var(--muted)">přelití:</span>
+          <button class="pour-chip" onclick="setCoolPours(0)">konvice</button>
+          <button class="pour-chip" onclick="setCoolPours(1)">1× džbánek</button>
+          <button class="pour-chip" onclick="setCoolPours(2)">2× nádoba</button>
+        </div>
+      </div>
+    </div>
+    <div class="checks-row" style="margin-top:.75rem">
+      <div class="check-item" id="chkWarm" onclick="toggleCheck('chkWarm')">
+        <div class="check-box"><div class="check-mark"></div></div>nahřát
+      </div>
+      <div class="check-item" id="chkRinse" onclick="toggleCheck('chkRinse')">
+        <div class="check-box"><div class="check-mark"></div></div>oplach
+      </div>
+      <div class="check-item" id="chkSieve" onclick="toggleCheck('chkSieve')">
+        <div class="check-box"><div class="check-mark"></div></div>sítko
+      </div>
+      <div class="check-item" id="chkCover" onclick="toggleCheck('chkCover')">
+        <div class="check-box"><div class="check-mark"></div></div>přikrýt
+      </div>
+      <div class="check-item" id="chkThermometer" onclick="toggleCheck('chkThermometer')">
+        <div class="check-box"><div class="check-mark"></div></div>teploměr
+      </div>
+    </div>
+    <div class="rinse-settings" id="rinseSettings">
+      <span class="rinse-label">0. 🍵 — oplach</span>
+      <div class="rinse-field">
+        <span>čas</span>
+        <input type="number" id="rinseSec" value="15" min="3" max="120" step="1" />
+        <span>s</span>
+      </div>
+      <div class="rinse-field">
+        <span>teplota</span>
+        <input type="number" id="rinseTemp" placeholder=" " min="40" max="100" step="5" style="width:68px" />
+        <span>°C</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="panel-steeps">
+    <div class="steeps-header">
+      <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-steeps',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-steeps">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-steeps',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-steeps')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
+      <div class="card-title" style="margin-bottom:0"><span class="card-title-text" title="nálevy"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span><button class="btn-add" onclick="resetAllSteeps()" title="restartovat vše">↺</button><button class="btn-add" onclick="addSteep()">+</button></div>
+    </div>
+    <div class="steep-list" id="steepList"></div>
+  </div>
+</div>
+
+<div class="notes-panel">
+  <div class="notes-card" id="panel-notes">
+    <div class="card-controls">
+      <div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-notes">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-notes')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+    </div>
+    <div class="notes-tabs">
+      <button class="notes-tab active" onclick="switchTab('general')">Obecné</button>
+      <button class="notes-tab" onclick="switchTab('log')">Zápisky</button>
+    </div>
+
+    <!-- Obecné poznámky -->
+    <div class="notes-pane active" id="pane-general">
+      <textarea id="notes" placeholder="Obecné poznámky k čaji — barva, aroma, chuť, příští úpravy…" style="flex:1;min-height:160px"></textarea>
+    </div>
+
+    <!-- Zápisky ze sezení -->
+    <div class="notes-pane" id="pane-log">
+      <div class="log-toolbar">
+        <button class="btn-log" onclick="logSession()" title="zapsat sezení">✎</button>
+        <button class="btn-log" onclick="exportLogText()" style="background:var(--w);color:var(--black);border:var(--bh)" title="exportovat zápisky tohoto čaje">↑</button>
+        <button class="btn-log" onclick="openMultiLogExport()" style="background:var(--w);color:var(--black);border:var(--bh)" title="exportovat zápisky více čajů">↑+</button>
+        <span class="log-count" id="logCount"></span>
+      </div>
+      <div class="log-list" id="logList"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+const SESSION_KEY='cajovy-v3-session';
+const LIBRARY_KEY='cajovy-v3-library';
+const ARCHIVE_KEY='cajovy-v3-archive';
+let steeps=[],timers={},nextId=1;
+let warmDone=false,measureDone=false;
+let rinseTimer=null,rinseState={remaining:15,state:'idle'};
+let coolTimer=null,coolState={remaining:0,state:'idle'};
+let coolPours=0;
+const COOL_CURVE=[{sec:0,temp:100},{sec:60,temp:95},{sec:180,temp:90},{sec:360,temp:85},{sec:540,temp:80},{sec:780,temp:75},{sec:1020,temp:70},{sec:1320,temp:65},{sec:1740,temp:60}];
+const COOL_CURVE_1=[{sec:0,temp:95},{sec:60,temp:90},{sec:105,temp:85},{sec:180,temp:80},{sec:300,temp:75},{sec:420,temp:70},{sec:540,temp:65},{sec:720,temp:60}];
+const COOL_CURVE_2=[{sec:0,temp:85},{sec:45,temp:80},{sec:120,temp:75},{sec:210,temp:70},{sec:330,temp:65},{sec:480,temp:60}];
+function coolWaitSecCurve(targetTemp,curve){
+  const raw=parseInt(targetTemp);
+  if(isNaN(raw)||raw<=0)return null;
+  if(raw>curve[0].temp)return curve===COOL_CURVE?0:null;
+  if(raw>=curve[0].temp)return 0;
+  if(raw<curve[curve.length-1].temp)return -1;
+  for(let i=0;i<curve.length-1;i++){
+    const hi=curve[i],lo=curve[i+1];
+    if(raw<=hi.temp&&raw>=lo.temp){const frac=(hi.temp-raw)/(hi.temp-lo.temp);return Math.round(hi.sec+frac*(lo.sec-hi.sec));}
+  }
+  return 0;
+}
+function coolWaitSec(t){return coolWaitSecCurve(t,COOL_CURVE);}
+function coolWaitSecPoured(t,p){return coolWaitSecCurve(t,p===2?COOL_CURVE_2:p===1?COOL_CURVE_1:COOL_CURVE);}
+function updateCoolGuide(){
+  const noTherm=!el('chkThermometer').classList.contains('checked');
+  const guide=el('coolGuide');const pc=el('pourControl');
+  if(!guide)return;
+  if(!noTherm){guide.style.display='none';if(pc)pc.classList.remove('visible');return;}
+  const temp=el('tempRange').value;
+  const fmtG=s=>{if(s<0)return'>30 min';if(s===0)return'ihned';return s<60?s+'s':Math.round(s/60)+' min';};
+  const s0=coolWaitSec(temp);
+  if(s0===null){guide.style.display='';guide.textContent='⚠ neplatná teplota';guide.style.color='#c0392b';if(pc)pc.classList.remove('visible');return;}
+  guide.style.color='';guide.style.display='';
+  const s1=coolWaitSecCurve(temp,COOL_CURVE_1);
+  const s2=coolWaitSecCurve(temp,COOL_CURVE_2);
+  const parts=['→ '+fmtG(s0)];
+  if(s1!==null)parts.push('1× '+fmtG(s1));
+  if(s2!==null)parts.push('2× '+fmtG(s2));
+  guide.textContent=parts.join(' · ');
+  if(pc){
+    pc.classList.add('visible');
+    const chips=pc.querySelectorAll('.pour-chip');
+    const curves=[COOL_CURVE,COOL_CURVE_1,COOL_CURVE_2];
+    if(coolPours>0&&coolWaitSecCurve(temp,curves[coolPours])===null){
+      coolPours=0;
+      if(coolTimer){clearInterval(coolTimer);coolTimer=null;}
+      const r0=coolWaitSecPoured(temp,0);
+      coolState={remaining:(r0!==null&&r0>0)?r0:0,state:'idle'};
+    }
+    chips.forEach((btn,i)=>{
+      btn.classList.toggle('active',i===coolPours);
+      const ok=i===0||coolWaitSecCurve(temp,curves[i])!==null;
+      btn.disabled=!ok;
+    });
+  }
+}
+let library=[],activeLibId=null;
+let archive=[],archiveOpen=false;
+let undoStack=[],redoStack=[],savedSnapshot=null;
+let autoSave=false;
+const UNDO_MAX=40;
+const defaultSteeps=[45,55,70,90];
+
+function el(id){return document.getElementById(id)}
+function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function parseNum(v){return parseFloat(String(v).replace(',','.'))}
+function normDec(v){return(v||'').toString().replace(',','.')}
+const CATEGORIES=['zelený','bílý','DJ FF','oolong','červený / černý','tmavý / pu-erh','bylinkový','ostatní'];
+const CAT_LEGACY={'zelený / dj ff':'zelený','červený / černý':'červený / černý','žlutý':'ostatní'};
+function normCat(v){
+  if(!v)return '';
+  const n=s=>s.toLowerCase().trim().replace(/\s+/g,' ').replace(/\s*\/\s*/g,' / ');
+  const nv=n(v);
+  const match=CATEGORIES.find(c=>n(c)===nv);
+  return match||CAT_LEGACY[nv]||v;
+}
+document.addEventListener('input',function(e){
+  const inp=e.target;if(inp.inputMode!=='decimal')return;
+  const v=inp.value;if(!v.includes(','))return;
+  const s=inp.selectionStart;inp.value=v.replace(',','.');inp.setSelectionRange(s,s);
+},true);
+
+let saveT,indT;
+function showStatusMsg(msg,duration=2200){
+  const e=el('statusMsg');
+  clearTimeout(e._to);clearTimeout(e._hide);
+  e.style.display='inline';e.textContent=msg;
+  requestAnimationFrame(()=>{e.style.opacity='1';});
+  e._to=setTimeout(()=>{e.style.opacity='0';e._hide=setTimeout(()=>{e.style.display='none';},400);},duration);
+}
+function showSave(msg='✓ uloženo'){showStatusMsg(msg,2200);}
+function schedSave(){clearTimeout(saveT);saveT=setTimeout(()=>{saveSession();renderLog();if(autoSave&&activeLibId)updateLibraryEntry();else showSave();},300)}
+
+function updateHeaderTeaName(){
+  const name=el('teaName').value.trim();
+  const sep=el('headerSep'),span=el('headerTeaName');
+  if(name){span.textContent=name;span.style.display='inline';sep.style.display='inline';}
+  else{span.style.display='none';sep.style.display='none';}
+}
+
+function updateRinseVisibility(){
+  el('rinseSettings').classList.toggle('visible',el('chkRinse').classList.contains('checked'));
+  updateCoolGuide();
+}
+function toggleCheck(id){
+  pushUndo();
+  el(id).classList.toggle('checked');
+  updateRinseVisibility();schedSave();renderLibrary();renderSteeps();
+}
+function toggleWarmDone(){warmDone=!warmDone;renderSteeps();}
+function toggleMeasureDone(){measureDone=!measureDone;renderSteeps();}
+
+
+
+
+/* ── PER-PANEL FONT SIZE ─── */
+const PFS_STEPS=[0.7,0.8,0.9,1.0,1.1,1.2,1.35,1.5,1.7,2.0];
+const PFS_DEFAULT=3;
+const PFS_ALL=['panel-library','panel-settings','panel-steeps','panel-notes'];
+// panelFs[pid] = {n: normalIdx, e: expandedIdx}
+let panelFs={};
+
+function loadPanelFs(){
+  try{const s=localStorage.getItem('cajovy-panel-fs');if(s)panelFs=JSON.parse(s);}catch(e){}
+  PFS_ALL.forEach(pid=>{
+    if(!panelFs[pid]||typeof panelFs[pid]!=='object')panelFs[pid]={n:PFS_DEFAULT,e:PFS_DEFAULT};
+    applyPanelFs(pid);
+  });
+}
+function savePanelFs(){try{localStorage.setItem('cajovy-panel-fs',JSON.stringify(panelFs));}catch(e){}}
+function isPanelExpanded(pid){return expandedPanel&&expandedPanel===el(pid);}
+function applyPanelFs(pid){
+  const panel=el(pid);if(!panel)return;
+  const mode=isPanelExpanded(pid)?'e':'n';
+  const idx=(panelFs[pid]||{})[mode]??PFS_DEFAULT;
+  const zoom=PFS_STEPS[idx];
+  panel.style.zoom=zoom;
+  updatePfsVal(pid);
+}
+function updatePfsVal(pid){
+  const valEl=el('pfs-'+pid);if(!valEl)return;
+  const mode=isPanelExpanded(pid)?'e':'n';
+  const idx=(panelFs[pid]||{})[mode]??PFS_DEFAULT;
+  const zoom=PFS_STEPS[idx];
+  // show indicator when expanded has different size
+  const ni=(panelFs[pid]||{}).n??PFS_DEFAULT;
+  const ei=(panelFs[pid]||{}).e??PFS_DEFAULT;
+  const marker=isPanelExpanded(pid)&&ni!==ei?'*':'';
+  valEl.textContent=Math.round(zoom*100)+'%'+marker;
+  valEl.title=isPanelExpanded(pid)?'velikost v rozšířeném pohledu (normální: '+Math.round(PFS_STEPS[ni]*100)+'%)':'velikost v normálním pohledu (rozšířený: '+Math.round(PFS_STEPS[ei]*100)+'%)';
+}
+function changePanelFs(pid,dir){
+  if(!panelFs[pid]||typeof panelFs[pid]!=='object')panelFs[pid]={n:PFS_DEFAULT,e:PFS_DEFAULT};
+  const mode=isPanelExpanded(pid)?'e':'n';
+  panelFs[pid][mode]=Math.max(0,Math.min(PFS_STEPS.length-1,(panelFs[pid][mode]??PFS_DEFAULT)+dir));
+  applyPanelFs(pid);
+  savePanelFs();
+}
+/* ── EXPAND PANEL ─── */
+let expandedPanel=null;
+function toggleExpand(id){
+  const panel=el(id);
+  if(!panel)return;
+  if(expandedPanel&&expandedPanel!==panel){collapsePanel(expandedPanel);}
+  if(panel.classList.contains('panel-expanded')){collapsePanel(panel);}
+  else{expandPanel(panel);}
+}
+function expandPanel(panel){
+  panel.classList.add('panel-expanded');
+  expandedPanel=panel;
+  applyPanelFs(panel.id);
+  // swap icon to collapse
+  const btn=panel.querySelector('.expand-btn');
+  if(btn)btn.innerHTML='<svg viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
+  // add esc hint once
+  if(!panel.querySelector('.expand-esc')){
+    const hint=document.createElement('span');
+    hint.className='expand-esc';hint.textContent='Esc';
+    btn&&btn.parentNode.appendChild(hint);
+  }
+  document.addEventListener('keydown',onExpandEsc);
+}
+function collapsePanel(panel){
+  panel.classList.remove('panel-expanded');
+  expandedPanel=null;
+  applyPanelFs(panel.id);
+  const btn=panel.querySelector('.expand-btn');
+  if(btn)btn.innerHTML='<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+  const hint=panel.querySelector('.expand-esc');
+  if(hint)hint.remove();
+  document.removeEventListener('keydown',onExpandEsc);
+}
+function onExpandEsc(e){if(e.key==='Escape'&&expandedPanel)collapsePanel(expandedPanel);}
+/* ── UNDO ─── */
+function sessionSnap(){return JSON.stringify(getSessionData());}
+function pushUndo(){
+  undoStack.push(sessionSnap());
+  if(undoStack.length>UNDO_MAX)undoStack.shift();
+  redoStack=[];
+  updateUndoBtn();
+}
+function undo(){
+  if(!undoStack.length)return;
+  redoStack.push(sessionSnap());
+  const prev=JSON.parse(undoStack.pop());
+  applySessionData({...prev,steeps:prev.steeps.map((s,i)=>({...s,id:s.id||i+1,remaining:s.sec,state:'idle'}))});
+  schedSave();updateUndoBtn();renderLibrary();
+}
+function redo(){
+  if(!redoStack.length)return;
+  undoStack.push(sessionSnap());
+  if(undoStack.length>UNDO_MAX)undoStack.shift();
+  const next=JSON.parse(redoStack.pop());
+  applySessionData({...next,steeps:next.steeps.map((s,i)=>({...s,id:s.id||i+1,remaining:s.sec,state:'idle'}))});
+  schedSave();updateUndoBtn();renderLibrary();
+}
+function updateUndoBtn(){
+  const u=el('undoBtn');if(u){u.disabled=undoStack.length===0;u.title=undoStack.length?'zpět '+undoStack.length+' (Ctrl+Z)':'nic k vrácení';}
+  const r=el('redoBtn');if(r){r.disabled=redoStack.length===0;r.title=redoStack.length?'vpřed '+redoStack.length+' (Ctrl+Y)':'nic vpřed';}
+}
+
+/* ── AUTO-SAVE ─── */
+function initAutoSave(){
+  try{autoSave=!!localStorage.getItem('cajovy-autosave');}catch(e){}
+  const chk=el('autoSaveChk');if(chk)chk.checked=autoSave;
+}
+function toggleAutoSave(on){
+  autoSave=on;
+  try{if(on)localStorage.setItem('cajovy-autosave','1');else localStorage.removeItem('cajovy-autosave');}catch(e){}
+  if(on&&activeLibId&&isDirty())updateLibraryEntry();
+}
+
+/* ── DIRTY TRACKING ─── */
+function markSaved(){savedSnapshot=sessionSnap();renderLibrary();}
+function isDirty(){
+  if(!activeLibId||!savedSnapshot)return false;
+  return sessionSnap()!==savedSnapshot;
+}
+
+function getSessionData(){
+  return{
+    teaName:el('teaName').value,teaCategory:el('teaCategory').value,seller:el('teaSeller').value,location:el('teaLocation').value,teaAmount:el('teaAmount').value,teaAmountTsp:el('teaAmountTsp').value,vesselMl:el('vesselMl').value,vesselType:el('vesselType').value,
+    temp:el('tempRange').value,notes:el('notes').value,
+    checks:{
+      chkWarm:el('chkWarm').classList.contains('checked'),
+      chkRinse:el('chkRinse').classList.contains('checked'),
+      chkSieve:el('chkSieve').classList.contains('checked'),
+      chkCover:el('chkCover').classList.contains('checked'),
+      chkThermometer:el('chkThermometer').classList.contains('checked'),
+    },
+    rinseSec:el('rinseSec').value,rinseTemp:el('rinseTemp').value,
+    coolPours,
+    steeps:steeps.map(s=>({id:s.id,sec:s.sec,temp:s.temp})),nextId,
+  };
+}
+
+function applySessionData(st){
+  if(!st)return;
+  el('teaName').value=st.teaName||'';el('teaCategory').value=normCat(st.teaCategory);el('teaSeller').value=st.seller||'';el('teaLocation').value=st.location||'';if(st.vesselMl!==undefined)el('vesselMl').value=st.vesselMl||50;el('vesselType').value=st.vesselType||'gaiwan';updatePer100();
+  el('teaAmount').value=normDec(st.teaAmount);
+  el('teaAmountTsp').value=normDec(st.teaAmountTsp);
+  if(st.temp)el('tempRange').value=st.temp;
+  el('notes').value=st.notes||'';
+  if(st.checks)Object.entries(st.checks).forEach(([id,on])=>el(id).classList.toggle('checked',!!on));
+  if(!(st.checks&&'chkThermometer' in st.checks))el('chkThermometer').classList.add('checked');
+  if(st.rinseSec)el('rinseSec').value=st.rinseSec;
+  if(st.rinseTemp!==undefined)el('rinseTemp').value=st.rinseTemp||'';
+  updateRinseVisibility();
+  steeps=[];nextId=st.nextId||1;
+  if(st.steeps?.length)st.steeps.forEach(s=>steeps.push({id:s.id,sec:s.sec,temp:s.temp||'',remaining:s.sec,state:'idle'}));
+  rinseState={remaining:parseInt(el('rinseSec').value)||15,state:'idle'};
+  coolPours=el('chkThermometer').classList.contains('checked')?0:(st.coolPours||0);
+  renderSteeps();updateHeaderTeaName();updatePer100();updateCoolGuide();
+}
+
+function saveSession(){try{localStorage.setItem(SESSION_KEY,JSON.stringify({...getSessionData(),activeLibId}));}catch(e){}}
+function loadSession(){
+  try{const raw=localStorage.getItem(SESSION_KEY);if(!raw)return false;const parsed=JSON.parse(raw);applySessionData(parsed);if(parsed.activeLibId&&library.find(e=>e.id===parsed.activeLibId))activeLibId=parsed.activeLibId;return true;}
+  catch(e){return false;}
+}
+
+function loadLibrary(){try{library=JSON.parse(localStorage.getItem(LIBRARY_KEY)||'[]');}catch(e){library=[];}}
+function saveLibrary(){try{localStorage.setItem(LIBRARY_KEY,JSON.stringify(library));}catch(e){}}
+function loadArchive(){try{archive=JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]');}catch(e){archive=[];}}
+function saveArchive(){try{localStorage.setItem(ARCHIVE_KEY,JSON.stringify(archive));}catch(e){}}
+
+function entryData(){
+  const d=getSessionData();
+  const activeEntry=library.find(e=>e.id===activeLibId);
+  return{teaName:d.teaName,teaCategory:d.teaCategory,seller:d.seller,location:d.location,teaAmount:d.teaAmount,teaAmountTsp:d.teaAmountTsp,vesselType:d.vesselType,vesselMl:d.vesselMl,temp:d.temp,notes:d.notes,checks:d.checks,rinseSec:d.rinseSec,rinseTemp:d.rinseTemp,coolPours:d.coolPours||0,steeps:d.steeps.map(s=>({sec:s.sec,temp:s.temp}))};
+}
+
+function saveToLibrary(){
+  const name=el('teaName').value.trim()||'Bez názvu';
+  const entry={id:Date.now(),name,data:entryData(),logs:[]};
+  library.push(entry);saveLibrary();
+  activeLibId=entry.id;markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();showSave('✓ uloženo do knihovny');
+}
+
+function updateLibraryEntry(){
+  if(!activeLibId)return;
+  const entry=library.find(e=>e.id===activeLibId);if(!entry)return;
+  entry.name=el('teaName').value.trim()||entry.name;
+  entry.data=entryData();
+  saveLibrary();markSaved();showSave('✓ změny uloženy');
+}
+
+function loadFromLibrary(id){
+  const entry=library.find(e=>e.id===id);if(!entry)return;
+  activeLibId=id;clearAllTimers();warmDone=false;measureDone=false;coolPours=0;
+  const d=entry.data;nextId=1;
+  const sw=d.steeps.map((s,i)=>({...s,id:i+1,remaining:s.sec,state:'idle'}));
+  nextId=sw.length+1;
+  applySessionData({...d,steeps:sw,nextId});
+  saveSession();markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();renderLog();showSave('↓ načteno');
+}
+
+async function deleteFromLibrary(id){
+  const entry=library.find(e=>e.id===id);
+  const name=entry?entry.name:'tento čaj';
+  const action=await customDeleteOrArchive(name);
+  if(!action)return;
+  if(action==='archive'){
+    archive.push({...entry,archivedAt:new Date().toISOString().slice(0,10)});
+    saveArchive();renderArchive();
+    showSave('archivováno');
+  }
+  library=library.filter(e=>e.id!==id);
+  const wasActive=activeLibId===id;
+  if(wasActive){activeLibId=null;savedSnapshot=null;}
+  saveLibrary();renderLibrary();
+  if(wasActive)renderLog();
+}
+function restoreFromArchive(id){
+  const entry=archive.find(e=>e.id===id);if(!entry)return;
+  const restored={...entry};delete restored.archivedAt;
+  library.push(restored);
+  archive=archive.filter(e=>e.id!==id);
+  saveLibrary();saveArchive();renderLibrary();renderArchive();
+  showSave('↑ obnoveno do knihovny');
+}
+function useArchiveAsNew(id){
+  const entry=archive.find(e=>e.id===id);if(!entry)return;
+  activeLibId=null;clearAllTimers();warmDone=false;measureDone=false;savedSnapshot=null;
+  const d=entry.data;nextId=1;
+  const sw=(d.steeps||[]).map((s,i)=>({...s,id:i+1,remaining:s.sec,state:'idle'}));
+  nextId=sw.length+1;
+  applySessionData({...d,steeps:sw,nextId});
+  saveSession();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();renderLog();
+  showSave('← načteno z archivu jako nový');
+}
+async function deleteFromArchive(id){
+  const entry=archive.find(e=>e.id===id);
+  if(!await customConfirm('Trvale smazat "'+(entry?entry.name:'')+'"?','smazat'))return;
+  archive=archive.filter(e=>e.id!==id);
+  saveArchive();renderArchive();
+}
+function toggleArchiveSection(){
+  archiveOpen=!archiveOpen;
+  el('archiveList').style.display=archiveOpen?'':'none';
+  el('archiveToggleIcon').textContent=archiveOpen?'▲':'▼';
+}
+function renderArchive(){
+  const count=archive.length;
+  el('archiveCount').textContent=count?'('+count+')':'';
+  const list=el('archiveList');
+  if(!count){list.innerHTML='<div class="tpl-empty">Archiv je prázdný.</div>';return;}
+  list.innerHTML=archive.map(e=>`
+    <div class="lib-item arch-item">
+      <span class="lib-item-name" title="${esc(e.name)} — nahlédnout" onclick="openArchPreview(${e.id})">${esc(e.name)}</span>
+      <span class="arch-date" id="arch-date-${e.id}" onclick="startArchDateEdit(${e.id})" title="kliknout pro změnu data archivace">${e.archivedAt||'—'}</span>
+      <button class="lib-item-del" style="opacity:.2" onclick="deleteFromArchive(${e.id})" title="trvale smazat"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>`).join('');
+}
+
+let archPreviewId=null;
+function openArchPreview(id){
+  const entry=archive.find(e=>e.id===id);if(!entry)return;
+  archPreviewId=id;
+  el('apm-name').textContent=entry.name||'Bez názvu';
+  el('apm-cat').textContent=entry.data?.teaCategory||'';
+  el('apm-archived').textContent=entry.archivedAt?'archivováno '+entry.archivedAt:'';
+  el('apm-setup').textContent=buildArchSetupText(entry.data);
+  const notes=(entry.data?.notes||'').trim();
+  el('apm-notes-wrap').style.display=notes?'':'none';
+  el('apm-notes').textContent=notes;
+  const logs=entry.logs||[];
+  el('apm-logs-wrap').style.display=logs.length?'':'none';
+  el('apm-log-count').textContent=logs.length?'('+logs.length+')':'';
+  el('apm-log-list').innerHTML=logs.map(l=>`
+    <div style="border:var(--b);border-radius:var(--r);overflow:hidden">
+      <div style="padding:.38rem .65rem;background:var(--off);border-bottom:var(--b);display:flex;gap:.55rem;align-items:baseline;flex-wrap:wrap">
+        <span style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0">${esc(l.date||'')}</span>
+        <span style="font-size:.72rem;color:var(--dark);white-space:pre-wrap;word-break:break-word">${esc(l.setup||'')}</span>
+      </div>
+      ${l.text&&l.text.trim()?`<div style="padding:.45rem .65rem;font-size:.82rem;line-height:1.65;white-space:pre-wrap;word-break:break-word">${esc(l.text)}</div>`:''}</div>`).join('');
+  el('apm-dup-btn').onclick=()=>dupArchiveToLibrary(id);
+  el('apm-restore-btn').onclick=()=>{closeModal('archPreviewModal');restoreFromArchive(id);};
+  el('apm-asnew-btn').onclick=()=>{closeModal('archPreviewModal');useArchiveAsNew(id);};
+  el('archPreviewModal').classList.add('open');
+}
+function buildArchSetupText(d){
+  if(!d)return'';
+  const lines=[];
+  const amtParts=[];
+  if(d.teaAmount)amtParts.push(d.teaAmount+' g');
+  if(d.teaAmountTsp)amtParts.push(d.teaAmountTsp+' tsp');
+  const vesselStr=d.vesselMl?((d.vesselType||'')+' '+d.vesselMl+' ml').trim():'';
+  const row1=[amtParts.join(' / '),vesselStr].filter(Boolean).join(' · ');
+  if(row1)lines.push(row1);
+  if(d.temp)lines.push('teplota: '+d.temp+' °C');
+  const checkLabels={chkWarm:'ohřát nádobu',chkRinse:'opláchnout',chkSieve:'cedník',chkCover:'přikrýt'};
+  if(d.checks){
+    const cStr=Object.entries(checkLabels).map(([k,l])=>(d.checks[k]?'✓ ':'✗ ')+l).join('  ');
+    lines.push(cStr);
+  }
+  if(d.checks?.chkRinse&&d.rinseSec){
+    lines.push('  oplach: '+d.rinseSec+'s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':''));
+  }
+  if(d.steeps?.length){
+    d.steeps.forEach((s,i)=>lines.push((i+1)+'. nálev: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'')));
+  }
+  return lines.join('\n');
+}
+function dupArchiveToLibrary(id){
+  const entry=archive.find(e=>e.id===id);if(!entry)return;
+  library.push({id:Date.now(),name:entry.name,data:{...entry.data},logs:(entry.logs||[]).map(l=>({...l}))});
+  saveLibrary();renderLibrary();
+  closeModal('archPreviewModal');
+  showSave('← duplikováno do knihovny');
+}
+function startArchDateEdit(id){
+  const span=el('arch-date-'+id);if(!span)return;
+  const cur=archive.find(e=>e.id===id)?.archivedAt||'';
+  const inp=document.createElement('input');
+  inp.type='date';inp.value=cur;
+  inp.style.cssText='font-family:"DM Mono",monospace;font-size:.65rem;color:var(--black);background:var(--w);border:1px solid var(--dark);border-radius:2px;padding:.04rem .1rem;width:90px;outline:none;flex-shrink:0';
+  span.replaceWith(inp);inp.focus();
+  const commit=()=>{
+    const v=inp.value;
+    const e=archive.find(x=>x.id===id);
+    if(e&&v)e.archivedAt=v;
+    saveArchive();renderArchive();
+  };
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();commit();}
+    if(ev.key==='Escape'){renderArchive();}
+  });
+}
+
+const CAT_ORDER=CATEGORIES;
+let libGroupByCat=false;
+function toggleLibGroupCat(){
+  libGroupByCat=!libGroupByCat;
+  try{localStorage.setItem('cajovy-lib-group-cat',libGroupByCat?'1':'');}catch(e){}
+  renderLibrary();
+}
+function libItemHtml(e){
+  return`<div class="lib-item ${activeLibId===e.id?'active':''}" data-id="${e.id}" onclick="loadFromLibrary(${e.id})"><span class="lib-item-name" title="${esc(e.name)}">${esc(e.name)}</span><button class="lib-item-del" onclick="event.stopPropagation();deleteFromLibrary(${e.id})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
+}
+/* ── LONG-PRESS na lib-item (touch) → smazat/archivovat ─── */
+let _lpTimer=null,_lpFired=false,_lpStartY=0;
+function initLibLongPress(){
+  const list=el('libList');
+  if(!list||list.dataset.lpInit)return;
+  list.dataset.lpInit='1';
+  list.addEventListener('touchstart',e=>{
+    const item=e.target.closest('.lib-item');
+    if(!item||e.target.closest('.lib-item-del')||item.classList.contains('arch-item'))return;
+    const id=parseInt(item.dataset.id||'0');
+    if(!id)return;
+    _lpFired=false;
+    _lpStartY=e.touches[0].clientY;
+    clearTimeout(_lpTimer);
+    _lpTimer=setTimeout(()=>{
+      _lpFired=true;
+      try{navigator.vibrate&&navigator.vibrate(40);}catch(_){}
+      deleteFromLibrary(id);
+    },550);
+  },{passive:true});
+  list.addEventListener('touchmove',e=>{
+    if(_lpTimer&&Math.abs(e.touches[0].clientY-_lpStartY)>10){
+      clearTimeout(_lpTimer);_lpTimer=null;
+    }
+  },{passive:true});
+  list.addEventListener('touchend',()=>{
+    if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}
+  });
+  list.addEventListener('touchcancel',()=>{
+    if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}
+  });
+  list.addEventListener('click',e=>{
+    if(_lpFired){e.preventDefault();e.stopPropagation();_lpFired=false;}
+  },true);
+}
+function updateDynamicFilter(selId,dataKey,placeholder,multi=false){
+  const sel=el(selId);if(!sel)return;
+  const vals=multi
+    ?[...new Set(library.flatMap(e=>(e.data?.[dataKey]||'').split(',').map(s=>s.trim()).filter(Boolean)))].sort((a,b)=>a.localeCompare(b,'cs'))
+    :[...new Set(library.map(e=>e.data?.[dataKey]||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'cs'));
+  const cur=sel.value;
+  sel.innerHTML=`<option value="">— ${placeholder}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  if(vals.includes(cur))sel.value=cur;else sel.value='';
+  sel.classList.toggle('has-options',vals.length>0);
+  sel.classList.toggle('active',!!sel.value);
+}
+function updateSellerFilter(){
+  updateDynamicFilter('libSellerFilter','seller','prodejce',true);
+  updateDynamicFilter('libLocationFilter','location','místo',true);
+}
+function renderLibrary(){
+  const list=el('libList');
+  const btn=el('libSortBtn');
+  if(btn)btn.classList.toggle('active',libGroupByCat);
+  updateSellerFilter();
+  const sellerFilter=(el('libSellerFilter')?.value||'');
+  const locationFilter=(el('libLocationFilter')?.value||'');
+  const items=library.filter(e=>
+    (!sellerFilter||(e.data?.seller||'').split(',').map(s=>s.trim()).includes(sellerFilter))&&
+    (!locationFilter||(e.data?.location||'').split(',').map(s=>s.trim()).includes(locationFilter))
+  );
+  if(!items.length){list.innerHTML='<div class="lib-empty">'+(sellerFilter||locationFilter?'Žádné čaje odpovídají filtru.':'Zatím žádné čaje.')+'</div>';}
+  else if(!libGroupByCat){
+    list.innerHTML=items.map(libItemHtml).join('');
+  }else{
+    const groups=new Map();
+    items.forEach(e=>{
+      const cat=(e.data&&e.data.teaCategory)||'';
+      if(!groups.has(cat))groups.set(cat,[]);
+      groups.get(cat).push(e);
+    });
+    const sortedKeys=[...CAT_ORDER.filter(c=>groups.has(c)),...[...groups.keys()].filter(c=>!CAT_ORDER.includes(c)&&c!==''),...(groups.has('')?['']:[])] ;
+    list.innerHTML=sortedKeys.map(cat=>{
+      const label=cat||'bez kategorie';
+      return`<div class="lib-cat-header">${esc(label)}</div>`+groups.get(cat).map(libItemHtml).join('');
+    }).join('');
+  }
+  const hSave=el('headerSaveBtn'),hNew=el('headerSaveNewBtn'),asl=el('autoSaveLbl');
+  if(activeLibId){
+    const dirty=isDirty();
+    hSave.style.display=autoSave?'none':'';
+    hSave.classList.toggle('dirty',dirty);
+    hSave.classList.toggle('saved',!dirty);
+    hSave.textContent=dirty?'uložit změny':'✓ uloženo';
+    hNew.textContent='uložit jako nový';
+    if(asl)asl.style.display='flex';
+  }else{
+    hSave.style.display='none';
+    hNew.textContent='+ uložit jako nový čaj';
+    if(asl)asl.style.display='none';
+  }
+}
+
+function updateMeasureRow(){
+  const lbl=document.querySelector('#measureRow .warm-label');
+  if(!lbl)return;
+  const amt=el('teaAmount').value;
+  const tsp=el('teaAmountTsp').value;
+  const amtStr=[amt?amt+' g':'',tsp?tsp+' lžičky':''].filter(Boolean).join(' / ');
+  lbl.textContent='odměřit '+(amtStr||'množství');
+}
+function updateDirtyState(){
+  const hSave=el('headerSaveBtn');
+  if(!hSave)return;
+  if(!activeLibId){hSave.style.display='none';return;}
+  const dirty=isDirty();
+  hSave.style.display=autoSave?'none':'';
+  hSave.classList.toggle('dirty',dirty);
+  hSave.classList.toggle('saved',!dirty);
+  hSave.textContent=dirty?'uložit změny':'✓ uloženo';
+}
+
+function addSteep(sec=60,temp='',silent=false){
+  if(!silent)pushUndo();
+  steeps.push({id:nextId++,sec,temp,remaining:sec,state:'idle'});
+  renderSteeps();if(!silent){schedSave();renderLibrary();}
+}
+
+function renderSteeps(){
+  const list=el('steepList');list.innerHTML='';
+  const gTemp=el('tempRange').value;
+  const rinseOn=el('chkRinse').classList.contains('checked');
+  const warmOn=el('chkWarm').classList.contains('checked');
+  const sieveOn=el('chkSieve').classList.contains('checked');
+  const coverOn=el('chkCover').classList.contains('checked');
+  const noTherm=!el('chkThermometer').classList.contains('checked');
+  const tagsHtml=`<div class="steep-tags"><span class="${sieveOn?'steep-tag-on':'steep-tag-off'}">sítko</span><span class="steep-tag-sep"> · </span><span class="${coverOn?'steep-tag-on':'steep-tag-off'}">přikrýt</span></div>`;
+  if(warmOn){
+    const warmRow=document.createElement('div');
+    warmRow.className='steep-row warm-row'+(warmDone?' warm-done':'');
+    warmRow.addEventListener('click',toggleWarmDone);
+    warmRow.innerHTML=`<div style="grid-column:1/-1;display:flex;align-items:center;gap:.55rem"><div class="warm-check-box"><div class="warm-check-mark"></div></div><span class="warm-label">nahřát nádobu</span></div>`;
+    list.appendChild(warmRow);
+  }
+  {
+    const amt=el('teaAmount').value;
+    const tsp=el('teaAmountTsp').value;
+    const amtStr=[amt?amt+' g':'',tsp?tsp+' lžičky':''].filter(Boolean).join(' / ');
+    const mRow=document.createElement('div');
+    mRow.id='measureRow';
+    mRow.className='steep-row warm-row'+(measureDone?' warm-done':'');
+    mRow.addEventListener('click',toggleMeasureDone);
+    mRow.innerHTML=`<div style="grid-column:1/-1;display:flex;align-items:center;gap:.55rem"><div class="warm-check-box"><div class="warm-check-mark"></div></div><span class="warm-label">odměřit ${amtStr||'množství'}</span></div>`;
+    list.appendChild(mRow);
+  }
+  if(noTherm){
+    const csecRaw=coolWaitSecPoured(gTemp,coolPours);
+    const csec=(csecRaw!==null&&csecRaw>0)?csecRaw:0;
+    if(coolState.state==='idle')coolState.remaining=csec;
+    const isDisabled=!csec;
+    const pct=(!isDisabled&&coolState.state!=='idle')?Math.round((1-coolState.remaining/csec)*100):0;
+    const fmtSec=s=>{if(s===null)return'—';if(s<0)return'>30 min';if(s===0)return'ihned';return s<60?s+'s':Math.round(s/60)+' min';};
+    const timeLabel=fmtSec(csecRaw);
+    const pourNames=['konvice','džbánek','2. nádoba'];
+    const rowLabel=csecRaw===null?'⚠ nedosažitelné':'ochlazení · '+pourNames[coolPours];
+    const rowColor=csecRaw===null?'color:#c0392b':'';
+    const icon=coolState.state==='running'
+      ?`<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
+      :coolState.state==='done'
+      ?`<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`
+      :`<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+    const coolRow=document.createElement('div');
+    coolRow.className='steep-row cool-row'+(coolState.state==='running'?' active':'')+(coolState.state==='done'?' done-row':'');
+    coolRow.innerHTML=`
+      <div class="steep-num" style="font-size:.7rem;color:var(--muted)">~°</div>
+      <div class="steep-label-wrap"><span class="steep-label" style="${rowColor}">${rowLabel}</span></div>
+      <div class="steep-time-input" style="text-align:center;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--muted);border-color:transparent;background:transparent">${timeLabel}</div>
+      <div class="steep-temp-input" style="text-align:center;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--muted);border-color:transparent;background:transparent">${isNaN(parseInt(gTemp))?'—':gTemp}</div>
+      <div class="timer-display ${coolState.state==='running'?'running':coolState.state==='done'?'done-time':''}" id="timer-cool">${isDisabled?'–':fmtTime(coolState.remaining)}</div>
+      <button class="btn-play ${coolState.state==='running'?'is-running':coolState.state==='done'?'is-done':''}" onclick="toggleCoolTimer()" ${isDisabled?'disabled':''}>${isDisabled?'–':icon}</button>
+      ${coolState.state!=='idle'?`<button class="btn-del" onclick="resetCoolTimer()" title="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.1L1 10"/></svg></button>`:'<div></div>'}
+      <div class="progress-bar-wrap ${coolState.state!=='idle'?'visible':''}" id="prog-wrap-cool">
+        <div class="progress-bar" id="prog-cool" style="width:${pct}%"></div>
+      </div>`;
+    list.appendChild(coolRow);
+  }
+  if(rinseOn){
+    const rs=rinseState,rsec=parseInt(el('rinseSec').value)||15;
+    const pct=rs.state!=='idle'?Math.round((1-rs.remaining/rsec)*100):0;
+    const icon=rs.state==='running'
+      ?`<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
+      :rs.state==='done'
+      ?`<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`
+      :`<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+    const rT=el('rinseTemp').value||gTemp;
+    const row=document.createElement('div');
+    row.className='steep-row rinse-row'+(rs.state==='running'?' active':'')+(rs.state==='done'?' done-row':'');
+    row.innerHTML=`
+      <div class="steep-num">0</div>
+      <div class="steep-label-wrap"><span class="steep-label">oplach</span></div>
+      <input class="steep-time-input" type="number" min="3" max="120" value="${rsec}" onchange="updateRinseTime(this.value)" />
+      <div class="steep-temp-input" style="text-align:center;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--muted);border-color:transparent;background:transparent">${rT}</div>
+      <div class="timer-display ${rs.state==='running'?'running':rs.state==='done'?'done-time':''}" id="timer-rinse">${fmtTime(rs.remaining)}</div>
+      <button class="btn-play ${rs.state==='running'?'is-running':rs.state==='done'?'is-done':''}" onclick="toggleRinseTimer()">${icon}</button>
+      <div></div>
+      <div class="progress-bar-wrap ${rs.state!=='idle'?'visible':''}" id="prog-wrap-rinse">
+        <div class="progress-bar" id="prog-rinse" style="width:${pct}%"></div>
+      </div>`;
+    list.appendChild(row);
+  }
+  steeps.forEach((s,idx)=>{
+    const pct=s.state!=='idle'?Math.round((1-s.remaining/s.sec)*100):0;
+    const eT=s.temp?s.temp+'°C':gTemp+'°C';
+    const icon=s.state==='running'
+      ?`<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
+      :s.state==='done'
+      ?`<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`
+      :`<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+    const row=document.createElement('div');
+    row.className='steep-row'+(s.state==='running'?' active':'')+(s.state==='done'?' done-row':'');
+    row.id='steep-'+s.id;
+    row.innerHTML=`
+      <div class="steep-num">${idx+1}</div>
+      <div class="steep-label-wrap"><span class="steep-label">🍵</span>${tagsHtml}</div>
+      <input class="steep-time-input" type="number" min="5" max="999" value="${s.sec}" onchange="updateSteepTime(${s.id},this.value)" />
+      <input class="steep-temp-input" type="number" min="40" max="100" step="5" value="${s.temp}" placeholder="${gTemp||' '}" onchange="updateSteepTemp(${s.id},this.value)" />
+      <div class="timer-display ${s.state==='running'?'running':s.state==='done'?'done-time':''}" id="timer-${s.id}">${fmtTime(s.remaining)}</div>
+      <button class="btn-play ${s.state==='running'?'is-running':s.state==='done'?'is-done':''}" onclick="toggleTimer(${s.id})">${icon}</button>
+      ${s.state==='idle'
+        ?`<button class="btn-del" onclick="removeSteep(${s.id})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
+        :`<button class="btn-del" onclick="resetSteep(${s.id})" title="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.1L1 10"/></svg></button>`}
+      <div class="progress-bar-wrap ${s.state!=='idle'?'visible':''}" id="prog-wrap-${s.id}">
+        <div class="progress-bar" id="prog-${s.id}" style="width:${pct}%"></div>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+function fmtTime(sec){const m=Math.floor(sec/60),s=sec%60;return m>0?`${m}:${String(s).padStart(2,'0')}`:`${sec}s`}
+
+function toggleRinseTimer(){
+  const rsec=parseInt(el('rinseSec').value)||15;
+  if(rinseState.state==='done'){rinseState={remaining:rsec,state:'idle'};if(rinseTimer){clearInterval(rinseTimer);rinseTimer=null;}renderSteeps();return;}
+  if(rinseState.state==='running'){clearInterval(rinseTimer);rinseTimer=null;rinseState.state='paused';renderSteeps();return;}
+  rinseState.state='running';renderSteeps();
+  rinseTimer=setInterval(()=>{
+    rinseState.remaining--;
+    const d=el('timer-rinse'),p=el('prog-rinse'),w=el('prog-wrap-rinse');
+    const r2=parseInt(el('rinseSec').value)||15;
+    if(d)d.textContent=fmtTime(rinseState.remaining);
+    if(p)p.style.width=Math.round((1-rinseState.remaining/r2)*100)+'%';
+    if(w)w.classList.add('visible');
+    if(rinseState.remaining<=0){clearInterval(rinseTimer);rinseTimer=null;rinseState.state='done';rinseState.remaining=0;renderSteeps();playBeep();}
+  },1000);
+}
+
+function setCoolPours(n){
+  pushUndo();
+  coolPours=n;
+  if(coolTimer){clearInterval(coolTimer);coolTimer=null;}
+  const csecRaw=coolWaitSecPoured(el('tempRange').value,coolPours);
+  const csec=(csecRaw!==null&&csecRaw>0)?csecRaw:0;
+  coolState={remaining:csec,state:'idle'};
+  updateCoolGuide();
+  renderSteeps();
+  schedSave();renderLibrary();
+}
+function resetCoolTimer(){
+  if(coolTimer){clearInterval(coolTimer);coolTimer=null;}
+  const r0=coolWaitSecPoured(el('tempRange').value,coolPours);
+  coolState={remaining:(r0!==null&&r0>0)?r0:0,state:'idle'};
+  renderSteeps();
+}
+function toggleCoolTimer(){
+  const csecRaw=coolWaitSecPoured(el('tempRange').value,coolPours);
+  const csec=(csecRaw!==null&&csecRaw>0)?csecRaw:0;if(!csec)return;
+  if(coolState.state==='done'){const r0=coolWaitSecPoured(el('tempRange').value,coolPours);coolState={remaining:(r0!==null&&r0>0)?r0:0,state:'idle'};if(coolTimer){clearInterval(coolTimer);coolTimer=null;}renderSteeps();return;}
+  if(coolState.state==='running'){clearInterval(coolTimer);coolTimer=null;coolState.state='paused';renderSteeps();return;}
+  coolState.state='running';renderSteeps();
+  coolTimer=setInterval(()=>{
+    coolState.remaining--;
+    const d=el('timer-cool'),p=el('prog-cool'),w=el('prog-wrap-cool');
+    if(d)d.textContent=fmtTime(coolState.remaining);
+    if(p)p.style.width=Math.round((1-coolState.remaining/csec)*100)+'%';
+    if(w)w.classList.add('visible');
+    if(coolState.remaining<=0){clearInterval(coolTimer);coolTimer=null;coolState.state='done';coolState.remaining=0;renderSteeps();playBeep();}
+  },1000);
+}
+
+function toggleTimer(id){
+  const s=steeps.find(x=>x.id===id);if(!s)return;
+  if(s.state==='done'){s.remaining=s.sec;s.state='idle';clearInterval(timers[id]);delete timers[id];renderSteeps();return;}
+  if(s.state==='running'){clearInterval(timers[id]);delete timers[id];s.state='paused';renderSteeps();return;}
+  s.state='running';renderSteeps();
+  timers[id]=setInterval(()=>{
+    s.remaining--;
+    const d=el('timer-'+id),p=el('prog-'+id),w=el('prog-wrap-'+id);
+    if(d)d.textContent=fmtTime(s.remaining);
+    if(p)p.style.width=Math.round((1-s.remaining/s.sec)*100)+'%';
+    if(w)w.classList.add('visible');
+    if(s.remaining<=0){clearInterval(timers[id]);delete timers[id];s.state='done';s.remaining=0;renderSteeps();playBeep();}
+  },1000);
+}
+
+function updateSteepTime(id,val){pushUndo();const s=steeps.find(x=>x.id===id);if(!s)return;const n=Math.max(5,Math.min(999,parseInt(val)||60));s.sec=n;if(s.state==='idle')s.remaining=n;renderSteeps();schedSave();renderLibrary();}
+function updateSteepTemp(id,val){pushUndo();const s=steeps.find(x=>x.id===id);if(!s)return;s.temp=val?Math.max(40,Math.min(100,parseInt(val)||0)).toString():'';renderSteeps();schedSave();renderLibrary();}
+function updateRinseTime(val){pushUndo();const n=Math.max(3,Math.min(120,parseInt(val)||15));el('rinseSec').value=n;if(rinseState.state==='idle')rinseState.remaining=n;renderSteeps();schedSave();renderLibrary();}
+function removeSteep(id){pushUndo();clearInterval(timers[id]);delete timers[id];steeps=steeps.filter(s=>s.id!==id);renderSteeps();schedSave();renderLibrary();}
+function resetSteep(id){const s=steeps.find(x=>x.id===id);if(!s)return;clearInterval(timers[id]);delete timers[id];s.state='idle';s.remaining=s.sec;renderSteeps();}
+function resetAllSteeps(){
+  steeps.forEach(s=>{clearInterval(timers[s.id]);delete timers[s.id];s.state='idle';s.remaining=s.sec;});
+  if(coolTimer){clearInterval(coolTimer);coolTimer=null;}
+  const r0=coolWaitSecPoured(el('tempRange').value,coolPours);
+  coolState={remaining:(r0!==null&&r0>0)?r0:0,state:'idle'};
+  if(rinseTimer){clearInterval(rinseTimer);rinseTimer=null;}
+  rinseState={remaining:parseInt(el('rinseSec').value)||15,state:'idle'};
+  warmDone=false;measureDone=false;
+  renderSteeps();
+}
+function clearAllTimers(){Object.values(timers).forEach(t=>clearInterval(t));timers={};if(rinseTimer){clearInterval(rinseTimer);rinseTimer=null;}if(coolTimer){clearInterval(coolTimer);coolTimer=null;}}
+async function newSession(){
+  if(!await customConfirm('Otevřít prázdnou kartu? Neuložené změny budou ztraceny.','otevřít'))return;
+  clearAllTimers();
+  steeps=[];nextId=1;activeLibId=null;coolPours=0;
+  el('teaName').value='';el('teaCategory').value='';el('teaSeller').value='';el('teaLocation').value='';el('teaAmount').value='';el('teaAmountTsp').value='';
+  el('vesselMl').value='50';el('vesselType').value='gaiwan';
+  el('tempRange').value='80';
+  el('notes').value='';
+  el('rinseSec').value='15';el('rinseTemp').value='';
+  ['chkWarm','chkRinse','chkSieve','chkCover','chkThermometer'].forEach(id=>el(id).classList.remove('checked'));
+  el('chkThermometer').classList.add('checked');
+  warmDone=false;measureDone=false;
+  if(coolTimer){clearInterval(coolTimer);coolTimer=null;}coolState={remaining:0,state:'idle'};
+  updateRinseVisibility();
+  defaultSteeps.forEach(s=>addSteep(s,'',true));
+  renderSteeps();updateHeaderTeaName();updatePer100();
+  savedSnapshot=null;undoStack=[];redoStack=[];updateUndoBtn();
+  renderLibrary();renderLog();schedSave();showSave('nová karta');
+}
+
+function playBeep(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [0,.15,.3].forEach(t=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);
+      o.frequency.value=880;o.type='sine';
+      g.gain.setValueAtTime(0,ctx.currentTime+t);g.gain.linearRampToValueAtTime(.2,ctx.currentTime+t+.02);g.gain.linearRampToValueAtTime(0,ctx.currentTime+t+.2);
+      o.start(ctx.currentTime+t);o.stop(ctx.currentTime+t+.25);
+    });
+  }catch(e){}
+}
+
+function clearStorage(){
+  el('clearStorageModal').classList.add('open');
+}
+
+function toggleAllClear(){
+  const boxes=['clr-session','clr-library','clr-templates','clr-archive','clr-appearance'].map(id=>el(id));
+  const anyUnchecked=boxes.some(b=>!b.checked);
+  boxes.forEach(b=>b.checked=anyUnchecked);
+}
+
+async function doSelectiveClear(){
+  const toDelete=[];
+  if(el('clr-session').checked) toDelete.push('cajovy-v3-session');
+  if(el('clr-library').checked) toDelete.push('cajovy-v3-library');
+  if(el('clr-templates').checked) toDelete.push('cajovy-v3-templates');
+  if(el('clr-archive').checked) toDelete.push('cajovy-v3-archive');
+  if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs');
+  if(!toDelete.length){closeModal('clearStorageModal');return;}
+  closeModal('clearStorageModal');
+  if(!await customConfirm('Opravdu smazat vybraná data?','smazat'))return;
+  try{toDelete.forEach(k=>localStorage.removeItem(k));}catch(e){}
+  location.reload();
+}
+
+
+/* ── FONT SIZE ─── */
+const FS_STEPS=[0.75,0.85,0.9,1,1.1,1.2,1.35,1.5,1.7,2.0];
+let fsIdx=3; // default = 100%
+function applyFs(){
+  const v=FS_STEPS[fsIdx];
+  document.documentElement.style.setProperty('--fs',v);
+  el('fsVal').textContent=Math.round(v*100)+'%';
+  try{localStorage.setItem('cajovy-fs',fsIdx);}catch(e){}
+}
+function changeFs(dir){
+  fsIdx=Math.max(0,Math.min(FS_STEPS.length-1,fsIdx+dir));
+  applyFs();
+}
+function initFs(){
+  try{const s=localStorage.getItem('cajovy-fs');if(s!==null){const p=parseInt(s);if(!isNaN(p))fsIdx=Math.max(0,Math.min(FS_STEPS.length-1,p));}}catch(e){}
+  applyFs();
+}
+
+/* ── CUSTOM CONFIRM (replaces native confirm() blocked by some WebViews) ─── */
+let _confirmResolve=null;
+function customConfirm(msg, okLabel='potvrdit'){
+  return new Promise(resolve=>{
+    if(_confirmResolve){const old=_confirmResolve;_confirmResolve=null;old(false);}
+    el('confirmMsg').textContent=msg;
+    el('confirmOkBtn').textContent=okLabel;
+    el('confirmCancelBtn').style.display='';
+    el('confirmModal').classList.add('open');
+    _confirmResolve=(val)=>{
+      el('confirmModal').classList.remove('open');
+      _confirmResolve=null;
+      resolve(val);
+    };
+  });
+}
+function customAlert(msg, okLabel='ok'){
+  return new Promise(resolve=>{
+    if(_confirmResolve){const old=_confirmResolve;_confirmResolve=null;old(false);}
+    el('confirmMsg').textContent=msg;
+    el('confirmOkBtn').textContent=okLabel;
+    el('confirmCancelBtn').style.display='none';
+    el('confirmModal').classList.add('open');
+    _confirmResolve=(val)=>{
+      el('confirmModal').classList.remove('open');
+      el('confirmCancelBtn').style.display='';
+      _confirmResolve=null;
+      resolve(val);
+    };
+  });
+}
+
+let _libDelResolve=null;
+function customDeleteOrArchive(name){
+  return new Promise(resolve=>{
+    if(_libDelResolve){const old=_libDelResolve;_libDelResolve=null;old(null);}
+    el('libDelMsg').textContent='Co chceš udělat s "'+name+'"?';
+    el('libDelModal').classList.add('open');
+    _libDelResolve=(val)=>{
+      el('libDelModal').classList.remove('open');
+      _libDelResolve=null;
+      resolve(val);
+    };
+  });
+}
+
+/* ── LIBRARY PANEL TOGGLE (mobile) ─── */
+function toggleLibPanel(){
+  const lp=document.querySelector('.library-panel');
+  if(!lp)return;
+  const hidden=lp.classList.toggle('lib-hidden');
+  el('libToggleBtn').textContent=hidden?'☰':'«';
+  updateAppGrid();
+}
+function toggleNewMenu(e){
+  e.stopPropagation();
+  const m=el('newMenu');
+  if(m.style.display==='flex'){m.style.display='none';return;}
+  m.style.display='flex';
+  const btn=e.currentTarget;
+  const br=btn.getBoundingClientRect();
+  const gap=4;
+  m.style.top=(br.bottom+gap+window.scrollY)+'px';
+  m.style.left='';m.style.right='';
+  requestAnimationFrame(()=>{
+    const mw=m.offsetWidth;
+    const vw=window.innerWidth;
+    let left=br.right-mw;
+    if(left<8)left=8;
+    if(left+mw>vw-8)left=vw-mw-8;
+    m.style.left=left+'px';
+  });
+}
+function closeNewMenu(){const m=el('newMenu');if(m)m.style.display='none';}
+function updateAppGrid(){
+  const lp=document.querySelector('.library-panel');
+  const app=document.querySelector('.app');
+  if(!app||!lp)return;
+  const hidden=lp.classList.contains('lib-hidden');
+  const w=window.innerWidth;
+  if(w<=820){
+    app.style.gridTemplateColumns='';  // handled by CSS
+  } else if(w<=1020){
+    app.style.gridTemplateColumns=hidden?'0 1fr':'185px 1fr';
+  } else {
+    app.style.gridTemplateColumns=hidden?'0 1fr 330px':'210px 1fr 330px';
+  }
+}
+/* ── DARK MODE ─── */
+function toggleDark(){
+  const on=document.documentElement.classList.toggle('dark');
+  el('darkToggle').textContent=on?'☾':'☀';
+  try{localStorage.setItem('cajovy-dark',on?'1':'0');}catch(e){}
+}
+function initDark(){
+  try{if(localStorage.getItem('cajovy-dark')==='1'){document.documentElement.classList.add('dark');el('darkToggle').textContent='☾';}}catch(e){}
+}
+
+/* ── MODALS ─── */
+function closeModal(id){el(id).classList.remove('open');}
+document.addEventListener('click',e=>{
+  closeNewMenu();
+  ['exportModal','importModal','exportCopyModal','tplNameModal','tplApplyModal','tplRenameModal','logExportModal','multiLogModal','mergePreviewModal','libPickModal','clearStorageModal','jsonbinModal'].forEach(id=>{
+    const m=el(id);if(m&&m.classList.contains('open')&&e.target===m)m.classList.remove('open');
+  });
+  // confirmModal needs special handling: must resolve promise on outside click
+  const cm=el('confirmModal');
+  if(cm&&cm.classList.contains('open')&&e.target===cm&&_confirmResolve){
+    _confirmResolve(false);
+  }
+  const dm=el('libDelModal');
+  if(dm&&dm.classList.contains('open')&&e.target===dm&&_libDelResolve){
+    _libDelResolve(null);
+  }
+});
+
+/* ── EXPORT ─── */
+let exportSelected=new Set();
+let exportTplSelected=new Set();
+let exportArchSelected=new Set();
+function openExportModal(){
+  exportSelected=new Set(library.map(e=>e.id));
+  exportTplSelected=new Set(templates.map(t=>t.id));
+  exportArchSelected=new Set(archive.map(e=>e.id));
+  const list=el('exportList');
+  list.innerHTML=library.length?library.map(e=>`
+    <label class="modal-item sel" id="ei-${e.id}">
+      <input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />
+      ${esc(e.name)}
+    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Knihovna je prázdná.</p>';
+  const tlist=el('exportTplList');
+  tlist.innerHTML=templates.length?templates.map(t=>`
+    <label class="modal-item sel" id="eti-${t.id}">
+      <input type="checkbox" checked onchange="toggleExportTplSel(${t.id},this.checked)" />
+      ${esc(t.name)}
+    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Žádné šablony.</p>';
+  const alist=el('exportArchList');
+  alist.innerHTML=archive.length?archive.map(e=>`
+    <label class="modal-item sel" id="eai-${e.id}">
+      <input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />
+      ${esc(e.name)}${e.archivedAt?' <span style="font-size:.72rem;color:var(--muted)">('+e.archivedAt+')</span>':''}
+    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archiv je prázdný.</p>';
+  updateExportFilename();
+  el('exportModal').classList.add('open');
+}
+function updateExportFilename(){
+  const _d=new Date();
+  const yymmdd=String(_d.getFullYear()).slice(2)+String(_d.getMonth()+1).padStart(2,'0')+String(_d.getDate()).padStart(2,'0');
+  el('exportFilename').value='TEA_'+yymmdd+'_T'+exportSelected.size+'S'+exportTplSelected.size+'A'+exportArchSelected.size+'.json';
+}
+function toggleExportSel(id,on){
+  on?exportSelected.add(id):exportSelected.delete(id);
+  el('ei-'+id)?.classList.toggle('sel',on);
+  updateExportFilename();
+}
+function toggleExportTplSel(id,on){
+  on?exportTplSelected.add(id):exportTplSelected.delete(id);
+  el('eti-'+id)?.classList.toggle('sel',on);
+  updateExportFilename();
+}
+function toggleExportArchSel(id,on){
+  on?exportArchSelected.add(id):exportArchSelected.delete(id);
+  el('eai-'+id)?.classList.toggle('sel',on);
+  updateExportFilename();
+}
+function selectAllExport(){
+  library.forEach(e=>{exportSelected.add(e.id);const el2=el('ei-'+e.id);el2?.classList.add('sel');el2?.querySelector('input')&&(el2.querySelector('input').checked=true);});
+  templates.forEach(t=>{exportTplSelected.add(t.id);const el2=el('eti-'+t.id);el2?.classList.add('sel');el2?.querySelector('input')&&(el2.querySelector('input').checked=true);});
+  archive.forEach(e=>{exportArchSelected.add(e.id);const el2=el('eai-'+e.id);el2?.classList.add('sel');el2?.querySelector('input')&&(el2.querySelector('input').checked=true);});
+  updateExportFilename();
+}
+function doExport(){
+  const items=library.filter(e=>exportSelected.has(e.id));
+  const tpls=templates.filter(t=>exportTplSelected.has(t.id));
+  const archItems=archive.filter(e=>exportArchSelected.has(e.id));
+  if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nic není vybráno.');return;}
+  const json=JSON.stringify({v:1,teas:items,templates:tpls,archive:archItems},null,2);
+  const rawName=(el('exportFilename').value.trim()||'export');
+  const fname=rawName.endsWith('.json')?rawName:rawName+'.json';
+
+  // Try data: URI first (works better on Android/Onyx than blob:)
+  let downloaded=false;
+  try{
+    const dataUri='data:application/json;charset=utf-8,'+encodeURIComponent(json);
+    const a=document.createElement('a');
+    a.href=dataUri;
+    a.download=fname;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    downloaded=true;
+  }catch(e){downloaded=false;}
+
+  closeModal('exportModal');
+
+  // Always show copy fallback so user can verify / use on restricted browsers
+  el('exportCopyText').value=json;
+  el('exportCopyNote').textContent=downloaded
+    ?'Soubor by měl být stažen jako "'+fname+'". Pokud ne, zkopíruj obsah níže.'
+    :'Stažení se nezdařilo — zkopíruj obsah níže a ulož jako soubor .json.';
+  el('exportCopyModal').classList.add('open');
+  showSave('↑ exportováno');
+}
+
+function copyExportText(){
+  const ta=el('exportCopyText');
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(ta.value).then(()=>showSave('✓ zkopírováno'));
+    }else{
+      ta.select();document.execCommand('copy');showSave('✓ zkopírováno');
+    }
+  }catch(e){ta.select();}
+}
+
+/* ── IMPORT ─── */
+let importData=[],importTplData=[],importArchData=[];
+let importSelected=new Set(),importTplSelected=new Set(),importArchSelected=new Set();
+let importNameActions={}; // tea_id -> 'add'|'rename'|'merge'|'merge-pick'
+let importMergeConfig={}; // tea_id -> {logIds:Set, applySettings:bool, targetLibId?}
+let currentMergeTeaId=null;
+let libPickForTeaId=null;
+function openImportModal(){
+  importData=[];importTplData=[];importArchData=[];importSelected=new Set();importTplSelected=new Set();importArchSelected=new Set();importNameActions={};importMergeConfig={};
+  el('importModal').classList.remove('from-cloud');
+  el('importModal').querySelector('h2').textContent='Import';
+  el('importFile').value='';el('importPaste').value='';
+  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';
+  el('importTeaSection').style.display='none';
+  el('importTplSection').style.display='none';
+  el('importArchSection').style.display='none';
+  el('importActions').style.display='none';
+  el('importCancel').style.display='flex';
+  el('importModal').classList.add('open');
+}
+function parseImportJson(text){
+  try{
+    const parsed=JSON.parse(text);
+    if(!parsed.teas&&!parsed.templates&&!parsed.archive)throw new Error('Neplatný formát — chybí teas, templates ani archive');
+    // Teas
+    const existingTeaNames=new Map(library.map(x=>[x.name.trim().toLowerCase(),x.id]));
+    const existingTeaById=new Map(library.map(x=>[x.id,x]));
+    importData=(parsed.teas||[]).map(t=>{
+      const {_nameDup,_idMatchRenamed}=detectTeaDuplicate(t,existingTeaById,existingTeaNames);
+      const entry={...t,_nameDup,_idMatchRenamed};
+      if(entry.data)entry.data={...entry.data,teaCategory:normCat(entry.data.teaCategory)};
+      return entry;
+    });
+    importNameActions={};
+    importData.forEach(t=>{importNameActions[t.id]=t._nameDup?(t._idMatchRenamed?'merge':'rename'):'add';});
+    importSelected=new Set(importData.map(t=>t.id));
+    // Detect fully identical name-matches and auto-deselect them
+    let identicalCount=0;
+    importData.forEach(t=>{
+      if(!t._nameDup||t._idMatchRenamed){t._isIdentical=false;return;}
+      const ex=library.find(x=>x.id===t._nameDup);
+      if(!ex){t._isIdentical=false;return;}
+      const diffs=buildSettingsDiff(ex.data,t.data);
+      const newLogs=getNewLogsForMerge(ex,t);
+      t._isIdentical=diffs.length===0&&newLogs.length===0&&(ex.data?.notes||'')===(t.data?.notes||'');
+      if(t._isIdentical){importSelected.delete(t.id);identicalCount++;}
+    });
+    if(importData.length){
+      el('importTeaSection').style.display='block';
+      const filterRow=el('importFilterRow');
+      if(filterRow){
+        filterRow.style.display=identicalCount>0?'flex':'none';
+        const hint=el('importFilterHint');
+        if(hint)hint.textContent=identicalCount+' shodné';
+      }
+      el('importList').innerHTML=importData.map(t=>{
+        const act=importNameActions[t.id]||'add';
+        if(t._nameDup){
+          const _ex=library.find(x=>x.id===t._nameDup);
+          const _diffs=_ex?buildSettingsDiff(_ex.data,t.data):[];
+          const _newLogs=_ex?getNewLogsForMerge(_ex,t):[];
+          const _notesMatch=!_ex||((_ex.data?.notes||'')===(t.data?.notes||''));
+          const _nameTag=t._idMatchRenamed?'jiný název':'stejný název';
+          const _sum=(_diffs.length?_diffs.length+' rozdíl'+(_diffs.length>1?'ů':'')+'  v nastavení':'nastavení shodné')+
+                     ' · '+(_newLogs.length?_newLogs.length+' nových zápisků':'zápisky shodné')+
+                     (!_notesMatch?' · obecné zápisky se liší':'');
+          const _isSel=importSelected.has(t.id);
+          return `<div style="border:var(--b);border-radius:var(--r)" data-tea-id="${t.id}" data-identical="${t._isIdentical}">
+            <label class="modal-item${_isSel?' sel':''}" id="ii-${t.id}" style="border:none;border-radius:var(--r) var(--r) 0 0">
+              <input type="checkbox" ${_isSel?'checked':''} onchange="toggleImportSel(${t.id},this.checked)" />
+              ${esc(t.name)}${t._idMatchRenamed?` <span style="font-size:.68rem;color:var(--muted)">(v knihovně: ${esc(_ex?.name||'')})</span>`:''}
+              <span class="dup-name-tag">${_nameTag}</span>
+            </label>
+            <div style="padding:.08rem .5rem .12rem;font-size:.73rem;color:var(--muted)">${esc(_sum)}</div>
+            <div class="dup-act-row">
+              ${t._idMatchRenamed?'':`<button class="dup-act-btn ${act==='rename'?'active':''}" id="iact-r-${t.id}" onclick="setImportAction(${t.id},'rename')">přejmenovat</button>`}
+              <button class="dup-act-btn ${act==='merge'?'active':''}" id="iact-m-${t.id}" onclick="setImportAction(${t.id},'merge')">sloučit zápisky</button>
+              <button class="dup-act-btn ${act==='merge-pick'?'active':''}" id="iact-mp-${t.id}" onclick="setImportAction(${t.id},'merge-pick')">sloučit s…</button>
+            </div>
+            <div id="iact-rn-${t.id}" style="display:${act==='rename'?'flex':'none'};gap:.4rem;align-items:center;padding:.15rem .5rem .35rem">
+              <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">nový název:</span>
+              <input type="text" id="iact-name-${t.id}" value="${esc(t.name)}" style="flex:1;font-size:.82rem;padding:.2rem .35rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)" />
+            </div>
+          </div>`;
+        }
+        return `<div style="border:var(--b);border-radius:var(--r)" data-tea-id="${t.id}" data-identical="false">
+          <label class="modal-item sel" id="ii-${t.id}" style="border:none;border-radius:var(--r) var(--r) 0 0">
+            <input type="checkbox" checked onchange="toggleImportSel(${t.id},this.checked)" />
+            ${esc(t.name)}
+          </label>
+          <div class="dup-act-row">
+            <button class="dup-act-btn ${act==='add'?'active':''}" id="iact-add-${t.id}" onclick="setImportAction(${t.id},'add')">přidat</button>
+            <button class="dup-act-btn ${act==='rename'?'active':''}" id="iact-r-${t.id}" onclick="setImportAction(${t.id},'rename')">přejmenovat</button>
+            <button class="dup-act-btn ${act==='merge-pick'?'active':''}" id="iact-mp-${t.id}" onclick="setImportAction(${t.id},'merge-pick')">sloučit s…</button>
+          </div>
+          <div id="iact-rn-${t.id}" style="display:${act==='rename'?'flex':'none'};gap:.4rem;align-items:center;padding:.15rem .5rem .35rem">
+            <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">nový název:</span>
+            <input type="text" id="iact-name-${t.id}" value="${esc(t.name)}" style="flex:1;font-size:.82rem;padding:.2rem .35rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)" />
+          </div>
+        </div>`;
+      }).join('');
+      applyImportFilter();
+    }
+    // Templates
+    const existingTpls=new Set(templates.map(x=>x.id));
+    importTplData=(parsed.templates||[]).map(t=>({...t,_dup:existingTpls.has(t.id)}));
+    importTplSelected=new Set(importTplData.filter(t=>!t._dup).map(t=>t.id));
+    if(importTplData.length){
+      el('importTplSection').style.display='block';
+      el('importTplList').innerHTML=importTplData.map(t=>`
+        <label class="modal-item ${importTplSelected.has(t.id)?'sel':''}" id="iti-${t.id}">
+          <input type="checkbox" ${importTplSelected.has(t.id)?'checked':''}
+            onchange="toggleImportTplSel(${t.id},this.checked)" />
+          ${esc(t.name)}${t._dup?' <span style="font-size:.7rem;opacity:.6">(duplicita)</span>':''}
+        </label>`).join('');
+    }
+    // Archive
+    const existingArchIds=new Set(archive.map(x=>x.id));
+    importArchData=(parsed.archive||[]).map(e=>({...e,_dup:existingArchIds.has(e.id)}));
+    importArchSelected=new Set(importArchData.filter(e=>!e._dup).map(e=>e.id));
+    if(importArchData.length){
+      el('importArchSection').style.display='block';
+      el('importArchList').innerHTML=importArchData.map(e=>`
+        <label class="modal-item ${importArchSelected.has(e.id)?'sel':''}" id="iai-${e.id}">
+          <input type="checkbox" ${importArchSelected.has(e.id)?'checked':''}
+            onchange="toggleImportArchSel(${e.id},this.checked)" />
+          ${esc(e.name)}${e.archivedAt?' <span style="font-size:.7rem;color:var(--muted)">('+e.archivedAt+')</span>':''}${e._dup?' <span style="font-size:.7rem;opacity:.6">(duplicita)</span>':''}
+        </label>`).join('');
+    }
+    const _dupCount=importData.filter(t=>t._nameDup&&!t._idMatchRenamed).length;
+    el('importBulkControls').style.display=_dupCount>=2?'block':'none';
+    if(_dupCount>=2){
+      _bulkNotesAction='keep-existing';_bulkApplySettings=false;
+      el('bulk-apply-settings').checked=false;
+      el('importBulkMergeOpts').style.display='none';
+      el('bulk-btn-rename')?.classList.remove('active');el('bulk-btn-merge')?.classList.remove('active');
+      ['keep','use','both'].forEach((k,i)=>el('bulk-mn-'+k)?.classList.toggle('active',i===0));
+    }
+    el('importActions').style.display='flex';
+    el('importCancel').style.display='none';
+  }catch(err){
+    el('importList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Chyba: '+err.message+'</p>';
+    el('importTeaSection').style.display='block';
+  }
+}
+function applyImportFilter(){
+  const filterOn=el('importFilterChanged')?.checked;
+  el('importList')?.querySelectorAll('[data-tea-id]').forEach(div=>{
+    div.style.display=(filterOn&&div.dataset.identical==='true')?'none':'';
+  });
+}
+function previewImportPaste(){
+  const text=el('importPaste').value.trim();
+  if(!text)return;
+  el('importTeaSection').style.display='none';el('importTplSection').style.display='none';el('importArchSection').style.display='none';
+  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';
+  parseImportJson(text);
+}
+function previewImport(){
+  const file=el('importFile').files[0];if(!file)return;
+  el('importPaste').value='';
+  el('importTeaSection').style.display='none';el('importTplSection').style.display='none';el('importArchSection').style.display='none';
+  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const parsed=JSON.parse(ev.target.result);
+      parseImportJson(JSON.stringify(parsed));
+    }catch(err){el('importList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Chyba: '+err.message+'</p>';el('importTeaSection').style.display='block';}
+  };
+  r.readAsText(file);
+}
+function toggleImportSel(id,on){
+  on?importSelected.add(id):importSelected.delete(id);
+  el('ii-'+id)?.classList.toggle('sel',on);
+}
+function toggleImportTplSel(id,on){
+  on?importTplSelected.add(id):importTplSelected.delete(id);
+  el('iti-'+id)?.classList.toggle('sel',on);
+}
+function toggleImportArchSel(id,on){
+  on?importArchSelected.add(id):importArchSelected.delete(id);
+  el('iai-'+id)?.classList.toggle('sel',on);
+}
+function setImportAction(id,action){
+  importNameActions[id]=action;
+  el('iact-add-'+id)?.classList.toggle('active',action==='add');
+  el('iact-r-'+id)?.classList.toggle('active',action==='rename');
+  el('iact-m-'+id)?.classList.toggle('active',action==='merge');
+  el('iact-mp-'+id)?.classList.toggle('active',action==='merge-pick');
+  const rn=el('iact-rn-'+id);if(rn)rn.style.display=action==='rename'?'flex':'none';
+  if(action==='merge')openMergePreview(id);
+  else if(action==='merge-pick')openLibPicker(id);
+}
+
+function openLibPicker(importTeaId){
+  libPickForTeaId=importTeaId;
+  const imp=importData.find(t=>t.id===importTeaId);
+  el('libPickList').innerHTML=library.map(lt=>`
+    <div class="modal-item" style="cursor:pointer" onclick="pickLibTea(${importTeaId},${lt.id})">
+      ${esc(lt.name)}
+      ${imp&&lt.name.trim().toLowerCase()===imp.name.trim().toLowerCase()?'<span class="dup-name-tag">stejný název</span>':''}
+    </div>`).join('') || '<p style="font-size:.82rem;color:var(--muted);padding:.3rem">Knihovna je prázdná.</p>';
+  el('libPickModal').classList.add('open');
+}
+
+function pickLibTea(importTeaId,libTeaId){
+  closeModal('libPickModal');
+  importNameActions[importTeaId]='merge-pick';
+  el('iact-mp-'+importTeaId)?.classList.add('active');
+  el('iact-r-'+importTeaId)?.classList.remove('active');
+  el('iact-m-'+importTeaId)?.classList.remove('active');
+  el('iact-add-'+importTeaId)?.classList.remove('active');
+  const rn=el('iact-rn-'+importTeaId);if(rn)rn.style.display='none';
+  const imp=importData.find(t=>t.id===importTeaId);
+  const existing=library.find(x=>x.id===libTeaId);
+  if(!imp||!existing)return;
+  const newLogs=getNewLogsForMerge(existing,imp);
+  importMergeConfig[importTeaId]={logIds:new Set(newLogs.map(l=>l.id)),applySettings:false,notesAction:'keep-existing',targetLibId:libTeaId};
+  // update button label
+  const btn=el('iact-mp-'+importTeaId);
+  if(btn)btn.textContent='sloučit s: '+existing.name;
+  openMergePreview(importTeaId);
+}
+
+function getNewLogsForMerge(existing,imp){
+  const existingLogIds=new Set((existing.logs||[]).map(l=>l.id));
+  return(imp.logs||[]).filter(l=>!existingLogIds.has(l.id));
+}
+
+function buildSettingsDiff(ed,id_data){
+  const diffs=[];
+  [{key:'temp',label:'teplota',fmt:v=>v+'°C'},{key:'vesselType',label:'nádoba typ'},{key:'vesselMl',label:'nádoba ml',fmt:v=>v+' ml'},
+   {key:'teaAmount',label:'množství',fmt:v=>v+'g'},{key:'teaAmountTsp',label:'lžičky'},{key:'teaCategory',label:'kategorie'},
+   {key:'seller',label:'prodejce'},{key:'location',label:'místo'},
+   {key:'rinseSec',label:'oplach',fmt:v=>v+'s'},{key:'rinseTemp',label:'tepl. opláchu',fmt:v=>v+'°C'}
+  ].forEach(f=>{
+    const eV=String(ed?.[f.key]||'');const iV=String(id_data?.[f.key]||'');
+    if(eV!==iV){const fmt=f.fmt||(v=>v||'—');diffs.push({label:f.label,oldVal:fmt(ed?.[f.key]),newVal:fmt(id_data?.[f.key])});}
+  });
+  const eS=(ed?.steeps||[]).length;const iS=(id_data?.steeps||[]).length;
+  if(eS!==iS)diffs.push({label:'nálevy',oldVal:eS+'×',newVal:iS+'×'});
+  const ckLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrýt',chkThermometer:'teploměr'};
+  Object.entries(ckLabels).forEach(([ck,cl])=>{
+    const eV=!!(ed?.checks?.[ck]);const iV=!!(id_data?.checks?.[ck]);
+    if(eV!==iV)diffs.push({label:cl,oldVal:eV?'✓':'✗',newVal:iV?'✓':'✗'});
+  });
+  return diffs;
+}
+
+function openMergePreview(id){
+  const imp=importData.find(t=>t.id===id);if(!imp)return;
+  const targetLibId=importMergeConfig[id]?.targetLibId||imp._nameDup;
+  const existing=library.find(x=>x.id===targetLibId);if(!existing)return;
+  currentMergeTeaId=id;
+  const newLogs=getNewLogsForMerge(existing,imp);
+  if(!importMergeConfig[id]){
+    importMergeConfig[id]={logIds:new Set(newLogs.map(l=>l.id)),applySettings:false,notesAction:'keep-existing',targetLibId:targetLibId,renameLib:!!imp._idMatchRenamed};
+  }
+  const _mergeLabel=(importNameActions[id]==='merge-pick')?imp.name+' → '+existing.name:imp.name;
+  el('mergePreviewTitle').textContent='Sloučit — '+_mergeLabel;
+  const cfg=importMergeConfig[id];
+  const diffs=buildSettingsDiff(existing.data,imp.data);
+  let html='';
+  if(imp._idMatchRenamed){
+    html+=`<div style="margin-bottom:.55rem">
+      <div class="merge-diff-row">
+        <span class="merge-diff-key">název</span>
+        <span class="merge-diff-old">${esc(existing.name)}</span>
+        <span style="color:var(--muted);flex-shrink:0">→</span>
+        <span class="merge-diff-new">${esc(imp.name)}</span>
+      </div>
+      <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.83rem;margin-top:.35rem">
+        <input type="checkbox" id="merge-rename-lib" ${cfg.renameLib?'checked':''} onchange="importMergeConfig[currentMergeTeaId].renameLib=this.checked" style="width:14px;height:14px;accent-color:var(--black);cursor:pointer;flex-shrink:0" />
+        přejmenovat čaj v knihovně
+      </label>
+    </div>`;
+  }
+  if(diffs.length){
+    html+=`<div class="field" style="margin-bottom:.55rem">
+      <label style="display:flex;align-items:center;gap:.45rem;cursor:pointer;font-size:.83rem">
+        <input type="checkbox" id="merge-apply-settings" ${cfg.applySettings?'checked':''} onchange="importMergeConfig[currentMergeTeaId].applySettings=this.checked" style="width:14px;height:14px;accent-color:var(--black);cursor:pointer;flex-shrink:0" />
+        přepsat nastavení čaje (${diffs.length} rozdíl${diffs.length>1?'ů':''})
+      </label>
+      <div style="margin-top:.32rem;padding:.3rem .5rem;background:var(--off);border-radius:var(--r)">
+        ${diffs.map(d=>`<div class="merge-diff-row">
+          <span class="merge-diff-key">${esc(d.label)}</span>
+          <span class="merge-diff-old">${esc(String(d.oldVal??'—'))}</span>
+          <span style="color:var(--muted);flex-shrink:0">→</span>
+          <span class="merge-diff-new">${esc(String(d.newVal??'—'))}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  } else {
+    html+=`<p style="font-size:.8rem;color:var(--muted);margin-bottom:.4rem">Nastavení čaje jsou shodná.</p>`;
+  }
+  const _exN=existing.data?.notes||'';const _impN=imp.data?.notes||'';
+  if(_exN&&_impN&&_exN!==_impN){
+    const na=cfg.notesAction||'keep-existing';
+    const trunc=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
+    html+=`<div class="field" style="margin-bottom:.55rem">
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.3rem">obecné zápisky</div>
+      <div style="font-size:.77rem;padding:.3rem .5rem;background:var(--off);border-radius:var(--r);margin-bottom:.3rem">
+        <div><span style="color:var(--muted)">stávající: </span>${esc(trunc(_exN,120))}</div>
+        <div style="margin-top:.18rem"><span style="color:var(--muted)">import: </span>${esc(trunc(_impN,120))}</div>
+      </div>
+      <div class="dup-act-row" style="gap:.3rem;flex-wrap:wrap">
+        <button class="dup-act-btn${na==='keep-existing'?' active':''}" id="mn-keep" onclick="mergeSetNotesAction('keep-existing')">zachovat stávající</button>
+        <button class="dup-act-btn${na==='use-import'?' active':''}" id="mn-use" onclick="mergeSetNotesAction('use-import')">použít importované</button>
+        <button class="dup-act-btn${na==='merge-both'?' active':''}" id="mn-both" onclick="mergeSetNotesAction('merge-both')">spojit obě</button>
+      </div>
+    </div>`;
+  }
+  if(newLogs.length){
+    html+=`<div class="field">
+      <label style="font-size:.78rem;color:var(--muted)">zápisky k přidání — ${newLogs.length} nových</label>
+      <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;max-height:210px;overflow-y:auto">
+        ${newLogs.map(l=>{
+          const sel=cfg.logIds.has(l.id);
+          const firstLine=(l.setup||'').split('\n')[0]||l.date;
+          return `<label class="merge-log-item ${sel?'sel':''}" id="mli-${l.id}">
+            <input type="checkbox" ${sel?'checked':''} onchange="mergeToggleLog(${l.id},this.checked)" style="width:13px;height:13px;accent-color:var(--black);cursor:pointer;flex-shrink:0" />
+            <span class="merge-log-date">${esc(l.date)}</span>
+            <span class="merge-log-setup" title="${esc(firstLine)}">${esc(firstLine)}</span>
+          </label>`;
+        }).join('')}
+      </div>
+    </div>`;
+  } else {
+    html+=`<p style="font-size:.8rem;color:var(--muted)">Žádné nové zápisky — vše je již v knihovně.</p>`;
+  }
+  el('mergePreviewBody').innerHTML=html;
+  el('mergePreviewModal').classList.add('open');
+}
+
+function mergeToggleLog(logId,on){
+  const cfg=importMergeConfig[currentMergeTeaId];if(!cfg)return;
+  on?cfg.logIds.add(logId):cfg.logIds.delete(logId);
+  el('mli-'+logId)?.classList.toggle('sel',on);
+}
+function mergeSetNotesAction(action){
+  const cfg=importMergeConfig[currentMergeTeaId];if(!cfg)return;
+  cfg.notesAction=action;
+  const ids={'keep-existing':'mn-keep','use-import':'mn-use','merge-both':'mn-both'};
+  Object.entries(ids).forEach(([a,bid])=>el(bid)?.classList.toggle('active',a===action));
+}
+
+function _updateMergeBtn(id){
+  const cfg=importMergeConfig[id];if(!cfg)return;
+  const action=importNameActions[id];
+  const suffix='('+cfg.logIds.size+' zápisků'+(cfg.applySettings?' + nastav.':'')+')';
+  if(action==='merge'){const btn=el('iact-m-'+id);if(btn)btn.textContent='sloučit '+suffix;}
+  else if(action==='merge-pick'){
+    const existing=cfg.targetLibId?library.find(x=>x.id===cfg.targetLibId):null;
+    const btn=el('iact-mp-'+id);
+    if(btn)btn.textContent='sloučit s: '+(existing?existing.name:'?')+' '+suffix;
+  }
+}
+function confirmMergeConfig(){
+  const id=currentMergeTeaId;
+  closeModal('mergePreviewModal');
+  _updateMergeBtn(id);
+  currentMergeTeaId=null;
+}
+
+let _bulkNotesAction='keep-existing',_bulkApplySettings=false;
+function bulkImportAction(action){
+  el('bulk-btn-rename')?.classList.toggle('active',action==='rename');
+  el('bulk-btn-merge')?.classList.toggle('active',action==='merge');
+  const opts=el('importBulkMergeOpts');
+  if(opts)opts.style.display=action==='merge'?'flex':'none';
+  importData.filter(t=>t._nameDup&&!t._idMatchRenamed&&importSelected.has(t.id)).forEach(t=>{
+    importNameActions[t.id]=action;
+    el('iact-r-'+t.id)?.classList.toggle('active',action==='rename');
+    el('iact-m-'+t.id)?.classList.toggle('active',action==='merge');
+    el('iact-mp-'+t.id)?.classList.remove('active');
+    const rn=el('iact-rn-'+t.id);if(rn)rn.style.display=action==='rename'?'flex':'none';
+    if(action==='merge'){
+      const existing=library.find(x=>x.id===t._nameDup);if(!existing)return;
+      const newLogs=getNewLogsForMerge(existing,t);
+      importMergeConfig[t.id]={logIds:new Set(newLogs.map(l=>l.id)),applySettings:_bulkApplySettings,notesAction:_bulkNotesAction,targetLibId:t._nameDup};
+      _updateMergeBtn(t.id);
+    }
+  });
+}
+function bulkSetNotesAction(action){
+  _bulkNotesAction=action;
+  const map={'keep-existing':'keep','use-import':'use','merge-both':'both'};
+  Object.entries(map).forEach(([v,k])=>el('bulk-mn-'+k)?.classList.toggle('active',v===action));
+  importData.filter(t=>t._nameDup&&importNameActions[t.id]==='merge').forEach(t=>{
+    if(importMergeConfig[t.id]){importMergeConfig[t.id].notesAction=action;_updateMergeBtn(t.id);}
+  });
+}
+function bulkApplySettingsToggle(){
+  _bulkApplySettings=el('bulk-apply-settings').checked;
+  importData.filter(t=>t._nameDup&&importNameActions[t.id]==='merge').forEach(t=>{
+    if(importMergeConfig[t.id]){importMergeConfig[t.id].applySettings=_bulkApplySettings;_updateMergeBtn(t.id);}
+  });
+}
+function detectTeaDuplicate(t,existingTeaById,existingTeaNames){
+  const idMatchLib=existingTeaById.get(t.id);
+  let _nameDup=null,_idMatchRenamed=false;
+  if(idMatchLib){
+    _nameDup=idMatchLib.id;
+    _idMatchRenamed=idMatchLib.name.trim().toLowerCase()!==t.name.trim().toLowerCase();
+  }else{
+    _nameDup=existingTeaNames.get(t.name.trim().toLowerCase())||null;
+  }
+  return{_nameDup,_idMatchRenamed};
+}
+function genUniqueId(existingIds){
+  let id;
+  do{id=Date.now()+Math.floor(Math.random()*100000);}while(existingIds.has(id));
+  existingIds.add(id);
+  return id;
+}
+function doImport(){
+  const existingIds=new Set(library.map(x=>x.id));
+  const toAdd=importData.filter(t=>importSelected.has(t.id));
+  let added=0,merged=0;
+  toAdd.forEach(t=>{
+    const action=importNameActions[t.id]||'add';
+    const isMerge=(action==='merge'&&t._nameDup)||(action==='merge-pick'&&!!importMergeConfig[t.id]?.targetLibId);
+    if(isMerge){
+      const targetLibId=(action==='merge-pick'?importMergeConfig[t.id]?.targetLibId:null)||t._nameDup;
+      const existing=library.find(x=>x.id===targetLibId);
+      if(existing){
+        const cfg=importMergeConfig[t.id];
+        const allNewLogs=getNewLogsForMerge(existing,t);
+        const logsToAdd=cfg?allNewLogs.filter(l=>cfg.logIds.has(l.id)):allNewLogs;
+        existing.logs=[...(existing.logs||[]),...logsToAdd];
+        const _exNotes=existing.data?.notes||'';
+        if(cfg?.applySettings&&t.data)existing.data={...existing.data,...t.data};
+        const _na=cfg?.notesAction||'keep-existing';
+        const _impNotes=t.data?.notes||'';
+        if(_na==='use-import')existing.data.notes=_impNotes;
+        else if(_na==='merge-both')existing.data.notes=(_exNotes&&_impNotes)?_exNotes+'\n\n---\n\n'+_impNotes:_exNotes||_impNotes;
+        else existing.data.notes=_exNotes;
+        if(t._idMatchRenamed&&cfg?.renameLib)existing.name=t.name;
+        merged++;
+      }
+    } else {
+      const entry={...t};
+      const renamedVal=el('iact-name-'+t.id)?.value;
+      if(renamedVal!==undefined)entry.name=renamedVal.trim()||t.name;
+      if(existingIds.has(entry.id)){entry.id=genUniqueId(existingIds);}
+      library.push(entry);added++;
+    }
+  });
+  saveLibrary();renderLibrary();
+  closeModal('mergePreviewModal');closeModal('libPickModal');
+  const existingTpls=new Set(templates.map(x=>x.id));
+  const tplsToAdd=importTplData.filter(t=>importTplSelected.has(t.id)&&!existingTpls.has(t.id));
+  templates.push(...tplsToAdd);
+  saveTemplates();renderTemplates();
+  const existingArchIds2=new Set(archive.map(x=>x.id));
+  const archToAdd=importArchData.filter(e=>importArchSelected.has(e.id));
+  archToAdd.forEach(e=>{
+    const entry={...e};
+    if(existingArchIds2.has(entry.id)){entry.id=genUniqueId(existingArchIds2);}
+    archive.push(entry);
+  });
+  saveArchive();renderArchive();
+  closeModal('importModal');
+  const parts=[];
+  if(added)parts.push(added+' čajů');
+  if(tplsToAdd.length)parts.push(tplsToAdd.length+' šablon');
+  if(archToAdd.length)parts.push(archToAdd.length+' archiv');
+  if(merged)parts.push(merged+' sloučeno');
+  showSave('↓ importováno: '+(parts.join(', ')||'nic'));
+}
+
+function updatePer100(){
+  const amount=parseNum(el('teaAmount').value);
+  const vessel=parseNum(el('vesselMl').value)||50;
+  const note=el('per100note');
+  if(!amount||amount<=0||!note){note&&(note.textContent='');return;}
+  const per100=Math.round((amount/vessel)*1000)/10; // per 100ml, 1 decimal
+  note.textContent='= '+per100.toFixed(1)+' g/100ml';
+  schedSave();
+}
+
+
+/* ── NOTES TABS ─── */
+function switchTab(tab){
+  document.querySelectorAll('.notes-tab').forEach((t,i)=>t.classList.toggle('active',['general','log'][i]===tab));
+  document.querySelectorAll('.notes-pane').forEach(p=>p.classList.remove('active'));
+  el('pane-'+tab).classList.add('active');
+}
+
+
+/* ── TEMPLATES ─── */
+const TPL_KEY='cajovy-v3-templates';
+let templates=[];
+let activeTplId=null;
+
+function loadTemplates(){
+  try{templates=JSON.parse(localStorage.getItem(TPL_KEY)||'[]');}catch(e){templates=[];}
+}
+function saveTemplates(){
+  try{localStorage.setItem(TPL_KEY,JSON.stringify(templates));}catch(e){}
+}
+
+function getTemplateData(){
+  return {
+    teaCategory:el('teaCategory').value||'',
+    teaAmount:el('teaAmount').value||'',
+    teaAmountTsp:el('teaAmountTsp').value||'',
+    temp:el('tempRange').value,
+    vesselMl:el('vesselMl').value||'50',
+    vesselType:el('vesselType').value||'gaiwan',
+    rinseSec:el('rinseSec').value||'15',
+    rinseTemp:el('rinseTemp').value||'',
+    coolPours,
+    checks:{
+      chkWarm:el('chkWarm').classList.contains('checked'),
+      chkRinse:el('chkRinse').classList.contains('checked'),
+      chkSieve:el('chkSieve').classList.contains('checked'),
+      chkCover:el('chkCover').classList.contains('checked'),
+      chkThermometer:el('chkThermometer').classList.contains('checked'),
+    },
+    steeps:steeps.map(s=>{return{sec:s.sec,temp:s.temp};}),
+  };
+}
+
+function openTplNameModal(){
+  pendingLogTplData=null;
+  const auto=el('teaName').value.trim();
+  el('tplNameInput').value=auto?'Gongfu — '+auto:'';
+  el('tplNameModal').classList.add('open');
+  setTimeout(()=>el('tplNameInput').select(),60);
+}
+function saveTplFromModal(){
+  const name=el('tplNameInput').value.trim()||'Šablona';
+  const data=pendingLogTplData||getTemplateData();
+  pendingLogTplData=null;
+  const tpl={id:Date.now(),name,data};
+  templates.push(tpl);
+  saveTemplates();renderTemplates();
+  closeModal('tplNameModal');
+  showSave('✓ šablona uložena');
+}
+
+function openTplApplyModal(id){
+  const tpl=templates.find(t=>t.id===id);if(!tpl)return;
+  activeTplId=id;
+  el('tplApplyTitle').textContent=tpl.name;
+  const d=tpl.data;
+  const fields=[];
+  fields.push({key:'temp',label:'Teplota',val:(d.temp||80)+' °C'});
+  fields.push({key:'vessel',label:'Nádoba',val:(d.vesselType||'gaiwan')+' '+(d.vesselMl||50)+' ml'});
+  const amtParts=[d.teaAmount?d.teaAmount+' g':'',d.teaAmountTsp?d.teaAmountTsp+' lžičky':''].filter(Boolean);
+  fields.push({key:'amount',label:'Množství',val:amtParts.length?amtParts.join(' / '):'—'});
+  fields.push({key:'category',label:'Kategorie',val:d.teaCategory||'—'});
+  const checkMap={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrýt'};
+  if(d.checks&&'chkThermometer' in d.checks)checkMap.chkThermometer='teploměr';
+  if(d.checks){
+    const cs=Object.entries(checkMap).map(([cid,l])=>(d.checks[cid]?'✓ ':'✗ ')+l).join('  ');
+    fields.push({key:'checks',label:'Příprava',val:cs});
+  }
+  if(d.checks&&d.checks.chkRinse){
+    const rv=(d.rinseSec||15)+'s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':'');
+    fields.push({key:'rinse',label:'Čas opláchu',val:rv});
+  }
+  if(d.steeps&&d.steeps.length){
+    const sv=d.steeps.map((s,i)=>(i+1)+'.'+s.sec+'s'+(s.temp?'/'+s.temp+'°C':'')).join('  ');
+    fields.push({key:'steeps',label:'Nálevy ('+d.steeps.length+'×)',val:sv});
+  }
+  el('tplApplyFields').innerHTML=fields.map(f=>`
+    <label class="tpl-field-row">
+      <input type="checkbox" checked id="tac-${f.key}" />
+      <span class="tpl-field-lbl">${esc(f.label)}</span>
+      <span class="tpl-field-val" title="${esc(f.val)}">${esc(f.val)}</span>
+    </label>`).join('');
+  el('tplApplyModal').classList.add('open');
+}
+
+function applySelectedFromTemplate(){
+  const tpl=templates.find(t=>t.id===activeTplId);if(!tpl)return;
+  const d=tpl.data;
+  const on=key=>{const cb=el('tac-'+key);return cb&&cb.checked;};
+  pushUndo();
+  if(on('temp'))el('tempRange').value=d.temp||80;
+  if(on('vessel')){el('vesselMl').value=d.vesselMl||50;el('vesselType').value=d.vesselType||'gaiwan';updatePer100();}
+  if(on('amount')){if(d.teaAmount!==undefined)el('teaAmount').value=normDec(d.teaAmount);if(d.teaAmountTsp!==undefined)el('teaAmountTsp').value=normDec(d.teaAmountTsp);updatePer100();}
+  if(on('category')&&d.teaCategory!==undefined)el('teaCategory').value=d.teaCategory;
+  if(on('checks')&&d.checks){Object.entries(d.checks).forEach(([cid,v])=>el(cid).classList.toggle('checked',!!v));updateRinseVisibility();}
+  if(on('rinse')){el('rinseSec').value=d.rinseSec||15;el('rinseTemp').value=d.rinseTemp||'';}
+  if(on('steeps')){
+    clearAllTimers();steeps=[];nextId=1;
+    (d.steeps||[]).forEach(s=>addSteep(s.sec,s.temp||'',true));
+    rinseState={remaining:parseInt(el('rinseSec').value)||15,state:'idle'};
+  }
+  updateRinseVisibility();renderSteeps();schedSave();renderLibrary();
+  closeModal('tplApplyModal');showSave('← šablona použita');
+}
+
+async function overwriteTemplate(){
+  const tpl=templates.find(t=>t.id===activeTplId);if(!tpl)return;
+  closeModal('tplApplyModal');
+  if(!await customConfirm('Přepsat šablonu "'+tpl.name+'" aktuálním nastavením?','přepsat'))return;
+  tpl.data=getTemplateData();
+  saveTemplates();renderTemplates();showSave('✓ šablona upravena');
+}
+
+function openTplRenameModal(id){
+  const tpl=templates.find(t=>t.id===id);if(!tpl)return;
+  activeTplId=id;
+  el('tplRenameInput').value=tpl.name;
+  el('tplRenameModal').classList.add('open');
+  setTimeout(()=>el('tplRenameInput').select(),60);
+}
+
+function saveTplRename(){
+  const tpl=templates.find(t=>t.id===activeTplId);if(!tpl)return;
+  const name=el('tplRenameInput').value.trim();if(!name)return;
+  tpl.name=name;
+  saveTemplates();renderTemplates();
+  closeModal('tplRenameModal');showSave('✓ přejmenováno');
+}
+
+async function deleteTemplate(id){
+  const tpl=templates.find(t=>t.id===id);
+  if(!await customConfirm('Smazat šablonu "'+(tpl?tpl.name:'')+'"?','smazat'))return;
+  templates=templates.filter(t=>t.id!==id);
+  saveTemplates();renderTemplates();
+}
+
+function renderTemplates(){
+  const list=el('tplList');
+  if(!templates.length){
+    list.innerHTML='<div class="tpl-empty">Žádné šablony.</div>';return;
+  }
+  list.innerHTML=templates.map(t=>`
+    <div class="tpl-item" onclick="openTplApplyModal(${t.id})" title="Klikni pro aplikaci šablony">
+      <span class="tpl-name" title="${esc(t.name)}">${esc(t.name)}</span>
+      <button class="tpl-rename" onclick="event.stopPropagation();openTplEdit(${t.id})" title="upravit parametry">✎</button>
+      <button class="tpl-rename" onclick="event.stopPropagation();openTplRenameModal(${t.id})" title="přejmenovat">✏</button>
+      <button class="tpl-del" onclick="event.stopPropagation();deleteTemplate(${t.id})" title="smazat">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+/* ── LOG TEXT EXPORT ─── */
+function exportLogText(){
+  const logs=getActiveLogs();
+  if(logs===null){customAlert('Vyber čaj z knihovny pro export zápisků.');return;}
+  if(!logs.length){customAlert('Žádné zápisky k exportu.');return;}
+  const teaName=el('teaName').value.trim()||'čaj';
+  const lines=[];
+  lines.push('ZÁPISKY — '+teaName.toUpperCase());
+  lines.push('='.repeat(40));
+  const generalNotes=(el('notes').value||'').trim();
+  if(generalNotes){lines.push('');lines.push(generalNotes);lines.push('-'.repeat(40));}
+  logs.forEach((e,i)=>{
+    lines.push('');
+    lines.push('['+e.date+']');
+    lines.push(e.setup);
+    if(e.text&&e.text.trim()){
+      lines.push('---');
+      lines.push(e.text.trim());
+    }
+    if(i<logs.length-1)lines.push('-'.repeat(40));
+  });
+  const text=lines.join('\n');
+  el('logExportTitle').textContent='Zápisky — '+teaName;
+  el('logExportNote').textContent=logs.length+' zápisků';
+  el('logExportText').value=text;
+  el('logExportModal').classList.add('open');
+}
+function copyLogText(){
+  const ta=el('logExportText');
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(ta.value).then(()=>showSave('✓ zkopírováno'));
+    }else{ta.select();document.execCommand('copy');showSave('✓ zkopírováno');}
+  }catch(e){ta.select();}
+}
+function downloadLogText(){
+  const text=el('logExportText').value;
+  const teaName=(el('teaName').value.trim()||'zapisky').replace(/[^a-z0-9áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s._-]/gi,'_').slice(0,50);
+  const fname=teaName+'-zapisky-'+new Date().toISOString().slice(0,10)+'.txt';
+  try{
+    const uri='data:text/plain;charset=utf-8,'+encodeURIComponent(text);
+    const a=document.createElement('a');a.href=uri;a.download=fname;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    showSave('↑ staženo');
+  }catch(e){showSave('chyba stahování');}
+}
+
+/* ── MULTI-TEA LOG TEXT EXPORT ─── */
+let multiLogSelected=new Set();
+
+function openMultiLogExport(){
+  // Only show teas that have at least one log entry
+  const withLogs=library.filter(e=>e.logs&&e.logs.length>0);
+  if(!withLogs.length){
+    customAlert('Žádný čaj nemá zápisky.');return;
+  }
+  multiLogSelected=new Set(withLogs.map(e=>e.id));
+  el('multiLogNote').textContent=withLogs.length+' čajů se zápisky';
+  el('multiLogList').innerHTML=withLogs.map(e=>`
+    <label class="modal-item sel" id="mli-${e.id}">
+      <input type="checkbox" checked onchange="toggleMultiLog(${e.id},this.checked)" />
+      ${esc(e.name)}
+      <span style="font-size:.7rem;opacity:.55;margin-left:.3rem">${e.logs.length} ${e.logs.length===1?'zápis':e.logs.length<5?'zápisky':'zápisků'}</span>
+    </label>`).join('');
+  el('multiLogModal').classList.add('open');
+}
+
+function toggleMultiLog(id,on){
+  on?multiLogSelected.add(id):multiLogSelected.delete(id);
+  el('mli-'+id)?.classList.toggle('sel',on);
+}
+
+function selectAllMultiLog(){
+  library.filter(e=>e.logs&&e.logs.length).forEach(e=>{
+    multiLogSelected.add(e.id);
+    const li=el('mli-'+e.id);
+    if(li){li.classList.add('sel');const cb=li.querySelector('input');if(cb)cb.checked=true;}
+  });
+}
+
+function generateMultiLog(){
+  const entries=library.filter(e=>multiLogSelected.has(e.id)&&e.logs&&e.logs.length);
+  if(!entries.length){customAlert('Nic není vybráno.');return;}
+  const sections=[];
+  entries.forEach(tea=>{
+    const lines=[];
+    lines.push('ZÁPISKY — '+tea.name.toUpperCase());
+    lines.push('='.repeat(42));
+    const gn=(tea.data?.notes||'').trim();
+    if(gn){lines.push('');lines.push(gn);lines.push('-'.repeat(42));}
+    tea.logs.forEach((log,i)=>{
+      lines.push('');
+      lines.push('['+log.date+']');
+      lines.push(log.setup||'');
+      if(log.text&&log.text.trim()){
+        lines.push('---');
+        lines.push(log.text.trim());
+      }
+      if(i<tea.logs.length-1)lines.push('-'.repeat(42));
+    });
+    sections.push(lines.join('\n'));
+  });
+  const text=sections.join('\n\n'+'#'.repeat(42)+'\n\n');
+  // reuse the single log export modal for display
+  closeModal('multiLogModal');
+  const title=entries.length===1?'Zápisky — '+entries[0].name:'Zápisky — '+entries.length+' čajů';
+  el('logExportTitle').textContent=title;
+  el('logExportNote').textContent=entries.map(e=>e.name).join(', ');
+  el('logExportText').value=text;
+  el('logExportModal').classList.add('open');
+}
+/* ── SESSION LOG — vázané na záznam knihovny ─── */
+function getActiveLogs(){
+  if(!activeLibId)return null;
+  const entry=library.find(e=>e.id===activeLibId);
+  if(!entry)return null;
+  if(!entry.logs)entry.logs=[];
+  return entry.logs;
+}
+function saveLog(){saveLibrary();}
+
+function buildSetupSnapshot(){
+  const name=el('teaName').value.trim()||'—';
+  return buildSetupFromData(getTemplateData(),name);
+}
+
+function fmtDate(d){
+  const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+
+function logSession(){
+  const logs=getActiveLogs();
+  if(logs===null){customAlert('Nejdřív ulož čaj do knihovny — zápisky se váží ke konkrétnímu záznamu.');return;}
+  const entry={id:Date.now(),date:fmtDate(new Date()),setup:buildSetupSnapshot(),data:getTemplateData(),text:''};
+  logs.unshift(entry);
+  saveLog();renderLog();
+  switchTab('log');
+  setTimeout(()=>{const ta=el('log-text-'+entry.id);if(ta)ta.focus();},50);
+}
+
+async function deleteLogEntry(id){
+  const logs=getActiveLogs();if(!logs)return;
+  if(!await customConfirm('Smazat tento zápis?','smazat'))return;
+  const idx=logs.findIndex(e=>e.id===id);
+  if(idx>-1)logs.splice(idx,1);
+  saveLog();renderLog();
+}
+
+function autoResizeTA(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
+
+function updateLogText(id,val){
+  const logs=getActiveLogs();if(!logs)return;
+  const e=logs.find(x=>x.id===id);
+  if(e){e.text=val;saveLog();}
+}
+
+/* ── LOG ENTRY EDIT ── */
+let editingLogId=null;
+let editingTplId=null;
+let leEditSteeps=[];
+let leEditCoolPours=0;
+
+function openLogEdit(logId){
+  const logs=getActiveLogs();if(!logs)return;
+  const e=logs.find(x=>x.id===logId);if(!e)return;
+  editingLogId=logId;editingTplId=null;
+  el('leModalTitle').textContent='Parametry přípravy';
+  const d=e.data||{};
+  el('le-amt').value=normDec(d.teaAmount);
+  el('le-amttsp').value=normDec(d.teaAmountTsp);
+  el('le-temp').value=d.temp||80;
+  el('le-vtype').value=d.vesselType||'gaiwan';
+  el('le-vml').value=d.vesselMl||50;
+  el('le-rsec').value=d.rinseSec||15;
+  el('le-rtemp').value=d.rinseTemp||'';
+  const ch=d.checks||{};
+  el('le-chkWarm').checked=!!ch.chkWarm;
+  el('le-chkRinse').checked=!!ch.chkRinse;
+  el('le-chkSieve').checked=!!ch.chkSieve;
+  el('le-chkCover').checked=!!ch.chkCover;
+  el('le-chkThermometer').checked='chkThermometer' in ch?!!ch.chkThermometer:true;
+  leEditCoolPours=d.coolPours||0;
+  leEditSteeps=(d.steeps||[]).map(s=>({sec:s.sec,temp:s.temp||''}));
+  renderLeEditSteeps();
+  updateLeRinseRow();updateLeCoolRow();
+  el('logEditModal').classList.add('open');
+}
+
+function updateLeRinseRow(){
+  el('le-rinse-row').style.display=el('le-chkRinse').checked?'flex':'none';
+}
+function updateLeCoolRow(){
+  const noTherm=!el('le-chkThermometer').checked;
+  const row=el('le-cool-row');if(!row)return;
+  row.style.display=noTherm?'flex':'none';
+  if(noTherm)row.querySelectorAll('.pour-chip').forEach((btn,i)=>btn.classList.toggle('active',i===leEditCoolPours));
+}
+function setLeCoolPours(n){leEditCoolPours=n;updateLeCoolRow();}
+
+function renderLeEditSteeps(){
+  el('le-steeps-body').innerHTML=leEditSteeps.map((s,i)=>`
+    <div class="le-steep-row">
+      <span class="le-steep-num">${i+1}.</span>
+      <input class="le-inp" type="number" id="les-sec-${i}" value="${s.sec||60}" min="5" max="999" />
+      <span class="le-unit">s</span>
+      <input class="le-inp" type="number" id="les-tmp-${i}" value="${s.temp||''}" min="40" max="100" step="5" placeholder=" " />
+      <span class="le-unit">°C</span>
+      <button class="le-steep-del" onclick="leRemoveSteep(${i})">✕</button>
+    </div>`).join('');
+}
+
+function leSyncSteepsFromDom(){
+  leEditSteeps=leEditSteeps.map((_,i)=>({
+    sec:Math.max(5,parseInt(el('les-sec-'+i)?.value)||60),
+    temp:el('les-tmp-'+i)?.value||''
+  }));
+}
+
+function leAddSteep(){
+  leSyncSteepsFromDom();
+  const last=leEditSteeps[leEditSteeps.length-1];
+  leEditSteeps.push({sec:last?Math.min(999,last.sec+10):60,temp:''});
+  renderLeEditSteeps();
+}
+
+function leRemoveSteep(i){
+  leSyncSteepsFromDom();
+  leEditSteeps.splice(i,1);
+  renderLeEditSteeps();
+}
+
+function openTplEdit(id){
+  const tpl=templates.find(t=>t.id===id);if(!tpl)return;
+  editingTplId=id;editingLogId=null;
+  const d=tpl.data||{};
+  el('le-amt').value=normDec(d.teaAmount);
+  el('le-amttsp').value=normDec(d.teaAmountTsp);
+  el('le-temp').value=d.temp||80;
+  el('le-vtype').value=d.vesselType||'gaiwan';
+  el('le-vml').value=d.vesselMl||50;
+  el('le-rsec').value=d.rinseSec||15;
+  el('le-rtemp').value=d.rinseTemp||'';
+  const ch=d.checks||{};
+  el('le-chkWarm').checked=!!ch.chkWarm;
+  el('le-chkRinse').checked=!!ch.chkRinse;
+  el('le-chkSieve').checked=!!ch.chkSieve;
+  el('le-chkCover').checked=!!ch.chkCover;
+  el('le-chkThermometer').checked='chkThermometer' in ch?!!ch.chkThermometer:true;
+  leEditCoolPours=d.coolPours||0;
+  leEditSteeps=(d.steeps||[]).map(s=>({sec:s.sec,temp:s.temp||''}));
+  renderLeEditSteeps();
+  updateLeRinseRow();updateLeCoolRow();
+  el('leModalTitle').textContent='Parametry šablony — '+tpl.name;
+  el('logEditModal').classList.add('open');
+}
+
+function saveCurrentEdit(){
+  if(editingTplId!==null) saveTplEdit();
+  else saveLogEdit();
+}
+
+function saveTplEdit(){
+  const tpl=templates.find(t=>t.id===editingTplId);if(!tpl)return;
+  leSyncSteepsFromDom();
+  const d=tpl.data?{...tpl.data}:{};
+  d.teaAmount=el('le-amt').value;
+  d.teaAmountTsp=el('le-amttsp').value;
+  d.temp=el('le-temp').value||'80';
+  d.vesselType=el('le-vtype').value||'gaiwan';
+  d.vesselMl=el('le-vml').value||'50';
+  d.rinseSec=el('le-rsec').value||'15';
+  d.rinseTemp=el('le-rtemp').value||'';
+  d.checks={chkWarm:el('le-chkWarm').checked,chkRinse:el('le-chkRinse').checked,chkSieve:el('le-chkSieve').checked,chkCover:el('le-chkCover').checked,chkThermometer:el('le-chkThermometer').checked};
+  d.coolPours=el('le-chkThermometer').checked?0:leEditCoolPours;
+  d.steeps=leEditSteeps.map(s=>({sec:s.sec,temp:s.temp}));
+  tpl.data=d;
+  editingTplId=null;
+  saveTemplates();renderTemplates();
+  closeModal('logEditModal');
+  showSave('✓ šablona upravena');
+}
+
+function buildSetupHtml(logData,curData,fallback,curTeaName){
+  if(!logData||!curData){
+    if(curTeaName&&fallback){
+      const ls=fallback.split('\n');
+      const pts=ls[0].split(' · ');pts[0]=curTeaName;ls[0]=pts.join(' · ');
+      return esc(ls.join('\n'));
+    }
+    return esc(fallback||'');
+  }
+  const df=(a,b)=>String(a||'')!==String(b||'');
+  const amt=logData.teaAmount||'';const amttsp=logData.teaAmountTsp||'';
+  const amtStr=[amt?amt+'g':'',amttsp?amttsp+' lžičky':''].filter(Boolean).join(' / ');
+  const vessel=logData.vesselMl||'50';const vesselType=logData.vesselType||'gaiwan';
+  const temp=logData.temp||'80';
+  const teaName=curTeaName||(fallback||'').split('\n')[0].split(' · ')[0];
+  const amtDiff=df(logData.teaAmount,curData.teaAmount)||df(logData.teaAmountTsp,curData.teaAmountTsp);
+  const vesselDiff=df(logData.vesselMl,curData.vesselMl)||df(logData.vesselType,curData.vesselType);
+  let line0=esc(teaName||'—');
+  if(amtStr)line0+=' · '+(amtDiff?`<b>${esc(amtStr)}</b>`:esc(amtStr));
+  if(vessel)line0+=' · '+(vesselDiff?`<b>${esc(vesselType+' '+vessel+' ml')}</b>`:esc(vesselType+' '+vessel+' ml'));
+  const tempDiff=df(logData.temp,curData.temp);
+  const line1='teplota: '+(tempDiff?`<b>${esc(temp)} °C</b>`:esc(temp)+' °C');
+  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí'};
+  const checks=logData.checks||{};const curChecks=curData.checks||{};
+  if('chkThermometer' in checks||'chkThermometer' in curChecks)checkLabels.chkThermometer='teploměr';
+  const checkLine=Object.entries(checkLabels).map(([id,l])=>{
+    const on=!!checks[id];const curOn=!!curChecks[id];
+    const txt=(on?'✓ ':'✗ ')+l;
+    return on!==curOn?`<b>${esc(txt)}</b>`:esc(txt);
+  }).join('  ');
+  const lines=[line0,line1,checkLine];
+  if(checks.chkRinse){
+    const rs=logData.rinseSec||'15';const rt=logData.rinseTemp||'';
+    const rDiff=df(rs,curData.rinseSec)||df(rt,curData.rinseTemp);
+    const rtxt='  oplach: '+rs+' s'+(rt?' / '+rt+' °C':'');
+    lines.push(rDiff?`<b>${esc(rtxt)}</b>`:esc(rtxt));
+  }
+  const logSteeps=logData.steeps||[];const curSteeps=curData.steeps||[];
+  logSteeps.forEach((s,i)=>{
+    const cs=curSteeps[i];
+    const txt=(i+1)+'. nálev: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'');
+    const diff=!cs||df(s.sec,cs.sec)||df(s.temp||'',cs.temp||'');
+    lines.push(diff?`<b>${esc(txt)}</b>`:esc(txt));
+  });
+  return lines.join('\n');
+}
+
+function buildSetupFromData(d,name){
+  const amt=d.teaAmount||'';const amttsp=d.teaAmountTsp||'';
+  const amtStr=[amt?amt+'g':'',amttsp?amttsp+' lžičky':''].filter(Boolean).join(' / ');
+  const vessel=d.vesselMl||'50';const vesselType=d.vesselType||'gaiwan';
+  const temp=d.temp||'80';
+  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí'};
+  const checks=d.checks||{};
+  if('chkThermometer' in checks)checkLabels.chkThermometer='teploměr';
+  const checkLine=Object.entries(checkLabels).map(([id,l])=>(checks[id]?'✓ ':'✗ ')+l).join('  ');
+  const lines=[];
+  lines.push((name||'—')+(amtStr?' · '+amtStr:'')+(vessel?' · '+vesselType+' '+vessel+' ml':''));
+  lines.push('teplota: '+temp+' °C');
+  lines.push(checkLine);
+  if(checks.chkRinse){lines.push('  oplach: '+(d.rinseSec||'15')+' s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':''));}
+  if(!checks.chkThermometer&&d.coolPours>0){const pourNames=['konvice','džbánek','2. nádoba'];lines.push('  chlazení: '+pourNames[d.coolPours]);}
+  (d.steeps||[]).forEach((s,i)=>lines.push((i+1)+'. nálev: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'')));
+  return lines.join('\n');
+}
+
+function saveLogEdit(){
+  const logs=getActiveLogs();if(!logs)return;
+  const e=logs.find(x=>x.id===editingLogId);if(!e)return;
+  leSyncSteepsFromDom();
+  const d=e.data?{...e.data}:{};
+  d.teaAmount=el('le-amt').value;
+  d.teaAmountTsp=el('le-amttsp').value;
+  d.temp=el('le-temp').value||'80';
+  d.vesselType=el('le-vtype').value||'gaiwan';
+  d.vesselMl=el('le-vml').value||'50';
+  d.rinseSec=el('le-rsec').value||'15';
+  d.rinseTemp=el('le-rtemp').value||'';
+  d.checks={chkWarm:el('le-chkWarm').checked,chkRinse:el('le-chkRinse').checked,chkSieve:el('le-chkSieve').checked,chkCover:el('le-chkCover').checked,chkThermometer:el('le-chkThermometer').checked};
+  d.coolPours=el('le-chkThermometer').checked?0:leEditCoolPours;
+  d.steeps=leEditSteeps.map(s=>({sec:s.sec,temp:s.temp}));
+  e.data=d;
+  const teaName=(e.setup||'').split('\n')[0].split(' · ')[0];
+  e.setup=buildSetupFromData(d,teaName);
+  saveLog();renderLog();
+  closeModal('logEditModal');
+  showSave('✓ zápis upraven');
+}
+
+function applyLogEntryData(d){
+  pushUndo();
+  if(d.teaAmount!==undefined)el('teaAmount').value=normDec(d.teaAmount);
+  if(d.teaAmountTsp!==undefined)el('teaAmountTsp').value=normDec(d.teaAmountTsp);
+  el('tempRange').value=d.temp||80;
+  el('vesselMl').value=d.vesselMl||50;el('vesselType').value=d.vesselType||'gaiwan';updatePer100();
+  el('rinseSec').value=d.rinseSec||15;
+  el('rinseTemp').value=d.rinseTemp||'';
+  if(d.checks)Object.entries(d.checks).forEach(([cid,on])=>el(cid).classList.toggle('checked',!!on));
+  coolPours=d.checks&&!d.checks.chkThermometer?(d.coolPours||0):0;
+  updateRinseVisibility();
+  clearAllTimers();steeps=[];nextId=1;
+  (d.steeps||[]).forEach(s=>addSteep(s.sec,s.temp||'',true));
+  rinseState={remaining:parseInt(el('rinseSec').value)||15,state:'idle'};
+  renderSteeps();schedSave();renderLibrary();updateCoolGuide();
+}
+
+async function activateLogEntry(logId){
+  const logs=getActiveLogs();if(!logs)return;
+  const e=logs.find(x=>x.id===logId);
+  if(!e||!e.data){await customAlert('Tento zápis nemá uložená data přípravy (starší formát).');return;}
+  if(!await customConfirm('Načíst přípravu z tohoto zápisu?\nPřepíše teplotu, nádobu, přípravu a nálevy.','načíst'))return;
+  applyLogEntryData(e.data);
+  showSave('← příprava načtena ze zápisu');
+}
+
+let pendingLogTplData=null;
+function logEntryToTemplate(logId){
+  const logs=getActiveLogs();if(!logs)return;
+  const e=logs.find(x=>x.id===logId);
+  if(!e||!e.data){customAlert('Tento zápis nemá uložená data (starší formát).');return;}
+  pendingLogTplData=e.data;
+  // pre-fill modal name from tea name + date
+  const tea=el('teaName').value.trim();
+  el('tplNameInput').value=(tea?tea+' — ':'')+e.date.slice(0,10);
+  el('tplNameModal').classList.add('open');
+  setTimeout(()=>el('tplNameInput').select(),60);
+}
+function renderLog(){
+  const list=el('logList');
+  const count=el('logCount');
+  const logs=getActiveLogs();
+
+  if(logs===null){
+    count.textContent='';
+    list.innerHTML='<div class="log-empty">Vyber čaj z knihovny — zápisky jsou vázané ke konkrétnímu záznamu.</div>';
+    return;
+  }
+  count.textContent=logs.length?logs.length+(logs.length===1?' zápis':logs.length<5?' zápisky':' zápisků'):'';
+  if(!logs.length){
+    list.innerHTML='<div class="log-empty">Žádné zápisky. Klikni na ✎ pro první zápis.</div>';
+    return;
+  }
+  const _curData=activeLibId?getTemplateData():null;
+  const _teaName=el('teaName').value.trim()||'—';
+  list.innerHTML=logs.map(e=>{
+    const hasData=!!e.data;
+    return `
+    <div class="log-entry" id="log-entry-${e.id}">
+      <div class="log-entry-head">
+        <div class="log-entry-meta">
+          <span class="log-entry-date">${esc(e.date)}</span>
+          <span class="log-entry-setup">${buildSetupHtml(e.data,_curData,e.setup,_teaName)}</span>
+        </div>
+        <button class="log-entry-del" onclick="deleteLogEntry(${e.id})" title="smazat zápis">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="log-entry-actions">
+        ${hasData
+          ?`<button class="log-act-btn" onclick="openLogEdit(${e.id})" title="Upravit parametry přípravy">✎ upravit přípravu</button>
+        <button class="log-act-btn" onclick="activateLogEntry(${e.id})" title="Načíst přípravu z tohoto zápisu">← použít jako přípravu</button>
+        <button class="log-act-btn" onclick="logEntryToTemplate(${e.id})" title="Uložit přípravu jako šablonu">→ šablona</button>`
+          :`<span class="log-no-data">starší zápis — data přípravy nejsou k dispozici</span>`}
+      </div>
+      <textarea id="log-text-${e.id}" placeholder="Chuť, barva, co změnit příště…"
+        oninput="autoResizeTA(this);updateLogText(${e.id},this.value)">${esc(e.text)}</textarea>
+    </div>`}).join('');
+  list.querySelectorAll('textarea').forEach(autoResizeTA);
+}
+
+function init(){
+  try{libGroupByCat=!!localStorage.getItem('cajovy-lib-group-cat');}catch(e){}
+  initAutoSave();
+  initFs();
+  initDark();
+  loadPanelFs();
+  loadTemplates();renderTemplates();
+  loadLibrary();renderLibrary();
+  loadArchive();renderArchive();
+  initLibLongPress();
+  const restored=loadSession();
+  if(!restored)defaultSteeps.forEach(s=>addSteep(s,'',true));
+  if(activeLibId)markSaved();
+  renderSteeps();updateHeaderTeaName();updatePer100();updateCoolGuide();
+  if(restored)showSave('↓ obnoveno');
+  let _undoPushT={};
+  ['teaName','notes'].forEach(id=>el(id).addEventListener('input',()=>{clearTimeout(_undoPushT[id]);_undoPushT[id]=setTimeout(()=>{pushUndo();},1500);schedSave();updateHeaderTeaName();renderLibrary();}));
+  el('teaCategory').addEventListener('change',()=>{pushUndo();schedSave();renderLibrary();});
+  el('teaSeller').addEventListener('input',()=>{clearTimeout(_undoPushT.seller);_undoPushT.seller=setTimeout(()=>pushUndo(),1500);schedSave();renderLibrary();});
+  el('teaLocation').addEventListener('input',()=>{clearTimeout(_undoPushT.location);_undoPushT.location=setTimeout(()=>pushUndo(),1500);schedSave();renderLibrary();});
+  el('teaAmount').addEventListener('input',()=>{clearTimeout(_undoPushT.amt);_undoPushT.amt=setTimeout(()=>pushUndo(),1500);schedSave();updatePer100();updateMeasureRow();updateDirtyState();});
+  el('teaAmountTsp').addEventListener('input',()=>{clearTimeout(_undoPushT.tsp);_undoPushT.tsp=setTimeout(()=>pushUndo(),1500);schedSave();updateMeasureRow();updateDirtyState();});
+  el('vesselMl').addEventListener('input',()=>{clearTimeout(_undoPushT.vessel);_undoPushT.vessel=setTimeout(()=>pushUndo(),1500);updatePer100();renderLibrary();renderLog();});
+  el('vesselType').addEventListener('input',()=>{clearTimeout(_undoPushT.vtype);_undoPushT.vtype=setTimeout(()=>pushUndo(),1500);schedSave();renderLibrary();});
+  el('tempRange').addEventListener('input',()=>{clearTimeout(_undoPushT.temp);_undoPushT.temp=setTimeout(()=>pushUndo(),1500);schedSave();updateDirtyState();updateCoolGuide();renderSteeps();});
+  el('rinseSec').addEventListener('change',()=>{pushUndo();schedSave();renderLibrary();});
+  el('rinseTemp').addEventListener('change',()=>{pushUndo();renderSteeps();schedSave();renderLibrary();});
+}
+init();
+window.addEventListener('resize',updateAppGrid);
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){
+    const active=document.activeElement;
+    const isInput=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA');
+    if(!isInput){e.preventDefault();redo();}
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){
+    const active=document.activeElement;
+    const isInput=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA');
+    if(!isInput){e.preventDefault();undo();}
+  }
+});
+</script>
+
+<!-- Clear storage modal -->
+<div class="modal-bg" id="clearStorageModal">
+  <div class="modal" style="max-width:360px">
+    <h2>smazat data</h2>
+    <p style="font-size:.82rem;color:var(--muted)">Vyber co chceš smazat. Akce je nevratná.</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
+      <label class="modal-item">
+        <input type="checkbox" id="clr-session" checked>
+        <span>aktuální session</span>
+      </label>
+      <label class="modal-item">
+        <input type="checkbox" id="clr-library" checked>
+        <span>knihovna čajů (včetně zápisků)</span>
+      </label>
+      <label class="modal-item">
+        <input type="checkbox" id="clr-templates" checked>
+        <span>šablony</span>
+      </label>
+      <label class="modal-item">
+        <input type="checkbox" id="clr-archive" checked>
+        <span>archiv</span>
+      </label>
+      <label class="modal-item">
+        <input type="checkbox" id="clr-appearance">
+        <span>nastavení vzhledu (písmo, tmavý režim)</span>
+      </label>
+    </div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" onclick="closeModal('clearStorageModal')">zrušit</button>
+      <button class="modal-btn" onclick="toggleAllClear()">vybrat/odznačit vše</button>
+      <button class="modal-btn primary" onclick="doSelectiveClear()">smazat</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom confirm modal -->
+<div class="modal-bg" id="confirmModal">
+  <div class="modal" style="max-width:340px">
+    <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">zrušit</button>
+      <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete or archive modal -->
+<div class="modal-bg" id="libDelModal">
+  <div class="modal" style="max-width:340px">
+    <p id="libDelMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
+    <div class="modal-row" style="margin-top:.25rem;flex-wrap:wrap">
+      <button class="modal-btn" onclick="_libDelResolve(null)">zrušit</button>
+      <button class="modal-btn" onclick="_libDelResolve('archive')">archivovat</button>
+      <button class="modal-btn danger" onclick="_libDelResolve('delete')">smazat</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log text export modal -->
+<div class="modal-bg" id="logExportModal">
+  <div class="modal" style="max-width:520px">
+    <h2 id="logExportTitle">Zápisky</h2>
+    <p style="font-size:.78rem;color:var(--muted)" id="logExportNote">Zkopíruj nebo stáhni zápisky jako prostý text.</p>
+    <textarea id="logExportText" readonly style="font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.65;min-height:200px;background:var(--off);border:var(--b);resize:vertical"></textarea>
+    <div class="modal-row">
+      <button class="modal-btn primary" onclick="copyLogText()">📋 kopírovat</button>
+      <button class="modal-btn" onclick="downloadLogText()">↓ stáhnout .txt</button>
+      <button class="modal-btn" onclick="closeModal('logExportModal')">zavřít</button>
+    </div>
+  </div>
+</div>
+
+<!-- Multi-tea log export modal -->
+<div class="modal-bg" id="multiLogModal">
+  <div class="modal" style="max-width:480px">
+    <h2>Export zápisků — více čajů</h2>
+    <p style="font-size:.78rem;color:var(--muted)" id="multiLogNote">Vyber čaje jejichž zápisky chceš exportovat.</p>
+    <div class="modal-list" id="multiLogList"></div>
+    <div class="modal-row" style="margin-top:.4rem">
+      <button class="modal-btn" onclick="selectAllMultiLog()">vybrat vše</button>
+      <button class="modal-btn" onclick="closeModal('multiLogModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="generateMultiLog()">zobrazit text</button>
+    </div>
+  </div>
+</div>
+
+<!-- JSONBin settings modal -->
+<div class="modal-bg" id="jsonbinModal">
+  <div class="modal" style="max-width:400px;gap:.65rem">
+    <h2>Nastavení JSONBin</h2>
+    <p>Zadej svůj JSONBin API klíč a Bin ID. Data se ukládají pouze v tomto prohlížeči.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Účet a klíč zdarma na <a href="https://jsonbin.io" target="_blank" rel="noopener" style="color:var(--black)">jsonbin.io</a> → Dashboard → API Keys.</p>
+    <div class="jb-field">
+      <label>X-Master-Key (API klíč)</label>
+      <input type="text" id="jbKeyInput" placeholder="$2a$10$…" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label>Bin ID <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(prázdné = při prvním uploadu se vytvoří)</span></label>
+      <input type="text" id="jbIdInput" placeholder="64a1b2c3d4e5f6…" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
+      <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── JSONBIN SYNC ─── */
+(function(){
+  const JBKEY='cajovy-jsonbin-key';
+  const JBID='cajovy-jsonbin-id';
+
+  function openJsonBinSettings(){
+    try{
+      el('jbKeyInput').value=localStorage.getItem(JBKEY)||'';
+      el('jbIdInput').value=localStorage.getItem(JBID)||'';
+    }catch(e){}
+    el('jsonbinModal').classList.add('open');
+  }
+  function saveJsonBinSettings(){
+    try{
+      const key=el('jbKeyInput').value.trim();
+      const id=el('jbIdInput').value.trim();
+      if(key) localStorage.setItem(JBKEY,key); else localStorage.removeItem(JBKEY);
+      if(id) localStorage.setItem(JBID,id); else localStorage.removeItem(JBID);
+    }catch(e){}
+    closeModal('jsonbinModal');
+  }
+  function showSyncTooltip(msg){showStatusMsg(msg,3500);}
+  function isCorsErr(e){return(e instanceof TypeError)&&/fetch/i.test(e.message);}
+  async function jbGet(binId,key){
+    let res=await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest',{mode:'cors',credentials:'omit'});
+    if((res.status===401||res.status===403)&&key){
+      res=await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest',{
+        mode:'cors',credentials:'omit',headers:{'X-Master-Key':key}
+      });
+    }
+    return res;
+  }
+
+  /* ↑ spouštěno tlačítkem v export modalu — bere výběr ze stejných Sets jako doExport() */
+  async function doCloudUpload(){
+    const key=localStorage.getItem(JBKEY);
+    if(!key){showSyncTooltip('⚠ chybí API klíč — otevři ⚙');return;}
+    let binId=localStorage.getItem(JBID);
+    const items=library.filter(e=>exportSelected.has(e.id));
+    const tpls=templates.filter(t=>exportTplSelected.has(t.id));
+    const archItems=archive.filter(e=>exportArchSelected.has(e.id));
+    if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nic není vybráno.');return;}
+    const payload={v:1,teas:items,templates:tpls,archive:archItems};
+    closeModal('exportModal');
+    showSyncTooltip('↑ nahrávám…');
+    try{
+      const url=binId?'https://api.jsonbin.io/v3/b/'+binId:'https://api.jsonbin.io/v3/b';
+      const hdrs={'Content-Type':'application/json','X-Master-Key':key};
+      if(!binId){hdrs['X-Bin-Name']='cajovy-sync';hdrs['X-Bin-Private']='false';}
+      const res=await fetch(url,{
+        method:binId?'PUT':'POST',
+        mode:'cors',credentials:'omit',
+        headers:hdrs,body:JSON.stringify(payload)
+      });
+      if(!res.ok){const e=await res.text();throw new Error('HTTP '+res.status+': '+e.slice(0,120));}
+      const json=await res.json();
+      if(!binId){
+        const newId=json.metadata&&json.metadata.id?json.metadata.id:null;
+        if(newId) localStorage.setItem(JBID,newId);
+      }
+      const t=new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+      showSyncTooltip('↑ nahráno '+t+' ('+items.length+'č '+tpls.length+'š '+archItems.length+'a)');
+    }catch(e){
+      showSyncTooltip(isCorsErr(e)?'⚠ CORS – otevři přes localhost':'⚠ '+e.message.slice(0,55));
+    }
+  }
+
+  /* ↓ stáhne z JSONBin a otevře import modal s plným merge/duplicate flow */
+  async function syncDownload(){
+    const binId=localStorage.getItem(JBID);
+    if(!binId){showSyncTooltip('⚠ chybí Bin ID — otevři ⚙');return;}
+    const btn=el('syncDownBtn');
+    btn.disabled=true;
+    showSyncTooltip('↓ stahuji…');
+    try{
+      const key=localStorage.getItem(JBKEY);
+      const res=await jbGet(binId,key);
+      if(!res.ok){const e=await res.text();throw new Error('HTTP '+res.status+': '+e.slice(0,120));}
+      const json=await res.json();
+      let record=json.record;
+      if(typeof record!=='object'||record===null) throw new Error('Neplatná data v binu');
+      // Backward compat: starý formát ukládal raw localStorage stringy pod klíči cajovy-v3-*
+      if('cajovy-v3-library' in record){
+        record={
+          v:1,
+          teas:JSON.parse(record['cajovy-v3-library']||'[]'),
+          templates:JSON.parse(record['cajovy-v3-templates']||'[]'),
+          archive:JSON.parse(record['cajovy-v3-archive']||'[]')
+        };
+      }
+      if(!record.teas&&!record.templates&&!record.archive){
+        throw new Error('Bin neobsahuje čaje ani šablony');
+      }
+      // Otevřu import modal a naplním ho stažená daty — reuse celý merge/duplicate flow
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent='Import z JSONBin';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('↓ staženo — zkontroluj výběr a importuj');
+    }catch(e){
+      showSyncTooltip(isCorsErr(e)?'⚠ CORS – otevři přes localhost':'⚠ '+e.message.slice(0,55));
+    }finally{btn.disabled=false;}
+  }
+
+  async function checkCloudOnStartup(){
+    const binId=localStorage.getItem(JBID);
+    if(!binId) return;
+    if(sessionStorage.getItem('cajovy-cloud-checked')) return;
+    sessionStorage.setItem('cajovy-cloud-checked','1');
+    const btn=el('syncDownBtn');
+    const origTitle=btn.title;
+    btn.disabled=true;btn.title='kontroluji cloud…';
+    try{
+      const key=localStorage.getItem(JBKEY);
+      const res=await jbGet(binId,key);
+      if(!res.ok) return;
+      const json=await res.json();
+      let record=json.record;
+      if(typeof record!=='object'||record===null) return;
+      if('cajovy-v3-library' in record){
+        record={
+          v:1,
+          teas:JSON.parse(record['cajovy-v3-library']||'[]'),
+          templates:JSON.parse(record['cajovy-v3-templates']||'[]'),
+          archive:JSON.parse(record['cajovy-v3-archive']||'[]')
+        };
+      }
+      const cloudTeas=record.teas||[];
+      const cloudTpls=record.templates||[];
+      const cloudArch=record.archive||[];
+      const idSig=arr=>arr.map(x=>String(x.id||'')).sort().join(',')+':'+arr.length;
+      const localSig=idSig(library)+'|'+idSig(templates)+'|'+idSig(archive);
+      const cloudSig=idSig(cloudTeas)+'|'+idSig(cloudTpls)+'|'+idSig(cloudArch);
+      if(localSig===cloudSig) return;
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent='Import z JSONBin';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
+    }catch(e){}finally{
+      btn.disabled=false;btn.title=origTitle;
+    }
+  }
+
+  window.openJsonBinSettings=openJsonBinSettings;
+  window.saveJsonBinSettings=saveJsonBinSettings;
+  window.doCloudUpload=doCloudUpload;
+  window.syncDownload=syncDownload;
+  window.checkCloudOnStartup=checkCloudOnStartup;
+  checkCloudOnStartup();
+})();
+</script>
+</body>
+</html>
