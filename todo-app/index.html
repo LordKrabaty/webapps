@@ -105,9 +105,9 @@ header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-i
 @media(hover:hover){.btn-lib.primary:hover{background:var(--dark)}}
 .main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:1rem}
 .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
-.field{display:flex;flex-direction:column;gap:.3rem}
+.field{display:flex;flex-direction:column;gap:.3rem;min-width:0}
 .field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
-.field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none}
+.field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none;width:100%}
 .field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
 .notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
@@ -173,6 +173,7 @@ textarea::placeholder{color:var(--mid)}
 .tl-WRAP_UP{background:var(--light);border:1px solid var(--mid)}
 .tl-BUFFER{background:var(--off);border:1px dashed var(--mid)}
 .tl-TASK{background:var(--w);border:1px solid var(--mid)}
+.tl-is-event{border-left:4px solid var(--black)!important;border-left-style:solid!important}
 .tl-urgent{border-width:3px!important;font-weight:bold}
 .tl-done{opacity:.4}
 .tl-done .tl-label{text-decoration:line-through}
@@ -194,6 +195,9 @@ textarea::placeholder{color:var(--mid)}
 .item-text{flex:1;font-size:.84rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;cursor:pointer;border-radius:2px;padding:0 2px}
 [contenteditable="true"].item-text{background:var(--off);outline:1.5px solid var(--black);white-space:normal;overflow:visible;cursor:text}
 .dur-badge{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
+.dur-badge.editable{cursor:pointer;border-bottom:1px dashed var(--mid)}
+@media(hover:hover){.dur-badge.editable:hover{color:var(--black);border-bottom-color:var(--black)}}
+[contenteditable="true"].dur-badge{background:var(--off);outline:1.5px solid var(--black);border-radius:2px;border-bottom:none;padding:0 3px;cursor:text}
 .item-move{width:16px;height:16px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.7rem;flex-shrink:0;padding:0;line-height:1;display:flex;align-items:center;justify-content:center}
 .item-move:hover{color:var(--black)}
 .item-move:disabled{opacity:.25;cursor:default}
@@ -217,6 +221,30 @@ textarea::placeholder{color:var(--mid)}
 .btn-tpl{flex:1;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .1rem;cursor:pointer;text-align:center}
 .btn-tpl:active{background:var(--light)}
 @media(hover:hover){.btn-tpl:hover{background:var(--light)}}
+
+/* ── NOTES TABS ── */
+.notes-tabs{display:flex;gap:0;border-bottom:1.5px solid var(--black);margin-bottom:.5rem;flex-shrink:0}
+.notes-tab{font-family:'DM Sans',sans-serif;font-size:.78rem;padding:.28rem .65rem;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1.5px}
+.notes-tab.active{color:var(--black);border-bottom-color:var(--black);font-weight:500}
+@media(hover:hover){.notes-tab:not(.active):hover{color:var(--black)}}
+.notes-pane{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;gap:.35rem}
+.notes-pane.active{display:flex}
+/* ── WEEK TAB ── */
+.week-day-row{display:flex;align-items:center;gap:.35rem;padding:.35rem .45rem;border:1px solid var(--light);border-radius:var(--r)}
+@media(hover:hover){.week-day-row:hover{border-color:var(--mid)}}
+.week-day-date{flex:1;font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.week-day-meta{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
+.week-day-del{width:18px;height:18px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.75rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:2px}
+@media(hover:hover){.week-day-del:hover{color:var(--black);background:var(--light)}}
+/* ── DRAG AND DROP ── */
+.item-row[draggable]:not(.is-event-block){cursor:grab}
+.item-row.dragging{opacity:.3}
+.item-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.item-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+.lib-item[draggable]{cursor:grab}
+.lib-item.dragging{opacity:.3}
+.lib-item.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.lib-item.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
 
 /* ── BLOCK DROPDOWN ── */
 .block-menu{position:fixed;background:var(--w);border:var(--bh);border-radius:var(--r);z-index:200;min-width:190px;display:none;flex-direction:column;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.08)}
@@ -361,13 +389,26 @@ textarea::placeholder{color:var(--mid)}
       </button>
     </div>
     <div class="card-title"><span class="card-title-text">Úkoly</span></div>
-    <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
-    <div class="input-btns">
-      <button class="btn-add" onclick="addQuickItems('TASK')">+ Úkol</button>
-      <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
-      <button class="btn-add" onclick="addQuickItems('EVENT')">+ Událost</button>
+    <div class="notes-tabs">
+      <button class="notes-tab active" id="tab-dnes" onclick="switchNotesTab('dnes')">Dnes</button>
+      <button class="notes-tab" id="tab-tyden" onclick="switchNotesTab('tyden')">Týden</button>
     </div>
-    <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.5rem;overflow-y:auto;flex:1;min-height:0"></div>
+    <div id="pane-dnes" class="notes-pane active">
+      <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
+      <div class="input-btns">
+        <button class="btn-add" onclick="addQuickItems('TASK')">+ Úkol</button>
+        <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
+        <button class="btn-add" onclick="addQuickItems('EVENT')">+ Událost</button>
+      </div>
+      <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
+    </div>
+    <div id="pane-tyden" class="notes-pane">
+      <div id="week-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.25rem"></div>
+      <div style="display:flex;gap:.3rem;flex-wrap:wrap;flex-shrink:0">
+        <button class="btn-add" style="flex:1" onclick="saveTodayToWeek()">+ uložit dnešní den</button>
+        <button class="btn-add" onclick="exportWeekAsText()">↗ export</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -435,6 +476,7 @@ textarea::placeholder{color:var(--mid)}
       <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>aktuální session</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>uložené šablony</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>archiv</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-week" checked><span>uložené dny týdne</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>nastavení vzhledu</span></label>
     </div>
     <div class="modal-row" style="margin-top:.25rem">
@@ -647,21 +689,23 @@ function computeTimeline() {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const floatStart = (autoAdvance && nowMin >= wStart && nowMin < wEnd) ? nowMin : wStart;
 
-  const topItems = items.filter(i => !i.isSubtask);
-  const eventBlocks = topItems.filter(i => i.isEvent && i.eventStart);
-  const floatBlocks = topItems.filter(i => !i.isEvent);
+  const topItemsIdx = items.reduce((a, item, i) => { if (!item.isSubtask) a.push(i); return a; }, []);
+  const eventBlocksIdx = topItemsIdx.filter(i => items[i].isEvent && items[i].eventStart);
+  const floatBlocksIdx = topItemsIdx.filter(i => !items[i].isEvent);
 
   // Position events at fixed times
-  const fixedBlocks = eventBlocks.map(item => {
+  const fixedBlocks = eventBlocksIdx.map(i => {
+    const item = items[i], dur = getEffectiveDuration(i);
     const s = timeToMin(item.eventStart);
-    const e = item.eventEnd ? timeToMin(item.eventEnd) : s + item.duration;
+    const e = item.eventEnd ? timeToMin(item.eventEnd) : s + dur;
     return { item, startMin: s, endMin: e, fixed: true };
   }).sort((a, b) => a.startMin - b.startMin);
 
   const result = [];
   let cursor = floatStart;
 
-  floatBlocks.forEach(item => {
+  floatBlocksIdx.forEach(i => {
+    const item = items[i], dur = getEffectiveDuration(i);
     // Skip cursor past any fixed events it overlaps
     let moved = true;
     while (moved) {
@@ -672,8 +716,8 @@ function computeTimeline() {
         }
       }
     }
-    result.push({ item, startMin: cursor, endMin: cursor + item.duration, fixed: false });
-    cursor += item.duration;
+    result.push({ item, startMin: cursor, endMin: cursor + dur, fixed: false });
+    cursor += dur;
   });
 
   // Merge fixed and floating
@@ -741,9 +785,10 @@ function renderTimeline() {
 
       const div = document.createElement('div');
       div.className = ['tl-block-h', 'tl-' + bt,
-        item.urgent ? 'tl-urgent' : '',
-        item.done   ? 'tl-done'   : '',
-        isHL        ? 'tl-highlight' : '',
+        item.isEvent ? 'tl-is-event' : '',
+        item.urgent  ? 'tl-urgent'   : '',
+        item.done    ? 'tl-done'     : '',
+        isHL         ? 'tl-highlight': '',
       ].filter(Boolean).join(' ');
       div.style.left  = leftPct + '%';
       div.style.width = 'calc(' + widthPct + '% - 1px)';
@@ -791,8 +836,12 @@ function renderItemList() {
     const isBlock = !item.isSubtask;
     const isHL = item.id === highlightedId;
 
+    const parentIdx = item.isSubtask ? findParentBlock(idx) : -1;
+    const parentIsEvent = parentIdx >= 0 && items[parentIdx]?.isEvent;
+
     const cls = ['item-row',
       isBlock ? 'is-block' : 'is-subtask',
+      item.isEvent ? 'is-event-block' : '',
       item.done   ? 'is-done'   : '',
       item.urgent ? 'is-urgent' : '',
       isHL        ? 'tl-highlight' : '',
@@ -800,15 +849,25 @@ function renderItemList() {
 
     const toggle = item.isSubtask ? (item.done ? '☑' : '✒') : (item.done ? '☑' : '☐');
     const emoji = isBlock && btInfo.emoji ? `<span style="flex-shrink:0;margin-right:.1rem">${btInfo.emoji}</span>` : '';
-    const durLabel = item.isEvent && item.eventStart
-      ? (item.eventStart + '–' + (item.eventEnd || '?'))
-      : formatDur(item.duration);
 
-    return `<div class="${cls}" data-idx="${idx}" data-id="${item.id}">
+    let durLabel = '', durEditable = false, durClick = '';
+    if (item.isEvent && item.eventStart) {
+      durLabel = item.eventStart + '–' + (item.eventEnd || '?');
+      durEditable = true; durClick = `onclick="startEventEdit(${idx})" title="klikni pro úpravu času"`;
+    } else if (item.isSubtask && !parentIsEvent) {
+      durLabel = formatDur(item.duration);
+      durEditable = true; durClick = `onclick="startDurEdit(${idx})" title="klikni pro úpravu času"`;
+    } else if (!item.isSubtask) {
+      durLabel = formatDur(getEffectiveDuration(idx));
+    }
+
+    const draggable = !item.isEvent ? 'draggable="true"' : '';
+
+    return `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
       <span class="item-toggle" onclick="toggleDone(${idx})" title="hotovo">${toggle}</span>
       ${emoji}
       <span class="item-text" onclick="startEdit(${idx})">${esc(item.text)}</span>
-      <span class="dur-badge">${durLabel}</span>
+      ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
       <button class="item-move" onclick="moveItem(${idx},-1)" title="nahoru" ${idx===0?'disabled':''}>↑</button>
       <button class="item-move" onclick="moveItem(${idx},1)" title="dolů" ${idx===items.length-1?'disabled':''}>↓</button>
       <button class="item-del" onclick="deleteItem(${idx})" title="smazat">✕</button>
@@ -820,8 +879,7 @@ function renderItemList() {
 function updateStats() {
   const wS = timeToMin(windowStart), wE = timeToMin(windowEnd);
   const wLen = Math.max(0, wE - wS);
-  const topItems = items.filter(i => !i.isSubtask);
-  const planned = topItems.reduce((s, i) => s + (i.duration || 0), 0);
+  const planned = items.reduce((s, item, i) => !item.isSubtask ? s + getEffectiveDuration(i) : s, 0);
   const overflow = Math.max(0, planned - wLen);
   const remain = wLen - planned;
 
@@ -893,7 +951,13 @@ function addBlockItem(blockType) {
 function toggleDone(idx) {
   if (!items[idx]) return;
   pushUndo();
-  items[idx].done = !items[idx].done;
+  const newDone = !items[idx].done;
+  items[idx].done = newDone;
+  if (!items[idx].isSubtask) {
+    for (let i = idx + 1; i < items.length && items[i].isSubtask; i++) {
+      items[i].done = newDone;
+    }
+  }
   schedSave(); renderAll();
 }
 
@@ -947,6 +1011,112 @@ function startEdit(idx) {
   textEl.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); textEl.blur(); }
     if (e.key === 'Escape') { textEl.textContent = item.text; textEl.blur(); }
+  });
+}
+
+// ── DURATION HELPERS ──────────────────────────────────────────────────────────
+function findParentBlock(idx) {
+  for (let i = idx - 1; i >= 0; i--) {
+    if (!items[i].isSubtask) return i;
+  }
+  return -1;
+}
+
+function getEffectiveDuration(idx) {
+  const item = items[idx];
+  if (item.isSubtask || item.isEvent) return item.duration;
+  let sum = 0;
+  for (let j = idx + 1; j < items.length && items[j].isSubtask; j++) {
+    sum += items[j].duration || 0;
+  }
+  return sum > 0 ? sum : item.duration;
+}
+
+function parseDuration(text) {
+  text = text.trim();
+  let m;
+  if ((m = text.match(/^(\d+)\s*h(?:od?)?\s*(\d+)\s*m(?:in?)?$/i))) return parseInt(m[1]) * 60 + parseInt(m[2]);
+  if ((m = text.match(/^(\d+)\s*h(?:od?)?$/i))) return parseInt(m[1]) * 60;
+  if ((m = text.match(/^(\d+)\s*m(?:in?)?$/i))) return parseInt(m[1]);
+  if ((m = text.match(/^(\d+)$/))) return parseInt(m[1]);
+  return null;
+}
+
+function startDurEdit(idx) {
+  const item = items[idx];
+  if (!item || !item.isSubtask) return;
+  const rows = el('item-list')?.querySelectorAll('.item-row');
+  if (!rows || !rows[idx]) return;
+  const durEl = rows[idx].querySelector('.dur-badge');
+  if (!durEl) return;
+
+  durEl.contentEditable = 'true';
+  durEl.textContent = item.duration + 'm';
+  durEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(durEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    durEl.contentEditable = 'false';
+    const parsed = parseDuration(durEl.textContent);
+    if (parsed && parsed > 0 && parsed !== item.duration) {
+      pushUndo();
+      items[idx].duration = parsed;
+      schedSave();
+    }
+    renderAll();
+  };
+  durEl.addEventListener('blur', commit, { once: true });
+  durEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
+    if (e.key === 'Escape') { durEl.textContent = formatDur(item.duration); durEl.blur(); }
+  });
+}
+
+function startEventEdit(idx) {
+  const item = items[idx];
+  if (!item || !item.isEvent) return;
+  const rows = el('item-list')?.querySelectorAll('.item-row');
+  if (!rows || !rows[idx]) return;
+  const durEl = rows[idx].querySelector('.dur-badge');
+  if (!durEl) return;
+
+  const original = durEl.textContent;
+  durEl.contentEditable = 'true';
+  durEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(durEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    durEl.contentEditable = 'false';
+    const m = durEl.textContent.trim().match(/(\d{1,2}:\d{2})\s*[–\-]\s*(\d{1,2}:\d{2})/);
+    if (m) {
+      const newStart = m[1], newEnd = m[2];
+      const newDur = timeToMin(newEnd) - timeToMin(newStart);
+      if (newDur > 0 && (newStart !== item.eventStart || newEnd !== item.eventEnd)) {
+        pushUndo();
+        items[idx].eventStart = newStart;
+        items[idx].eventEnd   = newEnd;
+        items[idx].duration   = newDur;
+        schedSave();
+      }
+    }
+    renderAll();
+  };
+  durEl.addEventListener('blur', commit, { once: true });
+  durEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
+    if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
   });
 }
 
@@ -1052,8 +1222,8 @@ function renderLibrary() {
   if (!library.length) {
     list.innerHTML = '<div class="lib-empty">Žádné uložené šablony</div>';
   } else {
-    list.innerHTML = library.map(entry => `
-      <div class="lib-item${entry.id === activeLibId ? ' active' : ''}" onclick="loadLibEntry(${entry.id})">
+    list.innerHTML = library.map((entry, idx) => `
+      <div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="true" onclick="loadLibEntry(${entry.id})">
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
         <button class="lib-item-del" onclick="event.stopPropagation();deleteLibEntry(${entry.id})" title="smazat">
           <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
@@ -1219,6 +1389,7 @@ async function doSelectiveClear() {
   if (el('clr-session').checked)    toDelete.push('todo-app-v1-session');
   if (el('clr-library').checked)    toDelete.push('todo-app-v1-library');
   if (el('clr-archive').checked)    toDelete.push('todo-app-v1-archive');
+  if (el('clr-week').checked)       toDelete.push('todo-app-v1-week');
   if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs');
   if (!toDelete.length) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
@@ -1493,14 +1664,188 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── TÝDEN ─────────────────────────────────────────────────────────────────────
+const WEEK_KEY = 'todo-app-v1-week';
+let weekDays = [];
+
+const CZ_DAYS   = ['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
+const CZ_MONTHS = ['ledna','února','března','dubna','května','června','července','srpna','září','října','listopadu','prosince'];
+
+function todayIso() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function formatDateCz(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return CZ_DAYS[d.getDay()] + ' ' + d.getDate() + '. ' + CZ_MONTHS[d.getMonth()];
+}
+
+function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WEEK_KEY) || '[]'); } catch(e) { weekDays = []; } }
+function saveWeek()  { try { localStorage.setItem(WEEK_KEY, JSON.stringify(weekDays)); } catch(e) {} }
+
+async function saveTodayToWeek() {
+  if (!items.length) { await customAlert('Dnešní plán je prázdný — přidej nejdříve úkoly.'); return; }
+  const today = todayIso();
+  const existing = weekDays.find(d => d.date === today);
+  if (existing) {
+    if (!await customConfirm('Dnešní den je již uložen. Přepsat?', 'přepsat')) return;
+    existing.items = JSON.parse(JSON.stringify(items));
+    existing.windowStart = windowStart; existing.windowEnd = windowEnd;
+  } else {
+    weekDays.push({ id: Date.now(), date: today,
+      items: JSON.parse(JSON.stringify(items)), windowStart, windowEnd });
+  }
+  saveWeek(); renderWeekTab();
+  showSave('✓ den uložen do týdne');
+}
+
+async function deleteWeekDay(id) {
+  if (!await customConfirm('Smazat uložený den?', 'smazat')) return;
+  weekDays = weekDays.filter(d => d.id !== id);
+  saveWeek(); renderWeekTab();
+}
+
+function renderWeekTab() {
+  const list = el('week-list'); if (!list) return;
+  if (!weekDays.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné uložené dny — klikni + uložit dnešní den.</div>';
+    return;
+  }
+  list.innerHTML = weekDays.slice().sort((a,b) => a.date.localeCompare(b.date)).map(d => {
+    const done  = d.items.filter(i => i.done).length;
+    const total = d.items.length;
+    return `<div class="week-day-row">
+      <span class="week-day-date">${formatDateCz(d.date)}</span>
+      <span class="week-day-meta">${done}/${total} hotovo</span>
+      <button class="week-day-del" onclick="deleteWeekDay(${d.id})" title="smazat">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function exportWeekAsText() {
+  if (!weekDays.length) { customAlert('Žádné uložené dny k exportu.'); return; }
+  const sorted = weekDays.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const lines = ['=== Týdenní přehled ===', ''];
+  sorted.forEach(day => {
+    lines.push('--- ' + formatDateCz(day.date) + ' | ' + day.windowStart + '–' + day.windowEnd + ' ---');
+    const di = day.items;
+    di.forEach((item, idx) => {
+      const indent = item.isSubtask ? '  ' : '';
+      const check  = item.done ? '☑' : (item.isSubtask ? '✒' : '☐');
+      let durStr = '';
+      if (item.isEvent && item.eventStart) {
+        durStr = ' [' + item.eventStart + '–' + (item.eventEnd || '?') + ']';
+      } else if (!item.isSubtask) {
+        let sum = 0;
+        for (let j = idx+1; j < di.length && di[j].isSubtask; j++) sum += di[j].duration || 0;
+        durStr = ' · ' + formatDur(sum > 0 ? sum : item.duration);
+      } else {
+        durStr = ' · ' + formatDur(item.duration);
+      }
+      lines.push(indent + check + ' ' + item.text + durStr);
+    });
+    lines.push('');
+  });
+  el('exportCopyText').value = lines.join('\n');
+  el('exportCopyNote').textContent = 'Zkopíruj text pro vyhodnocení týdne.';
+  el('exportCopyModal').classList.add('open');
+}
+
+function switchNotesTab(name) {
+  ['dnes','tyden'].forEach(n => {
+    el('pane-' + n)?.classList.toggle('active', n === name);
+    el('tab-'  + n)?.classList.toggle('active', n === name);
+  });
+}
+
+// ── DRAG AND DROP ─────────────────────────────────────────────────────────────
+let _dndSrcIdx = null, _dndContainer = null;
+
+function _dndClearIndicators(container) {
+  container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(r =>
+    r.classList.remove('drag-over-top', 'drag-over-bottom'));
+}
+
+function initDnd(container, onDrop) {
+  container.addEventListener('dragstart', e => {
+    const row = e.target.closest('[draggable="true"]');
+    if (!row || !container.contains(row)) return;
+    _dndSrcIdx = parseInt(row.dataset.idx);
+    _dndContainer = container;
+    e.dataTransfer.effectAllowed = 'move';
+    requestAnimationFrame(() => row.classList.add('dragging'));
+  });
+
+  container.addEventListener('dragover', e => {
+    if (_dndContainer !== container) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    _dndClearIndicators(container);
+    const row = e.target.closest('[draggable="true"]');
+    if (!row || !container.contains(row)) return;
+    const rect = row.getBoundingClientRect();
+    row.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+  });
+
+  container.addEventListener('dragleave', e => {
+    if (!container.contains(e.relatedTarget)) _dndClearIndicators(container);
+  });
+
+  container.addEventListener('drop', e => {
+    e.preventDefault();
+    let dstRow = null, insertBefore = true;
+    container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(r => {
+      insertBefore = r.classList.contains('drag-over-top');
+      dstRow = r;
+    });
+    _dndClearIndicators(container);
+    if (_dndContainer !== container || _dndSrcIdx === null || !dstRow) return;
+    const srcIdx = _dndSrcIdx;
+    const dstIdx = parseInt(dstRow.dataset.idx);
+    let finalIdx = insertBefore ? dstIdx : dstIdx + 1;
+    if (srcIdx < finalIdx) finalIdx--;
+    _dndSrcIdx = null; _dndContainer = null;
+    if (finalIdx !== srcIdx) onDrop(srcIdx, finalIdx);
+  });
+
+  container.addEventListener('dragend', () => {
+    container.querySelectorAll('.dragging').forEach(r => r.classList.remove('dragging'));
+    _dndClearIndicators(container);
+    _dndSrcIdx = null; _dndContainer = null;
+  });
+}
+
+function initItemDnd() {
+  const container = el('item-list');
+  if (!container) return;
+  initDnd(container, (srcIdx, dstIdx) => {
+    pushUndo();
+    const [moved] = items.splice(srcIdx, 1);
+    items.splice(dstIdx, 0, moved);
+    schedSave(); renderAll();
+  });
+}
+
+function initLibDnd() {
+  const container = el('libList');
+  if (!container) return;
+  initDnd(container, (srcIdx, dstIdx) => {
+    const [moved] = library.splice(srcIdx, 1);
+    library.splice(dstIdx, 0, moved);
+    saveLibrary(); renderLibrary();
+    showSave('↕ šablony přeuspořádány');
+  });
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init() {
   initAutoSave(); initFs(); initDark(); loadPanelFs();
-  loadLibrary(); loadArchive();
+  loadLibrary(); loadArchive(); loadWeek();
   const restored = loadSession();
-  renderLibrary(); renderAll();
+  renderLibrary(); renderAll(); renderWeekTab();
   if (activeLibId) markSaved();
   updateUndoBtn();
+  initItemDnd(); initLibDnd();
   if (restored) showSave('↓ obnoveno');
   // Refresh timeline every minute for current-time line
   setInterval(() => renderTimeline(), 60000);
