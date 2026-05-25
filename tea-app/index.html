@@ -276,10 +276,8 @@ textarea::placeholder{color:var(--mid)}
   .brand h1{font-size:1.5rem}
   .header-tea-name,.header-sep{font-size:1.15rem}
   .header-right{gap:.4rem}
-  /* Lib panel horizontal on mobile */
-  .lib-card{flex-direction:column}
-  #libList{display:flex;flex-wrap:wrap;gap:.3rem}
-  .lib-item{flex:0 0 auto;max-width:calc(50% - .15rem)}
+  /* Lib panel — vertical list on mobile */
+  #libList{display:flex;flex-direction:column;gap:.15rem}
   /* Steeps: temp on a sub-row on mobile */
   .col-header-temp{display:none}
   .steep-row{grid-template-columns:22px minmax(0,1fr) 54px 46px 28px 20px;gap:.3rem .32rem;padding:.48rem .5rem;grid-template-rows:auto auto}
@@ -488,7 +486,8 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
   <div class="header-right">
     <span id="statusMsg"></span>
     <div class="sync-group">
-      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="nahrát data do cloudu (JSONBin)">↑</button>
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (JSONBin)">↑</button>
+      <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
       <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
       <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
     </div>
@@ -531,10 +530,6 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       <select id="libLocationFilter" class="lib-seller-filter" onchange="renderLibrary()" title="filtrovat dle místa"></select>
     </div>
     <div id="libList"></div>
-    <div class="lib-io" style="margin-top:.45rem;padding-top:.45rem;border-top:var(--b)">
-      <button class="btn-io" onclick="openExportModal()">↑ export</button>
-      <button class="btn-io" onclick="openImportModal()">↓ import</button>
-    </div>
     <!-- Templates section -->
     <div class="lib-section">
       <div class="lib-section-hd">
