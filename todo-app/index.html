@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>todo-app</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --w:#ffffff;--off:#f2f2f2;--light:#e0e0e0;--mid:#aaaaaa;
+  --muted:#777777;--dark:#333333;--black:#000000;
+  --b:1.5px solid #aaaaaa;--bh:1.5px solid #000000;--r:4px;
+  --fs:1;
+}
+html{font-size:calc(16px * var(--fs))}
+html.dark{
+  --w:#000000;--off:#111111;--light:#222222;--mid:#555555;
+  --muted:#888888;--dark:#cccccc;--black:#ffffff;
+  --b:1.5px solid #555555;--bh:1.5px solid #ffffff;
+}
+html.dark body{background:var(--w);color:var(--black)}
+html.dark .lib-item.active{background:var(--black);border-color:var(--black)}
+html.dark .lib-item.active .lib-item-name{color:var(--w)}
+html.dark .lib-item.active .lib-item-del svg{stroke:var(--mid)}
+html.dark .lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){html.dark .btn-lib.primary:hover{background:var(--dark)}}
+@media(hover:hover){html.dark .btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+#darkToggle{font-size:1rem;width:34px;height:34px;border:var(--bh);border-radius:50%;background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+@media(hover:hover){#darkToggle:hover{background:var(--light)}}
+.sync-group{display:flex;align-items:center;gap:.15rem}
+.btn-sync{font-size:.85rem;width:32px;height:32px;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'DM Mono',monospace}
+@media(hover:hover){.btn-sync:hover{background:var(--light)}}
+.btn-sync:active{background:var(--light)}
+.btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
+@media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
+#statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
+.jb-field{display:flex;flex-direction:column;gap:.3rem}
+.jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
+.jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
+#importModal.from-cloud .jb-import-hide{display:none!important}
+.lib-io{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
+.btn-io{flex:1;font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .4rem;cursor:pointer;text-align:center;white-space:nowrap}
+.btn-io:active{background:var(--off);border-color:var(--dark)}
+@media(hover:hover){.btn-io:hover{background:var(--off);border-color:var(--dark)}}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
+html.dark .modal-bg{background:rgba(255,255,255,.25)}
+.modal-bg.open{display:flex}
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
+.modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+.modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
+@media(hover:hover){.modal-item:hover{background:var(--off)}}
+.modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
+.modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
+@media(hover:hover){.modal-btn:hover{background:var(--light)}}
+.modal-btn.primary{background:var(--black);color:var(--w)}
+@media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
+.modal-btn.danger{border-color:#c0392b;color:#c0392b}
+@media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
+html{-webkit-text-size-adjust:100%;overflow-x:clip}
+body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
+.app{padding:1.25rem 1.25rem 1.5rem;display:grid;grid-template-columns:210px minmax(0,1fr) 330px;gap:1.25rem;overflow-x:clip;max-width:1480px;margin:0 auto}
+header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-items:baseline;justify-content:space-between;padding:.9rem 1.25rem .85rem;border-bottom:2.5px solid var(--black);flex-wrap:wrap;gap:.5rem}
+.brand{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.brand h1{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:600;color:var(--black);letter-spacing:-.02em;line-height:1}
+.header-sep{font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:var(--mid);display:none}
+.header-sub{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:500;color:var(--dark);font-style:italic;display:none;letter-spacing:-.01em}
+.header-right{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.btn-sm{font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.38rem .8rem;cursor:pointer;letter-spacing:.02em}
+.btn-sm:active{background:var(--light)}
+@media(hover:hover){.btn-sm:hover{background:var(--light)}}
+.btn-sm.danger:active{background:var(--black);color:var(--w)}
+@media(hover:hover){.btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+.card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1rem 1.15rem;overflow:hidden;position:relative}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:var(--black);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.65rem;padding-bottom:.35rem;border-bottom:1.5px solid var(--black);display:flex;align-items:center;gap:.3rem;flex-wrap:nowrap}
+.card-title-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-title svg{display:block;stroke:var(--black);width:17px;height:17px}
+.library-panel{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:.75rem}
+.lib-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1;position:relative}
+.lib-item{display:flex;align-items:center;gap:.35rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0;overflow:hidden}
+.lib-item:active{background:var(--off);border-color:var(--mid)}
+@media(hover:hover){.lib-item:hover{background:var(--off);border-color:var(--mid)}}
+.lib-item.active{background:var(--black);border-color:var(--black)}
+.lib-item.active .lib-item-name{color:var(--w)}
+.lib-item-name{flex:1;font-size:.85rem;color:var(--black);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3}
+.lib-item-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0}
+.lib-item.active .lib-item-del{opacity:.55}
+@media(hover:hover){.lib-item:hover .lib-item-del{opacity:.55}}
+@media(hover:hover){.lib-item-del:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+.lib-item-del svg{width:10px;height:10px;stroke:var(--w);fill:none;stroke-width:2.5;stroke-linecap:round}
+.lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+.lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
+.btn-lib{width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.42rem .6rem;cursor:pointer;text-align:center;letter-spacing:.02em}
+.btn-lib:active{background:var(--light)}
+@media(hover:hover){.btn-lib:hover{background:var(--light)}}
+.btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+.btn-lib.primary:active{background:var(--dark)}
+@media(hover:hover){.btn-lib.primary:hover{background:var(--dark)}}
+.main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:1rem}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
+.field{display:flex;flex-direction:column;gap:.3rem}
+.field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none}
+.field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.card-controls{position:absolute;top:.4rem;right:.5rem;display:flex;align-items:center;gap:.15rem;z-index:2}
+textarea{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:1.8;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.7rem .75rem;outline:none;resize:none;min-height:60px}
+textarea:focus{outline:2px solid var(--black);outline-offset:1px}
+textarea::placeholder{color:var(--mid)}
+.btn-lib.dirty{background:var(--w);color:var(--black);border:var(--bh);font-weight:600}
+.btn-lib.dirty::before{content:'! ';color:var(--black)}
+.btn-sm.dirty{font-weight:700}
+.btn-sm.dirty::before{content:'! '}
+.btn-sm.saved{color:var(--muted);border-color:var(--light);pointer-events:none}
+#undoBtn,#redoBtn{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.33rem .65rem;cursor:pointer;letter-spacing:.02em}
+@media(hover:hover){#undoBtn:not(:disabled):hover,#redoBtn:not(:disabled):hover{background:var(--light);color:var(--black);border-color:var(--dark)}}
+#undoBtn:disabled,#redoBtn:disabled{opacity:.3;cursor:default}
+.fs-ctrl{display:flex;align-items:center;border:var(--bh);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.fs-btn{width:28px;height:28px;border:none;background:var(--w);color:var(--black);cursor:pointer;font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fs-btn:active{background:var(--light)}
+@media(hover:hover){.fs-btn:hover{background:var(--light)}}
+.fs-val{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);padding:0 .3rem;border-left:var(--b);border-right:var(--b);line-height:28px;white-space:nowrap;min-width:36px;text-align:center}
+.expand-btn{width:18px;height:18px;border:var(--b);border-radius:2px;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45;margin-left:.2rem}
+.expand-btn:active{opacity:1;background:var(--off)}
+@media(hover:hover){.expand-btn:hover{opacity:1;background:var(--off)}}
+.expand-btn svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel-expanded{position:fixed!important;inset:0!important;z-index:80;border-radius:0!important;overflow-y:auto;padding:1.1rem 1.3rem!important;background:var(--w)!important;border:none!important;display:flex;flex-direction:column}
+.notes-card.panel-expanded{overflow:hidden}
+.panel-expanded .expand-btn{opacity:1}
+.expand-esc{font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;margin-left:.4rem;letter-spacing:.04em}
+.pfs-ctrl{display:flex;align-items:center;gap:0;margin-left:.3rem;flex-shrink:0}
+.pfs-btn{width:15px;height:15px;border:var(--b);background:none;color:var(--black);cursor:pointer;font-size:.68rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45}
+.pfs-btn:first-child{border-radius:2px 0 0 2px}
+.pfs-btn:last-child{border-radius:0 2px 2px 0;border-left:none}
+.pfs-btn:active{background:var(--off);opacity:1}
+@media(hover:hover){.pfs-btn:hover{background:var(--off);opacity:1}}
+.pfs-val{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted);padding:0 .12rem;border-top:var(--b);border-bottom:var(--b);line-height:17px;min-width:22px;text-align:center;white-space:nowrap}
+#libToggleBtn{display:inline-flex;align-items:center;font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.35rem .7rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;white-space:nowrap}
+.library-panel.lib-hidden{display:none!important}
+.new-menu{position:fixed;background:var(--w);border:var(--bh);border-radius:var(--r);z-index:200;min-width:160px;flex-direction:column;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.new-menu-item{background:none;border:none;padding:.38rem .72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.8rem;text-align:left;color:var(--black);white-space:nowrap;width:100%;border-radius:0}
+@media(hover:hover){.new-menu-item:hover{background:var(--off)}}
+.new-menu-sep{height:1px;background:var(--light);margin:.2rem 0}
+@media(hover:none){.lib-item:not(.active) .lib-item-del{opacity:.45}}
+.field input:placeholder-shown:not(:focus){background:var(--off);border-color:var(--light)}
+
+/* ── TIMELINE ── */
+.tl-container{display:flex;flex-direction:column;width:100%;border:1.5px solid var(--dark);border-radius:var(--r);overflow:hidden}
+.tl-row{display:flex;align-items:stretch;min-height:46px;border-bottom:1px solid var(--light)}
+.tl-row:last-child{border-bottom:none}
+.tl-row.tl-overflow-row{background:rgba(0,0,0,.02)}
+.tl-row-label{width:36px;flex-shrink:0;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);padding:4px 3px 0;text-align:right;line-height:1;border-right:1.5px solid var(--dark)}
+.tl-row.tl-overflow-row .tl-row-label{color:var(--mid);border-right-style:dashed}
+.tl-row-content{flex:1;position:relative;min-height:46px}
+.tl-tick{position:absolute;top:0;bottom:0;width:1px;background:var(--light);pointer-events:none}
+.tl-tick-label{position:absolute;top:3px;font-family:'DM Mono',monospace;font-size:.55rem;color:var(--mid);white-space:nowrap;pointer-events:none}
+.tl-block-h{position:absolute;top:2px;bottom:2px;box-sizing:border-box;overflow:hidden;cursor:pointer;padding:1px 4px;font-size:.62rem;line-height:1.35}
+.tl-block-h.tl-highlight{outline:2px solid var(--black);z-index:2}
+.tl-MORNING_START{background:var(--off);border:1.5px solid var(--mid)}
+.tl-DEEP_WORK{background:var(--w);border:2px solid var(--black)}
+.tl-LUNCH_BREAK{background:var(--light);border:1px dashed var(--mid)}
+.tl-CREATIVE_ADMIN{background:var(--off);border:1.5px solid var(--mid)}
+.tl-EXPERIMENTS{background:var(--w);border:2px solid var(--black)}
+.tl-MEETING{background:var(--light);border:1.5px solid var(--black);background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.05) 3px,rgba(0,0,0,.05) 4px)}
+.tl-WRAP_UP{background:var(--light);border:1px solid var(--mid)}
+.tl-BUFFER{background:var(--off);border:1px dashed var(--mid)}
+.tl-TASK{background:var(--w);border:1px solid var(--mid)}
+.tl-urgent{border-width:3px!important;font-weight:bold}
+.tl-done{opacity:.4}
+.tl-done .tl-label{text-decoration:line-through}
+.tl-label{pointer-events:none;overflow:hidden;display:block;white-space:nowrap;text-overflow:ellipsis}
+.tl-now-v{position:absolute;top:0;bottom:0;width:1.5px;background:var(--black);z-index:3;pointer-events:none}
+.tl-now-v::before{content:'';position:absolute;top:-1px;left:-2px;width:5px;height:5px;border-radius:50%;background:var(--black)}
+
+/* ── ITEM LIST ── */
+.item-row{display:flex;align-items:center;gap:.3rem;padding:.3rem .35rem;border-radius:var(--r);border:1px solid transparent;min-width:0;cursor:default}
+@media(hover:hover){.item-row:hover{background:var(--off)}}
+.item-row.is-block{border-color:var(--light);background:var(--off);margin-top:.25rem}
+.item-row.is-block:first-child{margin-top:0}
+.item-row.is-subtask{padding-left:1.4rem}
+.item-row.is-done .item-text{opacity:.45;text-decoration:line-through}
+.item-row.is-urgent .item-text{font-weight:600}
+.item-row.tl-highlight{background:var(--light)!important;border-color:var(--mid)!important}
+.item-toggle{font-size:.85rem;cursor:pointer;flex-shrink:0;width:18px;text-align:center;color:var(--muted);line-height:1;user-select:none}
+@media(hover:hover){.item-toggle:hover{color:var(--black)}}
+.item-text{flex:1;font-size:.84rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;cursor:pointer;border-radius:2px;padding:0 2px}
+[contenteditable="true"].item-text{background:var(--off);outline:1.5px solid var(--black);white-space:normal;overflow:visible;cursor:text}
+.dur-badge{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
+.item-move{width:16px;height:16px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.7rem;flex-shrink:0;padding:0;line-height:1;display:flex;align-items:center;justify-content:center}
+.item-move:hover{color:var(--black)}
+.item-move:disabled{opacity:.25;cursor:default}
+.item-del{width:16px;height:16px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.75rem;flex-shrink:0;padding:0;line-height:1;display:flex;align-items:center;justify-content:center;border-radius:2px}
+@media(hover:hover){.item-del:hover{color:var(--black);background:var(--light)}}
+
+/* ── INPUT AREA ── */
+.input-btns{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
+.btn-add{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .55rem;cursor:pointer;white-space:nowrap}
+.btn-add:active{background:var(--light)}
+@media(hover:hover){.btn-add:hover{background:var(--light)}}
+
+/* ── STATS ── */
+.stats-row{display:grid;grid-template-columns:auto 1fr;gap:.15rem .5rem;font-size:.78rem;margin-top:.4rem}
+.stat-lbl{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.stat-val{font-family:'DM Mono',monospace;font-weight:500}
+.stat-val.overflow{font-weight:700}
+
+/* ── TEMPLATES ── */
+.tpl-btns{display:flex;gap:.3rem;margin-top:.1rem}
+.btn-tpl{flex:1;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .1rem;cursor:pointer;text-align:center}
+.btn-tpl:active{background:var(--light)}
+@media(hover:hover){.btn-tpl:hover{background:var(--light)}}
+
+/* ── BLOCK DROPDOWN ── */
+.block-menu{position:fixed;background:var(--w);border:var(--bh);border-radius:var(--r);z-index:200;min-width:190px;display:none;flex-direction:column;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.block-menu-item{background:none;border:none;padding:.38rem .75rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.82rem;text-align:left;color:var(--black);white-space:nowrap;width:100%}
+@media(hover:hover){.block-menu-item:hover{background:var(--off)}}
+
+/* ── TOGGLE ── */
+.toggle-row{display:flex;align-items:center;gap:.5rem;font-size:.82rem;cursor:pointer;user-select:none;margin-top:.25rem}
+.toggle-sw{width:30px;height:17px;border:var(--bh);border-radius:9px;background:var(--w);position:relative;flex-shrink:0;cursor:pointer}
+.toggle-sw::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:var(--mid)}
+.toggle-sw.on{background:var(--black)}
+.toggle-sw.on::after{left:calc(100% - 13px);background:var(--w)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1020px){.app{grid-template-columns:185px 1fr;padding:1rem 1rem 1.5rem}.notes-panel{grid-column:1/-1;grid-row:2}}
+@media(max-width:820px){.app{grid-template-columns:1fr;padding:1rem .85rem;gap:.85rem}.library-panel,.main-panel,.notes-panel{grid-column:1!important;grid-row:auto!important}.setup-grid{grid-template-columns:1fr 1fr}header{flex-direction:column;align-items:flex-start;gap:.35rem;padding:.65rem .85rem .65rem}.brand h1{font-size:1.5rem}.header-sub,.header-sep{font-size:1.15rem}.header-right{gap:.4rem}#libList{display:flex;flex-direction:column;gap:.15rem}textarea{min-height:100px}}
+@media(max-width:820px){header{flex-wrap:wrap;row-gap:.5rem;padding-bottom:.85rem}.header-right{flex-wrap:wrap;gap:.35rem}}
+@media(max-width:400px){.app{padding:.75rem .65rem;gap:.7rem}.setup-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>todo-app</h1>
+    <span class="header-sep" id="headerSep">—</span>
+    <span class="header-sub" id="headerSub">Denní plánovač</span>
+  </div>
+  <div class="header-right">
+    <span id="statusMsg"></span>
+    <div class="sync-group">
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (JSONBin)">↑</button>
+      <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
+    </div>
+    <div class="fs-ctrl" title="velikost písma">
+      <button class="fs-btn" onclick="changeFs(-1)" title="zmenšit písmo">−</button>
+      <span class="fs-val" id="fsVal">100%</span>
+      <button class="fs-btn" onclick="changeFs(1)" title="zvětšit písmo">+</button>
+    </div>
+    <button id="darkToggle" onclick="toggleDark()" title="přepnout tmavý/světlý režim">☀</button>
+    <button id="libToggleBtn" onclick="toggleLibPanel()" title="knihovna">☰</button>
+    <button id="undoBtn" onclick="undo()" disabled title="zpět (Ctrl+Z)">↩</button>
+    <button id="redoBtn" onclick="redo()" disabled title="vpřed (Ctrl+Y)">↪</button>
+    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automaticky ukládat změny">
+      <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
+      ⟳
+    </label>
+    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="uložit změny">✓</button>
+    <div style="position:relative;display:inline-flex">
+      <button class="btn-sm" onclick="toggleNewMenu(event)" title="nové / uložit jako">+</button>
+      <div id="newMenu" class="new-menu" style="display:none">
+        <button class="new-menu-item" onclick="newSession();closeNewMenu()">nové</button>
+        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">+ uložit jako šablonu</button>
+      </div>
+    </div>
+    <button class="btn-sm danger" onclick="clearStorage()" title="smazat">✕</button>
+  </div>
+</header>
+
+<div class="app">
+
+<!-- LEFT: nastavení + šablony -->
+<div class="library-panel">
+  <div class="lib-card" id="panel-library">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="zmenšit">−</button>
+        <span class="pfs-val" id="pfs-panel-library">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="zvětšit">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-library')" title="celá obrazovka">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Okno dne</span></div>
+    <div class="setup-grid">
+      <div class="field">
+        <label>Od</label>
+        <input type="text" id="winStart" value="6:00" oninput="onWindowChange()" placeholder="6:00">
+      </div>
+      <div class="field">
+        <label>Do</label>
+        <input type="text" id="winEnd" value="14:00" oninput="onWindowChange()" placeholder="14:00">
+      </div>
+    </div>
+    <label class="toggle-row" onclick="toggleAutoAdv()">
+      <div id="autoAdvToggle" class="toggle-sw"></div>
+      <span>Auto-advance</span>
+    </label>
+    <div class="stats-row" id="statsRow">
+      <span class="stat-lbl">Okno dne</span><span class="stat-val" id="stat-window">8h</span>
+      <span class="stat-lbl">Naplánováno</span><span class="stat-val" id="stat-planned">0 min</span>
+      <span class="stat-lbl">Zbývá / Přesah</span><span class="stat-val" id="stat-remain">—</span>
+    </div>
+
+    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Šablony</span></div>
+    <div class="tpl-btns">
+      <button class="btn-tpl" onclick="loadDayTemplate('Po')">Po</button>
+      <button class="btn-tpl" onclick="loadDayTemplate('Út')">Út</button>
+      <button class="btn-tpl" onclick="loadDayTemplate('St')">St</button>
+      <button class="btn-tpl" onclick="loadDayTemplate('Čt')">Čt</button>
+      <button class="btn-tpl" onclick="loadDayTemplate('Pá')">Pá</button>
+    </div>
+    <div id="libList" style="display:flex;flex-direction:column;gap:.2rem;margin-top:.3rem"></div>
+    <div class="lib-io">
+      <button class="btn-io" onclick="saveToLibrary()">+ uložit jako šablonu</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN: timeline -->
+<div class="main-panel">
+  <div class="card" id="panel-main" style="overflow:visible">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',-1)" title="zmenšit">−</button>
+        <span class="pfs-val" id="pfs-panel-main">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',1)" title="zvětšit">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-main')" title="celá obrazovka">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Časová osa</span></div>
+    <div id="tl-container" class="tl-container"></div>
+  </div>
+</div>
+
+<!-- RIGHT: vstup + seznam -->
+<div class="notes-panel">
+  <div class="notes-card" id="panel-notes">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="zmenšit">−</button>
+        <span class="pfs-val" id="pfs-panel-notes">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="zvětšit">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-notes')" title="celá obrazovka">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Úkoly</span></div>
+    <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
+    <div class="input-btns">
+      <button class="btn-add" onclick="addQuickItems('TASK')">+ Úkol</button>
+      <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
+      <button class="btn-add" onclick="addQuickItems('EVENT')">+ Událost</button>
+    </div>
+    <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.5rem;overflow-y:auto;flex:1;min-height:0"></div>
+  </div>
+</div>
+
+</div><!-- .app -->
+
+<!-- Block type menu -->
+<div id="blockMenu" class="block-menu"></div>
+
+<!-- Export modal -->
+<div class="modal-bg" id="exportModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Export</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Uložené šablony</p>
+    <div class="modal-list" id="exportList"></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archivované</p>
+    <div class="modal-list" id="exportArchList"></div>
+    <div style="margin-top:.8rem">
+      <label style="font-size:.78rem;color:var(--muted)">Název souboru</label>
+      <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
+    </div>
+    <div class="modal-row" style="margin-top:.5rem">
+      <button class="modal-btn" onclick="selectAllExport()">vybrat vše</button>
+      <button class="modal-btn" onclick="closeModal('exportModal')">zrušit</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do JSONBin</button>
+      <button class="modal-btn primary" onclick="doExport()">stáhnout JSON</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="exportCopyModal">
+  <div class="modal" style="max-width:520px">
+    <h2>Zkopírovat JSON</h2>
+    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Stažení se nezdařilo.</p>
+    <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
+    <div class="modal-row">
+      <button class="modal-btn primary" onclick="copyExportText()">📋 kopírovat</button>
+      <button class="modal-btn" onclick="closeModal('exportCopyModal')">zavřít</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="importModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Import</h2>
+    <p class="jb-import-hide">Vyber JSON soubor exportovaný z této aplikace.</p>
+    <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
+    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">nebo vlož obsah JSON:</p>
+    <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"items":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
+    <div id="importItemSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Položky</p>
+      <div class="modal-list" id="importList"></div>
+    </div>
+    <div class="modal-row" id="importActions" style="display:none">
+      <button class="modal-btn" onclick="closeModal('importModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="doImport()">importovat vybrané</button>
+    </div>
+    <div class="modal-row" id="importCancel">
+      <button class="modal-btn" onclick="closeModal('importModal')">zavřít</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="clearStorageModal">
+  <div class="modal" style="max-width:360px">
+    <h2>smazat data</h2>
+    <p style="font-size:.82rem;color:var(--muted)">Vyber co chceš smazat. Akce je nevratná.</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
+      <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>aktuální session</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>uložené šablony</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>archiv</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>nastavení vzhledu</span></label>
+    </div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" onclick="closeModal('clearStorageModal')">zrušit</button>
+      <button class="modal-btn" onclick="toggleAllClear()">vybrat vše</button>
+      <button class="modal-btn primary" onclick="doSelectiveClear()">smazat</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="confirmModal">
+  <div class="modal" style="max-width:340px">
+    <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">zrušit</button>
+      <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="jsonbinModal">
+  <div class="modal" style="max-width:400px;gap:.65rem">
+    <h2>Nastavení JSONBin</h2>
+    <p>Zadej svůj JSONBin API klíč a Bin ID.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Účet zdarma na <a href="https://jsonbin.io" target="_blank" rel="noopener" style="color:var(--black)">jsonbin.io</a> → API Keys.</p>
+    <div class="jb-field"><label>X-Master-Key</label><input type="text" id="jbKeyInput" placeholder="$2a$10$…" spellcheck="false" autocomplete="off"></div>
+    <div class="jb-field"><label>Bin ID <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(prázdné = vytvoří se)</span></label><input type="text" id="jbIdInput" placeholder="64a1b2c3…" spellcheck="false" autocomplete="off"></div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
+      <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STORAGE KEYS ─────────────────────────────────────────────────────────────
+const SESSION_KEY = 'todo-app-v1-session';
+const LIBRARY_KEY = 'todo-app-v1-library';
+const ARCHIVE_KEY = 'todo-app-v1-archive';
+
+// ── BLOCK TYPES ───────────────────────────────────────────────────────────────
+const BLOCK_TYPES = {
+  MORNING_START:  { emoji: '🥣', label: 'Morning Start',  defaultDuration: 120 },
+  DEEP_WORK:      { emoji: '🆓', label: 'Deep Work',      defaultDuration: 120 },
+  LUNCH_BREAK:    { emoji: '🍽️', label: 'Lunch Break',    defaultDuration: 30  },
+  CREATIVE_ADMIN: { emoji: '🖇️', label: 'Creative Admin', defaultDuration: 120 },
+  EXPERIMENTS:    { emoji: '🧵', label: 'Experiments',    defaultDuration: 120 },
+  MEETING:        { emoji: '🗣️', label: 'Meeting',        defaultDuration: 60  },
+  WRAP_UP:        { emoji: '🏚️', label: 'Wrap Up',        defaultDuration: 30  },
+  BUFFER:         { emoji: '🧹', label: 'Buffer',         defaultDuration: 480 },
+  TASK:           { emoji: '',   label: 'Úkol',           defaultDuration: 15  },
+};
+
+// ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
+function mkItem(text, blockType, duration, isSubtask, isEvent, eventStart, eventEnd, done) {
+  return { text, blockType: blockType||'TASK', duration: duration||15, isSubtask: !!isSubtask,
+           isEvent: !!isEvent, eventStart: eventStart||null, eventEnd: eventEnd||null,
+           done: !!done, urgent: false };
+}
+const DAY_TEMPLATES = {
+  'Po': [
+    mkItem('🥣 Morning Start','MORNING_START',120,false),
+    mkItem('Walk','MORNING_START',30,true),
+    mkItem('Planning','MORNING_START',15,true),
+    mkItem('Breakfast','MORNING_START',15,true),
+    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
+    mkItem('Meeting prep','DEEP_WORK',30,true),
+    mkItem('Focused tasks','DEEP_WORK',60,true),
+    mkItem('Snack','DEEP_WORK',15,true),
+    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
+    mkItem('Lunch','LUNCH_BREAK',30,true),
+    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
+    mkItem('Walk','CREATIVE_ADMIN',30,true),
+    mkItem('AI exploration','CREATIVE_ADMIN',60,true),
+    mkItem('Snack','CREATIVE_ADMIN',15,true),
+    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
+    mkItem('End of day','WRAP_UP',30,true),
+  ],
+  'Út': [
+    mkItem('🥣 Morning Start','MORNING_START',120,false),
+    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
+    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
+    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',60,false),
+    mkItem('🗣️ Meeting','MEETING',60,false,true,'12:30','13:30'),
+    mkItem('Standup','MEETING',60,true),
+    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
+    mkItem('End of day','WRAP_UP',30,true),
+  ],
+  'St': [
+    mkItem('🥣 Morning Start','MORNING_START',120,false),
+    mkItem('Walk','MORNING_START',30,true),
+    mkItem('Planning','MORNING_START',15,true),
+    mkItem('Breakfast','MORNING_START',15,true),
+    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
+    mkItem('Meeting prep','DEEP_WORK',30,true),
+    mkItem('Focused tasks','DEEP_WORK',60,true),
+    mkItem('Snack','DEEP_WORK',15,true),
+    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
+    mkItem('Lunch','LUNCH_BREAK',30,true),
+    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
+    mkItem('Walk','CREATIVE_ADMIN',30,true),
+    mkItem('AI exploration','CREATIVE_ADMIN',60,true),
+    mkItem('Snack','CREATIVE_ADMIN',15,true),
+    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
+    mkItem('End of day','WRAP_UP',30,true),
+  ],
+  'Čt': [
+    mkItem('🥣 Morning Start','MORNING_START',120,false),
+    mkItem('🧵 Experiments','EXPERIMENTS',120,false),
+    mkItem('Trials','EXPERIMENTS',45,true),
+    mkItem('Snack','EXPERIMENTS',15,true),
+    mkItem('Trials','EXPERIMENTS',45,true),
+    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
+    mkItem('Lunch','LUNCH_BREAK',30,true),
+    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
+    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
+    mkItem('End of day','WRAP_UP',30,true),
+  ],
+  'Pá': [
+    mkItem('🧹 Buffer','BUFFER',480,false,true,'6:00','14:00'),
+    mkItem('Walk','BUFFER',30,true),
+    mkItem('Planning','BUFFER',30,true),
+    mkItem('Breakfast','BUFFER',20,true),
+    mkItem('Weekly planning','BUFFER',60,true),
+    mkItem('Buffer tasks','BUFFER',180,true),
+    mkItem('End of day','BUFFER',30,true),
+  ],
+};
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let items = [];
+let windowStart = '6:00', windowEnd = '14:00';
+let autoAdvance = false;
+let highlightedId = null;
+let library = [], activeLibId = null, archive = [];
+let undoStack = [], redoStack = [], savedSnapshot = null;
+let autoSave = false;
+const UNDO_MAX = 40;
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function timeToMin(t) {
+  if (!t) return 0;
+  const parts = String(t).split(':');
+  return parseInt(parts[0]||0) * 60 + parseInt(parts[1]||0);
+}
+function minToTime(m) {
+  const h = Math.floor(m / 60), mn = m % 60;
+  return h + ':' + String(mn).padStart(2,'0');
+}
+function formatDur(min) {
+  if (!min) return '—';
+  if (min < 60) return min + 'min';
+  const h = Math.floor(min/60), m = min%60;
+  return m ? h + 'h' + m + 'm' : h + 'h';
+}
+
+// ── PARSE TEXT ────────────────────────────────────────────────────────────────
+function parseItemText(raw) {
+  let text = raw.trim();
+  let duration = null, isEvent = false, eventStart = null, eventEnd = null;
+  let blockType = 'TASK', isSubtask = false, done = false, urgent = false;
+
+  if (text.startsWith('✒')) { isSubtask = true; text = text.replace(/^✒\s*/, ''); }
+  else if (/^[xX] /.test(text)) { isSubtask = true; done = true; text = text.replace(/^[xX] /i, ''); }
+
+  if (text.endsWith(' !')) { urgent = true; text = text.slice(0, -2); }
+
+  let m;
+  // Duration at start: "120min" "2h"
+  if ((m = text.match(/^(\d+)\s*h\b/i))) { duration = parseInt(m[1]) * 60; text = text.slice(m[0].length).trim(); }
+  else if ((m = text.match(/^(\d+)\s*min\b/i))) { duration = parseInt(m[1]); text = text.slice(m[0].length).trim(); }
+
+  // Event time range: "13:30–14:00" "9:30-10:00" "9:30 to 10:00"
+  const rangeRe = /(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i;
+  if ((m = text.match(rangeRe))) {
+    isEvent = true; eventStart = m[1]; eventEnd = m[2];
+    duration = timeToMin(eventEnd) - timeToMin(eventStart);
+    text = text.replace(m[0], '').trim();
+  }
+
+  // Block type detection (emoji or text name)
+  for (const [key, bt] of Object.entries(BLOCK_TYPES)) {
+    if (key === 'TASK') continue;
+    const labelUpper = bt.label.toUpperCase();
+    if ((bt.emoji && text.includes(bt.emoji)) || text.toUpperCase().includes(labelUpper)) {
+      blockType = key;
+      if (!duration && !isEvent) duration = bt.defaultDuration;
+      break;
+    }
+  }
+
+  // Duration anywhere else: "20m" "45 min"
+  if (!duration && !isEvent) {
+    if ((m = text.match(/(\d+)\s*h\b/i))) duration = parseInt(m[1]) * 60;
+    else if ((m = text.match(/(\d+)\s*min?\b/i))) duration = parseInt(m[1]);
+  }
+
+  if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15;
+
+  return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent };
+}
+
+// ── COMPUTE TIMELINE ──────────────────────────────────────────────────────────
+
+function computeTimeline() {
+  const wStart = timeToMin(windowStart);
+  const wEnd = timeToMin(windowEnd);
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const floatStart = (autoAdvance && nowMin >= wStart && nowMin < wEnd) ? nowMin : wStart;
+
+  const topItems = items.filter(i => !i.isSubtask);
+  const eventBlocks = topItems.filter(i => i.isEvent && i.eventStart);
+  const floatBlocks = topItems.filter(i => !i.isEvent);
+
+  // Position events at fixed times
+  const fixedBlocks = eventBlocks.map(item => {
+    const s = timeToMin(item.eventStart);
+    const e = item.eventEnd ? timeToMin(item.eventEnd) : s + item.duration;
+    return { item, startMin: s, endMin: e, fixed: true };
+  }).sort((a, b) => a.startMin - b.startMin);
+
+  const result = [];
+  let cursor = floatStart;
+
+  floatBlocks.forEach(item => {
+    // Skip cursor past any fixed events it overlaps
+    let moved = true;
+    while (moved) {
+      moved = false;
+      for (const fb of fixedBlocks) {
+        if (cursor >= fb.startMin && cursor < fb.endMin) {
+          cursor = fb.endMin; moved = true; break;
+        }
+      }
+    }
+    result.push({ item, startMin: cursor, endMin: cursor + item.duration, fixed: false });
+    cursor += item.duration;
+  });
+
+  // Merge fixed and floating
+  const all = [...result, ...fixedBlocks].sort((a, b) => a.startMin - b.startMin);
+  return { blocks: all, wStart, wEnd, nowMin };
+}
+
+// ── RENDER TIMELINE ───────────────────────────────────────────────────────────
+const MINS_PER_ROW = 120;
+
+function renderTimeline() {
+  const container = el('tl-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const { blocks, wStart, wEnd, nowMin } = computeTimeline();
+  const maxEnd = blocks.reduce((mx, b) => Math.max(mx, b.endMin), wEnd);
+  const totalEnd = Math.max(wEnd, maxEnd);
+  const numRows = Math.ceil((totalEnd - wStart) / MINS_PER_ROW);
+
+  for (let row = 0; row < numRows; row++) {
+    const rowStart = wStart + row * MINS_PER_ROW;
+    const rowEnd = rowStart + MINS_PER_ROW;
+    const isOverflowRow = rowStart >= wEnd;
+
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'tl-row' + (isOverflowRow ? ' tl-overflow-row' : '');
+
+    // Time label (start of row)
+    const lbl = document.createElement('div');
+    lbl.className = 'tl-row-label';
+    lbl.textContent = minToTime(rowStart);
+    rowDiv.appendChild(lbl);
+
+    const content = document.createElement('div');
+    content.className = 'tl-row-content';
+
+    // 30-min tick marks with labels
+    for (let t = 30; t < MINS_PER_ROW; t += 30) {
+      const leftPct = t / MINS_PER_ROW * 100;
+      const tick = document.createElement('div');
+      tick.className = 'tl-tick';
+      tick.style.left = leftPct + '%';
+      content.appendChild(tick);
+
+      const tickLbl = document.createElement('div');
+      tickLbl.className = 'tl-tick-label';
+      tickLbl.style.left = 'calc(' + leftPct + '% + 2px)';
+      tickLbl.textContent = minToTime(rowStart + t);
+      content.appendChild(tickLbl);
+    }
+
+    // Blocks intersecting this row
+    blocks.forEach(({ item, startMin, endMin }) => {
+      const bStart = Math.max(startMin, rowStart);
+      const bEnd   = Math.min(endMin, rowEnd);
+      if (bStart >= rowEnd || bEnd <= rowStart) return;
+
+      const leftPct  = (bStart - rowStart) / MINS_PER_ROW * 100;
+      const widthPct = (bEnd - bStart)     / MINS_PER_ROW * 100;
+      const isContinued = startMin < rowStart;
+      const bt = item.blockType || 'TASK';
+      const btInfo = BLOCK_TYPES[bt] || BLOCK_TYPES.TASK;
+      const isHL = item.id === highlightedId;
+
+      const div = document.createElement('div');
+      div.className = ['tl-block-h', 'tl-' + bt,
+        item.urgent ? 'tl-urgent' : '',
+        item.done   ? 'tl-done'   : '',
+        isHL        ? 'tl-highlight' : '',
+      ].filter(Boolean).join(' ');
+      div.style.left  = leftPct + '%';
+      div.style.width = 'calc(' + widthPct + '% - 1px)';
+      div.dataset.id  = item.id;
+
+      const span = document.createElement('span');
+      span.className = 'tl-label';
+      let label = (btInfo.emoji ? btInfo.emoji + ' ' : '') + item.text;
+      if (isContinued) label = '↩ ' + label;
+      if (label.length > 24) label = label.slice(0, 22) + '…';
+      span.textContent = label;
+      div.appendChild(span);
+
+      div.addEventListener('click', () => highlightItem(item.id));
+      content.appendChild(div);
+    });
+
+    // Current-time vertical line
+    if (nowMin >= rowStart && nowMin < rowEnd) {
+      const leftPct = (nowMin - rowStart) / MINS_PER_ROW * 100;
+      const nowLine = document.createElement('div');
+      nowLine.className = 'tl-now-v';
+      nowLine.style.left = leftPct + '%';
+      content.appendChild(nowLine);
+    }
+
+    rowDiv.appendChild(content);
+    container.appendChild(rowDiv);
+  }
+}
+
+// ── RENDER ITEM LIST ──────────────────────────────────────────────────────────
+function renderItemList() {
+  const container = el('item-list');
+  if (!container) return;
+
+  if (!items.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Žádné úkoly — přidej výše nebo načti šablonu.</div>';
+    return;
+  }
+
+  container.innerHTML = items.map((item, idx) => {
+    const bt = item.blockType || 'TASK';
+    const btInfo = BLOCK_TYPES[bt] || BLOCK_TYPES.TASK;
+    const isBlock = !item.isSubtask;
+    const isHL = item.id === highlightedId;
+
+    const cls = ['item-row',
+      isBlock ? 'is-block' : 'is-subtask',
+      item.done   ? 'is-done'   : '',
+      item.urgent ? 'is-urgent' : '',
+      isHL        ? 'tl-highlight' : '',
+    ].filter(Boolean).join(' ');
+
+    const toggle = item.isSubtask ? (item.done ? '☑' : '✒') : (item.done ? '☑' : '☐');
+    const emoji = isBlock && btInfo.emoji ? `<span style="flex-shrink:0;margin-right:.1rem">${btInfo.emoji}</span>` : '';
+    const durLabel = item.isEvent && item.eventStart
+      ? (item.eventStart + '–' + (item.eventEnd || '?'))
+      : formatDur(item.duration);
+
+    return `<div class="${cls}" data-idx="${idx}" data-id="${item.id}">
+      <span class="item-toggle" onclick="toggleDone(${idx})" title="hotovo">${toggle}</span>
+      ${emoji}
+      <span class="item-text" onclick="startEdit(${idx})">${esc(item.text)}</span>
+      <span class="dur-badge">${durLabel}</span>
+      <button class="item-move" onclick="moveItem(${idx},-1)" title="nahoru" ${idx===0?'disabled':''}>↑</button>
+      <button class="item-move" onclick="moveItem(${idx},1)" title="dolů" ${idx===items.length-1?'disabled':''}>↓</button>
+      <button class="item-del" onclick="deleteItem(${idx})" title="smazat">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const wS = timeToMin(windowStart), wE = timeToMin(windowEnd);
+  const wLen = Math.max(0, wE - wS);
+  const topItems = items.filter(i => !i.isSubtask);
+  const planned = topItems.reduce((s, i) => s + (i.duration || 0), 0);
+  const overflow = Math.max(0, planned - wLen);
+  const remain = wLen - planned;
+
+  el('stat-window').textContent = (Math.round(wLen / 6) / 10) + 'h';
+  el('stat-planned').textContent = planned + ' min';
+  const remEl = el('stat-remain');
+  if (overflow > 0) {
+    remEl.textContent = '+' + overflow + 'min přesah';
+    remEl.classList.add('overflow');
+  } else {
+    remEl.textContent = '−' + remain + 'min';
+    remEl.classList.remove('overflow');
+  }
+}
+
+// ── RENDER ALL ────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderTimeline();
+  renderItemList();
+  updateStats();
+  updateDirtyState();
+}
+
+// ── HIGHLIGHT ─────────────────────────────────────────────────────────────────
+function highlightItem(id) {
+  highlightedId = (highlightedId === id) ? null : id;
+  renderAll();
+  if (highlightedId) {
+    const row = el('item-list')?.querySelector(`[data-id="${id}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// ── ADD ITEMS ─────────────────────────────────────────────────────────────────
+function addQuickItems(forceType) {
+  const ta = el('quickInput');
+  const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  pushUndo();
+  lines.forEach(line => {
+    const parsed = parseItemText(line);
+    if (forceType === 'EVENT' && !parsed.isEvent) {
+      parsed.isEvent = true;
+      parsed.eventStart = minToTime(timeToMin(windowStart));
+      parsed.eventEnd = minToTime(timeToMin(windowStart) + parsed.duration);
+    }
+    parsed.id = Date.now() + Math.random();
+    items.push(parsed);
+  });
+  ta.value = '';
+  schedSave(); renderAll();
+}
+
+function addBlockItem(blockType) {
+  const bt = BLOCK_TYPES[blockType] || BLOCK_TYPES.TASK;
+  pushUndo();
+  items.push({
+    id: Date.now() + Math.random(),
+    text: bt.emoji ? bt.emoji + ' ' + bt.label : bt.label,
+    blockType, duration: bt.defaultDuration,
+    isEvent: false, eventStart: null, eventEnd: null,
+    isSubtask: false, done: false, urgent: false,
+  });
+  schedSave(); renderAll();
+  closeBlockMenu();
+}
+
+// ── ITEM OPERATIONS ───────────────────────────────────────────────────────────
+function toggleDone(idx) {
+  if (!items[idx]) return;
+  pushUndo();
+  items[idx].done = !items[idx].done;
+  schedSave(); renderAll();
+}
+
+function deleteItem(idx) {
+  if (!items[idx]) return;
+  pushUndo();
+  items.splice(idx, 1);
+  schedSave(); renderAll();
+}
+
+function moveItem(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= items.length) return;
+  pushUndo();
+  [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+  schedSave(); renderAll();
+}
+
+function startEdit(idx) {
+  const item = items[idx];
+  const rows = el('item-list')?.querySelectorAll('.item-row');
+  if (!rows || !rows[idx]) return;
+  const textEl = rows[idx].querySelector('.item-text');
+  if (!textEl) return;
+
+  textEl.contentEditable = 'true';
+  textEl.style.whiteSpace = 'normal';
+  textEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(textEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    textEl.contentEditable = 'false';
+    textEl.style.whiteSpace = '';
+    const newText = textEl.textContent.trim();
+    if (newText && newText !== item.text) {
+      pushUndo();
+      items[idx].text = newText;
+      schedSave();
+      renderAll();
+    }
+  };
+
+  textEl.addEventListener('blur', commit, { once: true });
+  textEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); textEl.blur(); }
+    if (e.key === 'Escape') { textEl.textContent = item.text; textEl.blur(); }
+  });
+}
+
+// ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
+async function loadDayTemplate(day) {
+  const tpl = DAY_TEMPLATES[day];
+  if (!tpl) return;
+  if (!await customConfirm('Nahradit aktuální plán šablonou ' + day + '?', 'nahradit')) return;
+  pushUndo();
+  items = tpl.map((t, i) => ({ ...t, id: Date.now() + i }));
+  activeLibId = null; savedSnapshot = null;
+  schedSave(); renderLibrary(); renderAll();
+}
+
+// ── WINDOW CHANGE ─────────────────────────────────────────────────────────────
+function onWindowChange() {
+  windowStart = el('winStart')?.value || '6:00';
+  windowEnd   = el('winEnd')?.value   || '14:00';
+  schedSave(); renderAll();
+}
+
+function toggleAutoAdv() {
+  autoAdvance = !autoAdvance;
+  const sw = el('autoAdvToggle');
+  if (sw) sw.classList.toggle('on', autoAdvance);
+  schedSave(); renderAll();
+}
+
+// ── SESSION ───────────────────────────────────────────────────────────────────
+function getSessionData() {
+  return { items, windowStart, windowEnd, autoAdvance };
+}
+function applySessionData(d) {
+  if (!d) return;
+  items = d.items || [];
+  windowStart = d.windowStart || '6:00';
+  windowEnd   = d.windowEnd   || '14:00';
+  autoAdvance = !!d.autoAdvance;
+  if (el('winStart')) el('winStart').value = windowStart;
+  if (el('winEnd'))   el('winEnd').value   = windowEnd;
+  const sw = el('autoAdvToggle');
+  if (sw) sw.classList.toggle('on', autoAdvance);
+}
+function sessionSnap() { return JSON.stringify(getSessionData()); }
+function saveSession() {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...getSessionData(), activeLibId })); } catch(e) {}
+}
+function loadSession() {
+  try {
+    const s = localStorage.getItem(SESSION_KEY);
+    if (!s) return false;
+    const d = JSON.parse(s);
+    applySessionData(d);
+    activeLibId = d.activeLibId || null;
+    if (activeLibId) {
+      const entry = library.find(e => e.id === activeLibId);
+      if (entry) el('headerSub').textContent = entry.name || '';
+    }
+    return true;
+  } catch(e) { return false; }
+}
+function markSaved() { savedSnapshot = sessionSnap(); }
+function isDirty() { return activeLibId && savedSnapshot ? sessionSnap() !== savedSnapshot : false; }
+function updateDirtyState() {
+  const hSave = el('headerSaveBtn');
+  if (hSave) hSave.style.display = isDirty() ? 'inline-flex' : 'none';
+}
+
+// ── LIBRARY ───────────────────────────────────────────────────────────────────
+function loadLibrary() { try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch(e) { library = []; } }
+function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
+function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch(e) { archive = []; } }
+function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
+
+async function saveToLibrary() {
+  const name = await customPrompt('Název šablony:', 'Moje šablona');
+  if (!name) return;
+  const entry = { id: Date.now(), name, data: getSessionData() };
+  library.push(entry);
+  saveLibrary();
+  activeLibId = entry.id;
+  markSaved();
+  renderLibrary();
+  showSave('✓ uloženo do šablon');
+}
+
+function updateLibraryEntry() {
+  if (!activeLibId) return;
+  const entry = library.find(e => e.id === activeLibId);
+  if (!entry) return;
+  entry.data = getSessionData();
+  saveLibrary();
+  markSaved();
+  showSave('✓ šablona aktualizována');
+  updateDirtyState();
+}
+
+function renderLibrary() {
+  const list = el('libList');
+  if (!list) return;
+  const hSave = el('headerSaveBtn'), hNew = el('headerSaveNewBtn');
+
+  if (!library.length) {
+    list.innerHTML = '<div class="lib-empty">Žádné uložené šablony</div>';
+  } else {
+    list.innerHTML = library.map(entry => `
+      <div class="lib-item${entry.id === activeLibId ? ' active' : ''}" onclick="loadLibEntry(${entry.id})">
+        <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
+        <button class="lib-item-del" onclick="event.stopPropagation();deleteLibEntry(${entry.id})" title="smazat">
+          <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
+        </button>
+      </div>`).join('');
+  }
+
+  if (hSave) hSave.style.display = isDirty() ? 'inline-flex' : 'none';
+  if (hNew) hNew.textContent = '+ uložit jako šablonu';
+  el('headerSub').style.display = activeLibId ? 'inline' : 'none';
+  el('headerSep').style.display = activeLibId ? 'inline' : 'none';
+}
+
+async function loadLibEntry(id) {
+  const entry = library.find(e => e.id === id);
+  if (!entry) return;
+  if (!await customConfirm('Nahradit aktuální plán šablonou "' + (entry.name||id) + '"?', 'nahradit')) return;
+  pushUndo();
+  applySessionData(entry.data);
+  activeLibId = id;
+  markSaved();
+  el('headerSub').textContent = entry.name || '';
+  schedSave(); renderLibrary(); renderAll();
+}
+
+async function deleteLibEntry(id) {
+  const entry = library.find(e => e.id === id);
+  if (!await customConfirm('Smazat šablonu "' + (entry?.name || id) + '"?', 'smazat')) return;
+  library = library.filter(e => e.id !== id);
+  saveLibrary();
+  if (activeLibId === id) { activeLibId = null; savedSnapshot = null; }
+  renderLibrary(); updateDirtyState();
+}
+
+async function newSession() {
+  if (!await customConfirm('Otevřít prázdnou kartu?', 'otevřít')) return;
+  pushUndo();
+  items = [];
+  activeLibId = null; savedSnapshot = null;
+  undoStack = []; redoStack = [];
+  updateUndoBtn();
+  renderLibrary(); schedSave(); renderAll();
+  showSave('nová karta');
+}
+
+// ── BLOCK MENU ────────────────────────────────────────────────────────────────
+function toggleBlockMenu(e) {
+  e.stopPropagation();
+  const menu = el('blockMenu');
+  if (menu.style.display === 'flex') { closeBlockMenu(); return; }
+  menu.innerHTML = Object.entries(BLOCK_TYPES)
+    .filter(([k]) => k !== 'TASK')
+    .map(([k, bt]) => `<button class="block-menu-item" onclick="addBlockItem('${k}')">${bt.emoji} ${bt.label}</button>`)
+    .join('');
+  menu.style.display = 'flex';
+  const btn = e.currentTarget;
+  const br = btn.getBoundingClientRect();
+  menu.style.top = (br.bottom + 4 + window.scrollY) + 'px';
+  requestAnimationFrame(() => {
+    const mw = menu.offsetWidth, vw = window.innerWidth;
+    let left = br.left;
+    if (left + mw > vw - 8) left = vw - mw - 8;
+    if (left < 8) left = 8;
+    menu.style.left = left + 'px';
+  });
+}
+function closeBlockMenu() { const m = el('blockMenu'); if (m) m.style.display = 'none'; }
+
+// ── CUSTOM PROMPT ─────────────────────────────────────────────────────────────
+function customPrompt(msg, defaultVal) {
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = defaultVal || '';
+    input.style.cssText = 'width:100%;padding:.4rem .5rem;font-family:"DM Mono",monospace;font-size:.85rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);outline:none;margin-top:.25rem';
+    const origMsg = el('confirmMsg').textContent;
+    el('confirmMsg').textContent = msg;
+    el('confirmMsg').after(input);
+    el('confirmOkBtn').textContent = 'OK';
+    el('confirmCancelBtn').style.display = '';
+    el('confirmModal').classList.add('open');
+    input.focus(); input.select();
+    const cleanup = val => {
+      input.remove();
+      el('confirmMsg').textContent = origMsg;
+      el('confirmModal').classList.remove('open');
+      resolve(val);
+    };
+    el('confirmOkBtn').onclick = () => cleanup(input.value.trim() || null);
+    el('confirmCancelBtn').onclick = () => cleanup(null);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') cleanup(input.value.trim() || null);
+      if (e.key === 'Escape') cleanup(null);
+    });
+  });
+}
+
+// ── AUTO-SAVE ─────────────────────────────────────────────────────────────────
+function initAutoSave() {
+  try { autoSave = !!localStorage.getItem('todo-app-autosave'); } catch(e) {}
+  const chk = el('autoSaveChk'); if (chk) chk.checked = autoSave;
+}
+function toggleAutoSave(on) {
+  autoSave = on;
+  try { if (on) localStorage.setItem('todo-app-autosave','1'); else localStorage.removeItem('todo-app-autosave'); } catch(e) {}
+  if (on && activeLibId && isDirty()) updateLibraryEntry();
+}
+
+// ── UNDO ──────────────────────────────────────────────────────────────────────
+function pushUndo() {
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = [];
+  updateUndoBtn();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(sessionSnap());
+  applySessionData(JSON.parse(undoStack.pop()));
+  schedSave(); updateUndoBtn(); renderLibrary(); renderAll();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  applySessionData(JSON.parse(redoStack.pop()));
+  schedSave(); updateUndoBtn(); renderLibrary(); renderAll();
+}
+function updateUndoBtn() {
+  const u = el('undoBtn');
+  if (u) { u.disabled = !undoStack.length; u.title = undoStack.length ? 'zpět ' + undoStack.length + ' (Ctrl+Z)' : 'nic k vrácení'; }
+  const r = el('redoBtn');
+  if (r) { r.disabled = !redoStack.length; r.title = redoStack.length ? 'vpřed ' + redoStack.length + ' (Ctrl+Y)' : 'nic vpřed'; }
+}
+
+// ── STATUS / SAVE ─────────────────────────────────────────────────────────────
+let saveT;
+function showStatusMsg(msg, duration=2200) {
+  const e = el('statusMsg');
+  clearTimeout(e._to); clearTimeout(e._hide);
+  e.style.display = 'inline'; e.textContent = msg;
+  requestAnimationFrame(() => { e.style.opacity = '1'; });
+  e._to = setTimeout(() => {
+    e.style.opacity = '0';
+    e._hide = setTimeout(() => { e.style.display = 'none'; }, 400);
+  }, duration);
+}
+function showSave(msg='✓ uloženo') { showStatusMsg(msg, 2200); }
+function schedSave() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => { saveSession(); showSave(); }, 300);
+}
+
+// ── CLEAR STORAGE ─────────────────────────────────────────────────────────────
+function clearStorage() { el('clearStorageModal').classList.add('open'); }
+function toggleAllClear() {
+  const boxes = ['clr-session','clr-library','clr-archive','clr-appearance'].map(id => el(id));
+  const anyUnchecked = boxes.some(b => !b.checked);
+  boxes.forEach(b => b.checked = anyUnchecked);
+}
+async function doSelectiveClear() {
+  const toDelete = [];
+  if (el('clr-session').checked)    toDelete.push('todo-app-v1-session');
+  if (el('clr-library').checked)    toDelete.push('todo-app-v1-library');
+  if (el('clr-archive').checked)    toDelete.push('todo-app-v1-archive');
+  if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs');
+  if (!toDelete.length) { closeModal('clearStorageModal'); return; }
+  closeModal('clearStorageModal');
+  if (!await customConfirm('Opravdu smazat vybraná data?', 'smazat')) return;
+  try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
+  location.reload();
+}
+
+// ── FONT SIZE ─────────────────────────────────────────────────────────────────
+const FS_STEPS = [0.75,0.85,0.9,1,1.1,1.2,1.35,1.5,1.7,2.0];
+let fsIdx = 3;
+function applyFs() {
+  const v = FS_STEPS[fsIdx];
+  document.documentElement.style.setProperty('--fs', v);
+  el('fsVal').textContent = Math.round(v*100) + '%';
+  try { localStorage.setItem('todo-app-fs', fsIdx); } catch(e) {}
+}
+function changeFs(dir) { fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, fsIdx+dir)); applyFs(); }
+function initFs() {
+  try { const s = localStorage.getItem('todo-app-fs'); if (s !== null) { const p = parseInt(s); if (!isNaN(p)) fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, p)); } } catch(e) {}
+  applyFs();
+}
+
+// ── DARK MODE ─────────────────────────────────────────────────────────────────
+function toggleDark() {
+  const on = document.documentElement.classList.toggle('dark');
+  el('darkToggle').textContent = on ? '☾' : '☀';
+  try { localStorage.setItem('todo-app-dark', on ? '1' : '0'); } catch(e) {}
+}
+function initDark() {
+  try { if (localStorage.getItem('todo-app-dark') === '1') { document.documentElement.classList.add('dark'); el('darkToggle').textContent = '☾'; } } catch(e) {}
+}
+
+// ── PER-PANEL FONT SIZE ───────────────────────────────────────────────────────
+const PFS_STEPS = [0.7,0.8,0.9,1.0,1.1,1.2,1.35,1.5,1.7,2.0];
+const PFS_DEFAULT = 3;
+const PFS_ALL = ['panel-library','panel-main','panel-notes'];
+let panelFs = {};
+function loadPanelFs() {
+  try { const s = localStorage.getItem('todo-app-panel-fs'); if (s) panelFs = JSON.parse(s); } catch(e) {}
+  PFS_ALL.forEach(pid => {
+    if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+    applyPanelFs(pid);
+  });
+}
+function savePanelFs() { try { localStorage.setItem('todo-app-panel-fs', JSON.stringify(panelFs)); } catch(e) {} }
+function isPanelExpanded(pid) { return expandedPanel && expandedPanel === el(pid); }
+function applyPanelFs(pid) {
+  const panel = el(pid); if (!panel) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  panel.style.zoom = PFS_STEPS[idx];
+  updatePfsVal(pid);
+}
+function updatePfsVal(pid) {
+  const valEl = el('pfs-' + pid); if (!valEl) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  const ni = (panelFs[pid] || {}).n ?? PFS_DEFAULT;
+  const ei = (panelFs[pid] || {}).e ?? PFS_DEFAULT;
+  const marker = isPanelExpanded(pid) && ni !== ei ? '*' : '';
+  valEl.textContent = Math.round(PFS_STEPS[idx]*100) + '%' + marker;
+}
+function changePanelFs(pid, dir) {
+  if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  panelFs[pid][mode] = Math.max(0, Math.min(PFS_STEPS.length-1, (panelFs[pid][mode] ?? PFS_DEFAULT) + dir));
+  applyPanelFs(pid); savePanelFs();
+}
+
+// ── EXPAND PANEL ──────────────────────────────────────────────────────────────
+let expandedPanel = null;
+function toggleExpand(id) {
+  const panel = el(id); if (!panel) return;
+  if (expandedPanel && expandedPanel !== panel) collapsePanel(expandedPanel);
+  if (panel.classList.contains('panel-expanded')) collapsePanel(panel);
+  else expandPanel(panel);
+}
+function expandPanel(panel) {
+  panel.classList.add('panel-expanded'); expandedPanel = panel; applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
+  if (!panel.querySelector('.expand-esc')) {
+    const hint = document.createElement('span'); hint.className = 'expand-esc'; hint.textContent = 'Esc';
+    btn && btn.parentNode.appendChild(hint);
+  }
+  document.addEventListener('keydown', onExpandEsc);
+}
+function collapsePanel(panel) {
+  panel.classList.remove('panel-expanded'); expandedPanel = null; applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+  const hint = panel.querySelector('.expand-esc'); if (hint) hint.remove();
+  document.removeEventListener('keydown', onExpandEsc);
+}
+function onExpandEsc(e) { if (e.key === 'Escape' && expandedPanel) collapsePanel(expandedPanel); }
+
+// ── CUSTOM CONFIRM / ALERT ────────────────────────────────────────────────────
+let _confirmResolve = null;
+function customConfirm(msg, okLabel='potvrdit') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmOkBtn').onclick = () => _confirmResolve && _confirmResolve(true);
+    el('confirmCancelBtn').style.display = '';
+    el('confirmCancelBtn').onclick = () => _confirmResolve && _confirmResolve(false);
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); _confirmResolve = null; resolve(val); };
+  });
+}
+function customAlert(msg, okLabel='ok') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmOkBtn').onclick = () => _confirmResolve && _confirmResolve(true);
+    el('confirmCancelBtn').style.display = 'none';
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); el('confirmCancelBtn').style.display = ''; _confirmResolve = null; resolve(val); };
+  });
+}
+
+// ── MODALS ────────────────────────────────────────────────────────────────────
+function closeModal(id) { el(id).classList.remove('open'); }
+document.addEventListener('click', e => {
+  closeBlockMenu();
+  closeNewMenu();
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal'].forEach(id => {
+    const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
+  });
+  const cm = el('confirmModal');
+  if (cm && cm.classList.contains('open') && e.target === cm && _confirmResolve) _confirmResolve(false);
+});
+
+// ── LIB PANEL TOGGLE ─────────────────────────────────────────────────────────
+function toggleLibPanel() {
+  const lp = document.querySelector('.library-panel'); if (!lp) return;
+  const hidden = lp.classList.toggle('lib-hidden');
+  el('libToggleBtn').textContent = hidden ? '☰' : '«';
+  updateAppGrid();
+}
+function updateAppGrid() {
+  const lp = document.querySelector('.library-panel');
+  const app = document.querySelector('.app');
+  if (!app || !lp) return;
+  const hidden = lp.classList.contains('lib-hidden');
+  const w = window.innerWidth;
+  if (w <= 820) app.style.gridTemplateColumns = '';
+  else if (w <= 1020) app.style.gridTemplateColumns = hidden ? '0 1fr' : '185px 1fr';
+  else app.style.gridTemplateColumns = hidden ? '0 1fr 330px' : '210px 1fr 330px';
+}
+
+// ── NEW MENU ──────────────────────────────────────────────────────────────────
+function toggleNewMenu(e) {
+  e.stopPropagation();
+  const m = el('newMenu');
+  if (m.style.display === 'flex') { m.style.display = 'none'; return; }
+  m.style.display = 'flex';
+  const btn = e.currentTarget, br = btn.getBoundingClientRect();
+  m.style.top = (br.bottom + 4 + window.scrollY) + 'px';
+  m.style.left = ''; m.style.right = '';
+  requestAnimationFrame(() => {
+    const mw = m.offsetWidth, vw = window.innerWidth;
+    let left = br.right - mw;
+    if (left < 8) left = 8;
+    if (left + mw > vw - 8) left = vw - mw - 8;
+    m.style.left = left + 'px';
+  });
+}
+function closeNewMenu() { const m = el('newMenu'); if (m) m.style.display = 'none'; }
+
+// ── EXPORT ────────────────────────────────────────────────────────────────────
+let exportSelected = new Set(), exportArchSelected = new Set();
+function openExportModal() {
+  exportSelected = new Set(library.map(e => e.id));
+  exportArchSelected = new Set(archive.map(e => e.id));
+  el('exportList').innerHTML = library.length
+    ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Žádné uložené šablony.</p>';
+  el('exportArchList').innerHTML = archive.length
+    ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archiv je prázdný.</p>';
+  updateExportFilename();
+  el('exportModal').classList.add('open');
+}
+function updateExportFilename() {
+  const d = new Date();
+  const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  el('exportFilename').value = 'todo_' + yymmdd + '_I' + exportSelected.size + 'A' + exportArchSelected.size + '.json';
+}
+function toggleExportSel(id, on) { on ? exportSelected.add(id) : exportSelected.delete(id); el('ei-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
+function toggleExportArchSel(id, on) { on ? exportArchSelected.add(id) : exportArchSelected.delete(id); el('eai-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
+function selectAllExport() {
+  library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
+  archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
+  updateExportFilename();
+}
+function doExport() {
+  const its = library.filter(e => exportSelected.has(e.id));
+  const archs = archive.filter(e => exportArchSelected.has(e.id));
+  if (!its.length && !archs.length) { customAlert('Nic není vybráno.'); return; }
+  const json = JSON.stringify({v:1, items: its, archive: archs}, null, 2);
+  const rawName = (el('exportFilename').value.trim() || 'export');
+  const fname = rawName.endsWith('.json') ? rawName : rawName + '.json';
+  let downloaded = false;
+  try {
+    const a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json); a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); downloaded = true;
+  } catch(e) {}
+  closeModal('exportModal');
+  el('exportCopyText').value = json;
+  el('exportCopyNote').textContent = downloaded ? 'Soubor byl stažen jako "' + fname + '".' : 'Stažení se nezdařilo — zkopíruj níže.';
+  el('exportCopyModal').classList.add('open');
+  showSave('↑ exportováno');
+}
+function copyExportText() {
+  const ta = el('exportCopyText');
+  try {
+    if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(ta.value).then(() => showSave('✓ zkopírováno')); }
+    else { ta.select(); document.execCommand('copy'); showSave('✓ zkopírováno'); }
+  } catch(e) { ta.select(); }
+}
+
+// ── IMPORT ────────────────────────────────────────────────────────────────────
+let importData = [], importSelected = new Set();
+function openImportModal() {
+  importData = []; importSelected = new Set();
+  el('importModal').classList.remove('from-cloud');
+  el('importModal').querySelector('h2').textContent = 'Import';
+  el('importFile').value = ''; el('importPaste').value = '';
+  el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
+  el('importActions').style.display = 'none'; el('importCancel').style.display = 'flex';
+  el('importModal').classList.add('open');
+}
+function parseImportJson(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const its = parsed.items || parsed.teas || [];
+    if (!its.length) throw new Error('Žádné položky v souboru');
+    importData = its; importSelected = new Set(its.map(x => x.id));
+    el('importList').innerHTML = its.map(x => `<label class="modal-item sel" id="ii-${x.id}"><input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />${esc(x.name||String(x.id))}</label>`).join('');
+    el('importItemSection').style.display = 'block'; el('importActions').style.display = 'flex'; el('importCancel').style.display = 'none';
+  } catch(err) {
+    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Chyba: ' + err.message + '</p>';
+    el('importItemSection').style.display = 'block';
+  }
+}
+function previewImportPaste() { const text = el('importPaste').value.trim(); if (!text) return; parseImportJson(text); }
+function previewImport() { const file = el('importFile').files[0]; if (!file) return; el('importPaste').value = ''; const r = new FileReader(); r.onload = ev => parseImportJson(ev.target.result); r.readAsText(file); }
+function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
+function doImport() {
+  const toAdd = importData.filter(x => importSelected.has(x.id));
+  if (!toAdd.length) { customAlert('Nic není vybráno.'); return; }
+  library.push(...toAdd); saveLibrary(); renderLibrary();
+  closeModal('importModal'); showSave('↓ importováno: ' + toAdd.length + ' šablon');
+}
+
+// ── KEYBOARD ──────────────────────────────────────────────────────────────────
+el('quickInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addQuickItems('TASK'); }
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
+  }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); undo(); }
+  }
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+function init() {
+  initAutoSave(); initFs(); initDark(); loadPanelFs();
+  loadLibrary(); loadArchive();
+  const restored = loadSession();
+  renderLibrary(); renderAll();
+  if (activeLibId) markSaved();
+  updateUndoBtn();
+  if (restored) showSave('↓ obnoveno');
+  // Refresh timeline every minute for current-time line
+  setInterval(() => renderTimeline(), 60000);
+}
+init();
+window.addEventListener('resize', updateAppGrid);
+</script>
+
+<script>
+/* ── JSONBIN SYNC ─── */
+(function(){
+  const JBKEY = 'todo-app-jsonbin-key';
+  const JBID  = 'todo-app-jsonbin-id';
+  function openJsonBinSettings() {
+    try { el('jbKeyInput').value = localStorage.getItem(JBKEY)||''; el('jbIdInput').value = localStorage.getItem(JBID)||''; } catch(e) {}
+    el('jsonbinModal').classList.add('open');
+  }
+  function saveJsonBinSettings() {
+    try {
+      const key = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      if (key) localStorage.setItem(JBKEY, key); else localStorage.removeItem(JBKEY);
+      if (id)  localStorage.setItem(JBID,  id);  else localStorage.removeItem(JBID);
+    } catch(e) {}
+    closeModal('jsonbinModal');
+  }
+  function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
+  function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
+  async function jbGet(binId, key) {
+    let res = await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest', {mode:'cors',credentials:'omit'});
+    if ((res.status===401||res.status===403) && key) res = await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest', {mode:'cors',credentials:'omit',headers:{'X-Master-Key':key}});
+    return res;
+  }
+  async function doCloudUpload() {
+    const key = localStorage.getItem(JBKEY);
+    if (!key) { showSyncTooltip('⚠ chybí API klíč — otevři ⚙'); return; }
+    let binId = localStorage.getItem(JBID);
+    const its = library.filter(e => exportSelected.has(e.id));
+    const archs = archive.filter(e => exportArchSelected.has(e.id));
+    if (!its.length && !archs.length) { customAlert('Nic není vybráno.'); return; }
+    const payload = {v:1, items: its, archive: archs};
+    closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
+    try {
+      const url = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
+      const hdrs = {'Content-Type':'application/json','X-Master-Key':key};
+      if (!binId) { hdrs['X-Bin-Name']='todo-app-sync'; hdrs['X-Bin-Private']='false'; }
+      const res = await fetch(url, {method:binId?'PUT':'POST',mode:'cors',credentials:'omit',headers:hdrs,body:JSON.stringify(payload)});
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      const json = await res.json();
+      if (!binId) { const newId = json.metadata?.id; if (newId) localStorage.setItem(JBID, newId); }
+      showSyncTooltip('↑ nahráno ' + new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}));
+    } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
+  }
+  async function syncDownload() {
+    const binId = localStorage.getItem(JBID);
+    if (!binId) { showSyncTooltip('⚠ chybí Bin ID — otevři ⚙'); return; }
+    const btn = el('syncDownBtn'); btn.disabled = true; showSyncTooltip('↓ stahuji…');
+    try {
+      const key = localStorage.getItem(JBKEY);
+      const res = await jbGet(binId, key);
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      const json = await res.json();
+      let record = json.record;
+      if (typeof record !== 'object' || record === null) throw new Error('Neplatná data v binu');
+      if (!record.items && !record.teas && !record.archive) throw new Error('Bin neobsahuje položky');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import z JSONBin';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('↓ staženo — zkontroluj výběr a importuj');
+    } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
+    finally { btn.disabled = false; }
+  }
+  async function checkCloudOnStartup() {
+    const binId = localStorage.getItem(JBID); if (!binId) return;
+    if (sessionStorage.getItem('todo-app-cloud-checked')) return;
+    sessionStorage.setItem('todo-app-cloud-checked','1');
+    const btn = el('syncDownBtn'); const origTitle = btn.title;
+    btn.disabled = true; btn.title = 'kontroluji cloud…';
+    try {
+      const key = localStorage.getItem(JBKEY);
+      const res = await jbGet(binId, key); if (!res.ok) return;
+      const json = await res.json();
+      let record = json.record;
+      if (typeof record !== 'object' || record === null) return;
+      const cloudItems = record.items || record.teas || [];
+      const cloudArch  = record.archive || [];
+      const idSig = arr => arr.map(x => String(x.id||'')).sort().join(',') + ':' + arr.length;
+      if (idSig(library)+'|'+idSig(archive) === idSig(cloudItems)+'|'+idSig(cloudArch)) return;
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import z JSONBin';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
+    } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
+  }
+  window.openJsonBinSettings  = openJsonBinSettings;
+  window.saveJsonBinSettings  = saveJsonBinSettings;
+  window.doCloudUpload        = doCloudUpload;
+  window.syncDownload         = syncDownload;
+  window.checkCloudOnStartup  = checkCloudOnStartup;
+  checkCloudOnStartup();
+})();
+</script>
+</body>
+</html>
