@@ -1214,6 +1214,7 @@ function applySessionData(st){
   rinseState={remaining:parseInt(el('rinseSec').value)||15,state:'idle'};
   coolPours=el('chkThermometer').classList.contains('checked')?0:(st.coolPours||0);
   renderSteeps();updateHeaderTeaName();updatePer100();updateCoolGuide();
+  requestAnimationFrame(()=>document.querySelectorAll('.field input[placeholder]').forEach(i=>{const v=i.value;i.value='';i.value=v;}));
 }
 
 function saveSession(){try{localStorage.setItem(SESSION_KEY,JSON.stringify({...getSessionData(),activeLibId}));}catch(e){}}
@@ -2833,6 +2834,7 @@ function openLogEdit(logId){
   renderLeEditSteeps();
   updateLeRinseRow();updateLeCoolRow();
   el('logEditModal').classList.add('open');
+  requestAnimationFrame(()=>el('logEditModal').querySelectorAll('input[placeholder]').forEach(i=>{const v=i.value;i.value='';i.value=v;}));
 }
 
 function updateLeRinseRow(){
@@ -2901,6 +2903,7 @@ function openTplEdit(id){
   updateLeRinseRow();updateLeCoolRow();
   el('leModalTitle').textContent='Parametry šablony — '+tpl.name;
   el('logEditModal').classList.add('open');
+  requestAnimationFrame(()=>el('logEditModal').querySelectorAll('input[placeholder]').forEach(i=>{const v=i.value;i.value='';i.value=v;}));
 }
 
 function saveCurrentEdit(){
@@ -2951,9 +2954,8 @@ function buildSetupHtml(logData,curData,fallback,curTeaName){
   if(vessel)line0+=' · '+(vesselDiff?`<b>${esc(vesselType+' '+vessel+' ml')}</b>`:esc(vesselType+' '+vessel+' ml'));
   const tempDiff=df(logData.temp,curData.temp);
   const line1='teplota: '+(tempDiff?`<b>${esc(temp)} °C</b>`:esc(temp)+' °C');
-  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí'};
-  const checks=logData.checks||{};const curChecks=curData.checks||{};
-  if('chkThermometer' in checks||'chkThermometer' in curChecks)checkLabels.chkThermometer='teploměr';
+  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí',chkThermometer:'teploměr'};
+  const checks={chkThermometer:true,...(logData.checks||{})};const curChecks={chkThermometer:true,...(curData.checks||{})};
   const checkLine=Object.entries(checkLabels).map(([id,l])=>{
     const on=!!checks[id];const curOn=!!curChecks[id];
     const txt=(on?'✓ ':'✗ ')+l;
@@ -2981,9 +2983,8 @@ function buildSetupFromData(d,name){
   const amtStr=[amt?amt+'g':'',amttsp?amttsp+' lžičky':''].filter(Boolean).join(' / ');
   const vessel=d.vesselMl||'50';const vesselType=d.vesselType||'gaiwan';
   const temp=d.temp||'80';
-  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí'};
-  const checks=d.checks||{};
-  if('chkThermometer' in checks)checkLabels.chkThermometer='teploměr';
+  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí',chkThermometer:'teploměr'};
+  const checks={chkThermometer:true,...(d.checks||{})};
   const checkLine=Object.entries(checkLabels).map(([id,l])=>(checks[id]?'✓ ':'✗ ')+l).join('  ');
   const lines=[];
   lines.push((name||'—')+(amtStr?' · '+amtStr:'')+(vessel?' · '+vesselType+' '+vessel+' ml':''));
