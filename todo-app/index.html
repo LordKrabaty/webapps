@@ -230,12 +230,22 @@ textarea::placeholder{color:var(--mid)}
 .notes-pane{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;gap:.35rem}
 .notes-pane.active{display:flex}
 /* ── WEEK TAB ── */
-.week-day-row{display:flex;align-items:center;gap:.35rem;padding:.35rem .45rem;border:1px solid var(--light);border-radius:var(--r)}
+.week-section{display:flex;flex-direction:column;gap:.15rem}
+.week-section-hdr{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .15rem;border-top:1.5px solid var(--light);margin-top:.2rem;display:flex;align-items:center;gap:.5rem}
+.week-section-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
+.week-section-sel{font-size:.68rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);cursor:pointer;margin-left:auto}
+@media(hover:hover){.week-section-sel:hover{color:var(--black)}}
+.week-day-item{display:flex;flex-direction:column;gap:.15rem}
+.week-day-row{display:flex;align-items:center;gap:.35rem;padding:.35rem .45rem;border:1px solid var(--light);border-radius:var(--r);cursor:pointer;user-select:none}
 @media(hover:hover){.week-day-row:hover{border-color:var(--mid)}}
+.week-day-row.expanded{border-color:var(--black)}
 .week-day-date{flex:1;font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .week-day-meta{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
-.week-day-del{width:18px;height:18px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.75rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:2px}
-@media(hover:hover){.week-day-del:hover{color:var(--black);background:var(--light)}}
+.week-day-chev{font-size:.6rem;color:var(--muted);flex-shrink:0}
+.week-day-actions{display:flex;gap:.3rem;flex-wrap:wrap;padding:.05rem .1rem .15rem}
+.week-edit-banner{display:none;align-items:center;gap:.4rem;padding:.3rem .5rem;border:1.5px solid var(--black);border-radius:var(--r);font-size:.78rem;flex-shrink:0}
+.week-edit-banner strong{flex:1;font-size:.78rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.week-edit-banner.visible{display:flex}
 /* ── DRAG AND DROP ── */
 .item-row[draggable]:not(.is-event-block){cursor:grab}
 .item-row.dragging{opacity:.3}
@@ -400,6 +410,11 @@ textarea::placeholder{color:var(--mid)}
         <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
         <button class="btn-add" onclick="addQuickItems('EVENT')">+ Událost</button>
       </div>
+      <div id="week-edit-banner" class="week-edit-banner">
+        <span>Úprava:</span><strong id="week-edit-label"></strong>
+        <button class="btn-add" onclick="saveBackToWeekDay()" style="flex-shrink:0">uložit zpět</button>
+        <button class="week-day-chev" style="font-size:.8rem;border:none;background:none;cursor:pointer;color:var(--muted)" onclick="cancelWeekEdit()" title="zrušit úpravu">✕</button>
+      </div>
       <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
     </div>
     <div id="pane-tyden" class="notes-pane">
@@ -492,6 +507,17 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">zrušit</button>
       <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="weekExportModal">
+  <div class="modal" style="max-width:420px">
+    <h2>Export týdne</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Vyber týdny nebo jednotlivé dny k exportu.</p>
+    <div class="modal-list" id="weekExportList" style="max-height:320px"></div>
+    <div class="modal-row" style="margin-top:.65rem">
+      <button class="modal-btn" onclick="closeModal('weekExportModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="doExportWeekText()">exportovat jako text</button>
     </div>
   </div>
 </div>
@@ -1666,7 +1692,7 @@ document.addEventListener('keydown', e => {
 
 // ── TÝDEN ─────────────────────────────────────────────────────────────────────
 const WEEK_KEY = 'todo-app-v1-week';
-let weekDays = [];
+let weekDays = [], expandedWeekDayId = null, editingWeekDayId = null;
 
 const CZ_DAYS   = ['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
 const CZ_MONTHS = ['ledna','února','března','dubna','května','června','července','srpna','září','října','listopadu','prosince'];
@@ -1702,7 +1728,101 @@ async function saveTodayToWeek() {
 async function deleteWeekDay(id) {
   if (!await customConfirm('Smazat uložený den?', 'smazat')) return;
   weekDays = weekDays.filter(d => d.id !== id);
+  if (editingWeekDayId === id) cancelWeekEdit();
+  expandedWeekDayId = null;
   saveWeek(); renderWeekTab();
+}
+
+function toggleWeekDay(id) {
+  expandedWeekDayId = expandedWeekDayId === id ? null : id;
+  renderWeekTab();
+}
+
+async function loadWeekDay(id) {
+  const day = weekDays.find(d => d.id === id); if (!day) return;
+  if (items.length && !await customConfirm('Nahradit aktuální plán plánem z ' + formatDateCz(day.date) + '?', 'načíst')) return;
+  pushUndo();
+  applySessionData(day);
+  editingWeekDayId = id;
+  expandedWeekDayId = null;
+  updateWeekEditBanner();
+  schedSave(); renderAll(); renderWeekTab();
+  switchNotesTab('dnes');
+}
+
+async function saveBackToWeekDay() {
+  const day = weekDays.find(d => d.id === editingWeekDayId); if (!day) return;
+  day.items = JSON.parse(JSON.stringify(items));
+  day.windowStart = windowStart; day.windowEnd = windowEnd;
+  saveWeek(); renderWeekTab();
+  cancelWeekEdit();
+  showSave('✓ den aktualizován');
+}
+
+function cancelWeekEdit() {
+  editingWeekDayId = null;
+  updateWeekEditBanner();
+}
+
+function updateWeekEditBanner() {
+  const banner = el('week-edit-banner'); if (!banner) return;
+  const day = editingWeekDayId ? weekDays.find(d => d.id === editingWeekDayId) : null;
+  if (day) {
+    el('week-edit-label').textContent = formatDateCz(day.date);
+    banner.classList.add('visible');
+  } else {
+    banner.classList.remove('visible');
+  }
+}
+
+async function weekDayToTemplate(id) {
+  const day = weekDays.find(d => d.id === id); if (!day) return;
+  const name = await customPrompt('Název šablony:', formatDateCz(day.date));
+  if (!name) return;
+  const entry = { id: Date.now(), name,
+    data: { items: JSON.parse(JSON.stringify(day.items)), windowStart: day.windowStart, windowEnd: day.windowEnd, autoAdvance } };
+  library.push(entry); saveLibrary(); renderLibrary();
+  expandedWeekDayId = null; renderWeekTab();
+  showSave('✓ šablona uložena');
+}
+
+function getISOWeek(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const w1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
+}
+function getISOWeekYear(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  return d.getFullYear();
+}
+function groupByWeek() {
+  const map = new Map();
+  weekDays.slice().sort((a,b) => a.date.localeCompare(b.date)).forEach(day => {
+    const key = getISOWeekYear(day.date) + '-W' + String(getISOWeek(day.date)).padStart(2,'0');
+    if (!map.has(key)) map.set(key, { week: getISOWeek(day.date), year: getISOWeekYear(day.date), days: [] });
+    map.get(key).days.push(day);
+  });
+  return [...map.entries()].sort(([a],[b]) => a.localeCompare(b));
+}
+
+function renderDayRow(d) {
+  const done = d.items.filter(i => i.done).length, total = d.items.length;
+  const expanded = d.id === expandedWeekDayId, editing = d.id === editingWeekDayId;
+  return `<div class="week-day-item">
+    <div class="week-day-row${expanded ? ' expanded' : ''}" onclick="toggleWeekDay(${d.id})">
+      <span class="week-day-date">${editing ? '✏ ' : ''}${formatDateCz(d.date)}</span>
+      <span class="week-day-meta">${done}/${total}</span>
+      <span class="week-day-chev">${expanded ? '▲' : '▼'}</span>
+    </div>
+    ${expanded ? `<div class="week-day-actions">
+      <button class="btn-add" style="flex:2" onclick="event.stopPropagation();loadWeekDay(${d.id})">načíst &amp; upravit</button>
+      <button class="btn-add" style="flex:2" onclick="event.stopPropagation();weekDayToTemplate(${d.id})">+ šablona</button>
+      <button class="btn-add" onclick="event.stopPropagation();deleteWeekDay(${d.id})">✕</button>
+    </div>` : ''}
+  </div>`;
 }
 
 function renderWeekTab() {
@@ -1711,41 +1831,99 @@ function renderWeekTab() {
     list.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné uložené dny — klikni + uložit dnešní den.</div>';
     return;
   }
-  list.innerHTML = weekDays.slice().sort((a,b) => a.date.localeCompare(b.date)).map(d => {
-    const done  = d.items.filter(i => i.done).length;
-    const total = d.items.length;
-    return `<div class="week-day-row">
-      <span class="week-day-date">${formatDateCz(d.date)}</span>
-      <span class="week-day-meta">${done}/${total} hotovo</span>
-      <button class="week-day-del" onclick="deleteWeekDay(${d.id})" title="smazat">✕</button>
-    </div>`;
-  }).join('');
+  list.innerHTML = groupByWeek().map(([key, { week, year, days }], gi) =>
+    `<div class="week-section">
+      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">
+        Týden ${week} &middot; ${year}
+      </div>
+      ${days.map(renderDayRow).join('')}
+    </div>`
+  ).join('');
 }
+
+// ── EXPORT VÝBĚR ──────────────────────────────────────────────────────────────
+let weekExportSelected = new Set();
+let _weekGroups = new Map();
 
 function exportWeekAsText() {
   if (!weekDays.length) { customAlert('Žádné uložené dny k exportu.'); return; }
-  const sorted = weekDays.slice().sort((a,b) => a.date.localeCompare(b.date));
-  const lines = ['=== Týdenní přehled ===', ''];
-  sorted.forEach(day => {
-    lines.push('--- ' + formatDateCz(day.date) + ' | ' + day.windowStart + '–' + day.windowEnd + ' ---');
-    const di = day.items;
-    di.forEach((item, idx) => {
-      const indent = item.isSubtask ? '  ' : '';
-      const check  = item.done ? '☑' : (item.isSubtask ? '✒' : '☐');
-      let durStr = '';
-      if (item.isEvent && item.eventStart) {
-        durStr = ' [' + item.eventStart + '–' + (item.eventEnd || '?') + ']';
-      } else if (!item.isSubtask) {
-        let sum = 0;
-        for (let j = idx+1; j < di.length && di[j].isSubtask; j++) sum += di[j].duration || 0;
-        durStr = ' · ' + formatDur(sum > 0 ? sum : item.duration);
-      } else {
-        durStr = ' · ' + formatDur(item.duration);
-      }
-      lines.push(indent + check + ' ' + item.text + durStr);
-    });
-    lines.push('');
+  weekExportSelected = new Set(weekDays.map(d => d.id));
+  _weekGroups = new Map(groupByWeek());
+  el('weekExportList').innerHTML = [..._weekGroups.entries()].map(([key, { week, year, days }]) => `
+    <div style="margin-bottom:.5rem">
+      <label class="modal-item sel" style="font-weight:500" id="wexp-wk-${key}">
+        <input type="checkbox" checked onchange="toggleWeekExportAll('${key}',this.checked)">
+        <span>Týden ${week} &middot; ${year}</span>
+      </label>
+      ${days.map(d => `
+      <label class="modal-item sel" id="wexp-${d.id}" style="padding-left:1.75rem">
+        <input type="checkbox" checked onchange="toggleWeekExportDay(${d.id},'${key}',this.checked)">
+        <span>${formatDateCz(d.date)}</span>
+      </label>`).join('')}
+    </div>`).join('');
+  el('weekExportModal').classList.add('open');
+}
+
+function toggleWeekExportAll(key, checked) {
+  const group = _weekGroups.get(key); if (!group) return;
+  group.days.forEach(d => {
+    checked ? weekExportSelected.add(d.id) : weekExportSelected.delete(d.id);
+    const lbl = el('wexp-' + d.id);
+    lbl?.classList.toggle('sel', checked);
+    const cb = lbl?.querySelector('input'); if (cb) cb.checked = checked;
   });
+  el('wexp-wk-' + key)?.classList.toggle('sel', checked);
+}
+
+function toggleWeekExportDay(id, key, checked) {
+  checked ? weekExportSelected.add(id) : weekExportSelected.delete(id);
+  el('wexp-' + id)?.classList.toggle('sel', checked);
+  const group = _weekGroups.get(key); if (!group) return;
+  const allChecked = group.days.every(d => weekExportSelected.has(d.id));
+  const wkLbl = el('wexp-wk-' + key);
+  wkLbl?.classList.toggle('sel', allChecked);
+  const wkCb = wkLbl?.querySelector('input');
+  if (wkCb) { wkCb.checked = allChecked; wkCb.indeterminate = !allChecked && group.days.some(d => weekExportSelected.has(d.id)); }
+}
+
+function buildDayText(day) {
+  const lines = ['--- ' + formatDateCz(day.date) + ' | ' + day.windowStart + '–' + day.windowEnd + ' ---'];
+  day.items.forEach((item, idx) => {
+    const indent = item.isSubtask ? '  ' : '';
+    const check  = item.done ? '☑' : (item.isSubtask ? '✒' : '☐');
+    let durStr = '';
+    if (item.isEvent && item.eventStart) {
+      durStr = ' [' + item.eventStart + '–' + (item.eventEnd || '?') + ']';
+    } else if (!item.isSubtask) {
+      let sum = 0;
+      for (let j = idx+1; j < day.items.length && day.items[j].isSubtask; j++) sum += day.items[j].duration || 0;
+      durStr = ' · ' + formatDur(sum > 0 ? sum : item.duration);
+    } else {
+      durStr = ' · ' + formatDur(item.duration);
+    }
+    lines.push(indent + check + ' ' + item.text + durStr);
+  });
+  return lines.join('\n');
+}
+
+function doExportWeekText() {
+  const toExport = weekDays.filter(d => weekExportSelected.has(d.id));
+  if (!toExport.length) { customAlert('Nic není vybráno.'); return; }
+  const sorted = toExport.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const groups = new Map(groupByWeek());
+  const lines = ['=== Týdenní přehled ===', ''];
+  let lastWeekKey = null;
+  sorted.forEach(day => {
+    const key = getISOWeekYear(day.date) + '-W' + String(getISOWeek(day.date)).padStart(2,'0');
+    const g = groups.get(key);
+    if (key !== lastWeekKey) {
+      if (lastWeekKey) lines.push('');
+      lines.push('=== Týden ' + g.week + ' · ' + g.year + ' ===');
+      lastWeekKey = key;
+    }
+    lines.push('', buildDayText(day));
+  });
+  closeModal('weekExportModal');
   el('exportCopyText').value = lines.join('\n');
   el('exportCopyNote').textContent = 'Zkopíruj text pro vyhodnocení týdne.';
   el('exportCopyModal').classList.add('open');
