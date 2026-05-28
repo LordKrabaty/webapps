@@ -216,19 +216,13 @@ textarea::placeholder{color:var(--mid)}
 .stat-val{font-family:'DM Mono',monospace;font-weight:500}
 .stat-val.overflow{font-weight:700}
 
-/* ── TEMPLATES ── */
-.tpl-btns{display:flex;gap:.3rem;margin-top:.1rem}
+/* ── TEMPLATES / DAY BUTTONS ── */
 .btn-tpl{flex:1;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .1rem;cursor:pointer;text-align:center}
 .btn-tpl:active{background:var(--light)}
 @media(hover:hover){.btn-tpl:hover{background:var(--light)}}
-
-/* ── NOTES TABS ── */
-.notes-tabs{display:flex;gap:0;border-bottom:1.5px solid var(--black);margin-bottom:.5rem;flex-shrink:0}
-.notes-tab{font-family:'DM Sans',sans-serif;font-size:.78rem;padding:.28rem .65rem;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1.5px}
-.notes-tab.active{color:var(--black);border-bottom-color:var(--black);font-weight:500}
-@media(hover:hover){.notes-tab:not(.active):hover{color:var(--black)}}
-.notes-pane{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;gap:.35rem}
-.notes-pane.active{display:flex}
+.day-buttons{display:flex;gap:.3rem;margin-bottom:.35rem;flex-shrink:0}
+.btn-tpl.active{background:var(--black);color:var(--w);border-color:var(--black)}
+html.dark .btn-tpl.active{background:var(--w);color:var(--black);border-color:var(--w)}
 /* ── WEEK TAB ── */
 .week-section{display:flex;flex-direction:column;gap:.15rem}
 .week-section-hdr{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .15rem;border-top:1.5px solid var(--light);margin-top:.2rem;display:flex;align-items:center;gap:.5rem}
@@ -243,9 +237,6 @@ textarea::placeholder{color:var(--mid)}
 .week-day-meta{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
 .week-day-chev{font-size:.6rem;color:var(--muted);flex-shrink:0}
 .week-day-actions{display:flex;gap:.3rem;flex-wrap:wrap;padding:.05rem .1rem .15rem}
-.week-edit-banner{display:none;align-items:center;gap:.4rem;padding:.3rem .5rem;border:1.5px solid var(--black);border-radius:var(--r);font-size:.78rem;flex-shrink:0}
-.week-edit-banner strong{flex:1;font-size:.78rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.week-edit-banner.visible{display:flex}
 /* ── DRAG AND DROP ── */
 .item-row[draggable]:not(.is-event-block){cursor:grab}
 .item-row.dragging{opacity:.3}
@@ -353,16 +344,15 @@ textarea::placeholder{color:var(--mid)}
     </div>
 
     <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Šablony</span></div>
-    <div class="tpl-btns">
-      <button class="btn-tpl" onclick="loadDayTemplate('Po')">Po</button>
-      <button class="btn-tpl" onclick="loadDayTemplate('Út')">Út</button>
-      <button class="btn-tpl" onclick="loadDayTemplate('St')">St</button>
-      <button class="btn-tpl" onclick="loadDayTemplate('Čt')">Čt</button>
-      <button class="btn-tpl" onclick="loadDayTemplate('Pá')">Pá</button>
-    </div>
     <div id="libList" style="display:flex;flex-direction:column;gap:.2rem;margin-top:.3rem"></div>
     <div class="lib-io">
       <button class="btn-io" onclick="saveToLibrary()">+ uložit jako šablonu</button>
+    </div>
+
+    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Hotovo</span></div>
+    <div id="week-list" style="display:flex;flex-direction:column;gap:.25rem"></div>
+    <div style="margin-top:.25rem">
+      <button class="btn-io" onclick="exportWeekAsText()">↗ export</button>
     </div>
 
     <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Bloky</span></div>
@@ -404,32 +394,15 @@ textarea::placeholder{color:var(--mid)}
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Úkoly</span></div>
-    <div class="notes-tabs">
-      <button class="notes-tab active" id="tab-dnes" onclick="switchNotesTab('dnes')">Dnes</button>
-      <button class="notes-tab" id="tab-tyden" onclick="switchNotesTab('tyden')">Týden</button>
+    <div class="card-title"><span class="card-title-text">Týden</span></div>
+    <div id="day-buttons" class="day-buttons"></div>
+    <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
+    <div class="input-btns">
+      <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
+      <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
+      <button class="btn-add" id="btnEvent" onclick="toggleEventMenu(event)">+ Událost ▾</button>
     </div>
-    <div id="pane-dnes" class="notes-pane active">
-      <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
-      <div class="input-btns">
-        <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
-        <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
-        <button class="btn-add" id="btnEvent" onclick="toggleEventMenu(event)">+ Událost ▾</button>
-      </div>
-      <div id="week-edit-banner" class="week-edit-banner">
-        <span>Úprava:</span><strong id="week-edit-label"></strong>
-        <button class="btn-add" onclick="saveBackToWeekDay()" style="flex-shrink:0">uložit zpět</button>
-        <button class="week-day-chev" style="font-size:.8rem;border:none;background:none;cursor:pointer;color:var(--muted)" onclick="cancelWeekEdit()" title="zrušit úpravu">✕</button>
-      </div>
-      <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
-    </div>
-    <div id="pane-tyden" class="notes-pane">
-      <div id="week-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.25rem"></div>
-      <div style="display:flex;gap:.3rem;flex-wrap:wrap;flex-shrink:0">
-        <button class="btn-add" style="flex:1" onclick="saveTodayToWeek()">+ uložit dnešní den</button>
-        <button class="btn-add" onclick="exportWeekAsText()">↗ export</button>
-      </div>
-    </div>
+    <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
   </div>
 </div>
 
@@ -685,6 +658,7 @@ const DAY_TEMPLATES = {
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let items = [];
+let activePlanDate = null;
 let windowStart = '6:00', windowEnd = '14:00';
 let autoAdvance = false;
 let highlightedId = null;
@@ -1960,7 +1934,7 @@ document.addEventListener('keydown', e => {
 
 // ── TÝDEN ─────────────────────────────────────────────────────────────────────
 const WEEK_KEY = 'todo-app-v1-week';
-let weekDays = [], expandedWeekDayId = null, editingWeekDayId = null;
+let weekDays = [], expandedWeekDayId = null;
 
 const CZ_DAYS   = ['Neděle','Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota'];
 const CZ_MONTHS = ['ledna','února','března','dubna','května','června','července','srpna','září','října','listopadu','prosince'];
@@ -1977,26 +1951,46 @@ function formatDateCz(dateStr) {
 function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WEEK_KEY) || '[]'); } catch(e) { weekDays = []; } }
 function saveWeek()  { try { localStorage.setItem(WEEK_KEY, JSON.stringify(weekDays)); } catch(e) {} }
 
-async function saveTodayToWeek() {
-  if (!items.length) { await customAlert('Dnešní plán je prázdný — přidej nejdříve úkoly.'); return; }
-  const today = todayIso();
-  const existing = weekDays.find(d => d.date === today);
+function autoSavePlanDay() {
+  if (!activePlanDate) return;
+  const existing = weekDays.find(d => d.date === activePlanDate);
   if (existing) {
-    if (!await customConfirm('Dnešní den je již uložen. Přepsat?', 'přepsat')) return;
     existing.items = JSON.parse(JSON.stringify(items));
-    existing.windowStart = windowStart; existing.windowEnd = windowEnd;
+    existing.windowStart = windowStart;
+    existing.windowEnd = windowEnd;
   } else {
-    weekDays.push({ id: Date.now(), date: today,
+    if (!items.length) return;
+    weekDays.push({ id: Date.now(), date: activePlanDate,
       items: JSON.parse(JSON.stringify(items)), windowStart, windowEnd });
   }
-  saveWeek(); renderWeekTab();
-  showSave('✓ den uložen do týdne');
+  saveWeek();
+}
+
+function switchPlanDay(iso) {
+  if (iso === activePlanDate) return;
+  autoSavePlanDay();
+  pushUndo();
+  const target = weekDays.find(d => d.date === iso);
+  if (target) { applySessionData(target); }
+  else { items = []; }
+  activePlanDate = iso;
+  schedSave(); renderAll(); renderDayButtons(); renderWeekTab();
+}
+
+function renderDayButtons() {
+  const container = el('day-buttons');
+  if (!container) return;
+  container.innerHTML = getCurrentWeekDates().map(({ iso, day }) => {
+    const dayShort = PLAN_DAY_SHORT[day.getDay()];
+    const dateStr = day.getDate() + '. ' + (day.getMonth() + 1) + '.';
+    const isActive = iso === activePlanDate;
+    return `<button class="btn-tpl${isActive ? ' active' : ''}" onclick="switchPlanDay('${iso}')">${dayShort} · ${dateStr}</button>`;
+  }).join('');
 }
 
 async function deleteWeekDay(id) {
   if (!await customConfirm('Smazat uložený den?', 'smazat')) return;
   weekDays = weekDays.filter(d => d.id !== id);
-  if (editingWeekDayId === id) cancelWeekEdit();
   expandedWeekDayId = null;
   saveWeek(); renderWeekTab();
 }
@@ -2009,38 +2003,12 @@ function toggleWeekDay(id) {
 async function loadWeekDay(id) {
   const day = weekDays.find(d => d.id === id); if (!day) return;
   if (items.length && !await customConfirm('Nahradit aktuální plán plánem z ' + formatDateCz(day.date) + '?', 'načíst')) return;
+  autoSavePlanDay();
   pushUndo();
   applySessionData(day);
-  editingWeekDayId = id;
+  activePlanDate = day.date;
   expandedWeekDayId = null;
-  updateWeekEditBanner();
-  schedSave(); renderAll(); renderWeekTab();
-  switchNotesTab('dnes');
-}
-
-async function saveBackToWeekDay() {
-  const day = weekDays.find(d => d.id === editingWeekDayId); if (!day) return;
-  day.items = JSON.parse(JSON.stringify(items));
-  day.windowStart = windowStart; day.windowEnd = windowEnd;
-  saveWeek(); renderWeekTab();
-  cancelWeekEdit();
-  showSave('✓ den aktualizován');
-}
-
-function cancelWeekEdit() {
-  editingWeekDayId = null;
-  updateWeekEditBanner();
-}
-
-function updateWeekEditBanner() {
-  const banner = el('week-edit-banner'); if (!banner) return;
-  const day = editingWeekDayId ? weekDays.find(d => d.id === editingWeekDayId) : null;
-  if (day) {
-    el('week-edit-label').textContent = formatDateCz(day.date);
-    banner.classList.add('visible');
-  } else {
-    banner.classList.remove('visible');
-  }
+  schedSave(); renderAll(); renderWeekTab(); renderDayButtons();
 }
 
 async function weekDayToTemplate(id) {
@@ -2078,10 +2046,10 @@ function groupByWeek() {
 
 function renderDayRow(d) {
   const done = d.items.filter(i => i.done).length, total = d.items.length;
-  const expanded = d.id === expandedWeekDayId, editing = d.id === editingWeekDayId;
+  const expanded = d.id === expandedWeekDayId;
   return `<div class="week-day-item">
     <div class="week-day-row${expanded ? ' expanded' : ''}" onclick="toggleWeekDay(${d.id})">
-      <span class="week-day-date">${editing ? '✏ ' : ''}${formatDateCz(d.date)}</span>
+      <span class="week-day-date">${formatDateCz(d.date)}</span>
       <span class="week-day-meta">${done}/${total}</span>
       <span class="week-day-chev">${expanded ? '▲' : '▼'}</span>
     </div>
@@ -2096,7 +2064,7 @@ function renderDayRow(d) {
 function renderWeekTab() {
   const list = el('week-list'); if (!list) return;
   if (!weekDays.length) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné uložené dny — klikni + uložit dnešní den.</div>';
+    list.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné uložené dny.</div>';
     return;
   }
   list.innerHTML = groupByWeek().map(([key, { week, year, days }], gi) =>
@@ -2197,10 +2165,18 @@ function doExportWeekText() {
   el('exportCopyModal').classList.add('open');
 }
 
-function switchNotesTab(name) {
-  ['dnes','tyden'].forEach(n => {
-    el('pane-' + n)?.classList.toggle('active', n === name);
-    el('tab-'  + n)?.classList.toggle('active', n === name);
+const PLAN_DAY_SHORT = ['','Po','Út','St','Čt','Pá',''];
+
+function getCurrentWeekDates() {
+  const today = new Date();
+  const dow = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  return Array.from({length: 5}, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    return { iso, day: d };
   });
 }
 
@@ -2287,13 +2263,17 @@ function initLibDnd() {
 function init() {
   initAutoSave(); initFs(); initDark(); loadPanelFs();
   loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek();
+  activePlanDate = todayIso();
   const restored = loadSession();
-  renderLibrary(); renderBlockTypeList(); renderAll(); renderWeekTab();
+  if (!restored) {
+    const todayEntry = weekDays.find(d => d.date === activePlanDate);
+    if (todayEntry) applySessionData(todayEntry);
+  }
+  renderLibrary(); renderBlockTypeList(); renderAll(); renderWeekTab(); renderDayButtons();
   if (activeLibId) markSaved();
   updateUndoBtn();
   initItemDnd(); initLibDnd();
   if (restored) showSave('↓ obnoveno');
-  // Refresh timeline every minute for current-time line
   setInterval(() => renderTimeline(), 60000);
 }
 init();
