@@ -233,6 +233,42 @@ textarea::placeholder{color:var(--mid)}
 .day-btn-wrap.active .day-btn-chk{border-top-color:var(--mid)}
 .day-btn-chk input[type="checkbox"]{width:11px;height:11px;accent-color:var(--black);cursor:pointer}
 .day-btn-wrap.active .day-btn-chk input[type="checkbox"]{accent-color:var(--w)}
+/* ── PREVIEW ── */
+.preview-item{display:flex;align-items:center;gap:.35rem;padding:.28rem .1rem;border-bottom:1px solid var(--light)}
+.preview-item:last-child{border-bottom:none}
+.preview-item.subtask{padding-left:1.1rem}
+.preview-item-chk{flex-shrink:0;width:13px;height:13px;accent-color:var(--black);cursor:pointer}
+.preview-item-text{flex:1;font-size:.82rem;line-height:1.35;cursor:text;word-break:break-word}
+.preview-item-text.done{text-decoration:line-through;color:var(--muted)}
+.preview-item-dur{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap;cursor:pointer;border-bottom:1px dashed transparent}
+@media(hover:hover){.preview-item-dur:hover{border-bottom-color:var(--mid)}}
+.preview-item-move{display:flex;flex-direction:column;gap:0;flex-shrink:0;opacity:0}
+@media(hover:hover){.preview-item:hover .preview-item-move{opacity:.5}}
+@media(hover:none){.preview-item-move{opacity:.5}}
+.preview-item-move button{border:none;background:none;cursor:pointer;padding:0;font-size:.55rem;line-height:1;color:var(--black);width:12px;height:10px;display:flex;align-items:center;justify-content:center}
+.preview-item-move button:disabled{opacity:.2;cursor:default}
+.preview-item-del{width:16px;height:16px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0;padding:0}
+@media(hover:hover){.preview-item:hover .preview-item-del{opacity:.55}}
+@media(hover:none){.preview-item-del{opacity:.45}}
+.preview-item-del svg{width:8px;height:8px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
+.preview-item-input{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;padding:.05rem 0;min-width:0}
+.preview-add-row{display:flex;gap:.3rem;margin-top:.4rem;padding-top:.35rem;border-top:1px solid var(--light);align-items:center}
+.preview-add-text{flex:3;font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.25rem .45rem;background:var(--w);color:var(--black);outline:none;min-width:0}
+.preview-add-text:focus{outline:1.5px solid var(--black);outline-offset:1px}
+.preview-add-dur{width:3.5rem;font-family:'DM Mono',monospace;font-size:.78rem;border:var(--b);border-radius:var(--r);padding:.25rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:right}
+.preview-add-dur:focus{outline:1.5px solid var(--black);outline-offset:1px}
+.lib-item-prev{width:18px;height:18px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0;padding:0}
+@media(hover:hover){.lib-item:hover .lib-item-prev{opacity:.45}}
+@media(hover:hover){.lib-item-prev:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+@media(hover:none){.lib-item .lib-item-prev{opacity:.45}}
+.lib-item-prev svg{width:10px;height:8px;fill:none;stroke:var(--black);stroke-width:1.5;stroke-linecap:round}
+.lib-item.active .lib-item-prev{opacity:.55}
+.lib-item.active .lib-item-prev svg{stroke:var(--w)}
+@media(hover:hover){.lib-item.active .lib-item-prev:hover{background:rgba(255,255,255,.15)}}
+.lib-type-badge{font-family:'DM Mono',monospace;font-size:.58rem;padding:.08rem .28rem;border-radius:2px;flex-shrink:0;font-weight:500;white-space:nowrap;letter-spacing:.03em}
+.lib-type-week{border:1.5px solid var(--black);color:var(--black)}
+.lib-type-day{border:1px dashed var(--mid);color:var(--muted)}
+.lib-item.active .lib-type-badge{border-color:var(--w)!important;color:var(--w)!important;border-style:solid!important}
 /* ── WEEK TAB ── */
 .week-section{display:flex;flex-direction:column;gap:.15rem}
 .week-section-hdr{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .15rem;border-top:1.5px solid var(--light);margin-top:.2rem;display:flex;align-items:center;gap:.5rem}
@@ -402,6 +438,7 @@ textarea::placeholder{color:var(--mid)}
     <div class="card-title"><span class="card-title-text">Úkoly</span></div>
     <div class="notes-tabs">
       <button class="notes-tab active" id="tab-tyden" onclick="switchNotesTab('tyden')">Týden</button>
+      <button class="notes-tab" id="tab-pristi" onclick="switchNotesTab('pristi')">Příští</button>
       <button class="notes-tab" id="tab-hotovo" onclick="switchNotesTab('hotovo')">Hotovo</button>
     </div>
     <div id="pane-tyden" class="notes-pane active">
@@ -525,6 +562,19 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" style="margin-top:.5rem">
       <button class="modal-btn" onclick="closeModal('weekTplLoadModal')">zrušit</button>
       <button class="modal-btn primary" onclick="doLoadWeekTemplate()">načíst vybrané</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="previewModal">
+  <div class="modal" style="max-width:400px;max-height:85vh;display:flex;flex-direction:column;gap:.5rem;overflow:hidden">
+    <div style="display:flex;align-items:baseline;gap:.5rem">
+      <h2 id="previewTitle" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Náhled</h2>
+      <span id="previewMeta" style="font-size:.73rem;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap;flex-shrink:0"></span>
+    </div>
+    <div id="previewItemList" style="overflow-y:auto;flex:1;min-height:60px;border-top:1.5px solid var(--black);padding-top:.3rem"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('previewModal')">zavřít</button>
+      <button class="modal-btn primary" onclick="doPreviewSave()">uložit změny</button>
     </div>
   </div>
 </div>
@@ -687,6 +737,7 @@ const DAY_TEMPLATES = {
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let items = [];
 let activePlanDate = null;
+let planWeekOffset = 0;
 let windowStart = '6:00', windowEnd = '14:00';
 let autoAdvance = false;
 let highlightedId = null;
@@ -1445,7 +1496,7 @@ async function saveWeekAsTemplate() {
   if (!name) return;
   autoSavePlanDay();
   const weekData = {};
-  getCurrentWeekDates().forEach(({ iso, day }) => {
+  getCurrentWeekDates(planWeekOffset).forEach(({ iso, day }) => {
     const dayKey = PLAN_DAY_SHORT[day.getDay()];
     const wd = weekDays.find(d => d.date === iso);
     if (wd && wd.items.length) {
@@ -1484,10 +1535,17 @@ function renderLibrary() {
   } else {
     list.innerHTML = library.map((entry, idx) => {
       const isWeek = entry.type === 'week';
-      const badge = isWeek ? `<span style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);flex-shrink:0;margin-left:.25rem">7d</span>` : '';
+      const weekDayCount = isWeek ? Object.values(entry.weekData).filter(d => d?.items?.length).length : 0;
+      const typeBadge = isWeek
+        ? `<span class="lib-type-badge lib-type-week">${weekDayCount}d</span>`
+        : `<span class="lib-type-badge lib-type-day">1d</span>`;
+      const prevBtn = !isWeek ? `<button class="lib-item-prev" onclick="event.stopPropagation();openPreview('lib',${entry.id})" title="náhled">
+        <svg viewBox="0 0 10 8"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
+      </button>` : '';
       return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="${isWeek ? 'false' : 'true'}" onclick="loadLibEntry(${entry.id})">
+        ${typeBadge}
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
-        ${badge}
+        ${prevBtn}
         <button class="lib-item-del" onclick="event.stopPropagation();deleteLibEntry(${entry.id})" title="smazat">
           <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
         </button>
@@ -1517,6 +1575,7 @@ async function loadLibEntry(id) {
 }
 
 let _weekTplLoadId = null;
+let _previewSource = null;
 
 function openWeekTplLoadModal(entry) {
   _weekTplLoadId = entry.id;
@@ -1541,6 +1600,9 @@ function openWeekTplLoadModal(entry) {
       <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${total}×</span></span>
       <span style="color:var(--muted);font-size:.75rem">→</span>
       <select id="wtl-${dayKey}" style="${selectStyle}">${opts}</select>
+      <button onclick="openPreview('weekTplDay',${entry.id},'${dayKey}')" style="border:none;background:none;cursor:pointer;padding:.15rem .2rem;flex-shrink:0;display:flex;align-items:center;opacity:.6" title="náhled">
+        <svg width="14" height="11" viewBox="0 0 10 8" fill="none" stroke="var(--black)" stroke-width="1.5" stroke-linecap="round"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
+      </button>
     </div>`;
   }).join('');
   el('weekTplLoadModal').classList.add('open');
@@ -1574,6 +1636,204 @@ function doLoadWeekTemplate() {
   closeModal('weekTplLoadModal');
   schedSave(); renderAll(); renderWeekTab(); renderDayButtons();
   showSave('✓ načteno ' + loaded + (loaded === 1 ? ' den' : loaded < 5 ? ' dny' : ' dní'));
+}
+
+// ── PREVIEW ──────────────────────────────────────────────────────────────────
+function openPreview(type, id, dayKey) {
+  let src;
+  if (type === 'lib') {
+    const entry = library.find(e => e.id === id);
+    if (!entry || entry.type === 'week') return;
+    src = { type, id, name: entry.name,
+      items: JSON.parse(JSON.stringify(entry.data.items)),
+      windowStart: entry.data.windowStart, windowEnd: entry.data.windowEnd };
+  } else if (type === 'weekDay') {
+    const d = weekDays.find(d => d.id === id);
+    if (!d) return;
+    src = { type, id, name: formatDateCz(d.date),
+      items: JSON.parse(JSON.stringify(d.items)),
+      windowStart: d.windowStart, windowEnd: d.windowEnd };
+  } else if (type === 'weekTplDay') {
+    const entry = library.find(e => e.id === id);
+    if (!entry || entry.type !== 'week') return;
+    const data = entry.weekData[dayKey];
+    if (!data) return;
+    src = { type, id, dayKey, name: entry.name + ' · ' + dayKey,
+      items: JSON.parse(JSON.stringify(data.items)),
+      windowStart: data.windowStart, windowEnd: data.windowEnd };
+  }
+  if (!src) return;
+  _previewSource = src;
+  el('previewTitle').textContent = src.name;
+  el('previewMeta').textContent = src.windowStart + '–' + src.windowEnd + ' · ' + src.items.length + 'p';
+  renderPreviewList();
+  el('previewModal').classList.add('open');
+}
+
+function renderPreviewList() {
+  const container = el('previewItemList');
+  if (!container || !_previewSource) return;
+  const n = _previewSource.items.length;
+  const itemsHtml = n ? _previewSource.items.map((item, i) => {
+    let durTxt;
+    if (item.isEvent && item.eventStart) durTxt = item.eventStart + '–' + (item.eventEnd || '?');
+    else durTxt = formatDur(item.duration);
+    return `<div class="preview-item${item.isSubtask ? ' subtask' : ''}">
+      <input type="checkbox" class="preview-item-chk" ${item.done ? 'checked' : ''}
+        onchange="togglePreviewDone(${i},this.checked)">
+      <span class="preview-item-text${item.done ? ' done' : ''}"
+        onclick="startPreviewEdit(${i},this)">${esc(item.text)}</span>
+      <span class="preview-item-dur" onclick="startPreviewDurEdit(${i},this)" title="upravit čas">${durTxt}</span>
+      <div class="preview-item-move">
+        <button onclick="movePreviewItem(${i},-1)" ${i===0?'disabled':''}>▲</button>
+        <button onclick="movePreviewItem(${i},1)" ${i===n-1?'disabled':''}>▼</button>
+      </div>
+      <button class="preview-item-del" onclick="deletePreviewItem(${i})" title="smazat">
+        <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
+      </button>
+    </div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné položky.</div>';
+  container.innerHTML = itemsHtml + `<div class="preview-add-row">
+    <input id="previewAddText" class="preview-add-text" placeholder="nový úkol…"
+      onkeydown="if(event.key==='Enter')addPreviewItem()">
+    <input id="previewAddDur" class="preview-add-dur" type="number" min="1" max="720"
+      placeholder="min" title="délka v minutách" onkeydown="if(event.key==='Enter')addPreviewItem()">
+    <button class="modal-btn" style="padding:.25rem .55rem;flex:none" onclick="addPreviewItem()">+</button>
+  </div>`;
+}
+
+function togglePreviewDone(i, checked) {
+  if (!_previewSource) return;
+  _previewSource.items[i].done = checked;
+  renderPreviewList();
+}
+
+function startPreviewEdit(i, span) {
+  if (!_previewSource) return;
+  const item = _previewSource.items[i];
+  const inp = document.createElement('input');
+  inp.className = 'preview-item-input';
+  inp.value = item.text;
+  span.replaceWith(inp);
+  inp.focus();
+  let saved = false;
+  const finish = () => {
+    if (saved) return; saved = true;
+    const val = inp.value.trim();
+    if (val) _previewSource.items[i].text = val;
+    renderPreviewList();
+  };
+  inp.addEventListener('blur', finish);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { saved = true; renderPreviewList(); }
+  });
+}
+
+function startPreviewDurEdit(i, span) {
+  if (!_previewSource) return;
+  const item = _previewSource.items[i];
+  if (item.isEvent) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;gap:.2rem;align-items:center;flex-shrink:0';
+    const s = document.createElement('input');
+    s.type = 'time'; s.value = item.eventStart || '';
+    s.style.cssText = 'font-family:"DM Mono",monospace;font-size:.68rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;width:4.5rem';
+    const sep = document.createElement('span');
+    sep.textContent = '–'; sep.style.cssText = 'color:var(--muted);font-size:.68rem;flex-shrink:0';
+    const e2 = document.createElement('input');
+    e2.type = 'time'; e2.value = item.eventEnd || '';
+    e2.style.cssText = s.style.cssText;
+    wrap.append(s, sep, e2);
+    span.replaceWith(wrap);
+    s.focus();
+    wrap.addEventListener('focusout', ev => {
+      setTimeout(() => {
+        if (!wrap.contains(document.activeElement)) {
+          if (s.value) item.eventStart = s.value;
+          if (e2.value) item.eventEnd = e2.value;
+          renderPreviewList();
+        }
+      }, 80);
+    });
+    [s, e2].forEach(inp => inp.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') inp.blur();
+      if (ev.key === 'Escape') renderPreviewList();
+    }));
+  } else {
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = '1'; inp.max = '720';
+    inp.value = item.duration || '';
+    inp.style.cssText = 'font-family:"DM Mono",monospace;font-size:.68rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;width:3.5rem;text-align:right';
+    inp.placeholder = 'min';
+    span.replaceWith(inp);
+    inp.focus(); inp.select();
+    let saved = false;
+    const finish = () => {
+      if (saved) return; saved = true;
+      const v = parseInt(inp.value);
+      if (v > 0) item.duration = v;
+      renderPreviewList();
+    };
+    inp.addEventListener('blur', finish);
+    inp.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') inp.blur();
+      if (ev.key === 'Escape') { saved = true; renderPreviewList(); }
+    });
+  }
+}
+
+function movePreviewItem(i, dir) {
+  if (!_previewSource) return;
+  const arr = _previewSource.items;
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  renderPreviewList();
+}
+
+function addPreviewItem() {
+  if (!_previewSource) return;
+  const textInp = el('previewAddText');
+  const durInp = el('previewAddDur');
+  const text = textInp?.value.trim();
+  if (!text) { textInp?.focus(); return; }
+  const dur = parseInt(durInp?.value) || 30;
+  _previewSource.items.push({ id: Date.now(), text, duration: dur, done: false, isSubtask: false });
+  el('previewMeta').textContent = _previewSource.windowStart + '–' + _previewSource.windowEnd + ' · ' + _previewSource.items.length + 'p';
+  renderPreviewList();
+  el('previewAddText')?.focus();
+}
+
+function deletePreviewItem(i) {
+  if (!_previewSource) return;
+  _previewSource.items.splice(i, 1);
+  el('previewMeta').textContent = _previewSource.windowStart + '–' + _previewSource.windowEnd + ' · ' + _previewSource.items.length + 'p';
+  renderPreviewList();
+}
+
+function doPreviewSave() {
+  if (!_previewSource) return;
+  const { type, id, dayKey, items: preItems } = _previewSource;
+  const snapshot = JSON.parse(JSON.stringify(preItems));
+  if (type === 'lib') {
+    const entry = library.find(e => e.id === id);
+    if (!entry) return;
+    entry.data.items = snapshot;
+    saveLibrary(); renderLibrary();
+  } else if (type === 'weekDay') {
+    const d = weekDays.find(d => d.id === id);
+    if (!d) return;
+    d.items = snapshot;
+    saveWeek(); renderWeekTab(); renderDayButtons();
+  } else if (type === 'weekTplDay') {
+    const entry = library.find(e => e.id === id);
+    if (!entry || entry.type !== 'week') return;
+    entry.weekData[dayKey].items = snapshot;
+    saveLibrary();
+  }
+  closeModal('previewModal');
+  showSave('✓ změny uloženy');
 }
 
 async function deleteLibEntry(id) {
@@ -1904,7 +2164,7 @@ function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeBlockMenu();
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','blockEditModal','weekTplLoadModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','blockEditModal','weekTplLoadModal','previewModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -2099,7 +2359,7 @@ function renderDayButtons() {
   const container = el('day-buttons');
   if (!container) return;
   const savedDates = new Set(weekDays.map(d => d.date));
-  container.innerHTML = getCurrentWeekDates().map(({ iso, day }) => {
+  container.innerHTML = getCurrentWeekDates(planWeekOffset).map(({ iso, day }) => {
     const dayShort = PLAN_DAY_SHORT[day.getDay()];
     const dateStr = day.getDate() + '. ' + (day.getMonth() + 1) + '.';
     const isActive = iso === activePlanDate;
@@ -2125,10 +2385,22 @@ function toggleDayHotovo(iso, checked) {
 }
 
 function switchNotesTab(name) {
-  ['tyden','hotovo'].forEach(n => {
-    el('pane-' + n)?.classList.toggle('active', n === name);
-    el('tab-'  + n)?.classList.toggle('active', n === name);
-  });
+  const isPlan = name === 'tyden' || name === 'pristi';
+  el('pane-tyden')?.classList.toggle('active', isPlan);
+  el('pane-hotovo')?.classList.toggle('active', name === 'hotovo');
+  ['tyden','pristi','hotovo'].forEach(n => el('tab-' + n)?.classList.toggle('active', n === name));
+  if (name === 'tyden') {
+    planWeekOffset = 0;
+    const currentIsos = new Set(getCurrentWeekDates(0).map(d => d.iso));
+    if (!currentIsos.has(activePlanDate)) switchPlanDay(todayIso());
+    else renderDayButtons();
+  } else if (name === 'pristi') {
+    planWeekOffset = 1;
+    const nextDates = getCurrentWeekDates(1);
+    const nextIsos = new Set(nextDates.map(d => d.iso));
+    if (!nextIsos.has(activePlanDate)) switchPlanDay(nextDates[0].iso);
+    else renderDayButtons();
+  }
 }
 
 async function deleteWeekDay(id) {
@@ -2197,8 +2469,9 @@ function renderDayRow(d) {
       <span class="week-day-chev">${expanded ? '▲' : '▼'}</span>
     </div>
     ${expanded ? `<div class="week-day-actions">
+      <button class="btn-add" style="flex:2" onclick="event.stopPropagation();openPreview('weekDay',${d.id})">náhled</button>
       <button class="btn-add" style="flex:2" onclick="event.stopPropagation();loadWeekDay(${d.id})">načíst &amp; upravit</button>
-      <button class="btn-add" style="flex:2" onclick="event.stopPropagation();weekDayToTemplate(${d.id})">+ šablona</button>
+      <button class="btn-add" style="flex:1.5" onclick="event.stopPropagation();weekDayToTemplate(${d.id})">+ šabl.</button>
       <button class="btn-add" onclick="event.stopPropagation();deleteWeekDay(${d.id})">✕</button>
     </div>` : ''}
   </div>`;
@@ -2310,11 +2583,11 @@ function doExportWeekText() {
 
 const PLAN_DAY_SHORT = ['','Po','Út','St','Čt','Pá',''];
 
-function getCurrentWeekDates() {
+function getCurrentWeekDates(weekOffset = 0) {
   const today = new Date();
   const dow = today.getDay();
   const monday = new Date(today);
-  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + weekOffset * 7);
   return Array.from({length: 5}, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
