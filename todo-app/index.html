@@ -479,7 +479,9 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-list" id="exportList"></div>
     <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archivované</p>
     <div class="modal-list" id="exportArchList"></div>
-    <div id="exportDaysSection" style="margin-top:.5rem;display:flex;flex-direction:column;gap:.25rem">
+    <div id="exportDaysSection">
+      <p id="expDaysLbl" style="font-size:.8rem;color:var(--muted);margin-top:.6rem;margin-bottom:.3rem;display:none">Dny a plány</p>
+      <div style="display:flex;flex-direction:column;gap:.25rem">
       <label id="expWdRow" class="modal-item" style="cursor:pointer;display:none">
         <input type="checkbox" id="expWeekDays" checked onchange="updateExportFilename()">
         <span id="expWeekDaysLbl">Uložené dny</span>
@@ -488,6 +490,11 @@ textarea::placeholder{color:var(--mid)}
         <input type="checkbox" id="expWeekPlans" checked onchange="updateExportFilename()">
         <span id="expWeekPlansLbl">Plán týdne</span>
       </label>
+      <label id="expSetRow" class="modal-item" style="cursor:pointer;display:none">
+        <input type="checkbox" id="expSettings" checked onchange="updateExportFilename()">
+        <span id="expSettingsLbl">Nastavení (bloky, pracovní dny)</span>
+      </label>
+      </div>
     </div>
     <div style="margin-top:.8rem">
       <label style="font-size:.78rem;color:var(--muted)">Název souboru</label>
@@ -533,6 +540,10 @@ textarea::placeholder{color:var(--mid)}
         <label id="impWpRow" class="modal-item" style="cursor:pointer;display:none">
           <input type="checkbox" id="impWeekPlans" checked>
           <span id="impWeekPlansLbl">Plán týdne</span>
+        </label>
+        <label id="impSetRow" class="modal-item" style="cursor:pointer;display:none">
+          <input type="checkbox" id="impSettings" checked>
+          <span id="impSettingsLbl">Nastavení (bloky, pracovní dny)</span>
         </label>
       </div>
     </div>
@@ -2298,6 +2309,16 @@ function openExportModal() {
   el('exportArchList').innerHTML = archive.length
     ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archiv je prázdný.</p>';
+  const wdRow = el('expWdRow'), wpRow = el('expWpRow'), daysLbl = el('expDaysLbl'), setRow = el('expSetRow');
+  const hasAnyDays = weekDays.length > 0 || weekPlans.length > 0;
+  const hasCustomBlocks = Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]);
+  const hasSettings = hasCustomBlocks || Object.keys(workingDaysByWeek).length > 0;
+  if (daysLbl) daysLbl.style.display = (hasAnyDays || hasSettings) ? '' : 'none';
+  if (wdRow) { wdRow.style.display = weekDays.length ? '' : 'none'; if (weekDays.length) el('expWeekDaysLbl').textContent = 'Uložené dny (' + weekDays.length + ')'; }
+  if (wpRow) { wpRow.style.display = weekPlans.length ? '' : 'none'; if (weekPlans.length) el('expWeekPlansLbl').textContent = 'Plán týdne (' + weekPlans.length + ')'; }
+  if (setRow) setRow.style.display = '';
+  const expWd = el('expWeekDays'), expWp = el('expWeekPlans'), expSt = el('expSettings');
+  if (expWd) expWd.checked = true; if (expWp) expWp.checked = true; if (expSt) expSt.checked = true;
   updateExportFilename();
   el('exportModal').classList.add('open');
 }
@@ -2306,25 +2327,37 @@ function updateExportFilename() {
   const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
   const wdCount = el('expWeekDays')?.checked ? weekDays.length : 0;
   const wpCount = el('expWeekPlans')?.checked ? weekPlans.length : 0;
+  const stFlag = el('expSettings')?.checked ? 'S' : '';
   el('exportFilename').value = 'todo_' + yymmdd + '_I' + exportSelected.size + 'A' + exportArchSelected.size
-    + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + '.json';
+    + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + stFlag + '.json';
 }
 function toggleExportSel(id, on) { on ? exportSelected.add(id) : exportSelected.delete(id); el('ei-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
 function toggleExportArchSel(id, on) { on ? exportArchSelected.add(id) : exportArchSelected.delete(id); el('eai-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
 function selectAllExport() {
   library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
   archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
-  const wd = el('expWeekDays'), wp = el('expWeekPlans');
-  if (wd) wd.checked = true; if (wp) wp.checked = true;
+  const wd = el('expWeekDays'), wp = el('expWeekPlans'), st = el('expSettings');
+  if (wd) wd.checked = true; if (wp) wp.checked = true; if (st) st.checked = true;
   updateExportFilename();
+}
+function buildSettingsExport() {
+  const blockOverrides = Object.entries(BLOCK_TYPES).filter(([key, bt]) => {
+    const def = DEFAULT_BLOCK_TYPES[key];
+    return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration
+      || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent;
+  }).map(([key, bt]) => ({ key, ...bt }));
+  return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek };
 }
 function doExport() {
   const its = library.filter(e => exportSelected.has(e.id));
   const archs = archive.filter(e => exportArchSelected.has(e.id));
   const wdays = el('expWeekDays')?.checked ? weekDays : [];
   const wplans = el('expWeekPlans')?.checked ? weekPlans : [];
-  if (!its.length && !archs.length && !wdays.length && !wplans.length) { customAlert('Nic není vybráno.'); return; }
-  const json = JSON.stringify({v:2, items: its, archive: archs, weekDays: wdays, weekPlans: wplans}, null, 2);
+  const settings = el('expSettings')?.checked ? buildSettingsExport() : null;
+  if (!its.length && !archs.length && !wdays.length && !wplans.length && !settings) { customAlert('Nic není vybráno.'); return; }
+  const payload = {v:2, items: its, archive: archs, weekDays: wdays, weekPlans: wplans};
+  if (settings) payload.settings = settings;
+  const json = JSON.stringify(payload, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName + '.json';
   let downloaded = false;
@@ -2351,14 +2384,14 @@ let importData = [], importSelected = new Set();
 window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
   importData = []; importSelected = new Set();
-  window._importWeekDays = []; window._importWeekPlans = [];
+  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null;
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
   el('importFile').value = ''; el('importPaste').value = '';
   el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
   const ds = el('importDaysSection'); if (ds) ds.style.display = 'none';
-  const wr = el('impWdRow'), pr = el('impWpRow');
-  if (wr) wr.style.display = 'none'; if (pr) pr.style.display = 'none';
+  const wr = el('impWdRow'), pr = el('impWpRow'), sr = el('impSetRow');
+  if (wr) wr.style.display = 'none'; if (pr) pr.style.display = 'none'; if (sr) sr.style.display = 'none';
   el('importActions').style.display = 'none'; el('importCancel').style.display = 'flex';
   el('importModal').classList.add('open');
 }
@@ -2378,12 +2411,17 @@ function parseImportJson(text) {
     }
     window._importWeekDays = parsed.weekDays || [];
     window._importWeekPlans = parsed.weekPlans || [];
-    const wdRow = el('impWdRow'), wpRow = el('impWpRow'), daysSection = el('importDaysSection');
+    window._importSettings = parsed.settings || null;
+    const hasSettings = !!(parsed.settings && (
+      (parsed.settings.blockTypes && parsed.settings.blockTypes.length) ||
+      Object.keys(parsed.settings.workingDaysByWeek || {}).length));
+    const wdRow = el('impWdRow'), wpRow = el('impWpRow'), setRow = el('impSetRow'), daysSection = el('importDaysSection');
     if (wdRow) wdRow.style.display = hasDays ? '' : 'none';
     if (wpRow) wpRow.style.display = hasPlans ? '' : 'none';
+    if (setRow) setRow.style.display = hasSettings ? '' : 'none';
     if (hasDays && el('impWeekDaysLbl')) el('impWeekDaysLbl').textContent = 'Uložené dny (' + parsed.weekDays.length + ')';
     if (hasPlans && el('impWeekPlansLbl')) el('impWeekPlansLbl').textContent = 'Plán týdne (' + parsed.weekPlans.length + ')';
-    if (daysSection) daysSection.style.display = (hasDays || hasPlans) ? '' : 'none';
+    if (daysSection) daysSection.style.display = (hasDays || hasPlans || hasSettings) ? '' : 'none';
     el('importActions').style.display = 'flex'; el('importCancel').style.display = 'none';
   } catch(err) {
     el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Chyba: ' + err.message + '</p>';
@@ -2398,7 +2436,8 @@ function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
   const addWdays = el('impWeekDays')?.checked && window._importWeekDays?.length;
   const addWplans = el('impWeekPlans')?.checked && window._importWeekPlans?.length;
-  if (!toAdd.length && !addWdays && !addWplans) { customAlert('Nic není vybráno.'); return; }
+  const addSettings = el('impSettings')?.checked && window._importSettings;
+  if (!toAdd.length && !addWdays && !addWplans && !addSettings) { customAlert('Nic není vybráno.'); return; }
   if (toAdd.length) { library.push(...toAdd); saveLibrary(); renderLibrary(); }
   if (addWdays) {
     (window._importWeekDays || []).forEach(d => {
@@ -2416,10 +2455,32 @@ function doImport() {
     });
     saveWeekPlans(); renderWeekTab();
   }
+  if (addSettings) {
+    const s = window._importSettings;
+    if (s.blockTypes && s.blockTypes.length) {
+      s.blockTypes.forEach(bt => {
+        if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
+          defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
+          eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [] };
+      });
+      if (s.blockTypeOrder) {
+        blockTypeOrder = s.blockTypeOrder.filter(k => BLOCK_TYPES[k] && k !== 'TASK');
+        Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK' && !blockTypeOrder.includes(k)).forEach(k => blockTypeOrder.push(k));
+      } else {
+        s.blockTypes.forEach(bt => { if (bt.key && !blockTypeOrder.includes(bt.key)) blockTypeOrder.push(bt.key); });
+      }
+      saveBlockTypes(); renderBlockTypeList();
+    }
+    if (s.workingDaysByWeek && Object.keys(s.workingDaysByWeek).length) {
+      Object.assign(workingDaysByWeek, s.workingDaysByWeek);
+      saveWorkingDays(); renderWorkDayPicker();
+    }
+  }
   const msgs = [];
   if (toAdd.length) msgs.push(toAdd.length + ' šablon');
   if (addWdays) msgs.push((window._importWeekDays || []).length + ' dní');
   if (addWplans) msgs.push((window._importWeekPlans || []).length + ' plánů');
+  if (addSettings) msgs.push('nastavení');
   closeModal('importModal'); showSave('↓ importováno: ' + msgs.join(', '));
 }
 
@@ -3040,6 +3101,7 @@ window.addEventListener('resize', updateAppGrid);
     const payload = {v:2, items: its, archive: archs,
       weekDays: el('expWeekDays')?.checked ? weekDays : [],
       weekPlans: el('expWeekPlans')?.checked ? weekPlans : []};
+    if (el('expSettings')?.checked) payload.settings = buildSettingsExport();
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
       const url = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
