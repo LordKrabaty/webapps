@@ -822,7 +822,7 @@ function parseItemText(raw) {
   let m;
   // Duration at start: "120min" "2h"
   if ((m = text.match(/^(\d+)\s*h\b/i))) { duration = parseInt(m[1]) * 60; text = text.slice(m[0].length).trim(); }
-  else if ((m = text.match(/^(\d+)\s*min\b/i))) { duration = parseInt(m[1]); text = text.slice(m[0].length).trim(); }
+  else if ((m = text.match(/^(\d+)\s*m(?:in)?\b/i))) { duration = parseInt(m[1]); text = text.slice(m[0].length).trim(); }
 
   // Event time range: "13:30–14:00" "9:30-10:00" "9:30 to 10:00"
   const rangeRe = /(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i;
@@ -832,21 +832,21 @@ function parseItemText(raw) {
     text = text.replace(m[0], '').trim();
   }
 
+  // Duration anywhere else: "20m" "45 min" — detect & strip before block type
+  if (!duration && !isEvent) {
+    if ((m = text.match(/(\d+)\s*h\b/i))) { duration = parseInt(m[1]) * 60; text = text.replace(m[0], '').trim(); }
+    else if ((m = text.match(/(\d+)\s*m(?:in)?\b/i))) { duration = parseInt(m[1]); text = text.replace(m[0], '').trim(); }
+  }
+
   // Block type detection (emoji or text name)
   for (const [key, bt] of Object.entries(BLOCK_TYPES)) {
     if (key === 'TASK') continue;
-    const labelUpper = bt.label.toUpperCase();
-    if ((bt.emoji && text.includes(bt.emoji)) || text.toUpperCase().includes(labelUpper)) {
+    const labelUpper = (bt.label || '').toUpperCase();
+    if ((bt.emoji && text.includes(bt.emoji)) || (labelUpper && text.toUpperCase().includes(labelUpper))) {
       blockType = key;
       if (!duration && !isEvent) duration = bt.defaultDuration;
       break;
     }
-  }
-
-  // Duration anywhere else: "20m" "45 min"
-  if (!duration && !isEvent) {
-    if ((m = text.match(/(\d+)\s*h\b/i))) duration = parseInt(m[1]) * 60;
-    else if ((m = text.match(/(\d+)\s*min?\b/i))) duration = parseInt(m[1]);
   }
 
   if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15;
@@ -865,7 +865,8 @@ function computeTimeline() {
 
   const topItemsIdx = items.reduce((a, item, i) => { if (!item.isSubtask) a.push(i); return a; }, []);
   const eventBlocksIdx = topItemsIdx.filter(i => items[i].isEvent && items[i].eventStart);
-  const floatBlocksIdx = topItemsIdx.filter(i => !items[i].isEvent);
+  // Events without a fixed start fall back to floating so they don't vanish
+  const floatBlocksIdx = topItemsIdx.filter(i => !(items[i].isEvent && items[i].eventStart));
 
   // Position events at fixed times
   const fixedBlocks = eventBlocksIdx.map(i => {
@@ -880,12 +881,12 @@ function computeTimeline() {
 
   floatBlocksIdx.forEach(i => {
     const item = items[i], dur = getEffectiveDuration(i);
-    // Skip cursor past any fixed events it overlaps
+    // Push cursor past any fixed event the block [cursor, cursor+dur) would overlap
     let moved = true;
     while (moved) {
       moved = false;
       for (const fb of fixedBlocks) {
-        if (cursor >= fb.startMin && cursor < fb.endMin) {
+        if (cursor < fb.endMin && cursor + dur > fb.startMin) {
           cursor = fb.endMin; moved = true; break;
         }
       }
@@ -1161,7 +1162,12 @@ function toggleDone(idx) {
 function deleteItem(idx) {
   if (!items[idx]) return;
   pushUndo();
-  items.splice(idx, 1);
+  let count = 1;
+  if (!items[idx].isSubtask) {
+    // deleting a block removes its contiguous subtasks too
+    while (idx + count < items.length && items[idx + count].isSubtask) count++;
+  }
+  items.splice(idx, count);
   schedSave(); renderAll();
 }
 
@@ -1648,7 +1654,7 @@ let _previewSource = null;
 
 function openWeekTplLoadModal(entry) {
   _weekTplLoadId = entry.id;
-  el('weekTplLoadTitle').textContent = esc(entry.name || String(entry.id));
+  el('weekTplLoadTitle').textContent = entry.name || String(entry.id);
   const weekDates = getCurrentWeekDates();
   const targetOptions = '<option value="">— přeskočit</option>' +
     weekDates.map(({ iso, day }) =>
@@ -2030,6 +2036,7 @@ function closeBlockMenu() { const m = el('blockMenu'); if (m) { m.style.display 
 // ── CUSTOM PROMPT ─────────────────────────────────────────────────────────────
 function customPrompt(msg, defaultVal) {
   return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
     const input = document.createElement('input');
     input.type = 'text';
     input.value = defaultVal || '';
@@ -2045,8 +2052,11 @@ function customPrompt(msg, defaultVal) {
       input.remove();
       el('confirmMsg').textContent = origMsg;
       el('confirmModal').classList.remove('open');
+      _confirmResolve = null;
       resolve(val);
     };
+    // let the backdrop-click handler cancel this prompt too
+    _confirmResolve = () => cleanup(null);
     el('confirmOkBtn').onclick = () => cleanup(input.value.trim() || null);
     el('confirmCancelBtn').onclick = () => cleanup(null);
     input.addEventListener('keydown', e => {
@@ -2077,15 +2087,19 @@ function pushUndo() {
 function undo() {
   if (!undoStack.length) return;
   redoStack.push(sessionSnap());
-  applySessionData(JSON.parse(undoStack.pop()));
-  schedSave(); updateUndoBtn(); renderLibrary(); renderAll();
+  const d = JSON.parse(undoStack.pop());
+  applySessionData(d);
+  if (d.planDate !== undefined) activePlanDate = d.planDate;
+  schedSave(); updateUndoBtn(); renderLibrary(); renderAll(); renderDayButtons();
 }
 function redo() {
   if (!redoStack.length) return;
   undoStack.push(sessionSnap());
   if (undoStack.length > UNDO_MAX) undoStack.shift();
-  applySessionData(JSON.parse(redoStack.pop()));
-  schedSave(); updateUndoBtn(); renderLibrary(); renderAll();
+  const d = JSON.parse(redoStack.pop());
+  applySessionData(d);
+  if (d.planDate !== undefined) activePlanDate = d.planDate;
+  schedSave(); updateUndoBtn(); renderLibrary(); renderAll(); renderDayButtons();
 }
 function updateUndoBtn() {
   const u = el('undoBtn');
@@ -2574,7 +2588,10 @@ function switchPlanDay(iso) {
   if (target) { applySessionData(target); }
   else { items = []; }
   activePlanDate = iso;
-  schedSave(); renderAll(); renderDayButtons(); renderWeekTab();
+  // a different day is no longer tied to the previously loaded template
+  activeLibId = null; savedSnapshot = null;
+  el('headerSub').textContent = '';
+  schedSave(); renderAll(); renderDayButtons(); renderWeekTab(); renderLibrary();
 }
 
 function renderDayButtons() {
