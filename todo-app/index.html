@@ -236,6 +236,8 @@ textarea::placeholder{color:var(--mid)}
 /* ── PREVIEW ── */
 .preview-item{display:flex;align-items:center;gap:.35rem;padding:.28rem .1rem;border-bottom:1px solid var(--light)}
 .preview-item:last-child{border-bottom:none}
+.preview-item.block{background:var(--off);padding-left:.4rem;padding-right:.35rem;margin-top:.25rem}
+.preview-item.block:first-child{margin-top:0}
 .preview-item.subtask{padding-left:1.1rem}
 .preview-item-chk{flex-shrink:0;width:13px;height:13px;accent-color:var(--black);cursor:pointer}
 .preview-item-text{flex:1;font-size:.82rem;line-height:1.35;cursor:text;word-break:break-word}
@@ -1789,7 +1791,7 @@ function renderPreviewList() {
     let durTxt;
     if (item.isEvent && item.eventStart) durTxt = item.eventStart + '–' + (item.eventEnd || '?');
     else durTxt = formatDur(item.duration);
-    return `<div class="preview-item${item.isSubtask ? ' subtask' : ''}">
+    return `<div class="preview-item${item.isSubtask ? ' subtask' : ' block'}">
       <input type="checkbox" class="preview-item-chk" ${item.done ? 'checked' : ''}
         onchange="togglePreviewDone(${i},this.checked)">
       <span class="preview-item-text${item.done ? ' done' : ''}"
@@ -1805,11 +1807,12 @@ function renderPreviewList() {
     </div>`;
   }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné položky.</div>';
   container.innerHTML = itemsHtml + `<div class="preview-add-row">
-    <input id="previewAddText" class="preview-add-text" placeholder="nový úkol…"
-      onkeydown="if(event.key==='Enter')addPreviewItem()">
+    <input id="previewAddText" class="preview-add-text" placeholder="nová položka…"
+      onkeydown="if(event.key==='Enter')addPreviewItem(false)">
     <input id="previewAddDur" class="preview-add-dur" type="number" min="1" max="720"
-      placeholder="min" title="délka v minutách" onkeydown="if(event.key==='Enter')addPreviewItem()">
-    <button class="modal-btn" style="padding:.25rem .55rem;flex:none" onclick="addPreviewItem()">+</button>
+      placeholder="min" title="délka v minutách" onkeydown="if(event.key==='Enter')addPreviewItem(false)">
+    <button class="modal-btn" style="padding:.25rem .45rem;flex:none" onclick="addPreviewItem(false)" title="přidat úkol">+ úkol</button>
+    <button class="modal-btn" style="padding:.25rem .45rem;flex:none" onclick="addPreviewItem(true)" title="přidat blok">+ blok</button>
   </div>`;
 }
 
@@ -1903,14 +1906,14 @@ function movePreviewItem(i, dir) {
   renderPreviewList();
 }
 
-function addPreviewItem() {
+function addPreviewItem(asBlock) {
   if (!_previewSource) return;
   const textInp = el('previewAddText');
   const durInp = el('previewAddDur');
   const text = textInp?.value.trim();
   if (!text) { textInp?.focus(); return; }
   const dur = parseInt(durInp?.value) || 30;
-  _previewSource.items.push({ id: Date.now(), text, duration: dur, done: false, isSubtask: false });
+  _previewSource.items.push({ id: Date.now(), text, blockType: 'TASK', duration: dur, done: false, isSubtask: !asBlock, isEvent: false });
   el('previewMeta').textContent = _previewSource.windowStart + '–' + _previewSource.windowEnd + ' · ' + _previewSource.items.length + 'p';
   renderPreviewList();
   el('previewAddText')?.focus();
