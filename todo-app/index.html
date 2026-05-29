@@ -1172,10 +1172,35 @@ function deleteItem(idx) {
 }
 
 function moveItem(idx, dir) {
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= items.length) return;
-  pushUndo();
-  [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+  const item = items[idx];
+  if (!item) return;
+  if (item.isSubtask) {
+    // single subtask moves one slot
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= items.length) return;
+    pushUndo();
+    [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+    schedSave(); renderAll();
+    return;
+  }
+  // block moves as a whole group (block + its contiguous subtasks)
+  let end = idx + 1;
+  while (end < items.length && items[end].isSubtask) end++;
+  if (dir < 0) {
+    if (idx === 0) return;
+    let prev = idx - 1;
+    while (prev > 0 && items[prev].isSubtask) prev--;
+    pushUndo();
+    const group = items.splice(idx, end - idx);
+    items.splice(prev, 0, ...group);
+  } else {
+    if (end >= items.length) return;
+    let nextEnd = end + 1;
+    while (nextEnd < items.length && items[nextEnd].isSubtask) nextEnd++;
+    pushUndo();
+    const group = items.splice(idx, end - idx);
+    items.splice(idx + (nextEnd - end), 0, ...group);
+  }
   schedSave(); renderAll();
 }
 
@@ -2979,10 +3004,11 @@ function initDnd(container, onDrop) {
     if (_dndContainer !== container || _dndSrcIdx === null || !dstRow) return;
     const srcIdx = _dndSrcIdx;
     const dstIdx = parseInt(dstRow.dataset.idx);
-    let finalIdx = insertBefore ? dstIdx : dstIdx + 1;
+    const rawIdx = insertBefore ? dstIdx : dstIdx + 1; // insertion point in the original array
+    let finalIdx = rawIdx;
     if (srcIdx < finalIdx) finalIdx--;
     _dndSrcIdx = null; _dndContainer = null;
-    if (finalIdx !== srcIdx) onDrop(srcIdx, finalIdx);
+    if (finalIdx !== srcIdx) onDrop(srcIdx, finalIdx, rawIdx);
   });
 
   container.addEventListener('dragend', () => {
@@ -2995,10 +3021,17 @@ function initDnd(container, onDrop) {
 function initItemDnd() {
   const container = el('item-list');
   if (!container) return;
-  initDnd(container, (srcIdx, dstIdx) => {
+  initDnd(container, (srcIdx, finalIdx, rawIdx) => {
+    const item = items[srcIdx];
+    if (!item) return;
+    // a block drags together with its contiguous subtasks
+    let L = 1;
+    if (!item.isSubtask) { let e = srcIdx + 1; while (e < items.length && items[e].isSubtask) e++; L = e - srcIdx; }
+    if (rawIdx > srcIdx && rawIdx <= srcIdx + L) return; // dropped inside its own group
     pushUndo();
-    const [moved] = items.splice(srcIdx, 1);
-    items.splice(dstIdx, 0, moved);
+    const group = items.splice(srcIdx, L);
+    const insertAt = Math.max(0, Math.min(items.length, rawIdx > srcIdx ? rawIdx - L : rawIdx));
+    items.splice(insertAt, 0, ...group);
     schedSave(); renderAll();
   });
 }
