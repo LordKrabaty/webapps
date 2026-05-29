@@ -261,14 +261,16 @@ textarea::placeholder{color:var(--mid)}
 .preview-add-text:focus{outline:1.5px solid var(--black);outline-offset:1px}
 .preview-add-dur{width:3.5rem;font-family:'DM Mono',monospace;font-size:.78rem;border:var(--b);border-radius:var(--r);padding:.25rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:right}
 .preview-add-dur:focus{outline:1.5px solid var(--black);outline-offset:1px}
-.lib-item-prev{width:18px;height:18px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0;padding:0}
-@media(hover:hover){.lib-item:hover .lib-item-prev{opacity:.45}}
-@media(hover:hover){.lib-item-prev:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
-@media(hover:none){.lib-item .lib-item-prev{opacity:.45}}
-.lib-item-prev svg{width:10px;height:8px;fill:none;stroke:var(--black);stroke-width:1.5;stroke-linecap:round}
-.lib-item.active .lib-item-prev{opacity:.55}
-.lib-item.active .lib-item-prev svg{stroke:var(--w)}
-@media(hover:hover){.lib-item.active .lib-item-prev:hover{background:rgba(255,255,255,.15)}}
+.lib-item-prev,.lib-item-edit{width:18px;height:18px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0;padding:0}
+@media(hover:hover){.lib-item:hover .lib-item-prev,.lib-item:hover .lib-item-edit{opacity:.45}}
+@media(hover:hover){.lib-item-prev:hover,.lib-item-edit:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+@media(hover:none){.lib-item .lib-item-prev,.lib-item .lib-item-edit{opacity:.45}}
+.lib-item-prev svg,.lib-item-edit svg{fill:none;stroke:var(--black);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.lib-item-prev svg{width:10px;height:8px}
+.lib-item-edit svg{width:11px;height:11px}
+.lib-item.active .lib-item-prev,.lib-item.active .lib-item-edit{opacity:.55}
+.lib-item.active .lib-item-prev svg,.lib-item.active .lib-item-edit svg{stroke:var(--w)}
+@media(hover:hover){.lib-item.active .lib-item-prev:hover,.lib-item.active .lib-item-edit:hover{background:rgba(255,255,255,.15)}}
 .lib-type-badge{font-family:'DM Mono',monospace;font-size:.58rem;padding:.08rem .28rem;border-radius:2px;flex-shrink:0;font-weight:500;white-space:nowrap;letter-spacing:.03em}
 .lib-type-week{border:1.5px solid var(--black);color:var(--black)}
 .lib-type-day{border:1px dashed var(--mid);color:var(--muted)}
@@ -1654,6 +1656,9 @@ function renderLibrary() {
         ${typeBadge}
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
         ${prevBtn}
+        <button class="lib-item-edit" onclick="event.stopPropagation();renameLibEntry(${entry.id})" title="přejmenovat">
+          <svg viewBox="0 0 12 12"><path d="M8 1.5l2.5 2.5-6 6H2v-2.5z"/></svg>
+        </button>
         <button class="lib-item-del" onclick="event.stopPropagation();deleteLibEntry(${entry.id})" title="smazat">
           <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
         </button>
@@ -1974,6 +1979,16 @@ function doPreviewSave() {
   }
   closeModal('previewModal');
   showSave('✓ změny uloženy');
+}
+
+async function renameLibEntry(id) {
+  const entry = library.find(e => e.id === id);
+  if (!entry) return;
+  const name = await customPrompt('Nový název šablony:', entry.name || '');
+  if (!name || name === entry.name) return;
+  entry.name = name;
+  saveLibrary(); renderLibrary();
+  showSave('✓ přejmenováno');
 }
 
 async function deleteLibEntry(id) {
