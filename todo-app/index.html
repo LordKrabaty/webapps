@@ -271,6 +271,8 @@ textarea::placeholder{color:var(--mid)}
 .lib-item.active .lib-type-badge{border-color:var(--w)!important;color:var(--w)!important;border-style:solid!important}
 /* ── WEEK TAB ── */
 .week-section{display:flex;flex-direction:column;gap:.15rem}
+.week-sub-hdr{font-size:.65rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.2rem .1rem .1rem;margin-top:.15rem;border-top:1px dashed var(--light)}
+.plan-day-row{display:flex;align-items:center;gap:.35rem;padding:.22rem .45rem;border:1px dashed var(--light);border-radius:var(--r)}
 .week-section-hdr{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .15rem;border-top:1.5px solid var(--light);margin-top:.2rem;display:flex;align-items:center;gap:.5rem}
 .week-section-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .week-section-sel{font-size:.68rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);cursor:pointer;margin-left:auto}
@@ -443,6 +445,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div id="pane-tyden" class="notes-pane active">
       <div id="day-buttons" class="day-buttons"></div>
+      <button class="btn-add" style="flex-shrink:0;align-self:flex-start;margin-bottom:.3rem" onclick="savePlanSnapshot()">✓ naplánováno</button>
       <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
       <div class="input-btns">
         <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
@@ -524,7 +527,8 @@ textarea::placeholder{color:var(--mid)}
       <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>aktuální session</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>uložené šablony</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>archiv</span></label>
-      <label class="modal-item"><input type="checkbox" id="clr-week" checked><span>uložené dny týdne</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-week" checked><span>uložené dny týdne (Realita)</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-weekplans" checked><span>plán týdne (Plán)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>nastavení vzhledu</span></label>
     </div>
     <div class="modal-row" style="margin-top:.25rem">
@@ -642,7 +646,8 @@ textarea::placeholder{color:var(--mid)}
 const SESSION_KEY   = 'todo-app-v1-session';
 const LIBRARY_KEY   = 'todo-app-v1-library';
 const ARCHIVE_KEY   = 'todo-app-v1-archive';
-const BLOCKTYPES_KEY = 'todo-app-v1-blocktypes';
+const BLOCKTYPES_KEY  = 'todo-app-v1-blocktypes';
+const WEEKPLANS_KEY   = 'todo-app-v1-weekplans';
 
 // ── BLOCK TYPES ───────────────────────────────────────────────────────────────
 const DEFAULT_BLOCK_TYPES = {
@@ -742,6 +747,7 @@ let windowStart = '6:00', windowEnd = '14:00';
 let autoAdvance = false;
 let highlightedId = null;
 let library = [], activeLibId = null, archive = [];
+let weekPlans = [];
 let undoStack = [], redoStack = [], savedSnapshot = null;
 let autoSave = false;
 const UNDO_MAX = 40;
@@ -1301,7 +1307,7 @@ function toggleAutoAdv() {
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
 function getSessionData() {
-  return { items, windowStart, windowEnd, autoAdvance };
+  return { items, windowStart, windowEnd, autoAdvance, planDate: activePlanDate };
 }
 function applySessionData(d) {
   if (!d) return;
@@ -1344,6 +1350,8 @@ function loadLibrary() { try { library = JSON.parse(localStorage.getItem(LIBRARY
 function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
 function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch(e) { archive = []; } }
 function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
+function loadWeekPlans() { try { weekPlans = JSON.parse(localStorage.getItem(WEEKPLANS_KEY) || '[]'); } catch(e) { weekPlans = []; } }
+function saveWeekPlans() { try { localStorage.setItem(WEEKPLANS_KEY, JSON.stringify(weekPlans)); } catch(e) {} }
 
 // ── BLOCK TYPES MANAGEMENT ────────────────────────────────────────────────────
 function loadBlockTypes() {
@@ -2026,7 +2034,7 @@ function schedSave() {
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────────
 function clearStorage() { el('clearStorageModal').classList.add('open'); }
 function toggleAllClear() {
-  const boxes = ['clr-session','clr-library','clr-archive','clr-appearance'].map(id => el(id));
+  const boxes = ['clr-session','clr-library','clr-archive','clr-week','clr-weekplans','clr-appearance'].map(id => el(id));
   const anyUnchecked = boxes.some(b => !b.checked);
   boxes.forEach(b => b.checked = anyUnchecked);
 }
@@ -2036,6 +2044,7 @@ async function doSelectiveClear() {
   if (el('clr-library').checked)    toDelete.push('todo-app-v1-library');
   if (el('clr-archive').checked)    toDelete.push('todo-app-v1-archive');
   if (el('clr-week').checked)       toDelete.push('todo-app-v1-week');
+  if (el('clr-weekplans').checked)  toDelete.push('todo-app-v1-weekplans');
   if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs');
   if (!toDelete.length) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
@@ -2344,6 +2353,38 @@ function autoSavePlanDay() {
   saveWeek();
 }
 
+function savePlanSnapshot() {
+  autoSavePlanDay();
+  const weekDates = getCurrentWeekDates(planWeekOffset);
+  let saved = 0;
+  weekDates.forEach(({ iso }) => {
+    const wd = weekDays.find(d => d.date === iso);
+    if (!wd || !wd.items.length) return;
+    const planItems = wd.items.map(item => ({ ...item, done: false }));
+    const existing = weekPlans.find(p => p.date === iso);
+    if (existing) {
+      existing.items = planItems;
+      existing.windowStart = wd.windowStart;
+      existing.windowEnd = wd.windowEnd;
+    } else {
+      weekPlans.push({ id: Date.now() + Math.random(), date: iso,
+        items: planItems, windowStart: wd.windowStart, windowEnd: wd.windowEnd });
+    }
+    saved++;
+  });
+  if (!saved) { customAlert('Nejsou žádné naplánované dny — nejdřív přidej úkoly do dnů týdne.'); return; }
+  saveWeekPlans();
+  renderWeekTab();
+  showSave('✓ plán uložen (' + saved + (saved === 1 ? ' den' : saved < 5 ? ' dny' : ' dní') + ')');
+}
+
+async function deleteWeekPlanDay(id) {
+  if (!await customConfirm('Smazat plán pro tento den?', 'smazat')) return;
+  weekPlans = weekPlans.filter(p => p.id !== id);
+  saveWeekPlans();
+  renderWeekTab();
+}
+
 function switchPlanDay(iso) {
   if (iso === activePlanDate) return;
   autoSavePlanDay();
@@ -2459,6 +2500,26 @@ function groupByWeek() {
   return [...map.entries()].sort(([a],[b]) => a.localeCompare(b));
 }
 
+function groupPlansByWeek() {
+  const map = new Map();
+  weekPlans.slice().sort((a,b) => a.date.localeCompare(b.date)).forEach(day => {
+    const key = getISOWeekYear(day.date) + '-W' + String(getISOWeek(day.date)).padStart(2,'0');
+    if (!map.has(key)) map.set(key, { week: getISOWeek(day.date), year: getISOWeekYear(day.date), days: [] });
+    map.get(key).days.push(day);
+  });
+  return [...map.entries()].sort(([a],[b]) => a.localeCompare(b));
+}
+
+function renderPlanRow(p) {
+  const blockCount = p.items.filter(i => !i.isSubtask).length || p.items.length;
+  const totalDur = p.items.filter(i => !i.isSubtask).reduce((s, i) => s + (i.duration || 0), 0);
+  return `<div class="plan-day-row">
+    <span class="week-day-date">${formatDateCz(p.date)}</span>
+    <span class="week-day-meta">${blockCount}p${totalDur ? ' · ' + formatDur(totalDur) : ''}</span>
+    <button class="item-del" style="opacity:.4;margin-left:auto" onclick="deleteWeekPlanDay(${p.id})" title="smazat">✕</button>
+  </div>`;
+}
+
 function renderDayRow(d) {
   const done = d.items.filter(i => i.done).length, total = d.items.length;
   const expanded = d.id === expandedWeekDayId;
@@ -2479,18 +2540,30 @@ function renderDayRow(d) {
 
 function renderWeekTab() {
   const list = el('week-list'); if (!list) return;
-  if (!weekDays.length) {
+  const planMap = new Map(groupPlansByWeek());
+  const realMap = new Map(groupByWeek());
+  const allKeys = [...new Set([...planMap.keys(), ...realMap.keys()])].sort();
+
+  if (!allKeys.length) {
     list.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné uložené dny.</div>';
     return;
   }
-  list.innerHTML = groupByWeek().map(([key, { week, year, days }], gi) =>
-    `<div class="week-section">
-      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">
-        Týden ${week} &middot; ${year}
-      </div>
-      ${days.map(renderDayRow).join('')}
-    </div>`
-  ).join('');
+
+  list.innerHTML = allKeys.map((key, gi) => {
+    const pg = planMap.get(key);
+    const rg = realMap.get(key);
+    const { week, year } = pg || rg;
+    const planSection = pg
+      ? `<div class="week-sub-hdr">Plán</div>${pg.days.map(renderPlanRow).join('')}`
+      : '';
+    const realSection = rg
+      ? `<div class="week-sub-hdr">Realita</div>${rg.days.map(renderDayRow).join('')}`
+      : '';
+    return `<div class="week-section">
+      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">Týden ${week} &middot; ${year}</div>
+      ${planSection}${realSection}
+    </div>`;
+  }).join('');
 }
 
 // ── EXPORT VÝBĚR ──────────────────────────────────────────────────────────────
@@ -2678,18 +2751,55 @@ function initLibDnd() {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init() {
   initAutoSave(); initFs(); initDark(); loadPanelFs();
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek();
-  activePlanDate = todayIso();
-  const restored = loadSession();
-  if (!restored) {
-    const todayEntry = weekDays.find(d => d.date === activePlanDate);
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans();
+
+  const today = todayIso();
+  activePlanDate = today;
+
+  // Přečíst session jednou
+  let rawSession = null;
+  try { rawSession = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) {}
+
+  // Auto-archivace: session patří jinému dni a má položky → uložit do weekDays
+  let staleArchived = null;
+  if (rawSession?.planDate && rawSession.planDate !== today && rawSession.items?.length) {
+    const date = rawSession.planDate;
+    const existing = weekDays.find(d => d.date === date);
+    if (existing) {
+      existing.items = rawSession.items;
+      if (rawSession.windowStart) existing.windowStart = rawSession.windowStart;
+      if (rawSession.windowEnd)   existing.windowEnd   = rawSession.windowEnd;
+    } else {
+      weekDays.push({ id: Date.now(), date, items: rawSession.items,
+        windowStart: rawSession.windowStart || '6:00',
+        windowEnd:   rawSession.windowEnd   || '14:00' });
+    }
+    saveWeek();
+    staleArchived = date;
+    rawSession = null; // stale session — nepoužívat pro dnešek
+  }
+
+  // Načíst data pro dnešek
+  if (rawSession) {
+    // Dnešní session → obnovit
+    applySessionData(rawSession);
+    activeLibId = rawSession.activeLibId || null;
+    if (activeLibId) {
+      const entry = library.find(e => e.id === activeLibId);
+      if (entry) el('headerSub').textContent = entry.name || '';
+    }
+  } else {
+    // Žádná dnešní session → zkusit weekDays, jinak prázdný start
+    const todayEntry = weekDays.find(d => d.date === today);
     if (todayEntry) applySessionData(todayEntry);
   }
+
   renderLibrary(); renderBlockTypeList(); renderAll(); renderWeekTab(); renderDayButtons();
   if (activeLibId) markSaved();
   updateUndoBtn();
   initItemDnd(); initLibDnd();
-  if (restored) showSave('↓ obnoveno');
+  if (staleArchived) showSave('↓ archivováno: ' + formatDateCz(staleArchived));
+  else if (rawSession) showSave('↓ obnoveno');
   setInterval(() => renderTimeline(), 60000);
 }
 init();
