@@ -209,6 +209,8 @@ textarea::placeholder{color:var(--mid)}
 .btn-add{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .55rem;cursor:pointer;white-space:nowrap}
 .btn-add:active{background:var(--light)}
 @media(hover:hover){.btn-add:hover{background:var(--light)}}
+.btn-add.planned{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.btn-add.planned:hover{background:var(--black)}}
 
 /* ── STATS ── */
 .stats-row{display:grid;grid-template-columns:auto 1fr;gap:.15rem .5rem;font-size:.78rem;margin-top:.4rem}
@@ -273,6 +275,8 @@ textarea::placeholder{color:var(--mid)}
 .lib-item.active .lib-type-badge{border-color:var(--w)!important;color:var(--w)!important;border-style:solid!important}
 /* block list names start with emoji — disable line-clamp so they don't clip/overlap */
 #blockTypeList .lib-item-name{display:block;line-height:1.5;word-break:break-word}
+/* scrollable flex column would shrink rows below natural height → text overlap; keep them */
+#blockTypeList .lib-item{flex-shrink:0}
 /* ── WEEK TAB ── */
 .week-section{display:flex;flex-direction:column;gap:.15rem}
 .week-sub-hdr{font-size:.65rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.2rem .1rem .1rem;margin-top:.15rem;border-top:1px dashed var(--light)}
@@ -452,7 +456,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div id="pane-tyden" class="notes-pane active">
       <div id="day-buttons" class="day-buttons"></div>
-      <button class="btn-add" style="flex-shrink:0;align-self:flex-start;margin-bottom:.3rem" onclick="savePlanSnapshot()">✓ naplánováno</button>
+      <button class="btn-add" id="btnPlanSnapshot" style="flex-shrink:0;align-self:flex-start;margin-bottom:.3rem" onclick="togglePlanSnapshot()">naplánovat</button>
       <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
       <div class="input-btns">
         <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
@@ -602,7 +606,11 @@ textarea::placeholder{color:var(--mid)}
 <div class="modal-bg" id="weekTplLoadModal">
   <div class="modal" style="max-width:360px">
     <h2 id="weekTplLoadTitle">Načíst týdenní šablonu</h2>
-    <p style="font-size:.8rem;color:var(--muted)">Přiřaď dny šablony k dnům aktuálního týdne. Vyber „— přeskočit" pro vynechání.</p>
+    <p style="font-size:.8rem;color:var(--muted)">Přiřaď dny šablony ke konkrétním dnům. Vyber „— přeskočit" pro vynechání.</p>
+    <label class="toggle-row" onclick="toggleWeekTplNextWeek()">
+      <div id="weekTplNextWeekToggle" class="toggle-sw on"></div>
+      <span>Příští týden</span>
+    </label>
     <div id="weekTplDayList" style="display:flex;flex-direction:column;gap:.4rem;margin:.35rem 0"></div>
     <div class="modal-row" style="margin-top:.5rem">
       <button class="modal-btn" onclick="closeModal('weekTplLoadModal')">zrušit</button>
@@ -1675,43 +1683,56 @@ async function loadLibEntry(id) {
 let _weekTplLoadId = null;
 let _previewSource = null;
 
+let _weekTplNextWeek = true;
+
 function openWeekTplLoadModal(entry) {
   _weekTplLoadId = entry.id;
+  _weekTplNextWeek = true; // defaultně cílit na příští týden
   el('weekTplLoadTitle').textContent = entry.name || String(entry.id);
-  const weekDates = getCurrentWeekDates();
-  const targetOptions = '<option value="">— přeskočit</option>' +
-    weekDates.map(({ iso, day }) =>
-      `<option value="${iso}">${PLAN_DAY_SHORT[day.getDay()]} · ${day.getDate()}. ${day.getMonth()+1}.</option>`
-    ).join('');
+  // Target options: tento týden + příští týden (seskupené), jen pracovní dny
+  const thisWeek = getCurrentWeekDates(0);
+  const nextWeek = getCurrentWeekDates(1);
+  const optFor = ({ iso, day }) =>
+    `<option value="${iso}">${PLAN_DAY_SHORT[day.getDay()]} · ${day.getDate()}. ${day.getMonth()+1}.</option>`;
+  const targetOptions = '<option value="">— přeskočit</option>'
+    + '<optgroup label="Tento týden">' + thisWeek.map(optFor).join('') + '</optgroup>'
+    + '<optgroup label="Příští týden">' + nextWeek.map(optFor).join('') + '</optgroup>';
   const selectStyle = 'flex:1;font-family:"DM Sans",sans-serif;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.28rem .4rem;background:var(--w);color:var(--black);outline:none;cursor:pointer';
-  // Build ISO map for all 7 days of the current week (not just working days)
-  const today2 = new Date(), dow2 = today2.getDay();
-  const mon2 = new Date(today2);
-  mon2.setDate(today2.getDate() - (dow2 === 0 ? 6 : dow2 - 1));
-  const dayNumToIso = {};
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(mon2); d.setDate(mon2.getDate() + i);
-    const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    dayNumToIso[d.getDay()] = iso;
-  }
 
   el('weekTplDayList').innerHTML = DAY_ORDER.map((dayKey) => {
     const data = entry.weekData[dayKey];
     if (!data) return '';
     const total = data.items.length;
-    const dayNum = DAY_KEY_TO_NUM[dayKey];
-    const defaultIso = dayNumToIso[dayNum] || '';
-    const opts = defaultIso ? targetOptions.replace(`value="${defaultIso}"`, `value="${defaultIso}" selected`) : targetOptions;
     return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.83rem">
       <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${total}×</span></span>
       <span style="color:var(--muted);font-size:.75rem">→</span>
-      <select id="wtl-${dayKey}" style="${selectStyle}">${opts}</select>
+      <select id="wtl-${dayKey}" style="${selectStyle}">${targetOptions}</select>
       <button onclick="openPreview('weekTplDay',${entry.id},'${dayKey}')" style="border:none;background:none;cursor:pointer;padding:.15rem .2rem;flex-shrink:0;display:flex;align-items:center;opacity:.6" title="náhled">
         <svg width="14" height="11" viewBox="0 0 10 8" fill="none" stroke="var(--black)" stroke-width="1.5" stroke-linecap="round"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
       </button>
     </div>`;
   }).filter(Boolean).join('');
+  el('weekTplNextWeekToggle').classList.toggle('on', _weekTplNextWeek);
+  applyWeekTplWeekChoice();
   el('weekTplLoadModal').classList.add('open');
+}
+
+// Přesměruje všechny denní výběry na odpovídající den zvoleného týdne
+function applyWeekTplWeekChoice() {
+  const week = getCurrentWeekDates(_weekTplNextWeek ? 1 : 0);
+  const byNum = {};
+  week.forEach(({ iso, day }) => { byNum[day.getDay()] = iso; });
+  DAY_ORDER.forEach((dayKey) => {
+    const sel = el('wtl-' + dayKey);
+    if (!sel) return;
+    sel.value = byNum[DAY_KEY_TO_NUM[dayKey]] || '';
+  });
+}
+
+function toggleWeekTplNextWeek() {
+  _weekTplNextWeek = !_weekTplNextWeek;
+  el('weekTplNextWeekToggle').classList.toggle('on', _weekTplNextWeek);
+  applyWeekTplWeekChoice();
 }
 
 function doLoadWeekTemplate() {
@@ -2606,8 +2627,35 @@ function savePlanSnapshot() {
   });
   if (!saved) { customAlert('Nejsou žádné naplánované dny — nejdřív přidej úkoly do dnů týdne.'); return; }
   saveWeekPlans();
-  renderWeekTab();
+  renderWeekTab(); updatePlanBtn();
   showSave('✓ plán uložen (' + saved + (saved === 1 ? ' den' : saved < 5 ? ' dny' : ' dní') + ')');
+}
+
+// Je aktuálně zobrazený týden (planWeekOffset) už naplánovaný?
+function isWeekPlanned() {
+  const isos = new Set(getCurrentWeekDates(planWeekOffset).map(d => d.iso));
+  return weekPlans.some(p => isos.has(p.date));
+}
+
+function updatePlanBtn() {
+  const btn = el('btnPlanSnapshot');
+  if (!btn) return;
+  const planned = isWeekPlanned();
+  btn.classList.toggle('planned', planned);
+  btn.textContent = planned ? '✓ naplánováno' : 'naplánovat';
+}
+
+async function togglePlanSnapshot() {
+  if (isWeekPlanned()) {
+    if (!await customConfirm('Zrušit naplánování tohoto týdne? Uložený plán bude odstraněn.', 'zrušit plán')) return;
+    const isos = new Set(getCurrentWeekDates(planWeekOffset).map(d => d.iso));
+    weekPlans = weekPlans.filter(p => !isos.has(p.date));
+    saveWeekPlans();
+    renderWeekTab(); updatePlanBtn();
+    showSave('plán zrušen');
+  } else {
+    savePlanSnapshot();
+  }
 }
 
 async function deleteWeekPlanDay(id) {
@@ -2645,6 +2693,7 @@ function renderDayButtons() {
     </div>`;
   }).join('');
   updateHeaderDay();
+  updatePlanBtn();
 }
 
 function toggleDayHotovo(iso, checked) {
