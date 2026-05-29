@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
@@ -479,6 +479,16 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-list" id="exportList"></div>
     <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archivované</p>
     <div class="modal-list" id="exportArchList"></div>
+    <div id="exportDaysSection" style="margin-top:.5rem;display:flex;flex-direction:column;gap:.25rem">
+      <label id="expWdRow" class="modal-item" style="cursor:pointer;display:none">
+        <input type="checkbox" id="expWeekDays" checked onchange="updateExportFilename()">
+        <span id="expWeekDaysLbl">Uložené dny</span>
+      </label>
+      <label id="expWpRow" class="modal-item" style="cursor:pointer;display:none">
+        <input type="checkbox" id="expWeekPlans" checked onchange="updateExportFilename()">
+        <span id="expWeekPlansLbl">Plán týdne</span>
+      </label>
+    </div>
     <div style="margin-top:.8rem">
       <label style="font-size:.78rem;color:var(--muted)">Název souboru</label>
       <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
@@ -510,8 +520,21 @@ textarea::placeholder{color:var(--mid)}
     <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">nebo vlož obsah JSON:</p>
     <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"items":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
     <div id="importItemSection" style="display:none">
-      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Položky</p>
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Šablony</p>
       <div class="modal-list" id="importList"></div>
+    </div>
+    <div id="importDaysSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Dny a plány</p>
+      <div style="display:flex;flex-direction:column;gap:.25rem">
+        <label id="impWdRow" class="modal-item" style="cursor:pointer;display:none">
+          <input type="checkbox" id="impWeekDays" checked>
+          <span id="impWeekDaysLbl">Uložené dny</span>
+        </label>
+        <label id="impWpRow" class="modal-item" style="cursor:pointer;display:none">
+          <input type="checkbox" id="impWeekPlans" checked>
+          <span id="impWeekPlansLbl">Plán týdne</span>
+        </label>
+      </div>
     </div>
     <div class="modal-row" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">zrušit</button>
@@ -644,7 +667,8 @@ textarea::placeholder{color:var(--mid)}
 const SESSION_KEY   = 'todo-app-v1-session';
 const LIBRARY_KEY   = 'todo-app-v1-library';
 const ARCHIVE_KEY   = 'todo-app-v1-archive';
-const BLOCKTYPES_KEY  = 'todo-app-v1-blocktypes';
+const BLOCKTYPES_KEY      = 'todo-app-v1-blocktypes';
+const BLOCKTYPES_ORDER_KEY = 'todo-app-v1-blocktypes-order';
 const WEEKPLANS_KEY   = 'todo-app-v1-weekplans';
 const WORKDAYS_KEY    = 'todo-app-working-days';
 
@@ -661,6 +685,7 @@ const DEFAULT_BLOCK_TYPES = {
   TASK:           { emoji: '',   label: 'Úkol',           defaultDuration: 15  },
 };
 let BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES };
+let blockTypeOrder = [];
 
 // ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
 function mkItem(text, blockType, duration, isSubtask, isEvent, eventStart, eventEnd, done) {
@@ -1371,16 +1396,30 @@ function loadBlockTypes() {
   try {
     const saved = JSON.parse(localStorage.getItem(BLOCKTYPES_KEY) || '[]');
     saved.forEach(bt => {
-      if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key, defaultDuration: bt.defaultDuration || 15 };
+      if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
+        defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
+        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [] };
     });
   } catch(e) {}
+  const allKeys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
+  try {
+    const savedOrder = JSON.parse(localStorage.getItem(BLOCKTYPES_ORDER_KEY) || 'null');
+    if (Array.isArray(savedOrder)) {
+      blockTypeOrder = savedOrder.filter(k => BLOCK_TYPES[k] && k !== 'TASK');
+      allKeys.forEach(k => { if (!blockTypeOrder.includes(k)) blockTypeOrder.push(k); });
+    } else { blockTypeOrder = allKeys; }
+  } catch(e) { blockTypeOrder = allKeys; }
 }
 function saveBlockTypes() {
   const overrides = Object.entries(BLOCK_TYPES).filter(([key, bt]) => {
     const def = DEFAULT_BLOCK_TYPES[key];
-    return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration;
+    return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration
+      || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent;
   }).map(([key, bt]) => ({ key, ...bt }));
-  try { localStorage.setItem(BLOCKTYPES_KEY, JSON.stringify(overrides)); } catch(e) {}
+  try {
+    localStorage.setItem(BLOCKTYPES_KEY, JSON.stringify(overrides));
+    localStorage.setItem(BLOCKTYPES_ORDER_KEY, JSON.stringify(blockTypeOrder));
+  } catch(e) {}
 }
 
 function normalizeBlockKey(label) {
@@ -1391,21 +1430,18 @@ function normalizeBlockKey(label) {
 function renderBlockTypeList() {
   const list = el('blockTypeList');
   if (!list) return;
-  list.innerHTML = Object.entries(BLOCK_TYPES)
-    .filter(([k]) => k !== 'TASK')
-    .map(([key, bt]) => {
-      const isDefault = !!DEFAULT_BLOCK_TYPES[key];
-      const tasks = bt.defaultTasks || [];
-      const taskTotal = tasks.reduce((s, t) => s + (t.duration || 0), 0);
-      const durStr = formatDur(tasks.length ? taskTotal : bt.defaultDuration);
-      const taskBadge = tasks.length ? ` · ${tasks.length} úk.` : '';
-      return `<div class="lib-item" onclick="openBlockTypeEdit('${key}')" title="upravit">
-        <span class="lib-item-name">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}<span style="margin-left:.3rem;font-family:'DM Mono',monospace;font-size:.7em;color:var(--muted)">${durStr}${taskBadge}</span></span>
-        ${!isDefault ? `<button class="lib-item-del" onclick="event.stopPropagation();deleteBlockType('${key}')" title="smazat">
-          <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
-        </button>` : ''}
-      </div>`;
-    }).join('');
+  list.innerHTML = blockTypeOrder.map((key, idx) => {
+    const bt = BLOCK_TYPES[key]; if (!bt) return '';
+    const isDefault = !!DEFAULT_BLOCK_TYPES[key];
+    const tasks = bt.defaultTasks || [];
+    const taskTotal = tasks.reduce((s, t) => s + (t.duration || 0), 0);
+    const durStr = formatDur(tasks.length ? taskTotal : bt.defaultDuration);
+    const taskBadge = tasks.length ? ` · ${tasks.length} úk.` : '';
+    return `<div class="lib-item" data-idx="${idx}" data-key="${key}" draggable="true" onclick="openBlockTypeEdit('${key}')" title="upravit">
+      <span class="lib-item-name">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}<span style="margin-left:.3rem;font-family:'DM Mono',monospace;font-size:.7em;color:var(--muted)">${durStr}${taskBadge}</span></span>
+      ${!isDefault ? `<button class="lib-item-del" onclick="event.stopPropagation();deleteBlockType('${key}')" title="smazat"><svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></button>` : ''}
+    </div>`;
+  }).filter(Boolean).join('');
 }
 
 let _editingBlockKey = null;
@@ -1475,6 +1511,7 @@ function saveBlockType() {
     if (BLOCK_TYPES[key]) key = key + '_' + Date.now();
   }
   BLOCK_TYPES[key] = { emoji, label, defaultDuration: duration, isEvent, eventStart, eventEnd, defaultTasks };
+  if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key);
   saveBlockTypes();
   renderBlockTypeList();
   closeModal('blockEditModal');
@@ -1494,6 +1531,7 @@ async function deleteBlockType(key) {
   if (DEFAULT_BLOCK_TYPES[key]) return;
   if (!await customConfirm('Smazat typ bloku "' + esc(BLOCK_TYPES[key]?.label || key) + '"?', 'smazat')) return;
   delete BLOCK_TYPES[key];
+  blockTypeOrder = blockTypeOrder.filter(k => k !== key);
   saveBlockTypes();
   renderBlockTypeList();
   showSave('blok smazán');
@@ -1652,7 +1690,7 @@ function doLoadWeekTemplate() {
     const newItems = JSON.parse(JSON.stringify(tpl.items));
     const existing = weekDays.find(d => d.date === iso);
     if (existing) { existing.items = newItems; existing.windowStart = tpl.windowStart; existing.windowEnd = tpl.windowEnd; }
-    else weekDays.push({ id: Date.now() + i, date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd });
+    else weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd });
     if (iso === activePlanDate) {
       items = newItems;
       windowStart = tpl.windowStart; windowEnd = tpl.windowEnd;
@@ -1690,6 +1728,12 @@ function openPreview(type, id, dayKey) {
     src = { type, id, dayKey, name: entry.name + ' · ' + dayKey,
       items: JSON.parse(JSON.stringify(data.items)),
       windowStart: data.windowStart, windowEnd: data.windowEnd };
+  } else if (type === 'weekPlan') {
+    const p = weekPlans.find(p => p.id === id);
+    if (!p) return;
+    src = { type, id, name: formatDateCz(p.date) + ' · plán',
+      items: JSON.parse(JSON.stringify(p.items)),
+      windowStart: p.windowStart, windowEnd: p.windowEnd };
   }
   if (!src) return;
   _previewSource = src;
@@ -1860,6 +1904,11 @@ function doPreviewSave() {
     if (!entry || entry.type !== 'week') return;
     entry.weekData[dayKey].items = snapshot;
     saveLibrary();
+  } else if (type === 'weekPlan') {
+    const p = weekPlans.find(p => p.id === id);
+    if (!p) return;
+    p.items = snapshot;
+    saveWeekPlans(); renderWeekTab();
   }
   closeModal('previewModal');
   showSave('✓ změny uloženy');
@@ -2255,20 +2304,27 @@ function openExportModal() {
 function updateExportFilename() {
   const d = new Date();
   const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-  el('exportFilename').value = 'todo_' + yymmdd + '_I' + exportSelected.size + 'A' + exportArchSelected.size + '.json';
+  const wdCount = el('expWeekDays')?.checked ? weekDays.length : 0;
+  const wpCount = el('expWeekPlans')?.checked ? weekPlans.length : 0;
+  el('exportFilename').value = 'todo_' + yymmdd + '_I' + exportSelected.size + 'A' + exportArchSelected.size
+    + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + '.json';
 }
 function toggleExportSel(id, on) { on ? exportSelected.add(id) : exportSelected.delete(id); el('ei-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
 function toggleExportArchSel(id, on) { on ? exportArchSelected.add(id) : exportArchSelected.delete(id); el('eai-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
 function selectAllExport() {
   library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
   archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
+  const wd = el('expWeekDays'), wp = el('expWeekPlans');
+  if (wd) wd.checked = true; if (wp) wp.checked = true;
   updateExportFilename();
 }
 function doExport() {
   const its = library.filter(e => exportSelected.has(e.id));
   const archs = archive.filter(e => exportArchSelected.has(e.id));
-  if (!its.length && !archs.length) { customAlert('Nic není vybráno.'); return; }
-  const json = JSON.stringify({v:1, items: its, archive: archs}, null, 2);
+  const wdays = el('expWeekDays')?.checked ? weekDays : [];
+  const wplans = el('expWeekPlans')?.checked ? weekPlans : [];
+  if (!its.length && !archs.length && !wdays.length && !wplans.length) { customAlert('Nic není vybráno.'); return; }
+  const json = JSON.stringify({v:2, items: its, archive: archs, weekDays: wdays, weekPlans: wplans}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName + '.json';
   let downloaded = false;
@@ -2292,12 +2348,17 @@ function copyExportText() {
 
 // ── IMPORT ────────────────────────────────────────────────────────────────────
 let importData = [], importSelected = new Set();
+window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
   importData = []; importSelected = new Set();
+  window._importWeekDays = []; window._importWeekPlans = [];
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
   el('importFile').value = ''; el('importPaste').value = '';
   el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
+  const ds = el('importDaysSection'); if (ds) ds.style.display = 'none';
+  const wr = el('impWdRow'), pr = el('impWpRow');
+  if (wr) wr.style.display = 'none'; if (pr) pr.style.display = 'none';
   el('importActions').style.display = 'none'; el('importCancel').style.display = 'flex';
   el('importModal').classList.add('open');
 }
@@ -2305,13 +2366,29 @@ function parseImportJson(text) {
   try {
     const parsed = JSON.parse(text);
     const its = parsed.items || parsed.teas || [];
-    if (!its.length) throw new Error('Žádné položky v souboru');
+    const hasDays = parsed.weekDays && parsed.weekDays.length > 0;
+    const hasPlans = parsed.weekPlans && parsed.weekPlans.length > 0;
+    if (!its.length && !hasDays && !hasPlans) throw new Error('Žádné položky v souboru');
     importData = its; importSelected = new Set(its.map(x => x.id));
-    el('importList').innerHTML = its.map(x => `<label class="modal-item sel" id="ii-${x.id}"><input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />${esc(x.name||String(x.id))}</label>`).join('');
-    el('importItemSection').style.display = 'block'; el('importActions').style.display = 'flex'; el('importCancel').style.display = 'none';
+    if (its.length) {
+      el('importList').innerHTML = its.map(x => `<label class="modal-item sel" id="ii-${x.id}"><input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />${esc(x.name||String(x.id))}</label>`).join('');
+      el('importItemSection').style.display = 'block';
+    } else {
+      el('importItemSection').style.display = 'none';
+    }
+    window._importWeekDays = parsed.weekDays || [];
+    window._importWeekPlans = parsed.weekPlans || [];
+    const wdRow = el('impWdRow'), wpRow = el('impWpRow'), daysSection = el('importDaysSection');
+    if (wdRow) wdRow.style.display = hasDays ? '' : 'none';
+    if (wpRow) wpRow.style.display = hasPlans ? '' : 'none';
+    if (hasDays && el('impWeekDaysLbl')) el('impWeekDaysLbl').textContent = 'Uložené dny (' + parsed.weekDays.length + ')';
+    if (hasPlans && el('impWeekPlansLbl')) el('impWeekPlansLbl').textContent = 'Plán týdne (' + parsed.weekPlans.length + ')';
+    if (daysSection) daysSection.style.display = (hasDays || hasPlans) ? '' : 'none';
+    el('importActions').style.display = 'flex'; el('importCancel').style.display = 'none';
   } catch(err) {
     el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Chyba: ' + err.message + '</p>';
     el('importItemSection').style.display = 'block';
+    el('importActions').style.display = 'none'; el('importCancel').style.display = 'flex';
   }
 }
 function previewImportPaste() { const text = el('importPaste').value.trim(); if (!text) return; parseImportJson(text); }
@@ -2319,9 +2396,31 @@ function previewImport() { const file = el('importFile').files[0]; if (!file) re
 function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
-  if (!toAdd.length) { customAlert('Nic není vybráno.'); return; }
-  library.push(...toAdd); saveLibrary(); renderLibrary();
-  closeModal('importModal'); showSave('↓ importováno: ' + toAdd.length + ' šablon');
+  const addWdays = el('impWeekDays')?.checked && window._importWeekDays?.length;
+  const addWplans = el('impWeekPlans')?.checked && window._importWeekPlans?.length;
+  if (!toAdd.length && !addWdays && !addWplans) { customAlert('Nic není vybráno.'); return; }
+  if (toAdd.length) { library.push(...toAdd); saveLibrary(); renderLibrary(); }
+  if (addWdays) {
+    (window._importWeekDays || []).forEach(d => {
+      const ex = weekDays.find(w => w.date === d.date);
+      if (ex) { ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; }
+      else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()) });
+    });
+    saveWeek(); renderWeekTab(); renderDayButtons();
+  }
+  if (addWplans) {
+    (window._importWeekPlans || []).forEach(p => {
+      const ex = weekPlans.find(w => w.date === p.date);
+      if (ex) { ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; }
+      else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()) });
+    });
+    saveWeekPlans(); renderWeekTab();
+  }
+  const msgs = [];
+  if (toAdd.length) msgs.push(toAdd.length + ' šablon');
+  if (addWdays) msgs.push((window._importWeekDays || []).length + ' dní');
+  if (addWplans) msgs.push((window._importWeekPlans || []).length + ' plánů');
+  closeModal('importModal'); showSave('↓ importováno: ' + msgs.join(', '));
 }
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────────
@@ -2585,7 +2684,8 @@ function renderPlanRow(p) {
   return `<div class="plan-day-row">
     <span class="week-day-date">${formatDateCz(p.date)}</span>
     <span class="week-day-meta">${blockCount}p${totalDur ? ' · ' + formatDur(totalDur) : ''}</span>
-    <button class="item-del" style="opacity:.4;margin-left:auto" onclick="deleteWeekPlanDay(${p.id})" title="smazat">✕</button>
+    <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="openPreview('weekPlan',${p.id})" title="náhled">náhled</button>
+    <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekPlanDay(${p.id})" title="smazat">✕</button>
   </div>`;
 }
 
@@ -2836,6 +2936,18 @@ function initLibDnd() {
   });
 }
 
+function initBlockTypeDnd() {
+  const container = el('blockTypeList');
+  if (!container) return;
+  initDnd(container, (srcIdx, dstIdx) => {
+    const [moved] = blockTypeOrder.splice(srcIdx, 1);
+    blockTypeOrder.splice(dstIdx, 0, moved);
+    saveBlockTypes();
+    renderBlockTypeList();
+    showSave('↕ bloky přeuspořádány');
+  });
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init() {
   initAutoSave(); initFs(); initDark(); loadPanelFs();
@@ -2885,7 +2997,7 @@ function init() {
   renderLibrary(); renderBlockTypeList(); renderWorkDayPicker(); renderAll(); renderWeekTab(); renderDayButtons();
   if (activeLibId) markSaved();
   updateUndoBtn();
-  initItemDnd(); initLibDnd();
+  initItemDnd(); initLibDnd(); initBlockTypeDnd();
   if (staleArchived) showSave('↓ archivováno: ' + formatDateCz(staleArchived));
   else if (rawSession) showSave('↓ obnoveno');
   setInterval(() => renderTimeline(), 60000);
@@ -2925,7 +3037,9 @@ window.addEventListener('resize', updateAppGrid);
     const its = library.filter(e => exportSelected.has(e.id));
     const archs = archive.filter(e => exportArchSelected.has(e.id));
     if (!its.length && !archs.length) { customAlert('Nic není vybráno.'); return; }
-    const payload = {v:1, items: its, archive: archs};
+    const payload = {v:2, items: its, archive: archs,
+      weekDays: el('expWeekDays')?.checked ? weekDays : [],
+      weekPlans: el('expWeekPlans')?.checked ? weekPlans : []};
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
       const url = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
