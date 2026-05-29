@@ -391,6 +391,9 @@ textarea::placeholder{color:var(--mid)}
       <span class="stat-lbl">Zbývá / Přesah</span><span class="stat-val" id="stat-remain">—</span>
     </div>
 
+    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text" id="workDayPickerTitle">Pracovní dny</span></div>
+    <div id="workDayPicker" style="display:flex;gap:.3rem;margin-top:.2rem"></div>
+
     <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Šablony</span></div>
     <div id="libList" style="display:flex;flex-direction:column;gap:.2rem;margin-top:.3rem"></div>
     <div class="lib-io">
@@ -598,16 +601,11 @@ textarea::placeholder{color:var(--mid)}
 <div class="modal-bg" id="blockEditModal">
   <div class="modal" style="max-width:400px;gap:.65rem;max-height:90vh;overflow-y:auto">
     <h2 id="blockEditTitle">Upravit blok</h2>
-    <div class="setup-grid">
-      <div class="field">
-        <label>Emoji</label>
-        <input type="text" id="blockEditEmoji" placeholder="🆓" style="font-size:1.1rem;text-align:center">
-      </div>
-      <div class="field">
-        <label>Délka (min)</label>
-        <input type="number" id="blockEditDuration" min="5" max="720" step="5">
-      </div>
+    <div class="field" style="max-width:100px">
+      <label>Emoji</label>
+      <input type="text" id="blockEditEmoji" placeholder="🆓" style="font-size:1.1rem;text-align:center">
     </div>
+    <input type="hidden" id="blockEditDuration" value="30">
     <div class="field">
       <label>Název</label>
       <input type="text" id="blockEditLabel" placeholder="Název bloku" onkeydown="if(event.key==='Enter')saveBlockType();if(event.key==='Escape')closeModal('blockEditModal')">
@@ -648,6 +646,7 @@ const LIBRARY_KEY   = 'todo-app-v1-library';
 const ARCHIVE_KEY   = 'todo-app-v1-archive';
 const BLOCKTYPES_KEY  = 'todo-app-v1-blocktypes';
 const WEEKPLANS_KEY   = 'todo-app-v1-weekplans';
+const WORKDAYS_KEY    = 'todo-app-working-days';
 
 // ── BLOCK TYPES ───────────────────────────────────────────────────────────────
 const DEFAULT_BLOCK_TYPES = {
@@ -748,6 +747,7 @@ let autoAdvance = false;
 let highlightedId = null;
 let library = [], activeLibId = null, archive = [];
 let weekPlans = [];
+let workingDaysByWeek = {}; // { 'YYYY-MM-DD': [dayNums] } keyed by Monday ISO date
 let undoStack = [], redoStack = [], savedSnapshot = null;
 let autoSave = false;
 const UNDO_MAX = 40;
@@ -1083,10 +1083,11 @@ function addBlockItem(blockType) {
     eventEnd:   bt.isEvent ? (bt.eventEnd   || null) : null,
     isSubtask: false, done: false, urgent: false,
   });
-  (bt.defaultTasks || []).forEach((task, i) => {
+  const tasks = bt.defaultTasks && bt.defaultTasks.length ? bt.defaultTasks : [{ text: '✒ úkol', duration: bt.defaultDuration || 30 }];
+  tasks.forEach((task, i) => {
     items.push({
       id: Date.now() + Math.random() + (i + 1) * 0.001,
-      text: task.text || '',
+      text: task.text || '✒ úkol',
       blockType, duration: task.duration || 15,
       isEvent: false, eventStart: null, eventEnd: null,
       isSubtask: true, done: false, urgent: false,
@@ -1187,7 +1188,7 @@ function getEffectiveDuration(idx) {
   if (item.isSubtask || item.isEvent) return item.duration;
   let sum = 0;
   for (let j = idx + 1; j < items.length && items[j].isSubtask; j++) {
-    if (!items[j].done) sum += items[j].duration || 0;
+    sum += items[j].duration || 0;
   }
   return sum > 0 ? sum : item.duration;
 }
@@ -1352,6 +1353,17 @@ function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE
 function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
 function loadWeekPlans() { try { weekPlans = JSON.parse(localStorage.getItem(WEEKPLANS_KEY) || '[]'); } catch(e) { weekPlans = []; } }
 function saveWeekPlans() { try { localStorage.setItem(WEEKPLANS_KEY, JSON.stringify(weekPlans)); } catch(e) {} }
+function loadWorkingDays() { try { const s = localStorage.getItem(WORKDAYS_KEY); if (s) workingDaysByWeek = JSON.parse(s); } catch(e) {} }
+function saveWorkingDays() { try { localStorage.setItem(WORKDAYS_KEY, JSON.stringify(workingDaysByWeek)); } catch(e) {} }
+function getMondayIso(weekOffset = 0) {
+  const today = new Date(), dow = today.getDay();
+  const m = new Date(today);
+  m.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + weekOffset * 7);
+  return m.getFullYear() + '-' + String(m.getMonth()+1).padStart(2,'0') + '-' + String(m.getDate()).padStart(2,'0');
+}
+function getWorkingDays(weekOffset = 0) {
+  return workingDaysByWeek[getMondayIso(weekOffset)] || [1, 2, 3, 4, 5];
+}
 
 // ── BLOCK TYPES MANAGEMENT ────────────────────────────────────────────────────
 function loadBlockTypes() {
@@ -1594,16 +1606,24 @@ function openWeekTplLoadModal(entry) {
       `<option value="${iso}">${PLAN_DAY_SHORT[day.getDay()]} · ${day.getDate()}. ${day.getMonth()+1}.</option>`
     ).join('');
   const selectStyle = 'flex:1;font-family:"DM Sans",sans-serif;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.28rem .4rem;background:var(--w);color:var(--black);outline:none;cursor:pointer';
-  el('weekTplDayList').innerHTML = ['Po','Út','St','Čt','Pá'].map((dayKey, i) => {
+  // Build ISO map for all 7 days of the current week (not just working days)
+  const today2 = new Date(), dow2 = today2.getDay();
+  const mon2 = new Date(today2);
+  mon2.setDate(today2.getDate() - (dow2 === 0 ? 6 : dow2 - 1));
+  const dayNumToIso = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mon2); d.setDate(mon2.getDate() + i);
+    const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    dayNumToIso[d.getDay()] = iso;
+  }
+
+  el('weekTplDayList').innerHTML = DAY_ORDER.map((dayKey) => {
     const data = entry.weekData[dayKey];
-    if (!data) return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.83rem;opacity:.4">
-      <span style="min-width:2.5rem;font-weight:500">${dayKey}</span>
-      <span style="color:var(--muted);font-size:.75rem">→</span>
-      <span style="flex:1;color:var(--muted)">prázdný</span>
-    </div>`;
+    if (!data) return '';
     const total = data.items.length;
-    const defaultIso = weekDates[i]?.iso || '';
-    const opts = targetOptions.replace(`value="${defaultIso}"`, `value="${defaultIso}" selected`);
+    const dayNum = DAY_KEY_TO_NUM[dayKey];
+    const defaultIso = dayNumToIso[dayNum] || '';
+    const opts = defaultIso ? targetOptions.replace(`value="${defaultIso}"`, `value="${defaultIso}" selected`) : targetOptions;
     return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.83rem">
       <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${total}×</span></span>
       <span style="color:var(--muted);font-size:.75rem">→</span>
@@ -1612,7 +1632,7 @@ function openWeekTplLoadModal(entry) {
         <svg width="14" height="11" viewBox="0 0 10 8" fill="none" stroke="var(--black)" stroke-width="1.5" stroke-linecap="round"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
       </button>
     </div>`;
-  }).join('');
+  }).filter(Boolean).join('');
   el('weekTplLoadModal').classList.add('open');
 }
 
@@ -1622,8 +1642,9 @@ function doLoadWeekTemplate() {
   autoSavePlanDay();
   pushUndo();
   let loaded = 0;
-  ['Po','Út','St','Čt','Pá'].forEach((dayKey, i) => {
+  DAY_ORDER.forEach((dayKey) => {
     const sel = el('wtl-' + dayKey);
+    if (!sel) return;
     const iso = sel?.value;
     if (!iso) return;
     const tpl = entry.weekData[dayKey];
@@ -2045,7 +2066,7 @@ async function doSelectiveClear() {
   if (el('clr-archive').checked)    toDelete.push('todo-app-v1-archive');
   if (el('clr-week').checked)       toDelete.push('todo-app-v1-week');
   if (el('clr-weekplans').checked)  toDelete.push('todo-app-v1-weekplans');
-  if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs');
+  if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs',WORKDAYS_KEY);
   if (!toDelete.length) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
   if (!await customConfirm('Opravdu smazat vybraná data?', 'smazat')) return;
@@ -2425,6 +2446,48 @@ function toggleDayHotovo(iso, checked) {
   renderWeekTab(); renderDayButtons();
 }
 
+function renderWorkDayPicker() {
+  const container = el('workDayPicker');
+  if (!container) return;
+  const wDays = getWorkingDays(planWeekOffset);
+  const titleEl = el('workDayPickerTitle');
+  if (titleEl) titleEl.textContent = 'Pracovní dny — ' + (planWeekOffset === 0 ? 'tento' : 'příští');
+  const days = [
+    {n:'Po',d:1},{n:'Út',d:2},{n:'St',d:3},{n:'Čt',d:4},{n:'Pá',d:5},{n:'So',d:6},{n:'Ne',d:0}
+  ];
+  container.innerHTML = days.map(({n,d}) => {
+    const active = wDays.includes(d);
+    return `<label style="display:flex;flex-direction:column;align-items:center;gap:.2rem;cursor:pointer;flex:1;min-width:0;user-select:none">
+      <span style="font-size:.7rem;font-weight:500;color:${active ? 'var(--black)' : 'var(--muted)'}">${n}</span>
+      <input type="checkbox" ${active ? 'checked' : ''} style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="toggleWorkingDay(${d},this.checked)">
+    </label>`;
+  }).join('');
+}
+
+function toggleWorkingDay(dayNum, checked) {
+  const key = getMondayIso(planWeekOffset);
+  let wDays = workingDaysByWeek[key] ? [...workingDaysByWeek[key]] : [1, 2, 3, 4, 5];
+  if (checked) {
+    if (!wDays.includes(dayNum)) wDays.push(dayNum);
+  } else {
+    if (wDays.length <= 1) {
+      showStatusMsg('Musí být alespoň 1 pracovní den', 2000);
+      renderWorkDayPicker();
+      return;
+    }
+    wDays = wDays.filter(d => d !== dayNum);
+  }
+  workingDaysByWeek[key] = wDays;
+  saveWorkingDays();
+  renderWorkDayPicker();
+  const currentDates = getCurrentWeekDates(planWeekOffset);
+  if (!currentDates.find(d => d.iso === activePlanDate) && currentDates.length > 0) {
+    switchPlanDay(currentDates[0].iso);
+  } else {
+    renderDayButtons();
+  }
+}
+
 function switchNotesTab(name) {
   const isPlan = name === 'tyden' || name === 'pristi';
   el('pane-tyden')?.classList.toggle('active', isPlan);
@@ -2432,11 +2495,17 @@ function switchNotesTab(name) {
   ['tyden','pristi','hotovo'].forEach(n => el('tab-' + n)?.classList.toggle('active', n === name));
   if (name === 'tyden') {
     planWeekOffset = 0;
-    const currentIsos = new Set(getCurrentWeekDates(0).map(d => d.iso));
-    if (!currentIsos.has(activePlanDate)) switchPlanDay(todayIso());
-    else renderDayButtons();
+    renderWorkDayPicker();
+    const workDates = getCurrentWeekDates(0);
+    const currentIsos = new Set(workDates.map(d => d.iso));
+    if (!currentIsos.has(activePlanDate)) {
+      const todayStr = todayIso();
+      const target = currentIsos.has(todayStr) ? todayStr : (workDates[0]?.iso || todayStr);
+      switchPlanDay(target);
+    } else renderDayButtons();
   } else if (name === 'pristi') {
     planWeekOffset = 1;
+    renderWorkDayPicker();
     const nextDates = getCurrentWeekDates(1);
     const nextIsos = new Set(nextDates.map(d => d.iso));
     if (!nextIsos.has(activePlanDate)) switchPlanDay(nextDates[0].iso);
@@ -2611,9 +2680,9 @@ function toggleWeekExportDay(id, key, checked) {
   if (wkCb) { wkCb.checked = allChecked; wkCb.indeterminate = !allChecked && group.days.some(d => weekExportSelected.has(d.id)); }
 }
 
-function buildDayText(day) {
-  const lines = ['--- ' + formatDateCz(day.date) + ' | ' + day.windowStart + '–' + day.windowEnd + ' ---'];
-  day.items.forEach((item, idx) => {
+function _itemLines(items) {
+  const out = [];
+  items.forEach((item, idx) => {
     const indent = item.isSubtask ? '  ' : '';
     const check  = item.done ? '☑' : (item.isSubtask ? '✒' : '☐');
     let durStr = '';
@@ -2621,13 +2690,29 @@ function buildDayText(day) {
       durStr = ' [' + item.eventStart + '–' + (item.eventEnd || '?') + ']';
     } else if (!item.isSubtask) {
       let sum = 0;
-      for (let j = idx+1; j < day.items.length && day.items[j].isSubtask; j++) sum += day.items[j].duration || 0;
+      for (let j = idx+1; j < items.length && items[j].isSubtask; j++) sum += items[j].duration || 0;
       durStr = ' · ' + formatDur(sum > 0 ? sum : item.duration);
     } else {
       durStr = ' · ' + formatDur(item.duration);
     }
-    lines.push(indent + check + ' ' + item.text + durStr);
+    out.push(indent + check + ' ' + item.text + durStr);
   });
+  return out;
+}
+
+function buildDayText(reality, plan) {
+  const lines = ['--- ' + formatDateCz(reality.date) + ' | ' + reality.windowStart + '–' + reality.windowEnd + ' ---'];
+  if (plan) {
+    const planTotal = plan.items.length;
+    const planDur = plan.items.filter(i => !i.isSubtask).reduce((s, i) => s + (i.duration || 0), 0);
+    lines.push('[plán · ' + planTotal + 'p · ' + formatDur(planDur) + ']');
+    lines.push(..._itemLines(plan.items));
+    const realDone = reality.items.filter(i => i.done).length;
+    lines.push('', '[realita · ' + realDone + '/' + reality.items.length + ' ☑]');
+    lines.push(..._itemLines(reality.items));
+  } else {
+    lines.push(..._itemLines(reality.items));
+  }
   return lines.join('\n');
 }
 
@@ -2646,7 +2731,8 @@ function doExportWeekText() {
       lines.push('=== Týden ' + g.week + ' · ' + g.year + ' ===');
       lastWeekKey = key;
     }
-    lines.push('', buildDayText(day));
+    const plan = weekPlans.find(p => p.date === day.date);
+    lines.push('', buildDayText(day, plan));
   });
   closeModal('weekExportModal');
   el('exportCopyText').value = lines.join('\n');
@@ -2654,19 +2740,21 @@ function doExportWeekText() {
   el('exportCopyModal').classList.add('open');
 }
 
-const PLAN_DAY_SHORT = ['','Po','Út','St','Čt','Pá',''];
+const PLAN_DAY_SHORT = ['Ne','Po','Út','St','Čt','Pá','So'];
+const DAY_ORDER = ['Po','Út','St','Čt','Pá','So','Ne']; // Po→Mon(1)...Ne→Sun(0)
+const DAY_KEY_TO_NUM = {'Po':1,'Út':2,'St':3,'Čt':4,'Pá':5,'So':6,'Ne':0};
 
 function getCurrentWeekDates(weekOffset = 0) {
   const today = new Date();
   const dow = today.getDay();
   const monday = new Date(today);
   monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + weekOffset * 7);
-  return Array.from({length: 5}, (_, i) => {
+  return Array.from({length: 7}, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     return { iso, day: d };
-  });
+  }).filter(({ day }) => getWorkingDays(weekOffset).includes(day.getDay()));
 }
 
 // ── DRAG AND DROP ─────────────────────────────────────────────────────────────
@@ -2751,7 +2839,7 @@ function initLibDnd() {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init() {
   initAutoSave(); initFs(); initDark(); loadPanelFs();
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays();
 
   const today = todayIso();
   activePlanDate = today;
@@ -2794,7 +2882,7 @@ function init() {
     if (todayEntry) applySessionData(todayEntry);
   }
 
-  renderLibrary(); renderBlockTypeList(); renderAll(); renderWeekTab(); renderDayButtons();
+  renderLibrary(); renderBlockTypeList(); renderWorkDayPicker(); renderAll(); renderWeekTab(); renderDayButtons();
   if (activeLibId) markSaved();
   updateUndoBtn();
   initItemDnd(); initLibDnd();
