@@ -1981,7 +1981,7 @@ function _openMenu(menu, html, btn) {
   if (html != null) menu.innerHTML = html;
   menu.style.display = 'flex';
   const br = btn.getBoundingClientRect();
-  menu.style.top = (br.bottom + 4 + window.scrollY) + 'px';
+  menu.style.top = (br.bottom + 4) + 'px';
   requestAnimationFrame(() => {
     const mw = menu.offsetWidth, vw = window.innerWidth;
     let left = br.left;
@@ -2325,7 +2325,7 @@ function toggleNewMenu(e) {
   if (m.style.display === 'flex') { m.style.display = 'none'; return; }
   m.style.display = 'flex';
   const btn = e.currentTarget, br = btn.getBoundingClientRect();
-  m.style.top = (br.bottom + 4 + window.scrollY) + 'px';
+  m.style.top = (br.bottom + 4) + 'px';
   m.style.left = ''; m.style.right = '';
   requestAnimationFrame(() => {
     const mw = m.offsetWidth, vw = window.innerWidth;
