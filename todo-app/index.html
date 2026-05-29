@@ -269,6 +269,8 @@ textarea::placeholder{color:var(--mid)}
 .lib-type-week{border:1.5px solid var(--black);color:var(--black)}
 .lib-type-day{border:1px dashed var(--mid);color:var(--muted)}
 .lib-item.active .lib-type-badge{border-color:var(--w)!important;color:var(--w)!important;border-style:solid!important}
+/* block list names start with emoji — disable line-clamp so they don't clip/overlap */
+#blockTypeList .lib-item-name{display:block;line-height:1.5;word-break:break-word}
 /* ── WEEK TAB ── */
 .week-section{display:flex;flex-direction:column;gap:.15rem}
 .week-sub-hdr{font-size:.65rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.2rem .1rem .1rem;margin-top:.15rem;border-top:1px dashed var(--light)}
