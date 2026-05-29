@@ -1401,10 +1401,6 @@ function loadSession() {
     const d = JSON.parse(s);
     applySessionData(d);
     activeLibId = d.activeLibId || null;
-    if (activeLibId) {
-      const entry = library.find(e => e.id === activeLibId);
-      if (entry) el('headerSub').textContent = entry.name || '';
-    }
     return true;
   } catch(e) { return false; }
 }
@@ -1657,8 +1653,7 @@ function renderLibrary() {
 
   if (hSave) hSave.style.display = isDirty() ? 'inline-flex' : 'none';
   if (hNew) hNew.textContent = '+ uložit den';
-  el('headerSub').style.display = activeLibId ? 'inline' : 'none';
-  el('headerSep').style.display = activeLibId ? 'inline' : 'none';
+  updateHeaderDay();
 }
 
 async function loadLibEntry(id) {
@@ -1671,7 +1666,6 @@ async function loadLibEntry(id) {
   applySessionData(entry.data);
   activeLibId = id;
   markSaved();
-  el('headerSub').textContent = entry.name || '';
   autoSavePlanDay();
   schedSave(); renderLibrary(); renderAll(); renderDayButtons();
 }
@@ -2556,6 +2550,19 @@ function formatDateCz(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return CZ_DAYS[d.getDay()] + ' ' + d.getDate() + '. ' + CZ_MONTHS[d.getMonth()];
 }
+function updateHeaderDay() {
+  const sub = el('headerSub'), sep = el('headerSep');
+  if (!sub || !sep) return;
+  if (activePlanDate) {
+    sub.textContent = formatDateCz(activePlanDate) + (activePlanDate === todayIso() ? ' · dnes' : '');
+    sub.style.display = 'inline';
+    sep.style.display = 'inline';
+  } else {
+    sub.textContent = '';
+    sub.style.display = 'none';
+    sep.style.display = 'none';
+  }
+}
 
 function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WEEK_KEY) || '[]'); } catch(e) { weekDays = []; } }
 function saveWeek()  { try { localStorage.setItem(WEEK_KEY, JSON.stringify(weekDays)); } catch(e) {} }
@@ -2617,7 +2624,6 @@ function switchPlanDay(iso) {
   activePlanDate = iso;
   // a different day is no longer tied to the previously loaded template
   activeLibId = null; savedSnapshot = null;
-  el('headerSub').textContent = '';
   schedSave(); renderAll(); renderDayButtons(); renderWeekTab(); renderLibrary();
 }
 
@@ -2635,6 +2641,7 @@ function renderDayButtons() {
       <label class="day-btn-chk" onclick="event.stopPropagation()"><input type="checkbox" ${isSaved ? 'checked' : ''} onchange="toggleDayHotovo('${iso}',this.checked)"></label>
     </div>`;
   }).join('');
+  updateHeaderDay();
 }
 
 function toggleDayHotovo(iso, checked) {
@@ -3097,10 +3104,6 @@ function init() {
     // Dnešní session → obnovit
     applySessionData(rawSession);
     activeLibId = rawSession.activeLibId || null;
-    if (activeLibId) {
-      const entry = library.find(e => e.id === activeLibId);
-      if (entry) el('headerSub').textContent = entry.name || '';
-    }
   } else {
     // Žádná dnešní session → zkusit weekDays, jinak prázdný start
     const todayEntry = weekDays.find(d => d.date === today);
