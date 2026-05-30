@@ -622,6 +622,7 @@ textarea::placeholder{color:var(--mid)}
     <div id="previewItemList" style="overflow-y:auto;flex:1;min-height:60px;border-top:1.5px solid var(--black);padding-top:.3rem"></div>
     <div class="modal-row">
       <button class="modal-btn" onclick="closeModal('previewModal')">zavřít</button>
+      <button class="modal-btn" onclick="previewToTemplate()" title="uložit jako šablonu (bez odškrtnutí)">+ šablona</button>
       <button class="modal-btn primary" onclick="doPreviewSave()">uložit změny</button>
     </div>
   </div>
@@ -1582,10 +1583,17 @@ async function deleteBlockType(key) {
   showSave('blok smazán');
 }
 
+// Šablony nikdy neobsahují odškrtnuté položky → done resetuj na nesplněno
+function stripDone(items) {
+  return JSON.parse(JSON.stringify(items || [])).map(it => ({ ...it, done: false }));
+}
+
 async function saveToLibrary() {
   const name = await customPrompt('Název šablony:', 'Moje šablona');
   if (!name) return;
-  const entry = { id: Date.now(), name, type: 'day', data: getSessionData() };
+  const data = getSessionData();
+  data.items = stripDone(data.items);
+  const entry = { id: Date.now(), name, type: 'day', data };
   library.push(entry);
   saveLibrary();
   activeLibId = entry.id;
@@ -1603,7 +1611,7 @@ async function saveWeekAsTemplate() {
     const dayKey = PLAN_DAY_SHORT[day.getDay()];
     const wd = weekDays.find(d => d.date === iso);
     if (wd && wd.items.length) {
-      weekData[dayKey] = { items: JSON.parse(JSON.stringify(wd.items)), windowStart: wd.windowStart, windowEnd: wd.windowEnd };
+      weekData[dayKey] = { items: stripDone(wd.items), windowStart: wd.windowStart, windowEnd: wd.windowEnd };
     }
   });
   if (!Object.keys(weekData).length) {
@@ -1621,7 +1629,9 @@ function updateLibraryEntry() {
   if (!activeLibId) return;
   const entry = library.find(e => e.id === activeLibId);
   if (!entry) return;
-  entry.data = getSessionData();
+  const data = getSessionData();
+  data.items = stripDone(data.items);
+  entry.data = data;
   saveLibrary();
   markSaved();
   showSave('✓ šablona aktualizována');
@@ -1952,7 +1962,7 @@ function doPreviewSave() {
   if (type === 'lib') {
     const entry = library.find(e => e.id === id);
     if (!entry) return;
-    entry.data.items = snapshot;
+    entry.data.items = stripDone(snapshot);
     saveLibrary(); renderLibrary();
   } else if (type === 'weekDay') {
     const d = weekDays.find(d => d.id === id);
@@ -1962,7 +1972,7 @@ function doPreviewSave() {
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
-    entry.weekData[dayKey].items = snapshot;
+    entry.weekData[dayKey].items = stripDone(snapshot);
     saveLibrary();
   } else if (type === 'weekPlan') {
     const p = weekPlans.find(p => p.id === id);
@@ -1972,6 +1982,24 @@ function doPreviewSave() {
   }
   closeModal('previewModal');
   showSave('✓ změny uloženy');
+}
+
+// Uloží právě prohlížené položky jako novou denní šablonu (bez odškrtnutí).
+// Náhled zavíráme dřív, než otevřeme prompt — sdílí confirmModal, který by jinak
+// vykreslil pod náhledem (stejný z-index, dřív v DOM).
+async function previewToTemplate() {
+  if (!_previewSource) return;
+  const src = { items: _previewSource.items, windowStart: _previewSource.windowStart,
+    windowEnd: _previewSource.windowEnd, name: _previewSource.name };
+  closeModal('previewModal');
+  const baseName = (src.name || 'Moje šablona').replace(/ · (plán|plan)$/i, '');
+  const name = await customPrompt('Název šablony:', baseName);
+  if (!name) return;
+  const entry = { id: Date.now(), name, type: 'day',
+    data: { items: stripDone(src.items), windowStart: src.windowStart, windowEnd: src.windowEnd, autoAdvance } };
+  library.push(entry);
+  saveLibrary(); renderLibrary();
+  showSave('✓ uloženo do šablon');
 }
 
 async function renameLibEntry(id) {
@@ -2829,6 +2857,7 @@ function renderDayRow(d) {
   return `<div class="week-day-row" style="cursor:default">
     <span class="week-day-date">${formatDateCz(d.date)}</span>
     <span class="week-day-meta">${done}/${total}</span>
+    <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="openPreview('weekDay',${d.id})" title="náhled">náhled</button>
     <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${d.id})" title="smazat z reality">✕</button>
   </div>`;
 }
@@ -2854,11 +2883,33 @@ function renderWeekTab() {
     const realSection = rg
       ? `<div class="week-sub-hdr">Realita</div>${rg.days.map(renderDayRow).join('')}`
       : '';
+    const tplBtn = rg
+      ? `<button class="week-section-sel" style="background:none;border:none;font-family:inherit" onclick="weekGroupToTemplate('${key}')" title="uložit celý týden jako šablonu">+ šablona</button>`
+      : '';
     return `<div class="week-section">
-      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">Týden ${week} &middot; ${year}</div>
+      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">Týden ${week} &middot; ${year}${tplBtn}</div>
       ${planSection}${realSection}
     </div>`;
   }).join('');
+}
+
+// Uloží celý uložený týden (realita) z Hotova jako týdenní šablonu — bez odškrtnutí.
+async function weekGroupToTemplate(key) {
+  const rg = new Map(groupByWeek()).get(key);
+  if (!rg || !rg.days.length) { customAlert('Tento týden nemá v realitě žádné dny.'); return; }
+  const name = await customPrompt('Název týdenní šablony:', 'Týden ' + rg.week + ' · ' + rg.year);
+  if (!name) return;
+  const weekData = {};
+  rg.days.forEach(d => {
+    if (!d.items.length) return;
+    const dayKey = PLAN_DAY_SHORT[new Date(d.date + 'T12:00:00').getDay()];
+    weekData[dayKey] = { items: stripDone(d.items), windowStart: d.windowStart, windowEnd: d.windowEnd };
+  });
+  if (!Object.keys(weekData).length) { customAlert('Žádné dny s položkami.'); return; }
+  const entry = { id: Date.now(), name, type: 'week', weekData };
+  library.push(entry);
+  saveLibrary(); renderLibrary();
+  showSave('✓ týdenní šablona uložena');
 }
 
 // ── EXPORT VÝBĚR ──────────────────────────────────────────────────────────────
