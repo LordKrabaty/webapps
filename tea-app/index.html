@@ -1016,6 +1016,7 @@ const EMPTY_TAG='empty'; // sentinel pro filtr „bez údaje" (PUA znak, neko
 function tagsOf(raw,multi=true){return(multi?String(raw||'').split(','):[String(raw||'')]).map(s=>s.trim()).filter(Boolean)}
 function uniqueTagVals(dataKey,multi=true){const m=new Map();library.forEach(e=>tagsOf(e.data?.[dataKey],multi).forEach(p=>{const k=normTag(p);if(!m.has(k))m.set(k,p)}));return[...m.values()].sort((a,b)=>a.localeCompare(b,'cs'))}
 function tagMatch(raw,filter){if(!filter)return true;const parts=tagsOf(raw,true);if(filter===EMPTY_TAG)return parts.length===0;const nf=normTag(filter);return parts.some(p=>normTag(p)===nf)}
+function tagsEq(a,b){const k=r=>tagsOf(r,true).map(normTag).sort().join('');return k(a)===k(b)} // shoda množin tagů bez ohledu na diakritiku/velikost/pořadí
 const CATEGORIES=['zelený','bílý','DJ FF','oolong','červený / černý','tmavý / pu-erh','bylinkový','ostatní'];
 const CAT_LEGACY={'zelený / dj ff':'zelený','červený / černý':'červený / černý','žlutý':'ostatní'};
 function normCat(v){
@@ -2253,11 +2254,12 @@ function buildSettingsDiff(ed,id_data){
   const diffs=[];
   [{key:'temp',label:'teplota',fmt:v=>v+'°C'},{key:'vesselType',label:'nádoba typ'},{key:'vesselMl',label:'nádoba ml',fmt:v=>v+' ml'},
    {key:'teaAmount',label:'množství',fmt:v=>v+'g'},{key:'teaAmountTsp',label:'lžičky'},{key:'teaCategory',label:'kategorie'},
-   {key:'seller',label:'prodejce'},{key:'location',label:'místo'},
+   {key:'seller',label:'prodejce',eq:tagsEq},{key:'location',label:'místo',eq:tagsEq},
    {key:'rinseSec',label:'oplach',fmt:v=>v+'s'},{key:'rinseTemp',label:'tepl. opláchu',fmt:v=>v+'°C'}
   ].forEach(f=>{
     const eV=String(ed?.[f.key]||'');const iV=String(id_data?.[f.key]||'');
-    if(eV!==iV){const fmt=f.fmt||(v=>v||'—');diffs.push({label:f.label,oldVal:fmt(ed?.[f.key]),newVal:fmt(id_data?.[f.key])});}
+    const same=f.eq?f.eq(ed?.[f.key],id_data?.[f.key]):eV===iV;
+    if(!same){const fmt=f.fmt||(v=>v||'—');diffs.push({label:f.label,oldVal:fmt(ed?.[f.key]),newVal:fmt(id_data?.[f.key])});}
   });
   const eS=(ed?.steeps||[]).length;const iS=(id_data?.steeps||[]).length;
   if(eS!==iS)diffs.push({label:'nálevy',oldVal:eS+'×',newVal:iS+'×'});
