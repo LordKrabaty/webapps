@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>webapps</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --fg: #000000;
+      --mid: #555555;
+      --border: #cccccc;
+      --hover-bg: #000000;
+      --hover-fg: #ffffff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e0e;
+        --fg: #f0f0f0;
+        --mid: #aaaaaa;
+        --border: #444444;
+        --hover-bg: #f0f0f0;
+        --hover-fg: #0e0e0e;
+      }
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "DM Sans", system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    h1 span {
+      font-weight: 300;
+      color: var(--mid);
+    }
+
+    nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    nav a {
+      display: block;
+      padding: 0.9rem 1.25rem;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+    }
+
+    nav a:hover,
+    nav a:focus {
+      background: var(--hover-bg);
+      color: var(--hover-fg);
+      border-color: var(--hover-bg);
+      outline: none;
+    }
+
+    nav a .label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: var(--mid);
+      margin-top: 0.2rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    nav a:hover .label,
+    nav a:focus .label {
+      color: inherit;
+      opacity: 0.65;
+    }
+
+    footer {
+      margin-top: 3rem;
+      font-size: 0.72rem;
+      color: var(--mid);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>Web apps</h2>
+     <h0>works perfectly on pc, mobile and even on e-ink devices</h0>
+  </header>
+
+  <nav>
+    <a href="./tea-app/">
+      Tea App
+      <span class="label">tea session tracker</span>
+    </a>
+    <a href="./todo-app/">
+      Todo App
+      <span class="label">task manager</span>
+    </a>
+  </nav>
+
+  <footer>by LordKrabaty</footer>
+</body>
+</html>
