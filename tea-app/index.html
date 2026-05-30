@@ -822,11 +822,13 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       </div>
       <div class="field">
         <label>prodejce</label>
-        <input type="text" id="teaSeller" placeholder="Pu-erh shop, čajovna…" />
+        <input type="text" id="teaSeller" placeholder="Pu-erh shop, čajovna…" list="sellerOptions" autocomplete="off" />
+        <datalist id="sellerOptions"></datalist>
       </div>
       <div class="field">
         <label>místo</label>
-        <input type="text" id="teaLocation" placeholder="doma, práce…" />
+        <input type="text" id="teaLocation" placeholder="doma, práce…" list="locationOptions" autocomplete="off" />
+        <datalist id="locationOptions"></datalist>
       </div>
       <div class="field">
         <label>množství</label>
@@ -1008,6 +1010,12 @@ function el(id){return document.getElementById(id)}
 function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function parseNum(v){return parseFloat(String(v).replace(',','.'))}
 function normDec(v){return(v||'').toString().replace(',','.')}
+// Tag helpers (prodejce / místo) — diakritika & velikost písmen se ignorují
+function normTag(s){return(s==null?'':String(s)).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
+const EMPTY_TAG='empty'; // sentinel pro filtr „bez údaje" (PUA znak, nekoliduje s daty)
+function tagsOf(raw,multi=true){return(multi?String(raw||'').split(','):[String(raw||'')]).map(s=>s.trim()).filter(Boolean)}
+function uniqueTagVals(dataKey,multi=true){const m=new Map();library.forEach(e=>tagsOf(e.data?.[dataKey],multi).forEach(p=>{const k=normTag(p);if(!m.has(k))m.set(k,p)}));return[...m.values()].sort((a,b)=>a.localeCompare(b,'cs'))}
+function tagMatch(raw,filter){if(!filter)return true;const parts=tagsOf(raw,true);if(filter===EMPTY_TAG)return parts.length===0;const nf=normTag(filter);return parts.some(p=>normTag(p)===nf)}
 const CATEGORIES=['zelený','bílý','DJ FF','oolong','červený / černý','tmavý / pu-erh','bylinkový','ostatní'];
 const CAT_LEGACY={'zelený / dj ff':'zelený','červený / černý':'červený / černý','žlutý':'ostatní'};
 function normCat(v){
@@ -1440,18 +1448,27 @@ function initLibLongPress(){
 }
 function updateDynamicFilter(selId,dataKey,placeholder,multi=false){
   const sel=el(selId);if(!sel)return;
-  const vals=multi
-    ?[...new Set(library.flatMap(e=>(e.data?.[dataKey]||'').split(',').map(s=>s.trim()).filter(Boolean)))].sort((a,b)=>a.localeCompare(b,'cs'))
-    :[...new Set(library.map(e=>e.data?.[dataKey]||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'cs'));
+  const vals=uniqueTagVals(dataKey,multi);
+  const hasEmpty=library.some(e=>!tagsOf(e.data?.[dataKey],multi).length);
   const cur=sel.value;
-  sel.innerHTML=`<option value="">— ${placeholder}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
-  if(vals.includes(cur))sel.value=cur;else sel.value='';
+  let html=`<option value="">— ${placeholder}</option>`;
+  if(hasEmpty&&vals.length)html+=`<option value="${EMPTY_TAG}">— (bez údaje)</option>`;
+  html+=vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  sel.innerHTML=html;
+  sel.value=cur;
+  if(sel.value!==cur)sel.value=vals.find(v=>normTag(v)===normTag(cur))||'';
   sel.classList.toggle('has-options',vals.length>0);
   sel.classList.toggle('active',!!sel.value);
+}
+function fillDatalist(id,dataKey){
+  const dl=el(id);if(!dl)return;
+  dl.innerHTML=uniqueTagVals(dataKey,true).map(v=>`<option value="${esc(v)}"></option>`).join('');
 }
 function updateSellerFilter(){
   updateDynamicFilter('libSellerFilter','seller','prodejce',true);
   updateDynamicFilter('libLocationFilter','location','místo',true);
+  fillDatalist('sellerOptions','seller');
+  fillDatalist('locationOptions','location');
 }
 function renderLibrary(){
   const list=el('libList');
@@ -1461,8 +1478,7 @@ function renderLibrary(){
   const sellerFilter=(el('libSellerFilter')?.value||'');
   const locationFilter=(el('libLocationFilter')?.value||'');
   const items=library.filter(e=>
-    (!sellerFilter||(e.data?.seller||'').split(',').map(s=>s.trim()).includes(sellerFilter))&&
-    (!locationFilter||(e.data?.location||'').split(',').map(s=>s.trim()).includes(locationFilter))
+    tagMatch(e.data?.seller,sellerFilter)&&tagMatch(e.data?.location,locationFilter)
   );
   if(!items.length){list.innerHTML='<div class="lib-empty">'+(sellerFilter||locationFilter?'Žádné čaje odpovídají filtru.':'Zatím žádné čaje.')+'</div>';}
   else if(!libGroupByCat){
