@@ -178,7 +178,9 @@ textarea::placeholder{color:var(--mid)}
 .tl-done .tl-label{text-decoration:line-through}
 .tl-label{pointer-events:none;overflow:hidden;display:inline-block;max-width:100%;box-sizing:border-box;white-space:nowrap;text-overflow:ellipsis;position:relative;z-index:2;padding:0 2px;background-color:inherit}
 .tl-seg-div{position:absolute;top:1px;bottom:1px;width:0;border-left:1px dashed var(--mid);pointer-events:none;z-index:1}
-.tl-seg-label{position:absolute;bottom:1px;z-index:2;font-family:'DM Mono',monospace;font-size:.52rem;line-height:1.1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;padding:0 1px;background-color:inherit}
+.tl-seg-label{position:absolute;top:50%;transform:translateY(-50%);z-index:2;font-family:'DM Mono',monospace;font-size:.52rem;line-height:1.1;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;padding:0 1px;background-color:inherit}
+.tl-seg-time{position:absolute;bottom:0;z-index:2;font-family:'DM Mono',monospace;font-size:.46rem;line-height:1.1;color:var(--mid);white-space:nowrap;pointer-events:none;padding:0 1px;background-color:inherit}
+.tl-seg-time-end{transform:translateX(-100%)}
 .tl-seg-done{text-decoration:line-through;color:var(--mid)}
 .tl-hatch{position:absolute;top:0;bottom:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,transparent 0,transparent 3px,var(--mid) 3px,var(--mid) 4px),repeating-linear-gradient(-45deg,transparent 0,transparent 3px,var(--mid) 3px,var(--mid) 4px)}
 .tl-now-v{position:absolute;top:0;bottom:0;width:1.5px;background:var(--black);z-index:3;pointer-events:none}
@@ -1043,14 +1045,34 @@ function renderTimeline() {
             topEls.push(dv);
           }
 
-          // First-word label — only where the segment actually starts in this row chunk
+          // First-word label — centered in the slice (vertical middle) so it
+          // never collides with the start/end times in the bottom corners
           if (visEnd - segStart > 0 && segStart >= bStart - 0.01) {
             const sl = document.createElement('span');
             sl.className = 'tl-seg-label' + (st.done ? ' tl-seg-done' : '');
-            sl.style.left = 'calc(' + (segStart - bStart) / visSpan * 100 + '% + 2px)';
-            sl.style.maxWidth = 'calc(' + (visEnd - segStart) / visSpan * 100 + '% - 3px)';
+            sl.style.left  = 'calc(' + (segStart - bStart) / visSpan * 100 + '% + 1px)';
+            sl.style.width = 'calc(' + (visEnd - segStart) / visSpan * 100 + '% - 2px)';
             sl.textContent = firstWord(st.text);
             topEls.push(sl);
+          }
+
+          // Start time — bottom-left corner of the slice
+          if (segStart >= bStart - 0.01 && segStart <= bEnd + 0.01) {
+            const ts = document.createElement('span');
+            ts.className = 'tl-seg-time';
+            ts.style.left = 'calc(' + (segStart - bStart) / visSpan * 100 + '% + 1px)';
+            ts.textContent = minToTime(Math.round(segStart));
+            topEls.push(ts);
+          }
+
+          // End time — bottom-right corner; only when the slice is wide enough
+          // that it won't overlap the start time
+          if (segEnd <= bEnd + 0.01 && segEnd >= bStart - 0.01 && segEnd - segStart >= 20) {
+            const te = document.createElement('span');
+            te.className = 'tl-seg-time tl-seg-time-end';
+            te.style.left = 'calc(' + (segEnd - bStart) / visSpan * 100 + '% - 1px)';
+            te.textContent = minToTime(Math.round(segEnd));
+            topEls.push(te);
           }
         });
         div.title = item.text + '\n• ' + subs.map(s => s.text).join('\n• ');
