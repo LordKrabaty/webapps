@@ -175,9 +175,12 @@ textarea::placeholder{color:var(--mid)}
 .tl-TASK{background:var(--w);border:1px solid var(--mid)}
 .tl-is-event{border-left:4px solid var(--black)!important;border-left-style:solid!important}
 .tl-urgent{border-width:3px!important;font-weight:bold}
-.tl-done{opacity:.4}
 .tl-done .tl-label{text-decoration:line-through}
 .tl-label{pointer-events:none;overflow:hidden;display:block;white-space:nowrap;text-overflow:ellipsis}
+.tl-seg-div{position:absolute;top:1px;bottom:1px;width:0;border-left:1px dashed var(--mid);pointer-events:none;z-index:1}
+.tl-seg-label{position:absolute;bottom:1px;font-family:'DM Mono',monospace;font-size:.52rem;line-height:1.1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.tl-seg-done{text-decoration:line-through;opacity:.55}
+.tl-hatch{position:absolute;top:0;bottom:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,transparent 0,transparent 3px,var(--mid) 3px,var(--mid) 4px),repeating-linear-gradient(-45deg,transparent 0,transparent 3px,var(--mid) 3px,var(--mid) 4px)}
 .tl-now-v{position:absolute;top:0;bottom:0;width:1.5px;background:var(--black);z-index:3;pointer-events:none}
 .tl-now-v::before{content:'';position:absolute;top:-1px;left:-2px;width:5px;height:5px;border-radius:50%;background:var(--black)}
 
@@ -881,7 +884,7 @@ function computeTimeline() {
     const item = items[i], dur = getEffectiveDuration(i);
     const s = timeToMin(item.eventStart);
     const e = item.eventEnd ? timeToMin(item.eventEnd) : s + dur;
-    return { item, startMin: s, endMin: e, fixed: true };
+    return { item, startMin: s, endMin: e, fixed: true, subs: getSubtasks(i) };
   }).sort((a, b) => a.startMin - b.startMin);
 
   const result = [];
@@ -899,7 +902,7 @@ function computeTimeline() {
         }
       }
     }
-    result.push({ item, startMin: cursor, endMin: cursor + dur, fixed: false });
+    result.push({ item, startMin: cursor, endMin: cursor + dur, fixed: false, subs: getSubtasks(i) });
     cursor += dur;
   });
 
@@ -954,7 +957,7 @@ function renderTimeline() {
     }
 
     // Blocks intersecting this row
-    blocks.forEach(({ item, startMin, endMin }) => {
+    blocks.forEach(({ item, startMin, endMin, subs }) => {
       const bStart = Math.max(startMin, rowStart);
       const bEnd   = Math.min(endMin, rowEnd);
       if (bStart >= rowEnd || bEnd <= rowStart) return;
@@ -983,7 +986,63 @@ function renderTimeline() {
       if (isContinued) label = '↩ ' + label;
       if (label.length > 24) label = label.slice(0, 22) + '…';
       span.textContent = label;
+
+      // Subtask sub-segments: done fill (bottom layer) + dashed dividers + first-word labels (top)
+      const blockSpan = endMin - startMin;
+      const totalSub  = subs && subs.length ? subs.reduce((s, st) => s + (st.duration || 0), 0) : 0;
+      const topEls = [];
+      if (totalSub > 0 && blockSpan > 0) {
+        const visSpan = bEnd - bStart;
+        let acc = 0;
+        subs.forEach((st, si) => {
+          const segStart = startMin + acc / totalSub * blockSpan;
+          acc += st.duration || 0;
+          const segEnd = startMin + acc / totalSub * blockSpan;
+          const visStart = Math.max(segStart, bStart);
+          const visEnd   = Math.min(segEnd, bEnd);
+
+          // Done subtask → cross-hatch its slice of the block (painted under the labels)
+          if (st.done && visEnd - visStart > 0.01) {
+            const fill = document.createElement('div');
+            fill.className = 'tl-hatch';
+            fill.style.left  = (visStart - bStart) / visSpan * 100 + '%';
+            fill.style.width = (visEnd - visStart) / visSpan * 100 + '%';
+            div.appendChild(fill);
+          }
+
+          // Dashed divider before every segment except the first
+          if (si > 0 && segStart > bStart + 0.01 && segStart < bEnd - 0.01) {
+            const dv = document.createElement('div');
+            dv.className = 'tl-seg-div';
+            dv.style.left = (segStart - bStart) / visSpan * 100 + '%';
+            topEls.push(dv);
+          }
+
+          // First-word label — only where the segment actually starts in this row chunk
+          if (visEnd - segStart > 0 && segStart >= bStart - 0.01) {
+            const sl = document.createElement('span');
+            sl.className = 'tl-seg-label' + (st.done ? ' tl-seg-done' : '');
+            sl.style.left = 'calc(' + (segStart - bStart) / visSpan * 100 + '% + 2px)';
+            sl.style.maxWidth = 'calc(' + (visEnd - segStart) / visSpan * 100 + '% - 3px)';
+            sl.textContent = firstWord(st.text);
+            topEls.push(sl);
+          }
+        });
+        div.title = item.text + '\n• ' + subs.map(s => s.text).join('\n• ');
+      } else {
+        div.title = item.text;
+        // Done block without subtasks → cross-hatch the whole visible block
+        if (item.done) {
+          const hatch = document.createElement('div');
+          hatch.className = 'tl-hatch';
+          hatch.style.left = '0';
+          hatch.style.right = '0';
+          div.appendChild(hatch);
+        }
+      }
+
       div.appendChild(span);
+      topEls.forEach(e => div.appendChild(e));
 
       div.addEventListener('click', () => highlightItem(item.id));
       content.appendChild(div);
@@ -1266,6 +1325,17 @@ function getEffectiveDuration(idx) {
     sum += items[j].duration || 0;
   }
   return sum > 0 ? sum : item.duration;
+}
+
+function getSubtasks(idx) {
+  const subs = [];
+  for (let j = idx + 1; j < items.length && items[j].isSubtask; j++) subs.push(items[j]);
+  return subs;
+}
+
+function firstWord(text) {
+  const t = (text || '').trim();
+  return t ? t.split(/\s+/)[0] : '';
 }
 
 function parseDuration(text) {
