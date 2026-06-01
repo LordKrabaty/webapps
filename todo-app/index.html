@@ -855,6 +855,7 @@ function parseItemText(raw) {
     const labelUpper = (bt.label || '').toUpperCase();
     if ((bt.emoji && text.includes(bt.emoji)) || (labelUpper && text.toUpperCase().includes(labelUpper))) {
       blockType = key;
+      if (bt.emoji) text = text.split(bt.emoji).join('').trim();  // don't keep emoji in text (rendered separately)
       if (!duration && !isEvent) duration = bt.defaultDuration;
       break;
     }
@@ -982,7 +983,7 @@ function renderTimeline() {
 
       const span = document.createElement('span');
       span.className = 'tl-label';
-      let label = (btInfo.emoji ? btInfo.emoji + ' ' : '') + item.text;
+      let label = (btInfo.emoji ? btInfo.emoji + ' ' : '') + stripBlockEmoji(item.text, btInfo);
       if (isContinued) label = '↩ ' + label;
       if (label.length > 24) label = label.slice(0, 22) + '…';
       span.textContent = label;
@@ -1108,7 +1109,7 @@ function renderItemList() {
     return `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
       <span class="item-toggle" onclick="toggleDone(${idx})" title="hotovo">${toggle}</span>
       ${emoji}
-      <span class="item-text" onclick="startEdit(${idx})">${esc(item.text)}</span>
+      <span class="item-text" onclick="startEdit(${idx})">${esc(isBlock ? stripBlockEmoji(item.text, btInfo) : item.text)}</span>
       ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
       <button class="item-move" onclick="moveItem(${idx},-1)" title="nahoru" ${idx===0?'disabled':''}>↑</button>
       <button class="item-move" onclick="moveItem(${idx},1)" title="dolů" ${idx===items.length-1?'disabled':''}>↓</button>
@@ -1180,7 +1181,7 @@ function addBlockItem(blockType) {
   pushUndo();
   items.push({
     id: Date.now() + Math.random(),
-    text: bt.emoji ? bt.emoji + ' ' + bt.label : bt.label,
+    text: bt.label,
     blockType, duration: bt.defaultDuration,
     isEvent: !!bt.isEvent,
     eventStart: bt.isEvent ? (bt.eventStart || null) : null,
@@ -1336,6 +1337,16 @@ function getSubtasks(idx) {
 function firstWord(text) {
   const t = (text || '').trim();
   return t ? t.split(/\s+/)[0] : '';
+}
+
+// Remove a leading block-type emoji from the stored text so it isn't rendered twice
+// (the renderers add btInfo.emoji separately). Handles legacy data that baked it in.
+function stripBlockEmoji(text, btInfo) {
+  const e = btInfo && btInfo.emoji;
+  if (!e) return text;
+  let t = text || '';
+  while (t.startsWith(e)) t = t.slice(e.length).replace(/^\s+/, '');
+  return t;
 }
 
 function parseDuration(text) {
@@ -1890,11 +1901,15 @@ function renderPreviewList() {
     let durTxt;
     if (item.isEvent && item.eventStart) durTxt = item.eventStart + '–' + (item.eventEnd || '?');
     else durTxt = formatDur(item.duration);
+    const pbt = BLOCK_TYPES[item.blockType] || BLOCK_TYPES.TASK;
+    const ptext = !item.isSubtask && pbt.emoji
+      ? pbt.emoji + ' ' + stripBlockEmoji(item.text, pbt)
+      : item.text;
     return `<div class="preview-item${item.isSubtask ? ' subtask' : ' block'}">
       <input type="checkbox" class="preview-item-chk" ${item.done ? 'checked' : ''}
         onchange="togglePreviewDone(${i},this.checked)">
       <span class="preview-item-text${item.done ? ' done' : ''}"
-        onclick="startPreviewEdit(${i},this)">${esc(item.text)}</span>
+        onclick="startPreviewEdit(${i},this)">${esc(ptext)}</span>
       <span class="preview-item-dur" onclick="startPreviewDurEdit(${i},this)" title="upravit čas">${durTxt}</span>
       <div class="preview-item-move">
         <button onclick="movePreviewItem(${i},-1)" ${i===0?'disabled':''}>▲</button>
