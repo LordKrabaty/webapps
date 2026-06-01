@@ -34,6 +34,10 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 @media(hover:hover){.btn-sync:hover{background:var(--light)}}
 .btn-sync:active{background:var(--light)}
 .btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync.on{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.btn-sync.on:hover{background:var(--dark)}}
+.btn-sync.syncing{animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:.3}}
 .btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
 @media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
 #statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
@@ -345,6 +349,7 @@ textarea::placeholder{color:var(--mid)}
       <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (JSONBin)">↑</button>
       <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
       <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (JSONBin)">☁</button>
       <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
     </div>
     <div class="fs-ctrl" title="velikost písma">
@@ -2376,7 +2381,7 @@ function showStatusMsg(msg, duration=2200) {
 function showSave(msg='✓ uloženo') { showStatusMsg(msg, 2200); }
 function schedSave() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => { saveSession(); showSave(); }, 300);
+  saveT = setTimeout(() => { saveSession(); showSave(); if (window.autoSyncOnSave) window.autoSyncOnSave(); }, 300);
 }
 
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────────
@@ -3241,12 +3246,11 @@ function _itemLines(items) {
 function buildDayText(reality, plan) {
   const lines = ['--- ' + formatDateCz(reality.date) + ' | ' + reality.windowStart + '–' + reality.windowEnd + ' ---'];
   if (plan) {
-    const planTotal = plan.items.length;
-    const planDur = plan.items.filter(i => !i.isSubtask).reduce((s, i) => s + (i.duration || 0), 0);
-    lines.push('[plán · ' + planTotal + 'p · ' + formatDur(planDur) + ']');
+    const planMin = dayTotalMinutes(plan.items);
+    lines.push('[plán · ' + formatDur(planMin) + ' · ' + plan.items.length + 'p]');
     lines.push(..._itemLines(plan.items));
-    const realDone = reality.items.filter(i => i.done).length;
-    lines.push('', '[realita · ' + realDone + '/' + reality.items.length + ' ☑]');
+    const { done: rDone, total: rTotal } = dayTimeSplit(reality.items);
+    lines.push('', '[realita · ' + (rDone ? formatDur(rDone) : '0') + '/' + formatDur(rTotal) + ' ☑]');
     lines.push(..._itemLines(reality.items));
   } else {
     lines.push(..._itemLines(reality.items));
@@ -3528,6 +3532,11 @@ window.addEventListener('resize', updateAppGrid);
       const json = await res.json();
       let record = json.record;
       if (typeof record !== 'object' || record === null) return;
+      // AUTOSYNC: tichý obousměrný merge (vč. mazání) — kompletní porovnání stavu
+      if (autosyncEnabled()) {
+        if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
+        return;
+      }
       const cloudItems = record.items || record.teas || [];
       const cloudArch  = record.archive || [];
       const cloudInbox = record.inbox || [];
@@ -3542,11 +3551,240 @@ window.addEventListener('resize', updateAppGrid);
       showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
     } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
   }
+
+  /* ── AUTOSYNC (tichá obousměrná synchronizace) ─── */
+  const ASKEY = 'todo-app-autosync';
+  const PUSH_MIN_INTERVAL = 10000;            // max 1 push / 10 s
+  let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null;
+  let applyingRemote = false;   // true během tichého mergeu → potlačí save-hook (žádná rekurze)
+
+  function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
+  function hasKeys() { try { return !!(localStorage.getItem(JBKEY) && localStorage.getItem(JBID)); } catch(e) { return false; } }
+
+  // ── TOMBSTONES (propagace mazání mezi zařízeními) ───────────────────────────
+  const TOMB_KEY  = 'todo-app-tombstones';   // { "<ns>:<id>": deletedAtTs }
+  const KNOWN_KEY = 'todo-app-syncknown';    // [ "<ns>:<id>", … ] stav z minulé reconcile
+  const TOMB_TTL  = 90 * 864e5;              // náhrobky starší než 90 dní zahodit
+  let tombstones = {};
+  let knownIds = null;                        // null = ještě nesledováno
+  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(TOMB_KEY) || '{}') || {}; } catch(e) { tombstones = {}; } }
+  function saveTombstones() { try { localStorage.setItem(TOMB_KEY, JSON.stringify(tombstones)); } catch(e) {} }
+  function loadKnownIds()   { try { const s = localStorage.getItem(KNOWN_KEY); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
+  function saveKnownIds()   { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...(knownIds || [])])); } catch(e) {} }
+  function isTombstoned(key) { return !!tombstones[key]; }
+  // množina "<ns>:<id>" všech aktuálně existujících položek
+  function currentKeySet() {
+    const s = new Set();
+    library.forEach(e   => { if (e && e.id   != null) s.add('lib:' + e.id); });
+    archive.forEach(e   => { if (e && e.id   != null) s.add('arc:' + e.id); });
+    inbox.forEach(it    => { if (it && it.id != null) s.add('inb:' + it.id); });
+    weekDays.forEach(d  => { if (d && d.date)         s.add('wd:'  + d.date); });
+    weekPlans.forEach(p => { if (p && p.date)         s.add('wp:'  + p.date); });
+    Object.keys(BLOCK_TYPES).forEach(k => { if (!DEFAULT_BLOCK_TYPES[k]) s.add('bt:' + k); });
+    return s;
+  }
+  function pruneTombstones() {
+    const cutoff = Date.now() - TOMB_TTL;
+    Object.keys(tombstones).forEach(k => { if (!(tombstones[k] > cutoff)) delete tombstones[k]; });
+  }
+  // diff aktuálního stavu proti poslednímu známému → mazání zapíše jako náhrobek
+  function reconcileTombstones() {
+    const cur = currentKeySet(), now = Date.now();
+    if (knownIds) knownIds.forEach(k => { if (!cur.has(k)) tombstones[k] = now; });
+    cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // existuje ⇒ žije
+    knownIds = cur;
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+  }
+  function mergeCloudTombstones(cloudTomb) {
+    if (!cloudTomb || typeof cloudTomb !== 'object') return;
+    Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
+  }
+  // odstraní lokálně vše, co má náhrobek (mazání provedené na jiném zařízení)
+  function applyTombstones() {
+    let removed = 0, btChanged = false;
+    const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
+    library   = sweep('lib', x => x.id)(library);
+    archive   = sweep('arc', x => x.id)(archive);
+    inbox     = sweep('inb', x => x.id)(inbox);
+    weekDays  = sweep('wd',  x => x.date)(weekDays);
+    weekPlans = sweep('wp',  x => x.date)(weekPlans);
+    Object.keys(tombstones).forEach(k => {
+      if (k.slice(0, 3) === 'bt:') {
+        const key = k.slice(3);
+        if (BLOCK_TYPES[key] && !DEFAULT_BLOCK_TYPES[key]) { delete BLOCK_TYPES[key]; blockTypeOrder = blockTypeOrder.filter(x => x !== key); removed++; btChanged = true; }
+      }
+    });
+    if (btChanged) { saveBlockTypes(); renderBlockTypeList(); }
+    return removed;
+  }
+  // souhrnný podpis stavu (vč. náhrobků) pro detekci rozdílu cloud↔local
+  function sigOf(items, arch, inb, wd, wp, tomb) {
+    const idS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
+    const inS = arr => arr.map(x => String((x && x.id) || '') + '~' + String((x && x.text) || '')).sort().join('|') + ':' + arr.length;
+    const dS  = arr => arr.map(x => String((x && x.date) || '')).sort().join(',') + ':' + arr.length;
+    const tS  = o => Object.keys(o || {}).sort().join(',');
+    return [idS(items), idS(arch), inS(inb), dS(wd), dS(wp), tS(tomb)].join('||');
+  }
+  function localSig() { return sigOf(library, archive, inbox, weekDays, weekPlans, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.inbox || [], r.weekDays || [], r.weekPlans || [], r.tombstones || {}); }
+
+  // tlačítko v toolbaru slouží zároveň jako stavový indikátor
+  function updateAutoSyncBtn() {
+    const b = el('autoSyncBtn'); if (!b) return;
+    const on = autosyncEnabled();
+    b.classList.toggle('on', on);
+    if (!b.classList.contains('syncing')) b.textContent = '☁';
+    b.title = on ? 'automatická synchronizace zapnutá — klikni pro vypnutí'
+                 : 'zapnout automatickou synchronizaci (JSONBin)';
+  }
+  function setSyncState(state) {
+    const b = el('autoSyncBtn'); if (!b) return;
+    clearTimeout(stateTimer);
+    b.classList.remove('syncing');
+    if (state === 'syncing')  { b.textContent = '↑'; b.classList.add('syncing'); }       // probíhá push (blik)
+    else if (state === 'ok')  { b.textContent = '☁'; stateTimer = setTimeout(updateAutoSyncBtn, 3000); } // OK 3 s
+    else if (state === 'err') { b.textContent = '⚠'; stateTimer = setTimeout(updateAutoSyncBtn, 5000); } // chyba 5 s
+    else updateAutoSyncBtn();
+  }
+  function toggleAutoSync() {
+    const on = !autosyncEnabled();
+    try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
+    updateAutoSyncBtn();
+    if (on && !hasKeys()) { showStatusMsg('⚠ nejdřív nastav JSONBin přes ⚙ a jednou nahraj přes ↑', 4500); return; }
+    if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
+  }
+
+  // payload jako doCloudUpload s "vybrat vše": celá library + archive + weekDays + weekPlans + inbox + settings
+  function buildAutoPayload() {
+    const payload = { v:2, items: library, archive: archive, weekDays: weekDays, weekPlans: weekPlans, settings: buildSettingsExport(), tombstones: tombstones };
+    if (inbox.length) payload.inbox = inbox;
+    return payload;
+  }
+  function scheduleAutoPush() {
+    if (!autosyncEnabled() || !hasKeys()) return;
+    if (pushTimer) return;        // už naplánováno → coalesce
+    const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs));
+    pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
+  }
+  async function doAutoPush() {
+    if (!autosyncEnabled() || !hasKeys()) return;
+    if (pushing) { pushAgain = true; return; }
+    const key = localStorage.getItem(JBKEY), binId = localStorage.getItem(JBID);
+    if (!key || !binId) return;
+    pushing = true; setSyncState('syncing');
+    try {
+      const res = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
+        method:'PUT', mode:'cors', credentials:'omit',
+        headers:{'Content-Type':'application/json','X-Master-Key':key},
+        body: JSON.stringify(buildAutoPayload())
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      lastPushTs = Date.now(); setSyncState('ok');
+    } catch(e) {
+      console.warn('[autosync] push selhal:', (e && e.message) ? e.message : e);
+      setSyncState('err');
+    } finally {
+      pushing = false;
+      if (pushAgain) { pushAgain = false; scheduleAutoPush(); }
+    }
+  }
+
+  // tichý obousměrný merge cloud → local:
+  //  1) sjednotí náhrobky  2) aplikuje mazání  3) přidá jen chybějící a NE-náhrobkované položky
+  function autoImportSilent(record) {
+    if (!record || typeof record !== 'object') return;
+    applyingRemote = true;
+    try {
+    mergeCloudTombstones(record.tombstones);
+    let removed = applyTombstones();
+    let added = 0;
+    const libIds = new Set(library.map(x => String(x.id)));
+    (record.items || record.teas || []).forEach(it => {
+      if (it && it.id != null && !libIds.has(String(it.id)) && !isTombstoned('lib:' + it.id)) { library.push(it); libIds.add(String(it.id)); added++; }
+    });
+    const arcIds = new Set(archive.map(x => String(x.id)));
+    (record.archive || []).forEach(it => {
+      if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
+    });
+    const wdDates = new Set(weekDays.map(x => x.date));
+    (record.weekDays || []).forEach(d => {
+      if (d && d.date && !wdDates.has(d.date) && !isTombstoned('wd:' + d.date)) { weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()) }); wdDates.add(d.date); added++; }
+    });
+    const wpDates = new Set(weekPlans.map(x => x.date));
+    (record.weekPlans || []).forEach(p => {
+      if (p && p.date && !wpDates.has(p.date) && !isTombstoned('wp:' + p.date)) { weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()) }); wpDates.add(p.date); added++; }
+    });
+    const inSig = new Set(inbox.map(x => String(x.id) + '~' + String(x.text || '')));
+    (record.inbox || []).forEach(it => {
+      if (it && it.text && !isTombstoned('inb:' + it.id)) {
+        const sig = String(it.id) + '~' + String(it.text);
+        if (!inSig.has(sig)) {
+          inbox.push({ id: it.id != null ? it.id : (String(Date.now()) + Math.random().toString(36).slice(2,6)), text: it.text });
+          inSig.add(sig); added++;
+        }
+      }
+    });
+    const s = record.settings;
+    if (s && Array.isArray(s.blockTypes) && s.blockTypes.length) {
+      let btAdded = false;
+      s.blockTypes.forEach(bt => {
+        if (bt.key && !BLOCK_TYPES[bt.key] && !isTombstoned('bt:' + bt.key)) {
+          BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key, defaultDuration: bt.defaultDuration || 15,
+            isEvent: !!bt.isEvent, eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [] };
+          if (!blockTypeOrder.includes(bt.key)) blockTypeOrder.push(bt.key);
+          btAdded = true; added++;
+        }
+      });
+      if (btAdded) { saveBlockTypes(); renderBlockTypeList(); }
+    }
+    if (s && s.workingDaysByWeek) {
+      let wdwAdded = false;
+      Object.entries(s.workingDaysByWeek).forEach(([k, v]) => { if (!(k in workingDaysByWeek)) { workingDaysByWeek[k] = v; wdwAdded = true; } });
+      if (wdwAdded) { saveWorkingDays(); if (typeof renderWorkDayPicker === 'function') renderWorkDayPicker(); }
+    }
+    if (added || removed) {
+      saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans();
+      if (typeof saveInbox === 'function') saveInbox();
+      if (typeof renderLibrary === 'function') renderLibrary();
+      if (typeof renderAll === 'function') renderAll();
+      if (typeof renderWeekTab === 'function') renderWeekTab();
+      if (typeof renderDayButtons === 'function') renderDayButtons();
+      if (typeof renderInbox === 'function') renderInbox();
+      const parts = [];
+      if (added)   parts.push('+' + added);
+      if (removed) parts.push('−' + removed);
+      showStatusMsg('☁ sync ' + parts.join(' '), 3000);
+    }
+    // srovnej baseline na nový stav a ulož náhrobky
+    knownIds = currentKeySet();
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+    } finally { applyingRemote = false; }
+  }
+
+  // hook po každé perzistenci: zaznamenej mazání (náhrobky) a naplánuj push
+  function autoSyncOnSave() {
+    if (applyingRemote) return;      // změny z mergeu nesmí spustit reconcile/push
+    if (!hasKeys()) return;          // bez nastaveného JSONBinu není co sledovat
+    reconcileTombstones();
+    if (autosyncEnabled()) scheduleAutoPush();
+  }
+
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
   window.doCloudUpload        = doCloudUpload;
   window.syncDownload         = syncDownload;
   window.checkCloudOnStartup  = checkCloudOnStartup;
+  window.toggleAutoSync       = toggleAutoSync;
+  window.autoSyncOnSave       = autoSyncOnSave;     // hook volaný z schedSave()
+  loadTombstones(); loadKnownIds();
+  // obal perzistentní save-funkce, aby i mazání mimo schedSave (inbox, bloky, plány…) spustilo sync
+  ['saveInbox','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive'].forEach(fn => {
+    const orig = window[fn];
+    if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
+  });
+  updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
 </script>
