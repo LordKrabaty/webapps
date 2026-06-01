@@ -176,7 +176,7 @@ textarea::placeholder{color:var(--mid)}
 .tl-is-event{border-left:4px solid var(--black)!important;border-left-style:solid!important}
 .tl-urgent{border-width:3px!important;font-weight:bold}
 .tl-done .tl-label{text-decoration:line-through}
-.tl-label{pointer-events:none;overflow:hidden;display:block;white-space:nowrap;text-overflow:ellipsis}
+.tl-label{pointer-events:none;overflow:hidden;display:inline-block;max-width:100%;box-sizing:border-box;white-space:nowrap;text-overflow:ellipsis;position:relative;z-index:2;padding:0 2px;background-color:inherit}
 .tl-seg-div{position:absolute;top:1px;bottom:1px;width:0;border-left:1px dashed var(--mid);pointer-events:none;z-index:1}
 .tl-seg-label{position:absolute;bottom:1px;font-family:'DM Mono',monospace;font-size:.52rem;line-height:1.1;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 .tl-seg-done{text-decoration:line-through;opacity:.55}
