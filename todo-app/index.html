@@ -285,6 +285,8 @@ textarea::placeholder{color:var(--mid)}
 .lib-type-week{border:1.5px solid var(--black);color:var(--black)}
 .lib-type-day{border:1px dashed var(--mid);color:var(--muted)}
 .lib-item.active .lib-type-badge{border-color:var(--w)!important;color:var(--w)!important;border-style:solid!important}
+.lib-item-time{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
+.lib-item.active .lib-item-time{color:var(--w);opacity:.7}
 /* block list names start with emoji — disable line-clamp so they don't clip/overlap */
 #blockTypeList .lib-item-name{display:block;line-height:1.5;word-break:break-word}
 /* scrollable flex column would shrink rows below natural height → text overlap; keep them */
@@ -1375,6 +1377,39 @@ function getEffectiveDuration(idx) {
   return sum > 0 ? sum : item.duration;
 }
 
+// Naplánovaný + splněný čas (min) pro libovolné pole položek — blok se subtasky
+// počítá jako součet subtasků, jinak vlastní duration (stejně jako timeline).
+// Splněno = u bloků se subtasky součet hotových subtasků, jinak celá duration.
+function dayTimeSplit(arr) {
+  let total = 0, done = 0;
+  if (!arr || !arr.length) return { total, done };
+  for (let i = 0; i < arr.length; i++) {
+    const it = arr[i];
+    if (it.isSubtask) continue;
+    if (it.isEvent) {
+      const d = it.duration || 0;
+      total += d; if (it.done) done += d;
+      continue;
+    }
+    let subSum = 0, subDone = 0, hasSub = false;
+    for (let j = i + 1; j < arr.length && arr[j].isSubtask; j++) {
+      hasSub = true;
+      const sd = arr[j].duration || 0;
+      subSum += sd;
+      if (arr[j].done) subDone += sd;
+    }
+    if (hasSub && subSum > 0) {
+      total += subSum; done += subDone;
+    } else {
+      const d = it.duration || 0;
+      total += d; if (it.done) done += d;
+    }
+  }
+  return { total, done };
+}
+
+function dayTotalMinutes(arr) { return dayTimeSplit(arr).total; }
+
 function getSubtasks(idx) {
   const subs = [];
   for (let j = idx + 1; j < items.length && items[j].isSubtask; j++) subs.push(items[j]);
@@ -1780,12 +1815,17 @@ function renderLibrary() {
       const typeBadge = isWeek
         ? `<span class="lib-type-badge lib-type-week">${weekDayCount}d</span>`
         : `<span class="lib-type-badge lib-type-day">1d</span>`;
+      const totalMin = isWeek
+        ? Object.values(entry.weekData || {}).reduce((s, d) => s + dayTotalMinutes(d?.items), 0)
+        : dayTotalMinutes(entry.data?.items);
+      const timeBadge = totalMin ? `<span class="lib-item-time">${formatDur(totalMin)}</span>` : '';
       const prevBtn = !isWeek ? `<button class="lib-item-prev" onclick="event.stopPropagation();openPreview('lib',${entry.id})" title="náhled">
         <svg viewBox="0 0 10 8"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
       </button>` : '';
       return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="${isWeek ? 'false' : 'true'}" onclick="loadLibEntry(${entry.id})">
         ${typeBadge}
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
+        ${timeBadge}
         ${prevBtn}
         <button class="lib-item-edit" onclick="event.stopPropagation();renameLibEntry(${entry.id})" title="přejmenovat">
           <svg viewBox="0 0 12 12"><path d="M8 1.5l2.5 2.5-6 6H2v-2.5z"/></svg>
@@ -2935,15 +2975,15 @@ function switchPlanDay(iso) {
 function renderDayButtons() {
   const container = el('day-buttons');
   if (!container) return;
-  const countByDate = {};
-  weekDays.forEach(d => { countByDate[d.date] = d.items.length; });
+  const minsByDate = {};
+  weekDays.forEach(d => { minsByDate[d.date] = dayTotalMinutes(d.items); });
   container.innerHTML = getCurrentWeekDates(planWeekOffset).map(({ iso, day }) => {
     const dayShort = PLAN_DAY_SHORT[day.getDay()];
     const dateStr = day.getDate() + '. ' + (day.getMonth() + 1) + '.';
     const isActive = iso === activePlanDate;
-    const count = countByDate[iso] || 0;
+    const mins = minsByDate[iso] || 0;
     return `<div class="day-btn-wrap${isActive ? ' active' : ''}" onclick="switchPlanDay('${iso}')">
-      <span class="day-btn-label"><span>${dayShort}</span><small>${dateStr}</small>${count ? `<small class="day-btn-count">${count} pol.</small>` : ''}</span>
+      <span class="day-btn-label"><span>${dayShort}</span><small>${dateStr}</small>${mins ? `<small class="day-btn-count">${formatDur(mins)}</small>` : ''}</span>
     </div>`;
   }).join('');
   updateHeaderDay();
@@ -3074,10 +3114,10 @@ function renderPlanRow(p) {
 }
 
 function renderDayRow(d) {
-  const done = d.items.filter(i => i.done).length, total = d.items.length;
+  const { done, total } = dayTimeSplit(d.items);
   return `<div class="week-day-row" style="cursor:default">
     <span class="week-day-date">${formatDateCz(d.date)}</span>
-    <span class="week-day-meta">${done}/${total}</span>
+    <span class="week-day-meta">${done ? formatDur(done) : '0'} / ${formatDur(total)}</span>
     <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="openPreview('weekDay',${d.id})" title="náhled">náhled</button>
     <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${d.id})" title="smazat z reality">✕</button>
   </div>`;
