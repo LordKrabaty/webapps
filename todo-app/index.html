@@ -1330,6 +1330,7 @@ function startEdit(idx) {
   textEl.focus();
   const range = document.createRange();
   range.selectNodeContents(textEl);
+  range.collapse(false);
   const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(range);
