@@ -403,10 +403,6 @@ textarea::placeholder{color:var(--mid)}
         <input type="text" id="winEnd" value="14:00" oninput="onWindowChange()" placeholder="14:00">
       </div>
     </div>
-    <label class="toggle-row" onclick="toggleAutoAdv()">
-      <div id="autoAdvToggle" class="toggle-sw"></div>
-      <span>Auto-advance</span>
-    </label>
     <div class="stats-row" id="statsRow">
       <span class="stat-lbl">Okno dne</span><span class="stat-val" id="stat-window">8h</span>
       <span class="stat-lbl">Naplánováno</span><span class="stat-val" id="stat-planned">0 min</span>
@@ -823,7 +819,6 @@ let items = [];
 let activePlanDate = null;
 let planWeekOffset = 0;
 let windowStart = '6:00', windowEnd = '14:00';
-let autoAdvance = false;
 let highlightedId = null;
 let library = [], activeLibId = null, archive = [];
 let weekPlans = [];
@@ -906,7 +901,7 @@ function computeTimeline() {
   const wEnd = timeToMin(windowEnd);
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const floatStart = (autoAdvance && nowMin >= wStart && nowMin < wEnd) ? nowMin : wStart;
+  const floatStart = wStart;
 
   const topItemsIdx = items.reduce((a, item, i) => { if (!item.isSubtask) a.push(i); return a; }, []);
   const eventBlocksIdx = topItemsIdx.filter(i => items[i].isEvent && items[i].eventStart);
@@ -1542,16 +1537,9 @@ function onWindowChange() {
   schedSave(); renderAll();
 }
 
-function toggleAutoAdv() {
-  autoAdvance = !autoAdvance;
-  const sw = el('autoAdvToggle');
-  if (sw) sw.classList.toggle('on', autoAdvance);
-  schedSave(); renderAll();
-}
-
 // ── SESSION ───────────────────────────────────────────────────────────────────
 function getSessionData() {
-  return { items, windowStart, windowEnd, autoAdvance, planDate: activePlanDate };
+  return { items, windowStart, windowEnd, planDate: activePlanDate };
 }
 function applySessionData(d) {
   if (!d) return;
@@ -1560,11 +1548,8 @@ function applySessionData(d) {
   items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
   windowStart = d.windowStart || '6:00';
   windowEnd   = d.windowEnd   || '14:00';
-  autoAdvance = !!d.autoAdvance;
   if (el('winStart')) el('winStart').value = windowStart;
   if (el('winEnd'))   el('winEnd').value   = windowEnd;
-  const sw = el('autoAdvToggle');
-  if (sw) sw.classList.toggle('on', autoAdvance);
 }
 function sessionSnap() { return JSON.stringify(getSessionData()); }
 function saveSession() {
@@ -2180,7 +2165,7 @@ async function previewToTemplate() {
   const name = await customPrompt('Název šablony:', baseName);
   if (!name) return;
   const entry = { id: Date.now(), name, type: 'day', mt: Date.now(),
-    data: { items: stripDone(src.items), windowStart: src.windowStart, windowEnd: src.windowEnd, autoAdvance } };
+    data: { items: stripDone(src.items), windowStart: src.windowStart, windowEnd: src.windowEnd } };
   library.push(entry);
   saveLibrary(); renderLibrary();
   showSave('✓ uloženo do šablon');
