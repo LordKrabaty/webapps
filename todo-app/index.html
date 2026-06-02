@@ -1555,7 +1555,9 @@ function getSessionData() {
 }
 function applySessionData(d) {
   if (!d) return;
-  items = d.items || [];
+  // hluboká kopie — živý buffer nesmí sdílet referenci s uloženým dnem/šablonou,
+  // jinak by editace mutovala i zdroj a rozbila detekci změny (mt) v autoSavePlanDay()
+  items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
   windowStart = d.windowStart || '6:00';
   windowEnd   = d.windowEnd   || '14:00';
   autoAdvance = !!d.autoAdvance;
@@ -1761,7 +1763,7 @@ async function saveToLibrary() {
   if (!name) return;
   const data = getSessionData();
   data.items = stripDone(data.items);
-  const entry = { id: Date.now(), name, type: 'day', data };
+  const entry = { id: Date.now(), name, type: 'day', data, mt: Date.now() };
   library.push(entry);
   saveLibrary();
   activeLibId = entry.id;
@@ -1786,7 +1788,7 @@ async function saveWeekAsTemplate() {
     await customAlert('Žádné naplánované dny — nejdříve si naplánuj alespoň jeden den týdne.');
     return;
   }
-  const entry = { id: Date.now(), name, type: 'week', weekData };
+  const entry = { id: Date.now(), name, type: 'week', weekData, mt: Date.now() };
   library.push(entry);
   saveLibrary();
   renderLibrary();
@@ -1800,6 +1802,7 @@ function updateLibraryEntry() {
   const data = getSessionData();
   data.items = stripDone(data.items);
   entry.data = data;
+  entry.mt = Date.now();
   saveLibrary();
   markSaved();
   showSave('✓ šablona aktualizována');
@@ -1931,10 +1934,10 @@ function doLoadWeekTemplate() {
     if (!tpl) return;
     const newItems = JSON.parse(JSON.stringify(tpl.items));
     const existing = weekDays.find(d => d.date === iso);
-    if (existing) { existing.items = newItems; existing.windowStart = tpl.windowStart; existing.windowEnd = tpl.windowEnd; }
-    else weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd });
+    if (existing) { existing.items = newItems; existing.windowStart = tpl.windowStart; existing.windowEnd = tpl.windowEnd; existing.mt = Date.now(); }
+    else weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd, mt: Date.now() });
     if (iso === activePlanDate) {
-      items = newItems;
+      items = JSON.parse(JSON.stringify(newItems));   // vlastní kopie — nesdílet referenci s uloženým dnem
       windowStart = tpl.windowStart; windowEnd = tpl.windowEnd;
       if (el('winStart')) el('winStart').value = windowStart;
       if (el('winEnd'))   el('winEnd').value   = windowEnd;
@@ -2140,21 +2143,25 @@ function doPreviewSave() {
     const entry = library.find(e => e.id === id);
     if (!entry) return;
     entry.data.items = stripDone(snapshot);
+    entry.mt = Date.now();
     saveLibrary(); renderLibrary();
   } else if (type === 'weekDay') {
     const d = weekDays.find(d => d.id === id);
     if (!d) return;
     d.items = snapshot;
+    d.mt = Date.now();
     saveWeek(); renderWeekTab(); renderDayButtons();
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
     entry.weekData[dayKey].items = stripDone(snapshot);
+    entry.mt = Date.now();
     saveLibrary();
   } else if (type === 'weekPlan') {
     const p = weekPlans.find(p => p.id === id);
     if (!p) return;
     p.items = snapshot;
+    p.mt = Date.now();
     saveWeekPlans(); renderWeekTab();
   }
   closeModal('previewModal');
@@ -2172,7 +2179,7 @@ async function previewToTemplate() {
   const baseName = (src.name || 'Moje šablona').replace(/ · (plán|plan)$/i, '');
   const name = await customPrompt('Název šablony:', baseName);
   if (!name) return;
-  const entry = { id: Date.now(), name, type: 'day',
+  const entry = { id: Date.now(), name, type: 'day', mt: Date.now(),
     data: { items: stripDone(src.items), windowStart: src.windowStart, windowEnd: src.windowEnd, autoAdvance } };
   library.push(entry);
   saveLibrary(); renderLibrary();
@@ -2185,6 +2192,7 @@ async function renameLibEntry(id) {
   const name = await customPrompt('Nový název šablony:', entry.name || '');
   if (!name || name === entry.name) return;
   entry.name = name;
+  entry.mt = Date.now();
   saveLibrary(); renderLibrary();
   showSave('✓ přejmenováno');
 }
@@ -2381,7 +2389,12 @@ function showStatusMsg(msg, duration=2200) {
 function showSave(msg='✓ uloženo') { showStatusMsg(msg, 2200); }
 function schedSave() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => { saveSession(); showSave(); if (window.autoSyncOnSave) window.autoSyncOnSave(); }, 300);
+  saveT = setTimeout(() => {
+    // promítni živé úpravy aktivního dne do weekDays, ať se nasynchronizují i bez přepnutí dne
+    autoSavePlanDay();
+    saveSession(); showSave();
+    if (window.autoSyncOnSave) window.autoSyncOnSave();
+  }, 300);
 }
 
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────────
@@ -2723,6 +2736,7 @@ function doImport() {
   if (toAdd.length) {
     // dedup podle id — existující šablonu aktualizuj na místě, nezdvojuj (stejné chování jako bloky/dny)
     toAdd.forEach(t => {
+      t.mt = Date.now();   // import = vědomá akce → razítkem zajisti, že verze vyhraje při synchronizaci
       const i = library.findIndex(e => String(e.id) === String(t.id));
       if (i >= 0) { library[i] = t; tplUpdated++; }
       else { library.push(t); tplAdded++; }
@@ -2732,16 +2746,16 @@ function doImport() {
   if (addWdays) {
     (window._importWeekDays || []).forEach(d => {
       const ex = weekDays.find(w => w.date === d.date);
-      if (ex) { ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; }
-      else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()) });
+      if (ex) { ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = Date.now(); }
+      else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: Date.now() });
     });
     saveWeek(); renderWeekTab(); renderDayButtons();
   }
   if (addWplans) {
     (window._importWeekPlans || []).forEach(p => {
       const ex = weekPlans.find(w => w.date === p.date);
-      if (ex) { ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; }
-      else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()) });
+      if (ex) { ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = Date.now(); }
+      else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: Date.now() });
     });
     saveWeekPlans(); renderWeekTab();
   }
@@ -2906,15 +2920,18 @@ function renderInbox() {
 
 function autoSavePlanDay() {
   if (!activePlanDate) return;
+  const snap = JSON.parse(JSON.stringify(items));
   const existing = weekDays.find(d => d.date === activePlanDate);
   if (existing) {
-    existing.items = JSON.parse(JSON.stringify(items));
-    existing.windowStart = windowStart;
-    existing.windowEnd = windowEnd;
+    // mt (čas editace) razítkuj jen při SKUTEČNÉ změně obsahu — jinak by prázdné přeuložení
+    // přebilo novější verzi dne z jiného zařízení při synchronizaci (LWW)
+    const changed = existing.windowStart !== windowStart || existing.windowEnd !== windowEnd
+      || JSON.stringify(existing.items) !== JSON.stringify(snap);
+    existing.items = snap; existing.windowStart = windowStart; existing.windowEnd = windowEnd;
+    if (changed) existing.mt = Date.now();
   } else {
     if (!items.length) return;
-    weekDays.push({ id: Date.now(), date: activePlanDate,
-      items: JSON.parse(JSON.stringify(items)), windowStart, windowEnd });
+    weekDays.push({ id: Date.now(), date: activePlanDate, items: snap, windowStart, windowEnd, mt: Date.now() });
   }
   saveWeek();
 }
@@ -2932,9 +2949,10 @@ function savePlanSnapshot() {
       existing.items = planItems;
       existing.windowStart = wd.windowStart;
       existing.windowEnd = wd.windowEnd;
+      existing.mt = Date.now();
     } else {
       weekPlans.push({ id: Date.now() + Math.random(), date: iso,
-        items: planItems, windowStart: wd.windowStart, windowEnd: wd.windowEnd });
+        items: planItems, windowStart: wd.windowStart, windowEnd: wd.windowEnd, mt: Date.now() });
     }
     saved++;
   });
@@ -3430,13 +3448,15 @@ function init() {
     const date = rawSession.planDate;
     const existing = weekDays.find(d => d.date === date);
     if (existing) {
+      const changed = JSON.stringify(existing.items) !== JSON.stringify(rawSession.items);
       existing.items = rawSession.items;
       if (rawSession.windowStart) existing.windowStart = rawSession.windowStart;
       if (rawSession.windowEnd)   existing.windowEnd   = rawSession.windowEnd;
+      if (changed) existing.mt = Date.now();
     } else {
       weekDays.push({ id: Date.now(), date, items: rawSession.items,
         windowStart: rawSession.windowStart || '6:00',
-        windowEnd:   rawSession.windowEnd   || '14:00' });
+        windowEnd:   rawSession.windowEnd   || '14:00', mt: Date.now() });
     }
     saveWeek();
     staleArchived = date;
@@ -3618,11 +3638,9 @@ window.addEventListener('resize', updateAppGrid);
   function applyTombstones() {
     let removed = 0, btChanged = false;
     const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
-    library   = sweep('lib', x => x.id)(library);
     archive   = sweep('arc', x => x.id)(archive);
     inbox     = sweep('inb', x => x.id)(inbox);
-    weekDays  = sweep('wd',  x => x.date)(weekDays);
-    weekPlans = sweep('wp',  x => x.date)(weekPlans);
+    // lib / wd / wp řeší lwwMerge() (LWW vč. edit-vs-delete), zde se nemažou
     Object.keys(tombstones).forEach(k => {
       if (k.slice(0, 3) === 'bt:') {
         const key = k.slice(3);
@@ -3633,10 +3651,11 @@ window.addEventListener('resize', updateAppGrid);
     return removed;
   }
   // souhrnný podpis stavu (vč. náhrobků) pro detekci rozdílu cloud↔local
+  // mt je součástí podpisu → rozpozná i editaci existující položky (stejné id/datum, jiný obsah)
   function sigOf(items, arch, inb, wd, wp, tomb) {
-    const idS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
+    const idS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const inS = arr => arr.map(x => String((x && x.id) || '') + '~' + String((x && x.text) || '')).sort().join('|') + ':' + arr.length;
-    const dS  = arr => arr.map(x => String((x && x.date) || '')).sort().join(',') + ':' + arr.length;
+    const dS  = arr => arr.map(x => String((x && x.date) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS  = o => Object.keys(o || {}).sort().join(',');
     return [idS(items), idS(arch), inS(inb), dS(wd), dS(wp), tS(tomb)].join('||');
   }
@@ -3704,30 +3723,56 @@ window.addEventListener('resize', updateAppGrid);
     }
   }
 
+  // LWW slučování klíčovaného pole (šablony / dny / plány):
+  //  • obě strany mají položku → vyhrává novější mt
+  //  • jen v cloudu → přidat, pokud editace není starší než případné smazání (edit-after-delete = vzkříšení)
+  //  • náhrobek vyhraje jen pokud je novější než poslední editace položky
+  function lwwMerge(localArr, cloudArr, ns, keyOf, normalize) {
+    const byKey = new Map();
+    (localArr || []).forEach(x => { if (x && keyOf(x) != null) byKey.set(String(keyOf(x)), x); });
+    let added = 0, updated = 0, removed = 0;
+    (cloudArr || []).forEach(c => {
+      if (!c || keyOf(c) == null) return;
+      const k = String(keyOf(c)), cmt = +c.mt || 0, ex = byKey.get(k);
+      if (ex) {
+        if (cmt > (+ex.mt || 0)) { byKey.set(k, normalize(c)); updated++; }
+      } else {
+        const tomb = tombstones[ns + ':' + k] || 0;
+        if (cmt >= tomb) { byKey.set(k, normalize(c)); added++; if (tomb && cmt > tomb) delete tombstones[ns + ':' + k]; }
+      }
+    });
+    for (const [k, x] of byKey) {
+      const tomb = tombstones[ns + ':' + k] || 0;
+      if (tomb && tomb >= (+x.mt || 0)) { byKey.delete(k); removed++; }
+      else if (tomb) delete tombstones[ns + ':' + k];   // lokální editace novější než smazání → ponech, zahoď náhrobek
+    }
+    return { arr: [...byKey.values()], added, updated, removed };
+  }
+
   // tichý obousměrný merge cloud → local:
-  //  1) sjednotí náhrobky  2) aplikuje mazání  3) přidá jen chybějící a NE-náhrobkované položky
+  //  1) sjednotí náhrobky  2) LWW pro šablony/dny/plány (vč. mazání a editací)  3) doplní archiv/inbox/bloky
   function autoImportSilent(record) {
     if (!record || typeof record !== 'object') return;
     applyingRemote = true;
     try {
     mergeCloudTombstones(record.tombstones);
-    let removed = applyTombstones();
-    let added = 0;
-    const libIds = new Set(library.map(x => String(x.id)));
-    (record.items || record.teas || []).forEach(it => {
-      if (it && it.id != null && !libIds.has(String(it.id)) && !isTombstoned('lib:' + it.id)) { library.push(it); libIds.add(String(it.id)); added++; }
-    });
+    let removed = applyTombstones();           // archiv / inbox / bloky (lib/wd/wp řeší LWW níže)
+    let added = 0, updated = 0;
+    // zapamatuj si stav aktivního dne, ať po mergi poznáme, jestli se změnil
+    const prevActiveSnap = activePlanDate ? JSON.stringify(weekDays.find(d => d.date === activePlanDate) || null) : null;
+    // šablony — LWW podle id
+    const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
+    library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
+    // dny (Realita) — LWW podle data
+    const wdR = lwwMerge(weekDays, (record.weekDays || []), 'wd', x => x.date, c => ({ ...c, id: c.id || (Date.now() + Math.random()) }));
+    weekDays = wdR.arr; added += wdR.added; updated += wdR.updated; removed += wdR.removed;
+    // plány (Plán) — LWW podle data
+    const wpR = lwwMerge(weekPlans, (record.weekPlans || []), 'wp', x => x.date, c => ({ ...c, id: c.id || (Date.now() + Math.random()) }));
+    weekPlans = wpR.arr; added += wpR.added; updated += wpR.updated; removed += wpR.removed;
+    // archiv — jen doplnit chybějící (append-only)
     const arcIds = new Set(archive.map(x => String(x.id)));
     (record.archive || []).forEach(it => {
       if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
-    });
-    const wdDates = new Set(weekDays.map(x => x.date));
-    (record.weekDays || []).forEach(d => {
-      if (d && d.date && !wdDates.has(d.date) && !isTombstoned('wd:' + d.date)) { weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()) }); wdDates.add(d.date); added++; }
-    });
-    const wpDates = new Set(weekPlans.map(x => x.date));
-    (record.weekPlans || []).forEach(p => {
-      if (p && p.date && !wpDates.has(p.date) && !isTombstoned('wp:' + p.date)) { weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()) }); wpDates.add(p.date); added++; }
     });
     const inSig = new Set(inbox.map(x => String(x.id) + '~' + String(x.text || '')));
     (record.inbox || []).forEach(it => {
@@ -3757,7 +3802,12 @@ window.addEventListener('resize', updateAppGrid);
       Object.entries(s.workingDaysByWeek).forEach(([k, v]) => { if (!(k in workingDaysByWeek)) { workingDaysByWeek[k] = v; wdwAdded = true; } });
       if (wdwAdded) { saveWorkingDays(); if (typeof renderWorkDayPicker === 'function') renderWorkDayPicker(); }
     }
-    if (added || removed) {
+    // pokud merge změnil právě zobrazený den, obnov živý buffer — jinak by ho příští autoSavePlanDay() přepsal starou verzí
+    if (activePlanDate) {
+      const curDay = weekDays.find(d => d.date === activePlanDate);
+      if (curDay && JSON.stringify(curDay) !== prevActiveSnap) applySessionData(curDay);
+    }
+    if (added || updated || removed) {
       saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans();
       if (typeof saveInbox === 'function') saveInbox();
       if (typeof renderLibrary === 'function') renderLibrary();
@@ -3767,6 +3817,7 @@ window.addEventListener('resize', updateAppGrid);
       if (typeof renderInbox === 'function') renderInbox();
       const parts = [];
       if (added)   parts.push('+' + added);
+      if (updated) parts.push('~' + updated);
       if (removed) parts.push('−' + removed);
       showStatusMsg('☁ sync ' + parts.join(' '), 3000);
     }
