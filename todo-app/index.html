@@ -2719,7 +2719,16 @@ function doImport() {
   const addSettings = el('impSettings')?.checked && window._importSettings;
   const addInbox = el('impInbox')?.checked && window._importInbox?.length;
   if (!toAdd.length && !addWdays && !addWplans && !addSettings && !addInbox) { customAlert('Nic není vybráno.'); return; }
-  if (toAdd.length) { library.push(...toAdd); saveLibrary(); renderLibrary(); }
+  let tplAdded = 0, tplUpdated = 0;
+  if (toAdd.length) {
+    // dedup podle id — existující šablonu aktualizuj na místě, nezdvojuj (stejné chování jako bloky/dny)
+    toAdd.forEach(t => {
+      const i = library.findIndex(e => String(e.id) === String(t.id));
+      if (i >= 0) { library[i] = t; tplUpdated++; }
+      else { library.push(t); tplAdded++; }
+    });
+    saveLibrary(); renderLibrary();
+  }
   if (addWdays) {
     (window._importWeekDays || []).forEach(d => {
       const ex = weekDays.find(w => w.date === d.date);
@@ -2770,8 +2779,13 @@ function doImport() {
     });
     saveInbox(); renderInbox();
   }
+  // obnov živý buffer aktivního dne z naimportovaných dat, jinak ho příští autoSavePlanDay() přepíše starým stavem
+  if (addWdays && activePlanDate) {
+    const cur = weekDays.find(w => w.date === activePlanDate);
+    if (cur) { applySessionData(cur); renderAll(); }
+  }
   const msgs = [];
-  if (toAdd.length) msgs.push(toAdd.length + ' šablon');
+  if (toAdd.length) msgs.push(toAdd.length + ' šablon' + (tplUpdated ? ' (' + tplUpdated + ' aktualiz.)' : ''));
   if (addWdays) msgs.push((window._importWeekDays || []).length + ' dní');
   if (addWplans) msgs.push((window._importWeekPlans || []).length + ' plánů');
   if (addSettings) msgs.push('nastavení');
