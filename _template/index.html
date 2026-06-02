@@ -38,6 +38,10 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 @media(hover:hover){.btn-sync:hover{background:var(--light)}}
 .btn-sync:active{background:var(--light)}
 .btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync.on{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.btn-sync.on:hover{background:var(--dark)}}
+.btn-sync.syncing{animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:.3}}
 .btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
 @media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
 #statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
@@ -273,6 +277,7 @@ textarea::placeholder{color:var(--mid)}
       <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (JSONBin)">↑</button>
       <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
       <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (JSONBin)">☁</button>
       <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
     </div>
     <div class="fs-ctrl" title="velikost písma">
@@ -451,7 +456,11 @@ function showStatusMsg(msg, duration=2200) {
 function showSave(msg='✓ uloženo') { showStatusMsg(msg, 2200); }
 function schedSave() {
   clearTimeout(saveT);
-  saveT = setTimeout(() => { saveSession(); showSave(); }, 300);
+  saveT = setTimeout(() => {
+    // APP LOGIC: pokud app průběžně ukládá editovaný záznam do synchronizované kolekce
+    // (jako todo-app dny), promítni ho sem (flush) a zavolej window.autoSyncOnSave()
+    saveSession(); showSave();
+  }, 300);
 }
 
 // ── LIBRARY / ARCHIVE ─────────────────────────────────────────────────────
@@ -461,6 +470,8 @@ function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE
 function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
 
 // ── SESSION ────────────────────────────────────────────────────────────────
+// APP LOGIC: applySessionData(d) musí položky KOPÍROVAT — items = JSON.parse(JSON.stringify(d.items)) —
+// nikdy nesdílet referenci s uloženým záznamem, jinak se rozbije detekce změny (mt) pro auto-sync.
 function sessionSnap() {
   // APP LOGIC: return JSON.stringify(getSessionData())
   return JSON.stringify({});
@@ -480,12 +491,13 @@ function isDirty() {
 
 // ── LIBRARY OPERATIONS ────────────────────────────────────────────────────
 function saveToLibrary() {
-  // APP LOGIC: const entry = {id: Date.now(), name: '...', data: getSessionData(), ...};
+  // APP LOGIC: const entry = {id: Date.now(), name: '...', data: getSessionData(), mt: Date.now()};
   // library.push(entry); saveLibrary(); activeLibId = entry.id; markSaved();
+  // mt = čas editace pro auto-sync (LWW) — nastav při každém vytvoření i úpravě
   showSave('✓ uloženo do knihovny');
 }
 function updateLibraryEntry() {
-  // APP LOGIC: find entry by activeLibId, update entry.data, saveLibrary(), markSaved()
+  // APP LOGIC: najdi entry dle activeLibId, nastav entry.data, entry.mt = Date.now(), saveLibrary(), markSaved()
   showSave('✓ změny uloženy');
 }
 function renderLibrary() {
@@ -556,6 +568,12 @@ async function doSelectiveClear() {
   if (el('clr-library').checked)    toDelete.push('APP_NAME-v1-library');
   if (el('clr-archive').checked)    toDelete.push('APP_NAME-v1-archive');
   if (el('clr-appearance').checked) toDelete.push('APP_NAME-fs','APP_NAME-dark','APP_NAME-panel-fs');
+  // mazání synchronizované kolekce → resetuj sync baseline, ať se po reloadu čistě stáhne stav z cloudu
+  // (jinak zastaralé knownIds vygeneruje hromadné náhrobky a smaže data i na ostatních zařízeních)
+  if (el('clr-library').checked || el('clr-archive').checked) {
+    toDelete.push('APP_NAME-syncknown');
+    try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
+  }
   if (!toDelete.length) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
   if (!await customConfirm('Opravdu smazat vybraná data?','smazat')) return;
@@ -842,10 +860,17 @@ function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
   if (!toAdd.length) { customAlert('Nic není vybráno.'); return; }
-  // APP LOGIC: implement item import here
-  // Example: library.push(...toAdd); saveLibrary(); renderLibrary();
+  // dedup podle id — existující položku aktualizuj na místě, nezdvojuj; mt = teď (import vyhraje při synchronizaci)
+  let added = 0, updated = 0;
+  toAdd.forEach(t => {
+    t.mt = Date.now();
+    const i = library.findIndex(e => String(e.id) === String(t.id));
+    if (i >= 0) { library[i] = t; updated++; } else { library.push(t); added++; }
+  });
+  saveLibrary(); renderLibrary();
+  // APP LOGIC: importuj i další kolekce (archive, dny, inbox…) stejnou dedup logikou (viz CLAUDE.md)
   closeModal('importModal');
-  showSave('↓ importováno: '+toAdd.length+' položek');
+  showSave('↓ importováno: ' + (added + updated) + ' položek' + (updated ? ' (' + updated + ' aktualiz.)' : ''));
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
@@ -930,10 +955,17 @@ document.addEventListener('keydown', e => {
 </div>
 
 <script>
-/* ── JSONBIN SYNC ─── */
+/* ── JSONBIN SYNC + AUTO-SYNC (tichý obousměrný LWW) ───
+   Pravidla a pasti viz CLAUDE.md → "Auto-sync (tichý obousměrný LWW)".
+   Base kolekce: library (LWW dle id) + archive (append-only union).
+   Další kolekce přidej na místech označených // APP LOGIC. */
 (function(){
   const JBKEY = 'APP_NAME-jsonbin-key';
   const JBID  = 'APP_NAME-jsonbin-id';
+  const ASKEY = 'APP_NAME-autosync';
+  const PUSH_MIN_INTERVAL = 10000;            // max 1 push / 10 s
+  let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null;
+  let applyingRemote = false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
 
   function openJsonBinSettings() {
     try { el('jbKeyInput').value = localStorage.getItem(JBKEY)||''; el('jbIdInput').value = localStorage.getItem(JBID)||''; } catch(e) {}
@@ -955,6 +987,193 @@ document.addEventListener('keydown', e => {
       res = await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest', {mode:'cors',credentials:'omit',headers:{'X-Master-Key':key}});
     }
     return res;
+  }
+  function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
+  function hasKeys() { try { return !!(localStorage.getItem(JBKEY) && localStorage.getItem(JBID)); } catch(e) { return false; } }
+
+  /* ── TOMBSTONES (propagace mazání mezi zařízeními) ── */
+  const TOMB_KEY  = 'APP_NAME-tombstones';    // { "<ns>:<id>": deletedAtTs }
+  const KNOWN_KEY = 'APP_NAME-syncknown';     // [ "<ns>:<id>", … ] stav z minulé reconcile
+  const TOMB_TTL  = 90 * 864e5;               // náhrobky starší než 90 dní zahodit
+  let tombstones = {};
+  let knownIds = null;                         // null = ještě nesledováno
+  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(TOMB_KEY) || '{}') || {}; } catch(e) { tombstones = {}; } }
+  function saveTombstones() { try { localStorage.setItem(TOMB_KEY, JSON.stringify(tombstones)); } catch(e) {} }
+  function loadKnownIds()   { try { const s = localStorage.getItem(KNOWN_KEY); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
+  function saveKnownIds()   { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...(knownIds || [])])); } catch(e) {} }
+  function isTombstoned(key) { return !!tombstones[key]; }
+  // množina "<ns>:<id>" všech aktuálně existujících položek
+  function currentKeySet() {
+    const s = new Set();
+    library.forEach(e => { if (e && e.id != null) s.add('lib:' + e.id); });
+    archive.forEach(e => { if (e && e.id != null) s.add('arc:' + e.id); });
+    // APP LOGIC: přidej klíče dalších kolekcí (např. wd:date, inb:id, bt:key)
+    return s;
+  }
+  function pruneTombstones() {
+    const cutoff = Date.now() - TOMB_TTL;
+    Object.keys(tombstones).forEach(k => { if (!(tombstones[k] > cutoff)) delete tombstones[k]; });
+  }
+  // diff aktuálního stavu proti poslednímu známému → mazání zapíše jako náhrobek
+  function reconcileTombstones() {
+    const cur = currentKeySet(), now = Date.now();
+    if (knownIds) knownIds.forEach(k => { if (!cur.has(k)) tombstones[k] = now; });
+    cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // existuje ⇒ žije
+    knownIds = cur;
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+  }
+  function mergeCloudTombstones(cloudTomb) {
+    if (!cloudTomb || typeof cloudTomb !== 'object') return;
+    Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
+  }
+  // smaž lokálně append-only kolekce, které mají náhrobek (LWW kolekce řeší lwwMerge)
+  function applyTombstones() {
+    let removed = 0;
+    const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
+    archive = sweep('arc', x => x.id)(archive);
+    // APP LOGIC: další append-only kolekce smaž zde
+    return removed;
+  }
+  // souhrnný podpis stavu (vč. mt a náhrobků) pro detekci rozdílu cloud↔local
+  function sigOf(items, arch, tomb) {
+    const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
+    const arcS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
+    const tS   = o => Object.keys(o || {}).sort().join(',');
+    // APP LOGIC: do podpisu přidej i další synchronizované kolekce (vždy s mt!), jinak se jejich editace nestáhne
+    return [idS(items), arcS(arch), tS(tomb)].join('||');
+  }
+  function localSig() { return sigOf(library, archive, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}); }
+
+  // tlačítko v toolbaru = zároveň stavový indikátor
+  function updateAutoSyncBtn() {
+    const b = el('autoSyncBtn'); if (!b) return;
+    const on = autosyncEnabled();
+    b.classList.toggle('on', on);
+    if (!b.classList.contains('syncing')) b.textContent = '☁';
+    b.title = on ? 'automatická synchronizace zapnutá — klikni pro vypnutí'
+                 : 'zapnout automatickou synchronizaci (JSONBin)';
+  }
+  function setSyncState(state) {
+    const b = el('autoSyncBtn'); if (!b) return;
+    clearTimeout(stateTimer);
+    b.classList.remove('syncing');
+    if (state === 'syncing')  { b.textContent = '↑'; b.classList.add('syncing'); }
+    else if (state === 'ok')  { b.textContent = '☁'; stateTimer = setTimeout(updateAutoSyncBtn, 3000); }
+    else if (state === 'err') { b.textContent = '⚠'; stateTimer = setTimeout(updateAutoSyncBtn, 5000); }
+    else updateAutoSyncBtn();
+  }
+  function toggleAutoSync() {
+    const on = !autosyncEnabled();
+    try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
+    updateAutoSyncBtn();
+    if (on && !hasKeys()) { showStatusMsg('⚠ nejdřív nastav JSONBin přes ⚙ a jednou nahraj přes ↑', 4500); return; }
+    if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
+  }
+
+  // autosync nahrává celý stav + náhrobky (ne výběr jako doCloudUpload)
+  function buildAutoPayload() {
+    // APP LOGIC: přidej další synchronizované kolekce (settings, dny, inbox…)
+    return { v:1, items: library, archive: archive, tombstones: tombstones };
+  }
+  function scheduleAutoPush() {
+    if (!autosyncEnabled() || !hasKeys()) return;
+    if (pushTimer) return;        // už naplánováno → coalesce
+    const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs));
+    pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
+  }
+  async function doAutoPush() {
+    if (!autosyncEnabled() || !hasKeys()) return;
+    if (pushing) { pushAgain = true; return; }
+    const key = localStorage.getItem(JBKEY), binId = localStorage.getItem(JBID);
+    if (!key || !binId) return;
+    pushing = true; setSyncState('syncing');
+    try {
+      const res = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
+        method:'PUT', mode:'cors', credentials:'omit',
+        headers:{'Content-Type':'application/json','X-Master-Key':key},
+        body: JSON.stringify(buildAutoPayload())
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      lastPushTs = Date.now(); setSyncState('ok');
+    } catch(e) {
+      console.warn('[autosync] push selhal:', (e && e.message) ? e.message : e);
+      setSyncState('err');
+    } finally {
+      pushing = false;
+      if (pushAgain) { pushAgain = false; scheduleAutoPush(); }
+    }
+  }
+
+  // LWW slučování klíčovaného pole: novější mt vyhrává; mazání vyhraje jen pokud je novější
+  // než poslední editace (editace po smazání = vzkříšení). Vrací nové pole + počty.
+  function lwwMerge(localArr, cloudArr, ns, keyOf, normalize) {
+    const byKey = new Map();
+    (localArr || []).forEach(x => { if (x && keyOf(x) != null) byKey.set(String(keyOf(x)), x); });
+    let added = 0, updated = 0, removed = 0;
+    (cloudArr || []).forEach(c => {
+      if (!c || keyOf(c) == null) return;
+      const k = String(keyOf(c)), cmt = +c.mt || 0, ex = byKey.get(k);
+      if (ex) {
+        if (cmt > (+ex.mt || 0)) { byKey.set(k, normalize(c)); updated++; }
+      } else {
+        const tomb = tombstones[ns + ':' + k] || 0;
+        if (cmt >= tomb) { byKey.set(k, normalize(c)); added++; if (tomb && cmt > tomb) delete tombstones[ns + ':' + k]; }
+      }
+    });
+    for (const [k, x] of byKey) {
+      const tomb = tombstones[ns + ':' + k] || 0;
+      if (tomb && tomb >= (+x.mt || 0)) { byKey.delete(k); removed++; }
+      else if (tomb) delete tombstones[ns + ':' + k];   // lokální editace novější než smazání → ponech, zahoď náhrobek
+    }
+    return { arr: [...byKey.values()], added, updated, removed };
+  }
+
+  // tichý obousměrný merge cloud → local
+  function autoImportSilent(record) {
+    if (!record || typeof record !== 'object') return;
+    applyingRemote = true;
+    try {
+    mergeCloudTombstones(record.tombstones);
+    let removed = applyTombstones();           // append-only kolekce (archiv)
+    let added = 0, updated = 0;
+    // knihovna — LWW podle id
+    const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
+    library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
+    // archiv — jen doplnit chybějící (append-only)
+    const arcIds = new Set(archive.map(x => String(x.id)));
+    (record.archive || []).forEach(it => {
+      if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
+    });
+    // APP LOGIC: další kolekce sluč zde — pole dle id/data přes lwwMerge(...), object-mapy (bloky) vlastním merge
+
+    // APP LOGIC: pokud merge změnil právě editovanou položku (activeLibId), načti ji znovu do formuláře,
+    //            jinak ji příští uložení přepíše starou verzí (viz todo-app obnova aktivního dne)
+
+    if (added || updated || removed) {
+      saveLibrary(); saveArchive();
+      if (typeof renderLibrary === 'function') renderLibrary();
+      // APP LOGIC: překresli ostatní pohledy
+      const parts = [];
+      if (added)   parts.push('+' + added);
+      if (updated) parts.push('~' + updated);
+      if (removed) parts.push('−' + removed);
+      showStatusMsg('☁ sync ' + parts.join(' '), 3000);
+    }
+    // srovnej baseline na nový stav a ulož náhrobky
+    knownIds = currentKeySet();
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+    } finally { applyingRemote = false; }
+  }
+
+  // hook po každé perzistenci synchronizované kolekce: zaznamenej mazání (náhrobky) a naplánuj push
+  function autoSyncOnSave() {
+    if (applyingRemote) return;      // změny z mergeu nesmí spustit reconcile/push
+    if (!hasKeys()) return;          // bez nastaveného JSONBinu není co sledovat
+    reconcileTombstones();
+    if (autosyncEnabled()) scheduleAutoPush();
   }
 
   async function doCloudUpload() {
@@ -1017,6 +1236,12 @@ document.addEventListener('keydown', e => {
       const json = await res.json();
       let record = json.record;
       if (typeof record !== 'object' || record === null) return;
+      // AUTOSYNC: tichý obousměrný merge (vč. mazání i editací)
+      if (autosyncEnabled()) {
+        if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
+        return;
+      }
+      // jinak (autosync vypnutý): nabídni ruční import, pokud se data liší
       const cloudItems = record.items || record.teas || [];
       const cloudArch  = record.archive || [];
       const idSig = arr => arr.map(x => String(x.id||'')).sort().join(',')+':'+arr.length;
@@ -1034,6 +1259,16 @@ document.addEventListener('keydown', e => {
   window.doCloudUpload        = doCloudUpload;
   window.syncDownload         = syncDownload;
   window.checkCloudOnStartup  = checkCloudOnStartup;
+  window.toggleAutoSync       = toggleAutoSync;
+  window.autoSyncOnSave       = autoSyncOnSave;   // hook po změně synchronizované kolekce (obalené save-funkce ho volají samy)
+  loadTombstones(); loadKnownIds();
+  // obal perzistentní save-funkce, aby i mazání spustilo reconcile (náhrobek) + push
+  // APP LOGIC: přidej sem save-funkce dalších synchronizovaných kolekcí (saveInbox, saveBlockTypes…)
+  ['saveLibrary','saveArchive'].forEach(fn => {
+    const orig = window[fn];
+    if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
+  });
+  updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
 </script>
