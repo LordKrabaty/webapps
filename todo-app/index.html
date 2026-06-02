@@ -1614,7 +1614,7 @@ function loadBlockTypes() {
     saved.forEach(bt => {
       if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
         defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
-        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [] };
+        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], mt: +bt.mt || 0 };
     });
   } catch(e) {}
   const allKeys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
@@ -1726,7 +1726,7 @@ function saveBlockType() {
     key = normalizeBlockKey(label);
     if (BLOCK_TYPES[key]) key = key + '_' + Date.now();
   }
-  BLOCK_TYPES[key] = { emoji, label, defaultDuration: duration, isEvent, eventStart, eventEnd, defaultTasks };
+  BLOCK_TYPES[key] = { emoji, label, defaultDuration: duration, isEvent, eventStart, eventEnd, defaultTasks, mt: Date.now() };
   if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key);
   saveBlockTypes();
   renderBlockTypeList();
@@ -2765,7 +2765,7 @@ function doImport() {
       s.blockTypes.forEach(bt => {
         if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
           defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
-          eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [] };
+          eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], mt: Date.now() };
       });
       if (s.blockTypeOrder) {
         blockTypeOrder = s.blockTypeOrder.filter(k => BLOCK_TYPES[k] && k !== 'TASK');
@@ -2786,7 +2786,7 @@ function doImport() {
     (window._importInbox || []).forEach(it => {
       if (it && it.text && !existingIds.has(String(it.id))) {
         const nid = it.id != null ? it.id : String(Date.now()) + Math.random().toString(36).slice(2, 6);
-        inbox.push({ id: nid, text: it.text });
+        inbox.push({ id: nid, text: it.text, mt: Date.now() });
         existingIds.add(String(nid));
         inboxAdded++;
       }
@@ -2865,7 +2865,7 @@ function saveInbox() { try { localStorage.setItem(INBOX_KEY, JSON.stringify(inbo
 function addInboxItem() {
   const inp = el('inboxInput'); if (!inp) return;
   const txt = inp.value.trim(); if (!txt) return;
-  inbox.unshift({ id: String(Date.now()) + Math.random().toString(36).slice(2, 6), text: txt });
+  inbox.unshift({ id: String(Date.now()) + Math.random().toString(36).slice(2, 6), text: txt, mt: Date.now() });
   inp.value = '';
   saveInbox(); renderInbox();
 }
@@ -2895,7 +2895,7 @@ function editInboxItem(id, span) {
     if (committed) return; committed = true;
     span.contentEditable = 'false';
     const v = span.textContent.trim();
-    if (v && v !== it.text) { it.text = v; saveInbox(); }
+    if (v && v !== it.text) { it.text = v; it.mt = Date.now(); saveInbox(); }
     renderInbox();
   };
   span.addEventListener('blur', commit, { once: true });
@@ -3636,31 +3636,23 @@ window.addEventListener('resize', updateAppGrid);
   }
   // odstraní lokálně vše, co má náhrobek (mazání provedené na jiném zařízení)
   function applyTombstones() {
-    let removed = 0, btChanged = false;
+    let removed = 0;
     const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
-    archive   = sweep('arc', x => x.id)(archive);
-    inbox     = sweep('inb', x => x.id)(inbox);
-    // lib / wd / wp řeší lwwMerge() (LWW vč. edit-vs-delete), zde se nemažou
-    Object.keys(tombstones).forEach(k => {
-      if (k.slice(0, 3) === 'bt:') {
-        const key = k.slice(3);
-        if (BLOCK_TYPES[key] && !DEFAULT_BLOCK_TYPES[key]) { delete BLOCK_TYPES[key]; blockTypeOrder = blockTypeOrder.filter(x => x !== key); removed++; btChanged = true; }
-      }
-    });
-    if (btChanged) { saveBlockTypes(); renderBlockTypeList(); }
+    archive = sweep('arc', x => x.id)(archive);   // archiv je append-only; lib/wd/wp/inb/bt řeší LWW merge
     return removed;
   }
   // souhrnný podpis stavu (vč. náhrobků) pro detekci rozdílu cloud↔local
   // mt je součástí podpisu → rozpozná i editaci existující položky (stejné id/datum, jiný obsah)
-  function sigOf(items, arch, inb, wd, wp, tomb) {
+  function sigOf(items, arch, inb, wd, wp, tomb, bt) {
     const idS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
-    const inS = arr => arr.map(x => String((x && x.id) || '') + '~' + String((x && x.text) || '')).sort().join('|') + ':' + arr.length;
+    const inS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join('|') + ':' + arr.length;
     const dS  = arr => arr.map(x => String((x && x.date) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS  = o => Object.keys(o || {}).sort().join(',');
-    return [idS(items), idS(arch), inS(inb), dS(wd), dS(wp), tS(tomb)].join('||');
+    const btS = arr => (arr || []).map(b => String((b && b.key) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
+    return [idS(items), idS(arch), inS(inb), dS(wd), dS(wp), tS(tomb), btS(bt)].join('||');
   }
-  function localSig() { return sigOf(library, archive, inbox, weekDays, weekPlans, tombstones); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.inbox || [], r.weekDays || [], r.weekPlans || [], r.tombstones || {}); }
+  function localSig() { return sigOf(library, archive, inbox, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.inbox || [], r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || []); }
 
   // tlačítko v toolbaru slouží zároveň jako stavový indikátor
   function updateAutoSyncBtn() {
@@ -3749,6 +3741,33 @@ window.addEventListener('resize', updateAppGrid);
     return { arr: [...byKey.values()], added, updated, removed };
   }
 
+  // LWW slučování bloků (BLOCK_TYPES je object-mapa, klíč = key): novější mt vyhrává.
+  // Náhrobky platí jen pro vlastní (ne-defaultní) bloky — defaultní nelze smazat.
+  function mergeBlocksLww(cloudBlocks) {
+    let added = 0, updated = 0, removed = 0;
+    const norm = b => ({ emoji: b.emoji ?? '', label: b.label || b.key, defaultDuration: b.defaultDuration || 15,
+      isEvent: !!b.isEvent, eventStart: b.eventStart || null, eventEnd: b.eventEnd || null,
+      defaultTasks: b.defaultTasks || [], mt: +b.mt || 0 });
+    (cloudBlocks || []).forEach(b => {
+      if (!b || !b.key || b.key === 'TASK') return;
+      const key = b.key, cmt = +b.mt || 0, local = BLOCK_TYPES[key];
+      if (local) {
+        if (cmt > (+local.mt || 0)) { BLOCK_TYPES[key] = norm(b); if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key); updated++; }
+      } else {
+        const tomb = tombstones['bt:' + key] || 0;
+        if (cmt >= tomb) { BLOCK_TYPES[key] = norm(b); if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key); if (tomb && cmt > tomb) delete tombstones['bt:' + key]; added++; }
+      }
+    });
+    // náhrobky na vlastní bloky smazané na jiném zařízení (LWW: editace novější než smazání = ponech)
+    Object.keys(BLOCK_TYPES).forEach(key => {
+      if (DEFAULT_BLOCK_TYPES[key]) return;
+      const tomb = tombstones['bt:' + key] || 0;
+      if (tomb && tomb >= (+BLOCK_TYPES[key].mt || 0)) { delete BLOCK_TYPES[key]; blockTypeOrder = blockTypeOrder.filter(k => k !== key); removed++; }
+      else if (tomb) delete tombstones['bt:' + key];
+    });
+    return { added, updated, removed };
+  }
+
   // tichý obousměrný merge cloud → local:
   //  1) sjednotí náhrobky  2) LWW pro šablony/dny/plány (vč. mazání a editací)  3) doplní archiv/inbox/bloky
   function autoImportSilent(record) {
@@ -3756,7 +3775,7 @@ window.addEventListener('resize', updateAppGrid);
     applyingRemote = true;
     try {
     mergeCloudTombstones(record.tombstones);
-    let removed = applyTombstones();           // archiv / inbox / bloky (lib/wd/wp řeší LWW níže)
+    let removed = applyTombstones();           // jen archiv (lib/wd/wp/inb/bt řeší LWW níže)
     let added = 0, updated = 0;
     // zapamatuj si stav aktivního dne, ať po mergi poznáme, jestli se změnil
     const prevActiveSnap = activePlanDate ? JSON.stringify(weekDays.find(d => d.date === activePlanDate) || null) : null;
@@ -3774,29 +3793,15 @@ window.addEventListener('resize', updateAppGrid);
     (record.archive || []).forEach(it => {
       if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
     });
-    const inSig = new Set(inbox.map(x => String(x.id) + '~' + String(x.text || '')));
-    (record.inbox || []).forEach(it => {
-      if (it && it.text && !isTombstoned('inb:' + it.id)) {
-        const sig = String(it.id) + '~' + String(it.text);
-        if (!inSig.has(sig)) {
-          inbox.push({ id: it.id != null ? it.id : (String(Date.now()) + Math.random().toString(36).slice(2,6)), text: it.text });
-          inSig.add(sig); added++;
-        }
-      }
-    });
+    // inbox — LWW podle id (editace textu se razítkuje mt v editInboxItem)
+    const inR = lwwMerge(inbox, (record.inbox || []).filter(it => it && it.text), 'inb', x => x.id,
+      c => ({ id: c.id != null ? c.id : (String(Date.now()) + Math.random().toString(36).slice(2,6)), text: c.text, mt: +c.mt || 0 }));
+    inbox = inR.arr; added += inR.added; updated += inR.updated; removed += inR.removed;
+    // bloky — LWW podle key (vč. mazání vlastních bloků); voláme vždy, ať se aplikují i náhrobky
     const s = record.settings;
-    if (s && Array.isArray(s.blockTypes) && s.blockTypes.length) {
-      let btAdded = false;
-      s.blockTypes.forEach(bt => {
-        if (bt.key && !BLOCK_TYPES[bt.key] && !isTombstoned('bt:' + bt.key)) {
-          BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key, defaultDuration: bt.defaultDuration || 15,
-            isEvent: !!bt.isEvent, eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [] };
-          if (!blockTypeOrder.includes(bt.key)) blockTypeOrder.push(bt.key);
-          btAdded = true; added++;
-        }
-      });
-      if (btAdded) { saveBlockTypes(); renderBlockTypeList(); }
-    }
+    const btR = mergeBlocksLww((s && s.blockTypes) || []);
+    added += btR.added; updated += btR.updated; removed += btR.removed;
+    if (btR.added || btR.updated || btR.removed) { saveBlockTypes(); renderBlockTypeList(); }
     if (s && s.workingDaysByWeek) {
       let wdwAdded = false;
       Object.entries(s.workingDaysByWeek).forEach(([k, v]) => { if (!(k in workingDaysByWeek)) { workingDaysByWeek[k] = v; wdwAdded = true; } });
