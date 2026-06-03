@@ -1441,6 +1441,8 @@ function op_startEdit(ctx, idx) {
   const textEl = rows[idx].querySelector('.item-text');
   if (!textEl) return;
 
+  if (textEl.contentEditable === 'true') return;
+
   textEl.contentEditable = 'true';
   textEl.style.whiteSpace = 'normal';
   textEl.focus();
