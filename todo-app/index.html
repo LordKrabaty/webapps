@@ -317,10 +317,14 @@ textarea::placeholder{color:var(--mid)}
 .week-day-date{flex:1;font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .week-day-meta{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
 /* ── DRAG AND DROP ── */
-.item-row[draggable]:not(.is-event-block){cursor:grab}
+.item-row[draggable]{cursor:grab}
 .item-row.dragging{opacity:.3}
 .item-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
 .item-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+.preview-item[draggable]{cursor:grab}
+.preview-item.dragging{opacity:.3}
+.preview-item.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.preview-item.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
 .lib-item[draggable]{cursor:grab}
 .lib-item.dragging{opacity:.3}
 .lib-item.drag-over-top{box-shadow:0 -2px 0 var(--black)}
@@ -1215,7 +1219,9 @@ function rowsHtml(ctx) {
       durLabel = formatDur(getEffectiveDuration(idx, list));
     }
 
-    const draggable = (ctx.kind === 'day' && !item.isEvent) ? 'draggable="true"' : '';
+    // den: jen ne-události (události drží čas na časové ose); inbox/měsíc: vše (žádná osa)
+    const canDrag = (ctx.kind === 'day') ? !item.isEvent : true;
+    const draggable = canDrag ? 'draggable="true"' : '';
 
     // odznak dne: jen v Později a jen u položek nejvyšší úrovně
     const dayBadge = (ctx.kind === 'month' && !item.isSubtask)
@@ -2101,7 +2107,7 @@ function renderPreviewList() {
     const ptext = !item.isSubtask && pbt.emoji
       ? pbt.emoji + ' ' + stripBlockEmoji(item.text, pbt)
       : item.text;
-    return `<div class="preview-item${item.isSubtask ? ' subtask' : ' block'}">
+    return `<div class="preview-item${item.isSubtask ? ' subtask' : ' block'}" draggable="true" data-idx="${i}">
       <input type="checkbox" class="preview-item-chk" ${item.done ? 'checked' : ''}
         onchange="togglePreviewDone(${i},this.checked)">
       <span class="preview-item-text${item.done ? ' done' : ''}"
@@ -3171,6 +3177,7 @@ function renderLater() {
     return `<div class="later-month-hdr${gi === 0 ? ' first' : ''}">${monthLabel(b.ym)}<span class="later-month-sum">${formatDur(total)}</span></div>
       <div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym))}</div>`;
   }).join('');
+  initLaterDnd();   // měsíční kontejnery se právě vytvořily znovu → (pře)připoj DnD
 }
 
 function autoSavePlanDay() {
@@ -3654,22 +3661,53 @@ function initDnd(container, onDrop) {
   });
 }
 
+// Sdílené přeřazení tažením pro libovolný kontext (den / inbox / měsíc / preview).
+// Blok se táhne i se svými podúkoly (souvislá skupina). raw = pozice vložení v poli.
+function applyDndReorder(ctx, srcIdx, rawIdx) {
+  const list = ctx.list;
+  const item = list[srcIdx];
+  if (!item) return;
+  let L = 1;
+  if (!item.isSubtask) { let e = srcIdx + 1; while (e < list.length && list[e].isSubtask) e++; L = e - srcIdx; }
+  if (rawIdx > srcIdx && rawIdx <= srcIdx + L) return; // upuštěno uvnitř vlastní skupiny → nic
+  ctx.undo();
+  const group = list.splice(srcIdx, L);
+  const insertAt = Math.max(0, Math.min(list.length, rawIdx > srcIdx ? rawIdx - L : rawIdx));
+  list.splice(insertAt, 0, ...group);
+  ctx.save(); ctx.render();
+}
+
 function initItemDnd() {
   const container = el('item-list');
   if (!container) return;
-  initDnd(container, (srcIdx, finalIdx, rawIdx) => {
-    const item = items[srcIdx];
-    if (!item) return;
-    // a block drags together with its contiguous subtasks
-    let L = 1;
-    if (!item.isSubtask) { let e = srcIdx + 1; while (e < items.length && items[e].isSubtask) e++; L = e - srcIdx; }
-    if (rawIdx > srcIdx && rawIdx <= srcIdx + L) return; // dropped inside its own group
-    pushUndo();
-    const group = items.splice(srcIdx, L);
-    const insertAt = Math.max(0, Math.min(items.length, rawIdx > srcIdx ? rawIdx - L : rawIdx));
-    items.splice(insertAt, 0, ...group);
-    schedSave(); renderAll();
+  initDnd(container, (s, f, raw) => applyDndReorder(DAYCTX, s, raw));
+}
+
+// Inbox: kontejner #inbox-list je trvalý (innerHTML se mění) → stačí připojit jednou.
+function initInboxDnd() {
+  const container = el('inbox-list');
+  if (!container) return;
+  initDnd(container, (s, f, raw) => applyDndReorder(INBOXCTX, s, raw));
+}
+
+// Později: každý měsíc má vlastní .later-rows, který se po renderu vytváří znovu →
+// připojuj po každém renderLater (čerstvé elementy, žádná akumulace listenerů).
+function initLaterDnd() {
+  el('later-list')?.querySelectorAll('.later-rows').forEach(c => {
+    const ym = c.dataset.ym;
+    initDnd(c, (s, f, raw) => applyDndReorder(MCTX(ym), s, raw));
   });
+}
+
+// Preview/úprava (šablony i Hotovo): trvalý kontejner #previewItemList; pracuje
+// na _previewSource.items (uloží se až přes doPreviewSave).
+function initPreviewDnd() {
+  const container = el('previewItemList');
+  if (!container) return;
+  initDnd(container, (s, f, raw) => applyDndReorder({
+    get list() { return _previewSource ? _previewSource.items : []; },
+    undo() {}, save() {}, render() { renderPreviewList(); },
+  }, s, raw));
 }
 
 function initLibDnd() {
@@ -3743,7 +3781,7 @@ function init() {
   populateLaterAddMonth(); renderLater();
   if (activeLibId) markSaved();
   updateUndoBtn();
-  initItemDnd(); initLibDnd(); initBlockTypeDnd();
+  initItemDnd(); initLibDnd(); initBlockTypeDnd(); initInboxDnd(); initPreviewDnd();
   if (staleArchived) showSave('↓ archivováno: ' + formatDateCz(staleArchived));
   else if (rawSession) showSave('↓ obnoveno');
   setInterval(() => renderTimeline(), 60000);
