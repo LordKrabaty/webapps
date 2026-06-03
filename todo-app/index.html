@@ -317,6 +317,9 @@ textarea::placeholder{color:var(--mid)}
 .week-day-date{flex:1;font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .week-day-meta{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
 /* ── DRAG AND DROP ── */
+/* tažitelné řádky: na dotyku nesmí long-press spustit výběr textu / iOS callout */
+[draggable="true"]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+[draggable="true"] input,[draggable="true"] [contenteditable="true"]{-webkit-user-select:text;user-select:text}
 .item-row[draggable]{cursor:grab}
 .item-row.dragging{opacity:.3}
 .item-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
@@ -3603,8 +3606,12 @@ function getCurrentWeekDates(weekOffset = 0) {
   }).filter(({ day }) => getWorkingDays(weekOffset).includes(day.getDay()));
 }
 
-// ── DRAG AND DROP ─────────────────────────────────────────────────────────────
-let _dndSrcIdx = null, _dndContainer = null;
+// ── DRAG AND DROP (Pointer Events — myš i dotyk/pero) ─────────────────────────
+// Nativní HTML5 drag na dotyku nefunguje → vše řešíme přes pointer events:
+//   • myš: tažení po překročení prahu pohybu
+//   • dotyk/pero: tažení po krátkém podržení (long-press), aby zůstal možný scroll
+let _dndActive = false;   // true během tažení → globálně blokuje scroll stránky
+document.addEventListener('touchmove', e => { if (_dndActive && e.cancelable) e.preventDefault(); }, { passive: false });
 
 function _dndClearIndicators(container) {
   container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(r =>
@@ -3612,52 +3619,87 @@ function _dndClearIndicators(container) {
 }
 
 function initDnd(container, onDrop) {
-  container.addEventListener('dragstart', e => {
-    const row = e.target.closest('[draggable="true"]');
-    if (!row || !container.contains(row)) return;
-    _dndSrcIdx = parseInt(row.dataset.idx);
-    _dndContainer = container;
-    e.dataTransfer.effectAllowed = 'move';
-    requestAnimationFrame(() => row.classList.add('dragging'));
-  });
+  container.addEventListener('dragstart', e => e.preventDefault());   // potlač nativní drag
 
-  container.addEventListener('dragover', e => {
-    if (_dndContainer !== container) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+  let srcRow = null, srcIdx = null, pointerId = null, dragging = false;
+  let startX = 0, startY = 0, holdTimer = null;
+  const MOUSE_THRESHOLD = 6;    // px pohybu myší → drag
+  const SCROLL_THRESHOLD = 12;  // px pohybu před long-pressem (dotyk) → scroll, zruš
+  const TOUCH_HOLD = 180;       // ms podržení (dotyk/pero) → drag
+
+  const rowAt = (x, y) => {
+    const t = document.elementFromPoint(x, y);
+    const r = t && t.closest('[draggable="true"]');
+    return (r && container.contains(r)) ? r : null;
+  };
+  const beginDrag = () => {
+    if (dragging || !srcRow) return;
+    dragging = true; _dndActive = true;
+    srcRow.classList.add('dragging');
+    srcRow.style.pointerEvents = 'none';            // ať elementFromPoint vidí řádek pod prstem
+    document.body.style.userSelect = 'none';
+  };
+  const end = () => {
+    clearTimeout(holdTimer); holdTimer = null;
     _dndClearIndicators(container);
-    const row = e.target.closest('[draggable="true"]');
-    if (!row || !container.contains(row)) return;
+    if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents = ''; }
+    document.body.style.userSelect = '';
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onUp, true);
+    srcRow = null; srcIdx = null; pointerId = null; dragging = false; _dndActive = false;
+  };
+  const onMove = e => {
+    if (e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!dragging) {
+      if (e.pointerType === 'mouse') {
+        if (Math.abs(dx) + Math.abs(dy) > MOUSE_THRESHOLD) beginDrag(); else return;
+      } else {
+        if (Math.abs(dx) + Math.abs(dy) > SCROLL_THRESHOLD) end();   // pohyb před long-pressem = scroll
+        return;
+      }
+    }
+    if (!dragging) return;
+    if (e.cancelable) e.preventDefault();
+    _dndClearIndicators(container);
+    const row = rowAt(e.clientX, e.clientY);
+    if (!row) return;
     const rect = row.getBoundingClientRect();
     row.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
-  });
+  };
+  const onUp = e => {
+    if (e.pointerId !== pointerId) return;
+    if (dragging) {
+      let dstRow = null, insertBefore = true;
+      container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(r => {
+        insertBefore = r.classList.contains('drag-over-top'); dstRow = r;
+      });
+      const s = srcIdx;
+      if (dstRow && s !== null) {
+        const dstIdx = parseInt(dstRow.dataset.idx);
+        const rawIdx = insertBefore ? dstIdx : dstIdx + 1;
+        let finalIdx = rawIdx; if (s < finalIdx) finalIdx--;
+        end();
+        if (finalIdx !== s) onDrop(s, finalIdx, rawIdx);
+        return;
+      }
+    }
+    end();
+  };
 
-  container.addEventListener('dragleave', e => {
-    if (!container.contains(e.relatedTarget)) _dndClearIndicators(container);
-  });
-
-  container.addEventListener('drop', e => {
-    e.preventDefault();
-    let dstRow = null, insertBefore = true;
-    container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(r => {
-      insertBefore = r.classList.contains('drag-over-top');
-      dstRow = r;
-    });
-    _dndClearIndicators(container);
-    if (_dndContainer !== container || _dndSrcIdx === null || !dstRow) return;
-    const srcIdx = _dndSrcIdx;
-    const dstIdx = parseInt(dstRow.dataset.idx);
-    const rawIdx = insertBefore ? dstIdx : dstIdx + 1; // insertion point in the original array
-    let finalIdx = rawIdx;
-    if (srcIdx < finalIdx) finalIdx--;
-    _dndSrcIdx = null; _dndContainer = null;
-    if (finalIdx !== srcIdx) onDrop(srcIdx, finalIdx, rawIdx);
-  });
-
-  container.addEventListener('dragend', () => {
-    container.querySelectorAll('.dragging').forEach(r => r.classList.remove('dragging'));
-    _dndClearIndicators(container);
-    _dndSrcIdx = null; _dndContainer = null;
+  container.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;                          // jen primární tlačítko / dotyk
+    const row = e.target.closest('[draggable="true"]');
+    if (!row || !container.contains(row)) return;
+    // tap na ovládací prvek nesmí spustit tažení (tlačítka, checkbox, výběry, editace…)
+    if (e.target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return;
+    srcRow = row; srcIdx = parseInt(row.dataset.idx);
+    startX = e.clientX; startY = e.clientY; pointerId = e.pointerId; dragging = false;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    if (e.pointerType !== 'mouse') holdTimer = setTimeout(beginDrag, TOUCH_HOLD);
   });
 }
 
