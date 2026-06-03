@@ -228,6 +228,10 @@ textarea::placeholder{color:var(--mid)}
 .later-month-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .later-month-sum{margin-left:auto;font-family:'DM Mono',monospace;font-weight:400;text-transform:none;letter-spacing:0}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
+.later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
+.later-week-hdr.first-in-month{border-top:none;margin-top:0;padding-top:.05rem}
+.later-today-bar{font-size:.8rem;padding:.1rem .15rem .3rem;border-bottom:1.5px solid var(--mid);margin-bottom:.25rem}
+.day-name{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);flex-shrink:0}
 
 /* ── INPUT AREA ── */
 .input-btns{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
@@ -1235,7 +1239,7 @@ let addCtx = DAYCTX;                              // cíl pro menu/quick-add
 function setAddCtx(x) { addCtx = (x === 'day') ? DAYCTX : (x === 'inbox') ? INBOXCTX : MCTX(x); }
 
 // HTML řádků položek pro libovolný kontext (sdílí .item-row vzhled s denním plánem)
-function rowsHtml(ctx) {
+function rowsHtml(ctx, insertBefore = {}) {
   const list = ctx.list;
   return list.map((item, idx) => {
     const bt = item.blockType || 'TASK';
@@ -1273,15 +1277,18 @@ function rowsHtml(ctx) {
     const draggable = canDrag ? 'draggable="true"' : '';
 
     // odznak dne: jen v Později a jen u položek nejvyšší úrovně
-    const dayBadge = (ctx.kind === 'month' && !item.isSubtask)
-      ? `<span class="day-badge${item.dayLabel ? '' : ' empty'}" onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo „konec června“)">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`
-      : '';
+    let dayBadge = '';
+    if (ctx.kind === 'month' && !item.isSubtask) {
+      const parsedDay = item.dayLabel ? parseDayLabel(item.dayLabel, ctx.ym) : null;
+      const dayAbbr = parsedDay ? `<span class=”day-name”>${DAY_ABBREV_CZ[parsedDay.getDay()]}</span>` : '';
+      dayBadge = `<span class=”day-badge${item.dayLabel ? '' : ' empty'}” onclick=”${ctx.call('mEditDay', idx)}” title=”přiřadit den (např. 7.6. nebo „konec června”)”>${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>${dayAbbr}`;
+    }
     // šipka „vložit do pole": v Později i Inboxu — u bloků (celá skupina) i jednotlivých podúkolů
     const sendBtn = (ctx.kind === 'month' || ctx.kind === 'inbox')
       ? `<button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu)">→</button>`
       : '';
 
-    return `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
+    return (insertBefore[idx] || '') + `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
       ${dayBadge}
       <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${toggle}</span>
       ${emoji}
@@ -3251,19 +3258,88 @@ function sendItemToField(ctx, idx) {
 }
 function mSendToField(ym, idx) { sendItemToField(MCTX(ym), idx); }
 
+const DAY_ABBREV_CZ  = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
+const DAY_NAMES_CZ_LONG = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
+
+function parseDayLabel(label, ym) {
+  if (!label) return null;
+  const m = label.match(/^(\d{1,2})\.(\d{1,2})\.?(?:(\d{2,4}))?$/);
+  if (!m) return null;
+  const d = +m[1], mo = +m[2];
+  const y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : +ym.split('-')[0];
+  if (d < 1 || d > 31 || mo < 1 || mo > 12) return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return dt;
+}
+function getWeekMondayKey(date) {
+  const d = new Date(date);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1);
+  return d.toISOString().slice(0, 10);
+}
+function buildWeekLabel(mondayIso) {
+  const mon = new Date(mondayIso + 'T00:00:00');
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const jan4 = new Date(mon.getFullYear(), 0, 4);
+  const jan4Mon = new Date(jan4); jan4Mon.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1);
+  const weekN = Math.round((mon - jan4Mon) / (7 * 86400000)) + 1;
+  return `T${weekN} · ${mon.getDate()}.${mon.getMonth()+1}.–${sun.getDate()}.${sun.getMonth()+1}.`;
+}
+function sortBucketItems(items, ym) {
+  const groups = [];
+  for (let i = 0; i < items.length; ) {
+    if (!items[i].isSubtask) {
+      const g = [i]; let j = i + 1;
+      while (j < items.length && items[j].isSubtask) g.push(j++);
+      groups.push({ indices: g, date: parseDayLabel(items[i].dayLabel || null, ym) });
+      i = j;
+    } else {
+      groups.push({ indices: [i], date: null }); i++;
+    }
+  }
+  groups.sort((a, b) => {
+    if (a.date && b.date) return a.date - b.date;
+    if (a.date) return -1; if (b.date) return 1; return 0;
+  });
+  const sorted = [];
+  groups.forEach(g => g.indices.forEach(i => sorted.push(items[i])));
+  items.splice(0, items.length, ...sorted);
+}
+function buildWeekHeaders(items, ym) {
+  const ins = {};
+  let cur = null, first = true;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].isSubtask) continue;
+    const dt = parseDayLabel(items[i].dayLabel, ym);
+    if (!dt) continue;
+    const wk = getWeekMondayKey(dt);
+    if (wk !== cur) {
+      cur = wk;
+      ins[i] = `<div class="later-week-hdr${first ? ' first-in-month' : ''}">${buildWeekLabel(wk)}</div>`;
+      first = false;
+    }
+  }
+  return ins;
+}
+
 function renderLater() {
   const c = el('later-list'); if (!c) return;
   const buckets = later.filter(b => b && b.items && b.items.length).slice().sort((a, b) => a.ym.localeCompare(b.ym));
+  const now = new Date();
+  const todayHtml = `<div class="later-today-bar">Dnes: <b>${DAY_NAMES_CZ_LONG[now.getDay()]}</b> ${now.getDate()}. ${now.getMonth()+1}. ${now.getFullYear()}</div>`;
   if (!buckets.length) {
-    c.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Prázdné — vyber měsíc nahoře a přidej úkol, blok nebo událost (stejně jako v Týdnu).</div>';
+    c.innerHTML = todayHtml + '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Prázdné — vyber měsíc nahoře a přidej úkol, blok nebo událost (stejně jako v Týdnu).</div>';
     return;
   }
-  c.innerHTML = buckets.map((b, gi) => {
+  buckets.forEach(b => sortBucketItems(b.items, b.ym));
+  c.innerHTML = todayHtml + buckets.map((b, gi) => {
     const total = dayTotalMinutes(b.items);
+    const headers = buildWeekHeaders(b.items, b.ym);
     return `<div class="later-month-hdr${gi === 0 ? ' first' : ''}">${monthLabel(b.ym)}<span class="later-month-sum">${formatDur(total)}</span></div>
-      <div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym))}</div>`;
+      <div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
   }).join('');
-  initLaterDnd();   // měsíční kontejnery se právě vytvořily znovu → (pře)připoj DnD
+  initLaterDnd();
 }
 
 function autoSavePlanDay() {
