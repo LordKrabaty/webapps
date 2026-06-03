@@ -220,12 +220,6 @@ textarea::placeholder{color:var(--mid)}
 [contenteditable="true"].day-badge{outline:1.5px solid var(--black);background:var(--off);cursor:text;overflow:visible;max-width:none}
 @media(hover:hover){.day-badge:hover{border-color:var(--black);color:var(--black)}}
 
-/* ── INBOX ── */
-.inbox-row{display:flex;align-items:center;gap:.3rem;padding:.3rem .35rem;border-radius:var(--r);border:1px solid var(--light)}
-.inbox-text{flex:1;font-size:.84rem;min-width:0;line-height:1.4;cursor:text;word-break:break-word;padding:0 2px;border-radius:2px}
-[contenteditable="true"].inbox-text{background:var(--off);outline:1.5px solid var(--black)}
-.inbox-send,.inbox-del{width:20px;height:20px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.8rem;flex-shrink:0;padding:0;line-height:1;display:flex;align-items:center;justify-content:center;border-radius:2px}
-@media(hover:hover){.inbox-send:hover,.inbox-del:hover{color:var(--black);background:var(--light)}}
 
 /* ── LATER (Později) ── */
 .later-add-row{display:flex;gap:.4rem;flex-wrap:wrap;flex-shrink:0;align-items:center;margin-bottom:.35rem}
@@ -250,6 +244,7 @@ textarea::placeholder{color:var(--mid)}
 .stat-val.overflow{font-weight:700}
 
 /* ── NOTES TABS ── */
+.notes-add{display:flex;flex-direction:column;gap:.35rem;flex-shrink:0;margin-bottom:.5rem}
 .notes-tabs{display:flex;flex-wrap:wrap;gap:0;border-bottom:1.5px solid var(--black);margin-bottom:.5rem;flex-shrink:0}
 .notes-tab{font-family:'DM Sans',sans-serif;font-size:.78rem;padding:.28rem .65rem;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1.5px}
 .notes-tab.active{color:var(--black);border-bottom-color:var(--black);font-weight:500}
@@ -481,15 +476,18 @@ textarea::placeholder{color:var(--mid)}
       <button class="notes-tab" id="tab-inbox" onclick="switchNotesTab('inbox')">Inbox</button>
       <button class="notes-tab" id="tab-hotovo" onclick="switchNotesTab('hotovo')">Hotovo</button>
     </div>
+    <!-- sdílené přidávací pole — stejné pro Týden / Příští / Inbox / Později (cíl dle aktivní karty) -->
+    <div id="notes-add" class="notes-add">
+      <textarea id="quickInput" placeholder="úkol 20m  ·  9:30-10:00 standup  ·  90m 🧠 DEEP WORK" rows="2"></textarea>
+      <div class="input-btns">
+        <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
+        <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
+        <button class="btn-add" id="btnEvent" onclick="toggleEventMenu(event)">+ Událost ▾</button>
+      </div>
+    </div>
     <div id="pane-tyden" class="notes-pane active">
       <div id="day-buttons" class="day-buttons"></div>
       <button class="btn-add" id="btnPlanSnapshot" style="flex-shrink:0;align-self:flex-start;margin-bottom:.3rem" onclick="togglePlanSnapshot()">naplánovat</button>
-      <textarea id="quickInput" placeholder="snídaně 20m  nebo  9:30-10:00 standup  nebo  120min 🆓 DEEP WORK" rows="2"></textarea>
-      <div class="input-btns">
-        <button class="btn-add" id="btnTask" onclick="setAddCtx('day');toggleTaskMenu(event)">+ Úkol ▾</button>
-        <button class="btn-add" id="btnBlock" onclick="setAddCtx('day');toggleBlockMenu(event)">+ Blok ▾</button>
-        <button class="btn-add" id="btnEvent" onclick="setAddCtx('day');toggleEventMenu(event)">+ Událost ▾</button>
-      </div>
       <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
     </div>
     <div id="pane-hotovo" class="notes-pane">
@@ -499,26 +497,14 @@ textarea::placeholder{color:var(--mid)}
       </div>
     </div>
     <div id="pane-inbox" class="notes-pane">
-      <div style="display:flex;gap:.3rem;flex-shrink:0">
-        <input id="inboxInput" class="preview-add-text" placeholder="úkol na příště / co se nestihlo…"
-          onkeydown="if(event.key==='Enter')addInboxItem()">
-        <button class="btn-add" style="flex:none" onclick="addInboxItem()">+ přidat</button>
-      </div>
-      <div id="inbox-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.1rem;margin-top:.3rem"></div>
+      <div id="inbox-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.1rem"></div>
     </div>
     <div id="pane-pozdeji" class="notes-pane">
       <div class="later-add-row" style="align-items:center">
-        <span style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">měsíc</span>
+        <span style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">přidat do měsíce</span>
         <select id="laterAddMonth" class="later-sel" title="do kterého měsíce přidávat" onchange="setAddCtxLater()"></select>
       </div>
-      <textarea id="laterQuick" rows="2" placeholder="napiš úkol / událost…  např.  90m 🧠 rešerše  ·  9:30-10:00 standup"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();setAddCtxLater();addQuickItems('TASK');}"></textarea>
-      <div class="input-btns">
-        <button class="btn-add" onclick="setAddCtxLater();toggleTaskMenu(event)">+ Úkol ▾</button>
-        <button class="btn-add" onclick="setAddCtxLater();toggleBlockMenu(event)">+ Blok ▾</button>
-        <button class="btn-add" onclick="setAddCtxLater();toggleEventMenu(event)">+ Událost ▾</button>
-      </div>
-      <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.35rem"></div>
+      <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.1rem"></div>
     </div>
   </div>
 </div>
@@ -1169,10 +1155,10 @@ const DAYCTX = {
 function MCTX(ym) {
   return {
     kind: 'month', ym,
-    h: { toggle:'mToggleDone', edit:'mStartEdit', ev:'mStartEventEdit', dur:'mStartDurEdit', move:'mMoveItem', del:'mDeleteItem' },
+    h: { toggle:'mToggleDone', edit:'mStartEdit', ev:'mStartEventEdit', dur:'mStartDurEdit', move:'mMoveItem', del:'mDeleteItem', send:'mSendToField' },
     get list() { return laterBucket(ym).items; },
     rowsEl() { return el('later-list')?.querySelector('.later-rows[data-ym="' + ym + '"]')?.querySelectorAll('.item-row'); },
-    input: 'laterQuick',
+    input: 'quickInput',
     winStart() { return '8:00'; },
     undo() {},                                  // měsíce zatím bez undo
     save() { const b = laterBucket(ym); b.mt = Date.now(); saveLater(); },
@@ -1180,8 +1166,20 @@ function MCTX(ym) {
     call(name, idx, extra) { return name + "('" + ym + "'," + idx + (extra != null ? ',' + extra : '') + ')'; },
   };
 }
+const INBOXCTX = {
+  kind: 'inbox',
+  h: { toggle:'iToggleDone', edit:'iStartEdit', ev:'iStartEventEdit', dur:'iStartDurEdit', move:'iMoveItem', del:'iDeleteItem', send:'iSendToField' },
+  get list() { return inbox; },
+  rowsEl() { return el('inbox-list')?.querySelectorAll('.item-row'); },
+  input: 'quickInput',
+  winStart() { return '8:00'; },
+  undo() {},                                       // inbox zatím bez undo
+  save() { inboxMt = Date.now(); saveInbox(); },
+  render() { renderInbox(); },
+  call(name, idx, extra) { return name + '(' + idx + (extra != null ? ',' + extra : '') + ')'; },
+};
 let addCtx = DAYCTX;                              // cíl pro menu/quick-add
-function setAddCtx(x) { addCtx = (x === 'day') ? DAYCTX : MCTX(x); }
+function setAddCtx(x) { addCtx = (x === 'day') ? DAYCTX : (x === 'inbox') ? INBOXCTX : MCTX(x); }
 
 // HTML řádků položek pro libovolný kontext (sdílí .item-row vzhled s denním plánem)
 function rowsHtml(ctx) {
@@ -1219,13 +1217,13 @@ function rowsHtml(ctx) {
 
     const draggable = (ctx.kind === 'day' && !item.isEvent) ? 'draggable="true"' : '';
 
-    // jen v Později a jen u položek nejvyšší úrovně: odznak dne + šipka do Týdne
-    const isMonthTop = ctx.kind === 'month' && !item.isSubtask;
-    const dayBadge = isMonthTop
+    // odznak dne: jen v Později a jen u položek nejvyšší úrovně
+    const dayBadge = (ctx.kind === 'month' && !item.isSubtask)
       ? `<span class="day-badge${item.dayLabel ? '' : ' empty'}" onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo „konec června“)">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`
       : '';
-    const sendBtn = isMonthTop
-      ? `<button class="item-send" onclick="${ctx.call('mSendToWeek', idx)}" title="vložit do plánu (Týden)">→</button>`
+    // šipka „vložit do pole": v Později i Inboxu — u bloků (celá skupina) i jednotlivých podúkolů
+    const sendBtn = (ctx.kind === 'month' || ctx.kind === 'inbox')
+      ? `<button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu)">→</button>`
       : '';
 
     return `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
@@ -1421,6 +1419,10 @@ function moveItem(idx, dir) { op_moveItem(DAYCTX, idx, dir); }
 function mToggleDone(ym, idx) { op_toggleDone(MCTX(ym), idx); }
 function mDeleteItem(ym, idx) { op_deleteItem(MCTX(ym), idx); }
 function mMoveItem(ym, idx, dir) { op_moveItem(MCTX(ym), idx, dir); }
+// inbox varianty (volané z řádků v Inboxu)
+function iToggleDone(idx) { op_toggleDone(INBOXCTX, idx); }
+function iDeleteItem(idx) { op_deleteItem(INBOXCTX, idx); }
+function iMoveItem(idx, dir) { op_moveItem(INBOXCTX, idx, dir); }
 
 function op_startEdit(ctx, idx) {
   const list = ctx.list;
@@ -1463,6 +1465,7 @@ function op_startEdit(ctx, idx) {
 }
 function startEdit(idx) { op_startEdit(DAYCTX, idx); }
 function mStartEdit(ym, idx) { op_startEdit(MCTX(ym), idx); }
+function iStartEdit(idx) { op_startEdit(INBOXCTX, idx); }
 
 // ── DURATION HELPERS ──────────────────────────────────────────────────────────
 function findParentBlock(idx, arr = items) {
@@ -1629,6 +1632,8 @@ function startDurEdit(idx) { op_startDurEdit(DAYCTX, idx); }
 function startEventEdit(idx) { op_startEventEdit(DAYCTX, idx); }
 function mStartDurEdit(ym, idx) { op_startDurEdit(MCTX(ym), idx); }
 function mStartEventEdit(ym, idx) { op_startEventEdit(MCTX(ym), idx); }
+function iStartDurEdit(idx) { op_startDurEdit(INBOXCTX, idx); }
+function iStartEventEdit(idx) { op_startEventEdit(INBOXCTX, idx); }
 
 // ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
 async function loadDayTemplate(day) {
@@ -2745,7 +2750,7 @@ function doExport() {
   if (!its.length && !archs.length && !wdays.length && !wplans.length && !settings && !inb.length && !lat.length) { customAlert('Nic není vybráno.'); return; }
   const payload = {v:2, items: its, archive: archs, weekDays: wdays, weekPlans: wplans};
   if (settings) payload.settings = settings;
-  if (inb.length) payload.inbox = inb;
+  if (inb.length) { payload.inbox = inb; payload.inboxMt = inboxMt; }
   if (lat.length) payload.later = lat;
   const json = JSON.stringify(payload, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
@@ -2890,13 +2895,14 @@ function doImport() {
   if (addInbox) {
     const existingIds = new Set(inbox.map(x => String(x.id)));
     (window._importInbox || []).forEach(it => {
-      if (it && it.text && !existingIds.has(String(it.id))) {
-        const nid = it.id != null ? it.id : String(Date.now()) + Math.random().toString(36).slice(2, 6);
-        inbox.push({ id: nid, text: it.text, mt: Date.now() });
-        existingIds.add(String(nid));
+      const ni = normItem(it); if (!ni || !ni.text) return;
+      if (!existingIds.has(String(ni.id))) {
+        inbox.push(ni);
+        existingIds.add(String(ni.id));
         inboxAdded++;
       }
     });
+    inboxMt = Date.now();
     saveInbox(); renderInbox();
   }
   let laterAdded = 0;
@@ -2929,7 +2935,7 @@ function doImport() {
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────────
 el('quickInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setAddCtx('day'); addQuickItems('TASK'); }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addQuickItems('TASK'); }
 });
 
 document.addEventListener('keydown', e => {
@@ -2976,67 +2982,35 @@ function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WEEK_KEY
 function saveWeek()  { try { localStorage.setItem(WEEK_KEY, JSON.stringify(weekDays)); } catch(e) {} }
 
 // ── INBOX ───────────────────────────────────────────────────────────────────
-// Volné úkoly na příště / co se nestihlo — perzistentní, nezávislé na dni
+// Volné úkoly / bloky / události na příště. STEJNÝ model položek jako den/měsíc
+// (sdílený editor přes INBOXCTX). Synchronizace: LWW celého seznamu podle inboxMt.
 const INBOX_KEY = 'todo-app-v1-inbox';
 let inbox = [];
-function loadInbox() { try { inbox = JSON.parse(localStorage.getItem(INBOX_KEY) || '[]'); } catch(e) { inbox = []; } }
-function saveInbox() { try { localStorage.setItem(INBOX_KEY, JSON.stringify(inbox)); } catch(e) {} }
-
-function addInboxItem() {
-  const inp = el('inboxInput'); if (!inp) return;
-  const txt = inp.value.trim(); if (!txt) return;
-  inbox.unshift({ id: String(Date.now()) + Math.random().toString(36).slice(2, 6), text: txt, mt: Date.now() });
-  inp.value = '';
-  saveInbox(); renderInbox();
+let inboxMt = 0;
+function loadInbox() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(INBOX_KEY) || 'null'); } catch(e) { raw = null; }
+  if (Array.isArray(raw)) {                         // starý plochý tvar [{id,text,mt}]
+    inbox = raw.map(normItem).filter(Boolean);
+    inboxMt = raw.reduce((mx, it) => Math.max(mx, +(it && it.mt) || 0), 0);
+  } else if (raw && Array.isArray(raw.items)) {     // nový tvar { items, mt }
+    inbox = raw.items.map(normItem).filter(Boolean);
+    inboxMt = +raw.mt || 0;
+  } else { inbox = []; inboxMt = 0; }
 }
-
-function deleteInboxItem(id) {
-  inbox = inbox.filter(it => String(it.id) !== String(id));
-  saveInbox(); renderInbox();
-}
-
-// Pošle text do plánovacího vstupu (Týden), odkud ho lze přidat jako úkol/blok/událost
-function sendInboxToPlan(id) {
-  const it = inbox.find(x => String(x.id) === String(id)); if (!it) return;
-  const ta = el('quickInput');
-  if (ta) ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + it.text : it.text;
-  switchNotesTab('tyden');
-  ta?.focus();
-}
-
-function editInboxItem(id, span) {
-  const it = inbox.find(x => String(x.id) === String(id)); if (!it) return;
-  span.contentEditable = 'true';
-  span.focus();
-  const r = document.createRange(); r.selectNodeContents(span);
-  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
-  let committed = false;
-  const commit = () => {
-    if (committed) return; committed = true;
-    span.contentEditable = 'false';
-    const v = span.textContent.trim();
-    if (v && v !== it.text) { it.text = v; it.mt = Date.now(); saveInbox(); }
-    renderInbox();
-  };
-  span.addEventListener('blur', commit, { once: true });
-  span.addEventListener('keydown', e => {
-    if (e.key === 'Enter')  { e.preventDefault(); span.blur(); }
-    if (e.key === 'Escape') { span.textContent = it.text; span.blur(); }
-  });
-}
+function saveInbox() { try { localStorage.setItem(INBOX_KEY, JSON.stringify({ items: inbox, mt: inboxMt })); } catch(e) {} }
 
 function renderInbox() {
   const c = el('inbox-list'); if (!c) return;
   if (!inbox.length) {
-    c.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Prázdné — sem si zapiš úkoly na příště nebo co se nestihlo.</div>';
+    c.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Prázdné — přidej úkol nebo blok výše (na příště / co se nestihlo).</div>';
     return;
   }
-  c.innerHTML = inbox.map(it => `<div class="inbox-row" data-id="${it.id}">
-    <span class="inbox-text" onclick="editInboxItem('${it.id}',this)">${esc(it.text)}</span>
-    <button class="inbox-send" onclick="sendInboxToPlan('${it.id}')" title="přidat do plánu (Týden)">→</button>
-    <button class="inbox-del" onclick="deleteInboxItem('${it.id}')" title="smazat">✕</button>
-  </div>`).join('');
+  c.innerHTML = rowsHtml(INBOXCTX);
 }
+
+// inline editace + přesun pro inbox řádky
+function iSendToField(idx) { sendItemToField(INBOXCTX, idx); }
 
 // ── LATER (Později) ─────────────────────────────────────────────────────────
 // Budoucí plány tříděné po měsících. Každý měsíc = bucket { ym, items:[…], mt }
@@ -3047,7 +3021,7 @@ const LATER_KEY = 'todo-app-v1-later';
 let later = [];   // [{ ym:"YYYY-MM", items:[ <stejný tvar jako denní položka> ], mt }]
 const MONTHS_CZ = ['leden','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
 
-function normLaterItem(it) {
+function normItem(it) {
   if (!it || typeof it !== 'object') return null;
   const blockType = it.blockType || 'TASK';
   return {
@@ -3066,7 +3040,7 @@ function normLaterItem(it) {
 }
 function normLaterBucket(b) {
   if (!b || !b.ym) return null;
-  return { ym: b.ym, items: (b.items || []).map(normLaterItem).filter(Boolean), mt: +b.mt || 0 };
+  return { ym: b.ym, items: (b.items || []).map(normItem).filter(Boolean), mt: +b.mt || 0 };
 }
 // migrace staršího plochého tvaru [{id,text,ym,day,start,end,mt}] → měsíční buckety
 function migrateFlatLater(arr) {
@@ -3077,7 +3051,7 @@ function migrateFlatLater(arr) {
     const bucket = map.get(it.ym);
     const isEvent = !!it.start;
     const dur = (it.start && it.end) ? Math.max(15, timeToMin(it.end) - timeToMin(it.start)) : 15;
-    bucket.items.push(normLaterItem({
+    bucket.items.push(normItem({
       text: it.text, blockType: 'TASK', duration: dur, isEvent,
       eventStart: it.start || null,
       eventEnd: it.end || (it.start ? minToTime(timeToMin(it.start) + dur) : null),
@@ -3158,17 +3132,18 @@ function mEditDay(ym, idx) {
   });
 }
 
-// jako inbox: vloží text položky (blok + podúkoly) do plánovacího pole v Týdnu —
-// uživatel ho pak sám Enterem přidá do konkrétního dne. Položku v Později nemaže.
-function mSendToWeek(ym, idx) {
-  const b = laterBucket(ym);
-  const it = b.items[idx]; if (!it) return;
+// Jako inbox: serializuje položku (blok + podúkoly / úkol / událost) do TEXTu a vloží
+// ho do sdíleného pole. Uživatel pak přepne na žádanou kartu a Enterem přidá kamkoliv.
+// Položku nemaže (přesun proběhne ručně přidáním + případným smazáním zdroje).
+function sendItemToField(ctx, idx) {
+  const list = ctx.list;
+  const it = list[idx]; if (!it) return;
   let count = 1;
-  if (!it.isSubtask) { while (idx + count < b.items.length && b.items[idx + count].isSubtask) count++; }
+  if (!it.isSubtask) { while (idx + count < list.length && list[idx + count].isSubtask) count++; }
   const hasSubs = count > 1;
   const lines = [];
   for (let i = idx; i < idx + count; i++) {
-    const x = b.items[i];
+    const x = list[i];
     const bt = BLOCK_TYPES[x.blockType];
     const emoji = (!x.isSubtask && x.blockType !== 'TASK' && bt && bt.emoji) ? bt.emoji + ' ' : '';
     const prefix = x.isSubtask ? '✒ ' : '';
@@ -3179,10 +3154,10 @@ function mSendToWeek(ym, idx) {
   }
   const txt = lines.join('\n');
   const ta = el('quickInput');
-  if (ta) ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + txt : txt;
-  switchNotesTab('tyden');
-  ta?.focus();
+  if (ta) { ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + txt : txt; ta.focus(); }
+  showStatusMsg('→ vloženo do pole — přepni na kartu a přidej (Enter)', 2800);
 }
+function mSendToField(ym, idx) { sendItemToField(MCTX(ym), idx); }
 
 function renderLater() {
   const c = el('later-list'); if (!c) return;
@@ -3356,6 +3331,11 @@ function switchNotesTab(name) {
   el('pane-inbox')?.classList.toggle('active', name === 'inbox');
   el('pane-pozdeji')?.classList.toggle('active', name === 'pozdeji');
   ['tyden','pristi','pozdeji','inbox','hotovo'].forEach(n => el('tab-' + n)?.classList.toggle('active', n === name));
+  // sdílené přidávací pole skryj jen na Hotovo
+  const addArea = el('notes-add'); if (addArea) addArea.style.display = (name === 'hotovo') ? 'none' : '';
+  // cíl přidávání (addCtx) podle aktivní karty
+  if (isPlan) setAddCtx('day');
+  else if (name === 'inbox') setAddCtx('inbox');
   if (name === 'tyden') {
     planWeekOffset = 0;
     renderWorkDayPicker();
@@ -3381,6 +3361,7 @@ function switchNotesTab(name) {
     renderInbox();
   } else if (name === 'pozdeji') {
     populateLaterAddMonth();
+    setAddCtxLater();
     renderLater();
   }
 }
@@ -3806,7 +3787,7 @@ window.addEventListener('resize', updateAppGrid);
       weekDays: el('expWeekDays')?.checked ? weekDays : [],
       weekPlans: el('expWeekPlans')?.checked ? weekPlans : []};
     if (el('expSettings')?.checked) payload.settings = buildSettingsExport();
-    if (el('expInbox')?.checked && inbox.length) payload.inbox = inbox;
+    if (el('expInbox')?.checked && inbox.length) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
       const url = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
@@ -3896,7 +3877,6 @@ window.addEventListener('resize', updateAppGrid);
     const s = new Set();
     library.forEach(e   => { if (e && e.id   != null) s.add('lib:' + e.id); });
     archive.forEach(e   => { if (e && e.id   != null) s.add('arc:' + e.id); });
-    inbox.forEach(it    => { if (it && it.id != null) s.add('inb:' + it.id); });
     later.forEach(b     => { if (b && b.ym)           s.add('lat:' + b.ym); });
     weekDays.forEach(d  => { if (d && d.date)         s.add('wd:'  + d.date); });
     weekPlans.forEach(p => { if (p && p.date)         s.add('wp:'  + p.date); });
@@ -3936,10 +3916,11 @@ window.addEventListener('resize', updateAppGrid);
     const tS  = o => Object.keys(o || {}).sort().join(',');
     const btS = arr => (arr || []).map(b => String((b && b.key) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
     const ymS = arr => (arr || []).map(b => String((b && b.ym) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
-    return [idS(items), idS(arch), inS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || [])].join('||');
+    const ibS = o => (((o && o.items) || []).length) + '@' + ((o && o.mt) || 0);   // inbox = celý seznam podle mt
+    return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || [])].join('||');
   }
-  function localSig() { return sigOf(library, archive, inbox, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, later); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.inbox || [], r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || []); }
+  function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, later); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], { items: r.inbox || [], mt: +r.inboxMt || 0 }, r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || []); }
 
   // tlačítko v toolbaru slouží zároveň jako stavový indikátor
   function updateAutoSyncBtn() {
@@ -3970,7 +3951,7 @@ window.addEventListener('resize', updateAppGrid);
   // payload jako doCloudUpload s "vybrat vše": celá library + archive + weekDays + weekPlans + inbox + settings
   function buildAutoPayload() {
     const payload = { v:2, items: library, archive: archive, weekDays: weekDays, weekPlans: weekPlans, settings: buildSettingsExport(), tombstones: tombstones };
-    if (inbox.length) payload.inbox = inbox;
+    payload.inbox = inbox; payload.inboxMt = inboxMt;   // celý seznam + mt (i prázdný, ať se propíše smazání)
     if (later.length) payload.later = later;
     return payload;
   }
@@ -4081,10 +4062,13 @@ window.addEventListener('resize', updateAppGrid);
     (record.archive || []).forEach(it => {
       if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
     });
-    // inbox — LWW podle id (editace textu se razítkuje mt v editInboxItem)
-    const inR = lwwMerge(inbox, (record.inbox || []).filter(it => it && it.text), 'inb', x => x.id,
-      c => ({ id: c.id != null ? c.id : (String(Date.now()) + Math.random().toString(36).slice(2,6)), text: c.text, mt: +c.mt || 0 }));
-    inbox = inR.arr; added += inR.added; updated += inR.updated; removed += inR.removed;
+    // inbox — LWW celého seznamu podle inboxMt (editace položek razítkuje inboxMt přes INBOXCTX.save)
+    const rInboxMt = +record.inboxMt || 0;
+    if (rInboxMt > inboxMt || (rInboxMt === inboxMt && (record.inbox || []).length > inbox.length)) {
+      inbox = (record.inbox || []).map(normItem).filter(Boolean);
+      inboxMt = rInboxMt || inboxMt;
+      updated++;
+    }
     // později — LWW po celém měsíci podle ym (editace položek razítkuje bucket.mt přes MCTX.save)
     const latR = lwwMerge(later, (record.later || []).filter(b => b && b.ym && Array.isArray(b.items)), 'lat', x => x.ym, c => normLaterBucket(c));
     later = latR.arr; added += latR.added; updated += latR.updated; removed += latR.removed;
