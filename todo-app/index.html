@@ -485,7 +485,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <!-- sdílené přidávací pole — stejné pro Týden / Příští / Inbox / Později (cíl dle aktivní karty) -->
     <div id="notes-add" class="notes-add">
-      <textarea id="quickInput" placeholder="úkol 20m  ·  9:30-10:00 standup  ·  90m 🧠 DEEP WORK" rows="2"></textarea>
+      <textarea id="quickInput" placeholder="úkol 20m  ·  9:30-10:00 standup  ·  -D text (pod blok)  ·  text -d" rows="2"></textarea>
       <div class="input-btns">
         <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
         <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
@@ -878,6 +878,40 @@ function formatDur(min) {
   return m ? h + 'h' + m + 'm' : h + 'h';
 }
 
+// ── BLOCK ABBREVIATIONS ───────────────────────────────────────────────────────
+function _abbrevStr(label, len) {
+  let r = '', i = 0;
+  while (i < label.length && r.length < len) { if (label[i] !== ' ') r += label[i]; i++; }
+  return r;
+}
+function getBlockAbbrevMap() {
+  const keys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
+  const norms = keys.map(k => (BLOCK_TYPES[k].label || '').replace(/\s+/g, '').toUpperCase());
+  const abbrevs = {};
+  for (let i = 0; i < keys.length; i++) {
+    const norm = norms[i];
+    for (let len = 1; len <= norm.length; len++) {
+      if (norms.every((n, j) => j === i || !n.startsWith(norm.slice(0, len)))) {
+        abbrevs[keys[i]] = _abbrevStr(BLOCK_TYPES[keys[i]].label || '', len); break;
+      }
+    }
+    if (!abbrevs[keys[i]]) abbrevs[keys[i]] = _abbrevStr(BLOCK_TYPES[keys[i]].label || '', 3);
+  }
+  const map = {};
+  for (const [k, a] of Object.entries(abbrevs)) map[a.toLowerCase()] = k;
+  return { abbrevs, map };
+}
+function hlBlockText(rawText, btInfo, blockType) {
+  const text = stripBlockEmoji(rawText, btInfo);
+  if (blockType === 'TASK') return esc(text);
+  const { abbrevs } = getBlockAbbrevMap();
+  const abbr = abbrevs[blockType];
+  if (!abbr) return esc(text);
+  let i = 0, c = 0;
+  while (i < text.length && c < abbr.length) { if (text[i] !== ' ') c++; i++; }
+  return `<u>${esc(text.slice(0, i))}</u>${esc(text.slice(i))}`;
+}
+
 // ── PARSE TEXT ────────────────────────────────────────────────────────────────
 function parseItemText(raw) {
   let text = raw.trim();
@@ -888,6 +922,16 @@ function parseItemText(raw) {
   else if (/^[xX] /.test(text)) { isSubtask = true; done = true; text = text.replace(/^[xX] /i, ''); }
 
   if (text.endsWith(' !')) { urgent = true; text = text.slice(0, -2); }
+
+  let targetBlockKey = null;
+  { const { map } = getBlockAbbrevMap();
+    const pm = text.match(/^-([a-zA-Z]+)\s+(.+)$/);
+    if (pm && map[pm[1].toLowerCase()]) { targetBlockKey = map[pm[1].toLowerCase()]; text = pm[2].trim(); isSubtask = true; }
+    if (!targetBlockKey) {
+      const sm = text.match(/^(.+?)\s+-([a-zA-Z]+)$/);
+      if (sm && map[sm[2].toLowerCase()]) { targetBlockKey = map[sm[2].toLowerCase()]; text = sm[1].trim(); isSubtask = true; }
+    }
+  }
 
   let m;
   // Duration at start: "120min" "2h"
@@ -921,8 +965,9 @@ function parseItemText(raw) {
   }
 
   if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15;
+  if (targetBlockKey) { blockType = targetBlockKey; if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15; }
 
-  return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent };
+  return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent, targetBlockKey };
 }
 
 // ── COMPUTE TIMELINE ──────────────────────────────────────────────────────────
@@ -1239,7 +1284,7 @@ function rowsHtml(ctx) {
       ${dayBadge}
       <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${toggle}</span>
       ${emoji}
-      <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(isBlock ? stripBlockEmoji(item.text, btInfo) : item.text)}</span>
+      <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, bt) : esc(item.text)}</span>
       ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx===0?'disabled':''}>↑</button>
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx===list.length-1?'disabled':''}>↓</button>
@@ -1313,7 +1358,19 @@ function op_addQuickItems(ctx, forceType) {
       parsed.eventEnd = minToTime(timeToMin(w) + parsed.duration);
     }
     parsed.id = Date.now() + Math.random();
-    ctx.list.push(parsed);
+    if (parsed.targetBlockKey) {
+      const list = ctx.list;
+      let ins = list.length, inB = false;
+      for (let i = 0; i < list.length; i++) {
+        const it = list[i];
+        if (!it.isSubtask && it.blockType === parsed.targetBlockKey) { inB = true; ins = i + 1; }
+        else if (inB && !it.isSubtask) { ins = i; break; }
+        else if (inB) ins = i + 1;
+      }
+      list.splice(ins, 0, parsed);
+    } else {
+      ctx.list.push(parsed);
+    }
   });
   ta.value = '';
   ctx.save(); ctx.render();
@@ -1442,6 +1499,7 @@ function op_startEdit(ctx, idx) {
   if (!textEl) return;
 
   if (textEl.contentEditable === 'true') return;
+  textEl.textContent = textEl.textContent; // strip abbrev highlight markup before editing
 
   textEl.contentEditable = 'true';
   textEl.style.whiteSpace = 'normal';
@@ -1748,6 +1806,17 @@ function saveBlockTypes() {
     localStorage.setItem(BLOCKTYPES_KEY, JSON.stringify(overrides));
     localStorage.setItem(BLOCKTYPES_ORDER_KEY, JSON.stringify(blockTypeOrder));
   } catch(e) {}
+  updateQuickInputPlaceholder();
+}
+
+function updateQuickInputPlaceholder() {
+  const ta = el('quickInput');
+  if (!ta) return;
+  const { abbrevs } = getBlockAbbrevMap();
+  let ex = 'D', exLabel = 'blok';
+  if (abbrevs['DEEP_WORK']) { ex = abbrevs['DEEP_WORK']; exLabel = BLOCK_TYPES['DEEP_WORK']?.label || 'Deep Work'; }
+  else { const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; } }
+  ta.placeholder = `úkol 20m  ·  9:30-10:00 standup  ·  -${ex} text (pod ${exLabel})  ·  text -${ex.toLowerCase()}`;
 }
 
 function normalizeBlockKey(label) {
@@ -3829,6 +3898,7 @@ function init() {
   if (staleArchived) showSave('↓ archivováno: ' + formatDateCz(staleArchived));
   else if (rawSession) showSave('↓ obnoveno');
   setInterval(() => renderTimeline(), 60000);
+  updateQuickInputPlaceholder();
 }
 init();
 window.addEventListener('resize', updateAppGrid);
