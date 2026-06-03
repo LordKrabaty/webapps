@@ -749,8 +749,9 @@ textarea::placeholder{color:var(--mid)}
 const SESSION_KEY   = 'todo-app-v1-session';
 const LIBRARY_KEY   = 'todo-app-v1-library';
 const ARCHIVE_KEY   = 'todo-app-v1-archive';
-const BLOCKTYPES_KEY      = 'todo-app-v1-blocktypes';
-const BLOCKTYPES_ORDER_KEY = 'todo-app-v1-blocktypes-order';
+const BLOCKTYPES_KEY         = 'todo-app-v1-blocktypes';
+const BLOCKTYPES_ORDER_KEY   = 'todo-app-v1-blocktypes-order';
+const BLOCKTYPES_DELETED_KEY = 'todo-app-v1-blocktypes-deleted';
 const WEEKPLANS_KEY   = 'todo-app-v1-weekplans';
 const WORKDAYS_KEY    = 'todo-app-working-days';
 
@@ -1787,6 +1788,10 @@ function loadBlockTypes() {
         eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], mt: +bt.mt || 0 };
     });
   } catch(e) {}
+  try {
+    const del = JSON.parse(localStorage.getItem(BLOCKTYPES_DELETED_KEY) || '[]');
+    del.forEach(k => { if (DEFAULT_BLOCK_TYPES[k]) delete BLOCK_TYPES[k]; });
+  } catch(e) {}
   const allKeys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
   try {
     const savedOrder = JSON.parse(localStorage.getItem(BLOCKTYPES_ORDER_KEY) || 'null');
@@ -1836,7 +1841,7 @@ function renderBlockTypeList() {
     const taskBadge = tasks.length ? ` · ${tasks.length} úk.` : '';
     return `<div class="lib-item" data-idx="${idx}" data-key="${key}" draggable="true" onclick="openBlockTypeEdit('${key}')" title="upravit">
       <span class="lib-item-name">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}<span style="margin-left:.3rem;font-family:'DM Mono',monospace;font-size:.7em;color:var(--muted)">${durStr}${taskBadge}</span></span>
-      ${!isDefault ? `<button class="lib-item-del" onclick="event.stopPropagation();deleteBlockType('${key}')" title="smazat"><svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></button>` : ''}
+      ${key !== 'TASK' ? `<button class="lib-item-del" onclick="event.stopPropagation();deleteBlockType('${key}')" title="smazat"><svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></button>` : ''}
     </div>`;
   }).filter(Boolean).join('');
 }
@@ -1925,8 +1930,15 @@ function resetBlockType() {
 }
 
 async function deleteBlockType(key) {
-  if (DEFAULT_BLOCK_TYPES[key]) return;
+  if (key === 'TASK') return;
   if (!await customConfirm('Smazat typ bloku "' + esc(BLOCK_TYPES[key]?.label || key) + '"?', 'smazat')) return;
+  if (DEFAULT_BLOCK_TYPES[key]) {
+    try {
+      const del = JSON.parse(localStorage.getItem(BLOCKTYPES_DELETED_KEY) || '[]');
+      if (!del.includes(key)) del.push(key);
+      localStorage.setItem(BLOCKTYPES_DELETED_KEY, JSON.stringify(del));
+    } catch(e) {}
+  }
   delete BLOCK_TYPES[key];
   blockTypeOrder = blockTypeOrder.filter(k => k !== key);
   saveBlockTypes();
