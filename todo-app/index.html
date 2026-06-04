@@ -305,16 +305,6 @@ textarea::placeholder{color:var(--mid)}
 .preview-add-text:focus{outline:1.5px solid var(--black);outline-offset:1px}
 .preview-add-dur{width:3.5rem;font-family:'DM Mono',monospace;font-size:.78rem;border:var(--b);border-radius:var(--r);padding:.25rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:right}
 .preview-add-dur:focus{outline:1.5px solid var(--black);outline-offset:1px}
-.lib-item-prev,.lib-item-edit{width:18px;height:18px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0;padding:0}
-@media(hover:hover){.lib-item:hover .lib-item-prev,.lib-item:hover .lib-item-edit{opacity:.45}}
-@media(hover:hover){.lib-item-prev:hover,.lib-item-edit:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
-@media(hover:none){.lib-item .lib-item-prev,.lib-item .lib-item-edit{opacity:.45}}
-.lib-item-prev svg,.lib-item-edit svg{fill:none;stroke:var(--black);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-.lib-item-prev svg{width:10px;height:8px}
-.lib-item-edit svg{width:11px;height:11px}
-.lib-item.active .lib-item-prev,.lib-item.active .lib-item-edit{opacity:.55}
-.lib-item.active .lib-item-prev svg,.lib-item.active .lib-item-edit svg{stroke:var(--w)}
-@media(hover:hover){.lib-item.active .lib-item-prev:hover,.lib-item.active .lib-item-edit:hover{background:rgba(255,255,255,.15)}}
 .lib-type-badge{font-family:'DM Mono',monospace;font-size:.58rem;padding:.08rem .28rem;border-radius:2px;flex-shrink:0;font-weight:500;white-space:nowrap;letter-spacing:.03em}
 .lib-type-week{border:1.5px solid var(--black);color:var(--black)}
 .lib-type-day{border:1px dashed var(--mid);color:var(--muted)}
@@ -706,8 +696,9 @@ textarea::placeholder{color:var(--mid)}
     <div id="previewItemList" style="overflow-y:auto;flex:1;min-height:60px;border-top:1.5px solid var(--black);padding-top:.3rem"></div>
     <div class="modal-row">
       <button class="modal-btn" onclick="closeModal('previewModal')">zavřít</button>
-      <button class="modal-btn" onclick="previewToTemplate()" title="uložit jako šablonu (bez odškrtnutí)">+ šablona</button>
-      <button class="modal-btn primary" onclick="doPreviewSave()">uložit změny</button>
+      <button class="modal-btn" onclick="previewToTemplate()" title="uložit jako novou šablonu (bez odškrtnutí)">+ šablona</button>
+      <button class="modal-btn" id="previewSaveBtn" onclick="doPreviewSave()">uložit změny</button>
+      <button class="modal-btn primary" id="previewApplyBtn" onclick="applyPreviewTemplate()" title="aplikovat šablonu do aktivního dne">aplikovat</button>
     </div>
   </div>
 </div>
@@ -2367,17 +2358,10 @@ function renderLibrary() {
         ? Object.values(entry.weekData || {}).reduce((s, d) => s + dayTotalMinutes(d?.items), 0)
         : dayTotalMinutes(entry.data?.items);
       const timeBadge = totalMin ? `<span class="lib-item-time">${formatDur(totalMin)}</span>` : '';
-      const prevBtn = !isWeek ? `<button class="lib-item-prev" onclick="event.stopPropagation();openPreview('lib',${entry.id})" title="náhled">
-        <svg viewBox="0 0 10 8"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
-      </button>` : '';
-      return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="${isWeek ? 'false' : 'true'}" onclick="loadLibEntry(${entry.id})">
+      return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="${isWeek ? 'false' : 'true'}" onclick="openLibEntry(${entry.id})">
         ${typeBadge}
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
         ${timeBadge}
-        ${prevBtn}
-        <button class="lib-item-edit" onclick="event.stopPropagation();renameLibEntry(${entry.id})" title="přejmenovat">
-          <svg viewBox="0 0 12 12"><path d="M8 1.5l2.5 2.5-6 6H2v-2.5z"/></svg>
-        </button>
         <button class="lib-item-del" onclick="event.stopPropagation();deleteLibEntry(${entry.id})" title="smazat">
           <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
         </button>
@@ -2390,10 +2374,19 @@ function renderLibrary() {
   updateHeaderDay();
 }
 
-async function loadLibEntry(id) {
+// Klik na šablonu: týdenní → modal přiřazení dnů; denní → náhled (s možností aplikovat/přejmenovat).
+function openLibEntry(id) {
   const entry = library.find(e => e.id === id);
   if (!entry) return;
   if (entry.type === 'week') { openWeekTplLoadModal(entry); return; }
+  openPreview('lib', id);
+}
+
+// Aplikuje denní šablonu do aktivního dne (volá se z náhledu).
+async function applyLibEntry(id) {
+  const entry = library.find(e => e.id === id);
+  if (!entry || entry.type === 'week') return;
+  closeModal('previewModal');
   const dayLabel = activePlanDate ? ' do dne ' + formatDateCz(activePlanDate) : '';
   if (!await customConfirm('Načíst šablonu "' + (entry.name||id) + '"' + dayLabel + '?', 'načíst')) return;
   pushUndo();
@@ -2522,10 +2515,60 @@ function openPreview(type, id, dayKey) {
   }
   if (!src) return;
   _previewSource = src;
-  el('previewTitle').textContent = src.name;
+  const isLib = src.type === 'lib';
+  const titleEl = el('previewTitle');
+  titleEl.textContent = src.name;
+  titleEl.style.cursor = isLib ? 'text' : '';
+  titleEl.title = isLib ? 'klikni pro přejmenování' : '';
+  titleEl.onclick = isLib ? startPreviewTitleEdit : null;
+  const applyBtn = el('previewApplyBtn'), saveBtn = el('previewSaveBtn');
+  if (applyBtn) applyBtn.style.display = isLib ? 'block' : 'none';
+  // primární akce náhledu: u šablony „aplikovat", jinak „uložit změny"
+  if (saveBtn) saveBtn.classList.toggle('primary', !isLib);
   el('previewMeta').textContent = src.windowStart + '–' + src.windowEnd + ' · ' + src.items.length + 'p';
   renderPreviewList();
   el('previewModal').classList.add('open');
+}
+
+// Inline přejmenování šablony přímo v náhledu (jen type==='lib').
+function startPreviewTitleEdit() {
+  if (!_previewSource || _previewSource.type !== 'lib') return;
+  const entry = library.find(e => e.id === _previewSource.id);
+  if (!entry) return;
+  const h = el('previewTitle');
+  const inp = document.createElement('input');
+  inp.className = 'preview-item-input';
+  inp.style.cssText = 'flex:1;min-width:0;font-size:1.05rem';
+  inp.value = entry.name || '';
+  h.style.display = 'none';
+  h.parentNode.insertBefore(inp, h);
+  inp.focus(); inp.select();
+  let done = false;
+  const finish = (commit) => {
+    if (done) return; done = true;
+    if (commit) {
+      const val = inp.value.trim();
+      if (val && val !== entry.name) {
+        entry.name = val; entry.mt = Date.now(); _previewSource.name = val;
+        h.textContent = val;
+        saveLibrary(); renderLibrary();
+        showSave('✓ přejmenováno');
+      }
+    }
+    inp.remove();
+    h.style.display = '';
+  };
+  inp.addEventListener('blur', () => finish(true));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    else if (e.key === 'Escape') { finish(false); }
+  });
+}
+
+// Aplikuje právě prohlíženou šablonu do aktivního dne.
+function applyPreviewTemplate() {
+  if (!_previewSource || _previewSource.type !== 'lib') return;
+  applyLibEntry(_previewSource.id);
 }
 
 function renderPreviewList() {
@@ -2725,17 +2768,6 @@ async function previewToTemplate() {
   library.push(entry);
   saveLibrary(); renderLibrary();
   showSave('✓ uloženo do šablon');
-}
-
-async function renameLibEntry(id) {
-  const entry = library.find(e => e.id === id);
-  if (!entry) return;
-  const name = await customPrompt('Nový název šablony:', entry.name || '');
-  if (!name || name === entry.name) return;
-  entry.name = name;
-  entry.mt = Date.now();
-  saveLibrary(); renderLibrary();
-  showSave('✓ přejmenováno');
 }
 
 async function deleteLibEntry(id) {
