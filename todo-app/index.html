@@ -268,6 +268,11 @@ textarea::placeholder{color:var(--mid)}
 .day-btn-label{font-family:'DM Sans',sans-serif;font-size:.78rem;padding:.45rem .1rem;text-align:center;line-height:1.3;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .day-btn-label small{font-size:.62rem;opacity:.7}
 .day-btn-count{font-family:'DM Mono',monospace;font-size:.55rem!important;opacity:.55;white-space:nowrap}
+/* státní svátek — řádek pod datem v den-tlačítku */
+.day-btn-holiday{font-size:.6rem;color:var(--muted);font-style:italic;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* státní svátek inline (Hotovo · Později) — jen text a váha, žádná barva navíc */
+.holiday-name{color:var(--muted);font-style:italic}
+.later-month-holidays{font-size:.66rem;color:var(--muted);font-style:italic;line-height:1.45;padding:.05rem .15rem .25rem}
 /* ── PREVIEW ── */
 .preview-item{display:flex;align-items:center;gap:.35rem;padding:.28rem .1rem;border-bottom:1px solid var(--light)}
 .preview-item:last-child{border-bottom:none}
@@ -3092,6 +3097,57 @@ function updateHeaderDay() {
   }
 }
 
+// ── STÁTNÍ SVÁTKY (ČR) ────────────────────────────────────────────────────────
+// Zdroj: date.nager.at — letošní + příští rok. Cache v localStorage (TTL 30 dní),
+// klíč `todo-app-holidays-{rok}`. V paměti Map: ISO "YYYY-MM-DD" → localName.
+// Fetch jen při startu (loadHolidays() volaná z init() bez await). Selhání = ticho.
+const HOLIDAYS_KEY = y => 'todo-app-holidays-' + y;
+const HOLIDAYS_TTL = 30 * 24 * 60 * 60 * 1000;   // 30 dní
+const holidays = new Map();                       // "YYYY-MM-DD" → localName
+
+function getHoliday(isoDate) { return holidays.get(isoDate) || null; }
+
+// svátky daného měsíce "YYYY-MM" (pro pohled Později), seřazené podle data
+function monthHolidays(ym) {
+  const out = [];
+  for (const [iso, name] of holidays) if (iso.slice(0, 7) === ym) out.push({ iso, name });
+  return out.sort((a, b) => a.iso.localeCompare(b.iso));
+}
+
+function mergeHolidayData(data) {
+  if (!data || typeof data !== 'object') return;
+  for (const [iso, name] of Object.entries(data)) if (iso && name) holidays.set(iso, name);
+}
+
+async function loadHolidaysForYear(year) {
+  const key = HOLIDAYS_KEY(year);
+  // cache hit (neprošlá) → použij a nefetchuj
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || 'null');
+    if (raw && raw.ts && raw.data && (Date.now() - raw.ts) < HOLIDAYS_TTL) { mergeHolidayData(raw.data); return; }
+  } catch(e) {}
+  // fetch + ulož do cache
+  try {
+    const res = await fetch('https://date.nager.at/api/v3/PublicHolidays/' + year + '/CZ', { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) return;
+    const arr = await res.json();
+    if (!Array.isArray(arr)) return;
+    const data = {};
+    arr.forEach(h => { if (h && h.date) data[h.date] = h.localName || h.name || ''; });
+    mergeHolidayData(data);
+    try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
+  } catch(e) { /* offline / CORS → tiše ignoruj, mapa zůstane prázdná */ }
+}
+
+async function loadHolidays() {
+  const y = new Date().getFullYear();
+  await Promise.all([loadHolidaysForYear(y), loadHolidaysForYear(y + 1)]);
+  if (!holidays.size) return;                       // nic nenačteno → neměň UI
+  renderDayButtons();                               // den-tlačítka jsou vždy viditelná
+  if (el('pane-hotovo')?.classList.contains('active'))  renderWeekTab();
+  if (el('pane-pozdeji')?.classList.contains('active')) renderLater();
+}
+
 function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WEEK_KEY) || '[]'); } catch(e) { weekDays = []; } }
 function saveWeek()  { try { localStorage.setItem(WEEK_KEY, JSON.stringify(weekDays)); } catch(e) {} }
 
@@ -3351,8 +3407,12 @@ function renderLater() {
   c.innerHTML = todayHtml + buckets.map((b, gi) => {
     const total = dayTotalMinutes(b.items);
     const headers = buildWeekHeaders(b.items, b.ym);
+    const hols = monthHolidays(b.ym);
+    const holHtml = hols.length
+      ? `<div class="later-month-holidays">${hols.map(h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); }).join(' · ')}</div>`
+      : '';
     return `<div class="later-month-hdr${gi === 0 ? ' first' : ''}">${monthLabel(b.ym)}<span class="later-month-sum">${formatDur(total)}</span></div>
-      <div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
+      ${holHtml}<div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
   }).join('');
   initLaterDnd();
 }
@@ -3458,8 +3518,9 @@ function renderDayButtons() {
     const dateStr = day.getDate() + '. ' + (day.getMonth() + 1) + '.';
     const isActive = iso === activePlanDate;
     const mins = minsByDate[iso] || 0;
+    const hol = getHoliday(iso);
     return `<div class="day-btn-wrap${isActive ? ' active' : ''}" onclick="switchPlanDay('${iso}')">
-      <span class="day-btn-label"><span>${dayShort}</span><small>${dateStr}</small>${mins ? `<small class="day-btn-count">${formatDur(mins)}</small>` : ''}</span>
+      <span class="day-btn-label"><span>${dayShort}</span><small>${dateStr}</small>${mins ? `<small class="day-btn-count">${formatDur(mins)}</small>` : ''}${hol ? `<small class="day-btn-holiday" title="${esc(hol)}">${esc(hol)}</small>` : ''}</span>
     </div>`;
   }).join('');
   updateHeaderDay();
@@ -3601,8 +3662,9 @@ function renderPlanRow(p) {
 
 function renderDayRow(d) {
   const { done, total } = dayTimeSplit(d.items);
+  const hol = getHoliday(d.date);
   return `<div class="week-day-row" style="cursor:default">
-    <span class="week-day-date">${formatDateCz(d.date)}</span>
+    <span class="week-day-date">${formatDateCz(d.date)}${hol ? ` <span class="holiday-name">· ${esc(hol)}</span>` : ''}</span>
     <span class="week-day-meta">${done ? formatDur(done) : '0'} / ${formatDur(total)}</span>
     <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="openPreview('weekDay',${d.id})" title="náhled">náhled</button>
     <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${d.id})" title="smazat z reality">✕</button>
@@ -4002,6 +4064,7 @@ function init() {
   else if (rawSession) showSave('↓ obnoveno');
   setInterval(() => renderTimeline(), 60000);
   updateQuickInputPlaceholder();
+  loadHolidays();   // async, bez await — nesmí blokovat start; po načtení překreslí dotčené pohledy
 }
 init();
 window.addEventListener('resize', updateAppGrid);
