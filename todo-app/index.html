@@ -1277,11 +1277,11 @@ function rowsHtml(ctx, insertBefore = {}) {
     const canDrag = (ctx.kind === 'day') ? !item.isEvent : true;
     const draggable = canDrag ? 'draggable="true"' : '';
 
-    // odznak dne: jen v Később a jen u položek nejvyšší úrovně
+    // odznak dne: jen v Později a jen u položek nejvyšší úrovně
     const _pd = (ctx.kind === 'month' && !item.isSubtask && item.dayLabel) ? parseDayLabel(item.dayLabel, ctx.ym) : null;
-    const _da = _pd ? ` data-day=”${DAY_ABBREV_CZ[_pd.getDay()]}”` : '';
+    const _da = _pd ? ` data-day="${DAY_ABBREV_CZ[_pd.getDay()]}"` : '';
     const dayBadge = (ctx.kind === 'month' && !item.isSubtask)
-      ? `<span class=”day-badge${item.dayLabel ? '' : ' empty'}”${_da} onclick=”${ctx.call('mEditDay', idx)}” title=”přiřadit den (např. 7.6. nebo „konec června”)”>${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`
+      ? `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo konec června)">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`
       : '';
     // šipka „vložit do pole": v Později i Inboxu — u bloků (celá skupina) i jednotlivých podúkolů
     const sendBtn = (ctx.kind === 'month' || ctx.kind === 'inbox')
