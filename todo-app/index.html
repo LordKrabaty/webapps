@@ -201,6 +201,10 @@ textarea::placeholder{color:var(--mid)}
 .item-row.tl-highlight{background:var(--light)!important;border-color:var(--mid)!important}
 .item-toggle{font-size:.85rem;cursor:pointer;flex-shrink:0;width:18px;text-align:center;color:var(--muted);line-height:1;user-select:none}
 @media(hover:hover){.item-toggle:hover{color:var(--black)}}
+.item-emoji{flex-shrink:0;margin-right:.1rem;line-height:1;cursor:pointer;border-radius:2px;user-select:none}
+.item-emoji.empty{color:var(--muted);font-size:.72rem;border:1px dashed var(--light);padding:0 .18rem}
+@media(hover:hover){.item-emoji:hover{outline:1px dashed var(--mid)}}
+[contenteditable="true"].item-emoji{background:var(--off);outline:1.5px solid var(--black);cursor:text;padding:0 2px;min-width:1ch;font-size:.95rem}
 .item-text{flex:1;font-size:.84rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;cursor:pointer;border-radius:2px;padding:0 2px}
 [contenteditable="true"].item-text{background:var(--off);outline:1.5px solid var(--black);white-space:normal;overflow:visible;cursor:text}
 .dur-badge{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
@@ -1103,7 +1107,7 @@ function renderTimeline() {
 
       const span = document.createElement('span');
       span.className = 'tl-label';
-      let label = (btInfo.emoji ? btInfo.emoji + ' ' : '') + stripBlockEmoji(item.text, btInfo);
+      let label = (itemIcon(item) ? itemIcon(item) + ' ' : '') + stripBlockEmoji(item.text, btInfo);
       if (isContinued) label = '↩ ' + label;
       if (label.length > 24) label = label.slice(0, 22) + '…';
       span.textContent = label;
@@ -1210,7 +1214,7 @@ function renderTimeline() {
 // na op_*(MCTX(ym),…) → jedna implementace logiky, žádná duplikace.
 const DAYCTX = {
   kind: 'day',
-  h: { toggle:'toggleDone', edit:'startEdit', ev:'startEventEdit', dur:'startDurEdit', move:'moveItem', del:'deleteItem' },
+  h: { toggle:'toggleDone', edit:'startEdit', ev:'startEventEdit', dur:'startDurEdit', move:'moveItem', del:'deleteItem', icon:'startIconEdit', btime:'startBlockTimeEdit' },
   get list() { return items; },
   rowsEl() { return el('item-list')?.querySelectorAll('.item-row'); },
   input: 'quickInput',
@@ -1223,7 +1227,7 @@ const DAYCTX = {
 function MCTX(ym) {
   return {
     kind: 'month', ym,
-    h: { toggle:'mToggleDone', edit:'mStartEdit', ev:'mStartEventEdit', dur:'mStartDurEdit', move:'mMoveItem', del:'mDeleteItem', send:'mSendToField' },
+    h: { toggle:'mToggleDone', edit:'mStartEdit', ev:'mStartEventEdit', dur:'mStartDurEdit', move:'mMoveItem', del:'mDeleteItem', send:'mSendToField', icon:'mStartIconEdit', btime:'mStartBlockTimeEdit' },
     get list() { return laterBucket(ym).items; },
     rowsEl() { return el('later-list')?.querySelector('.later-rows[data-ym="' + ym + '"]')?.querySelectorAll('.item-row'); },
     input: 'quickInput',
@@ -1236,7 +1240,7 @@ function MCTX(ym) {
 }
 const INBOXCTX = {
   kind: 'inbox',
-  h: { toggle:'iToggleDone', edit:'iStartEdit', ev:'iStartEventEdit', dur:'iStartDurEdit', move:'iMoveItem', del:'iDeleteItem', send:'iSendToField' },
+  h: { toggle:'iToggleDone', edit:'iStartEdit', ev:'iStartEventEdit', dur:'iStartDurEdit', move:'iMoveItem', del:'iDeleteItem', send:'iSendToField', icon:'iStartIconEdit', btime:'iStartBlockTimeEdit' },
   get list() { return inbox; },
   rowsEl() { return el('inbox-list')?.querySelectorAll('.item-row'); },
   input: 'quickInput',
@@ -1270,17 +1274,22 @@ function rowsHtml(ctx, insertBefore = {}) {
     ].filter(Boolean).join(' ');
 
     const toggle = item.isSubtask ? (item.done ? '☑' : '✒') : (item.done ? '☑' : '☐');
-    const emoji = isBlock && btInfo.emoji ? `<span style="flex-shrink:0;margin-right:.1rem">${btInfo.emoji}</span>` : '';
+    // bloky i události: klikací ikona (přepis řádku / „-“,0,✒ → úkol); chybí-li, klikací placeholder „+“
+    const iconChar = itemIcon(item);
+    const emoji = isBlock
+      ? `<span class="item-emoji${iconChar ? '' : ' empty'}" onclick="${ctx.call(ctx.h.icon, idx)}" title="klikni: jiný emoji změní ikonu · &quot;-&quot; / 0 / ✒ → úkol">${iconChar ? esc(iconChar) : '+'}</span>`
+      : '';
 
     let durLabel = '', durEditable = false, durClick = '';
     if (item.isEvent && item.eventStart) {
       durLabel = item.eventStart + '–' + (item.eventEnd || '?');
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni pro úpravu času"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → blok · -/✒ → úkol"`;
     } else if (item.isSubtask && !parentIsEvent) {
       durLabel = formatDur(item.duration);
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.dur, idx)}" title="klikni pro úpravu času"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.dur, idx)}" title="klikni: uprav čas · 9:00-10:00 → událost · 0 → blok · -/✒ → úkol"`;
     } else if (!item.isSubtask) {
       durLabel = formatDur(getEffectiveDuration(idx, list));
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="klikni: 9:00-10:00 → událost · -/✒ → úkol"`;
     }
 
     // den: jen ne-události (události drží čas na časové ose); inbox/měsíc: vše (žádná osa)
@@ -1348,6 +1357,7 @@ function renderAll() {
   renderItemList();
   updateStats();
   updateDirtyState();
+  updateAbbrevHint();
 }
 
 // ── HIGHLIGHT ─────────────────────────────────────────────────────────────────
@@ -1616,6 +1626,15 @@ function firstWord(text) {
   return t ? t.split(/\s+/)[0] : '';
 }
 
+// Ikona položky k zobrazení: per-řádkový přepis (item.icon) má přednost před emoji
+// typu bloku. Prázdné = bez ikony (vykreslí se klikací placeholder „+").
+function itemIcon(item) {
+  if (!item) return '';
+  if (item.icon) return item.icon;
+  const bt = BLOCK_TYPES[item.blockType] || BLOCK_TYPES.TASK;
+  return bt.emoji || '';
+}
+
 // Remove a leading block-type emoji from the stored text so it isn't rendered twice
 // (the renderers add btInfo.emoji separately). Handles legacy data that baked it in.
 function stripBlockEmoji(text, btInfo) {
@@ -1634,6 +1653,41 @@ function parseDuration(text) {
   if ((m = text.match(/^(\d+)\s*m(?:in?)?$/i))) return parseInt(m[1]);
   if ((m = text.match(/^(\d+)$/))) return parseInt(m[1]);
   return null;
+}
+
+// Přepnutí typu položky podle textu zadaného do pole ČASU (jednotné pro úkol/blok/událost):
+//   „9:00-10:00" → událost · „0" → blok · „-" nebo „✒" → úkol.
+// Vrací true, pokud byl text rozpoznán jako konverze (a obsloužil ji — i no-op, když už je
+// položka cílového typu). false = text není konverzní příkaz, ať se zpracuje jako délka.
+function applyTimeConversion(ctx, idx, txt) {
+  const item = ctx.list[idx];
+  txt = (txt || '').trim();
+  const rm = txt.match(/(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i);
+  if (rm) {
+    const dur = timeToMin(rm[2]) - timeToMin(rm[1]);
+    if (dur <= 0) return true;                                              // neplatný rozsah → beze změny
+    if (item.isEvent && item.eventStart === rm[1] && item.eventEnd === rm[2]) return true;  // stejný čas → nic
+    ctx.undo();
+    item.isSubtask = false; item.isEvent = true;
+    item.eventStart = rm[1]; item.eventEnd = rm[2]; item.duration = dur;
+    ctx.save(); return true;
+  }
+  if (txt === '0') {                                                        // → blok (čas/rozsah zahodí, délku nechá)
+    if (!item.isEvent && !item.isSubtask) return true;                      // už je to blok
+    ctx.undo();
+    item.isSubtask = false; item.isEvent = false;
+    item.eventStart = null; item.eventEnd = null;
+    ctx.save(); return true;
+  }
+  if (txt === '-' || txt === '✒') {                                         // → úkol
+    if (item.isSubtask) return true;                                        // už je to úkol
+    ctx.undo();
+    item.isSubtask = true; item.isEvent = false;
+    item.eventStart = null; item.eventEnd = null;
+    delete item.icon;
+    ctx.save(); return true;
+  }
+  return false;
 }
 
 function op_startDurEdit(ctx, idx) {
@@ -1658,7 +1712,10 @@ function op_startDurEdit(ctx, idx) {
     if (committed) return;
     committed = true;
     durEl.contentEditable = 'false';
-    const parsed = parseDuration(durEl.textContent);
+    const txt = durEl.textContent.trim();
+    // rozsah → událost · 0 → blok · -/✒ → úkol
+    if (applyTimeConversion(ctx, idx, txt)) { ctx.render(); return; }
+    const parsed = parseDuration(txt);
     if (parsed && parsed > 0 && parsed !== item.duration) {
       ctx.undo();
       list[idx].duration = parsed;
@@ -1695,18 +1752,8 @@ function op_startEventEdit(ctx, idx) {
     if (committed) return;
     committed = true;
     durEl.contentEditable = 'false';
-    const m = durEl.textContent.trim().match(/(\d{1,2}:\d{2})\s*[–\-]\s*(\d{1,2}:\d{2})/);
-    if (m) {
-      const newStart = m[1], newEnd = m[2];
-      const newDur = timeToMin(newEnd) - timeToMin(newStart);
-      if (newDur > 0 && (newStart !== item.eventStart || newEnd !== item.eventEnd)) {
-        ctx.undo();
-        list[idx].eventStart = newStart;
-        list[idx].eventEnd   = newEnd;
-        list[idx].duration   = newDur;
-        ctx.save();
-      }
-    }
+    // rozsah → uprav/ponech událost · 0 → blok · -/✒ → úkol
+    applyTimeConversion(ctx, idx, durEl.textContent.trim());
     ctx.render();
   };
   durEl.addEventListener('blur', commit, { once: true });
@@ -1721,6 +1768,94 @@ function mStartDurEdit(ym, idx) { op_startDurEdit(MCTX(ym), idx); }
 function mStartEventEdit(ym, idx) { op_startEventEdit(MCTX(ym), idx); }
 function iStartDurEdit(idx) { op_startDurEdit(INBOXCTX, idx); }
 function iStartEventEdit(idx) { op_startEventEdit(INBOXCTX, idx); }
+
+// ── IKONA BLOKU/UDÁLOSTI (inline): jiný emoji = přepis ikony řádku, „-“/0/✒ = → úkol ──
+function op_startIconEdit(ctx, idx) {
+  const list = ctx.list;
+  const item = list[idx];
+  if (!item || item.isSubtask) return;            // jen bloky/události
+  const rows = ctx.rowsEl();
+  if (!rows || !rows[idx]) return;
+  const iconEl = rows[idx].querySelector('.item-emoji');
+  if (!iconEl) return;
+
+  const original = itemIcon(item);
+  iconEl.classList.remove('empty');
+  iconEl.textContent = original;
+  iconEl.contentEditable = 'true';
+  iconEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(iconEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    iconEl.contentEditable = 'false';
+    const val = iconEl.textContent.trim();
+    if (val === '-' || val === '0' || val === '✒') {
+      // blok/událost → úkol
+      ctx.undo();
+      item.isSubtask = true; item.isEvent = false;
+      item.eventStart = null; item.eventEnd = null;
+      delete item.icon;
+      ctx.save();
+    } else if (val && val !== original) {
+      // jiný emoji → přepis ikony jen tohoto řádku
+      ctx.undo();
+      item.icon = val;
+      ctx.save();
+    }
+    ctx.render();
+  };
+  iconEl.addEventListener('blur', commit, { once: true });
+  iconEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); iconEl.blur(); }
+    if (e.key === 'Escape') { iconEl.textContent = original; iconEl.blur(); }
+  });
+}
+
+// ── ČAS BLOKU (inline): zadaný rozsah 9:00-10:00 → blok se stane událostí ──────────
+function op_startBlockTimeEdit(ctx, idx) {
+  const list = ctx.list;
+  const item = list[idx];
+  if (!item || item.isSubtask || item.isEvent) return;   // jen bloky (ne úkoly, ne události)
+  const rows = ctx.rowsEl();
+  if (!rows || !rows[idx]) return;
+  const durEl = rows[idx].querySelector('.dur-badge');
+  if (!durEl) return;
+
+  const original = durEl.textContent;
+  durEl.contentEditable = 'true';
+  durEl.focus();
+  const range = document.createRange();                  // označ obsah — uživatel rovnou přepíše rozsahem
+  range.selectNodeContents(durEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    durEl.contentEditable = 'false';
+    // rozsah → událost · -/✒ → úkol  (0 = už je blok, nic)
+    applyTimeConversion(ctx, idx, durEl.textContent.trim());
+    ctx.render();
+  };
+  durEl.addEventListener('blur', commit, { once: true });
+  durEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
+    if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
+  });
+}
+function startIconEdit(idx) { op_startIconEdit(DAYCTX, idx); }
+function startBlockTimeEdit(idx) { op_startBlockTimeEdit(DAYCTX, idx); }
+function mStartIconEdit(ym, idx) { op_startIconEdit(MCTX(ym), idx); }
+function mStartBlockTimeEdit(ym, idx) { op_startBlockTimeEdit(MCTX(ym), idx); }
+function iStartIconEdit(idx) { op_startIconEdit(INBOXCTX, idx); }
+function iStartBlockTimeEdit(idx) { op_startBlockTimeEdit(INBOXCTX, idx); }
 
 // ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
 async function loadDayTemplate(day) {
@@ -1839,16 +1974,22 @@ function updateQuickInputPlaceholder() {
   if (abbrevs['DEEP_WORK']) { ex = abbrevs['DEEP_WORK']; exLabel = BLOCK_TYPES['DEEP_WORK']?.label || 'Deep Work'; }
   else { const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; } }
   ta.placeholder = `úkol 20m  ·  9:30-10:00 standup  ·  -${ex} text (pod ${exLabel})  ·  text -${ex.toLowerCase()}`;
+  updateAbbrevHint();
+}
 
+// hint pod polem: jen zkratky bloků, které jsou v právě aktivním cíli (addCtx — den / inbox / měsíc)
+function updateAbbrevHint() {
   const hint = el('abbrevHint');
-  if (hint) {
-    const keys = (blockTypeOrder && blockTypeOrder.length) ? blockTypeOrder : Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
-    hint.innerHTML = keys.map(k => {
-      const ab = abbrevs[k]; const bt = BLOCK_TYPES[k];
-      if (!ab || !bt) return '';
-      return `<span class="ab" title="${esc(bt.label || k)} → -${ab}"><b>${esc(ab)}</b>${bt.emoji ? esc(bt.emoji) : ''}</span>`;
-    }).filter(Boolean).join('');
-  }
+  if (!hint) return;
+  const { abbrevs } = getBlockAbbrevMap();
+  const list = (addCtx && addCtx.list) ? addCtx.list : [];
+  const present = new Set(list.filter(it => !it.isSubtask && it.blockType && it.blockType !== 'TASK').map(it => it.blockType));
+  const order = (blockTypeOrder && blockTypeOrder.length) ? blockTypeOrder : Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
+  hint.innerHTML = order.filter(k => present.has(k)).map(k => {
+    const ab = abbrevs[k]; const bt = BLOCK_TYPES[k];
+    if (!ab || !bt) return '';
+    return `<span class="ab" title="${esc(bt.label || k)} → -${ab}"><b>${esc(ab)}</b>${bt.emoji ? esc(bt.emoji) : ''}</span>`;
+  }).filter(Boolean).join('');
 }
 
 function normalizeBlockKey(label) {
@@ -2217,8 +2358,9 @@ function renderPreviewList() {
     if (item.isEvent && item.eventStart) durTxt = item.eventStart + '–' + (item.eventEnd || '?');
     else durTxt = formatDur(item.duration);
     const pbt = BLOCK_TYPES[item.blockType] || BLOCK_TYPES.TASK;
-    const ptext = !item.isSubtask && pbt.emoji
-      ? pbt.emoji + ' ' + stripBlockEmoji(item.text, pbt)
+    const pic = itemIcon(item);
+    const ptext = !item.isSubtask && pic
+      ? pic + ' ' + stripBlockEmoji(item.text, pbt)
       : item.text;
     return `<div class="preview-item${item.isSubtask ? ' subtask' : ' block'}" draggable="true" data-idx="${i}">
       <input type="checkbox" class="preview-item-chk" ${item.done ? 'checked' : ''}
@@ -3172,6 +3314,7 @@ function saveInbox() { try { localStorage.setItem(INBOX_KEY, JSON.stringify({ it
 
 function renderInbox() {
   const c = el('inbox-list'); if (!c) return;
+  updateAbbrevHint();
   if (!inbox.length) {
     c.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Prázdné — přidej úkol nebo blok výše (na příště / co se nestihlo).</div>';
     return;
@@ -3271,7 +3414,7 @@ function populateLaterAddMonth() {
 }
 
 // nastaví cíl přidávání na vybraný měsíc (volá se před otevřením menu / quick-add)
-function setAddCtxLater() { const ym = el('laterAddMonth')?.value; if (ym) setAddCtx(ym); }
+function setAddCtxLater() { const ym = el('laterAddMonth')?.value; if (ym) setAddCtx(ym); updateAbbrevHint(); }
 
 // inline editace odznaku dne — volný text; samotné číslo doplní měsíc (7 → 7.6.)
 function mEditDay(ym, idx) {
@@ -3314,8 +3457,7 @@ function sendItemToField(ctx, idx) {
   const lines = [];
   for (let i = idx; i < idx + count; i++) {
     const x = list[i];
-    const bt = BLOCK_TYPES[x.blockType];
-    const emoji = (!x.isSubtask && x.blockType !== 'TASK' && bt && bt.emoji) ? bt.emoji + ' ' : '';
+    const emoji = (!x.isSubtask && itemIcon(x)) ? itemIcon(x) + ' ' : '';
     const prefix = x.isSubtask ? '✒ ' : '';
     let suffix = '';
     if (x.isEvent && x.eventStart) suffix = ' ' + x.eventStart + '-' + (x.eventEnd || x.eventStart);
@@ -3396,6 +3538,7 @@ function buildWeekHeaders(items, ym) {
 
 function renderLater() {
   const c = el('later-list'); if (!c) return;
+  updateAbbrevHint();
   const buckets = later.filter(b => b && b.items && b.items.length).slice().sort((a, b) => a.ym.localeCompare(b.ym));
   const now = new Date();
   const todayHtml = `<div class="later-today-bar">Dnes: <b>${DAY_NAMES_CZ_LONG[now.getDay()]}</b> ${now.getDate()}. ${now.getMonth()+1}. ${now.getFullYear()}</div>`;
@@ -3609,6 +3752,7 @@ function switchNotesTab(name) {
     setAddCtxLater();
     renderLater();
   }
+  updateAbbrevHint();
 }
 
 async function deleteWeekDay(id) {
