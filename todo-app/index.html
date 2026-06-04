@@ -990,6 +990,63 @@ function parseItemText(raw) {
   return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent, targetBlockKey };
 }
 
+// ── EMOJI / DATUM helpery pro rychlé přidávání ────────────────────────────────
+function _blockEmojiSet() {
+  const s = new Set();
+  Object.values(BLOCK_TYPES).forEach(bt => { if (bt && bt.emoji) s.add(bt.emoji.replace(/️/g, '')); });
+  return s;
+}
+// detekce emoji přes rozsahy code-pointů (žádný \p{…}/u literál → bez rizika parse-erroru na starém webview)
+function _isEmojiCp(ch) {
+  const cp = ch.codePointAt(0);
+  return (cp >= 0x1F000 && cp <= 0x1FAFF) || (cp >= 0x2600 && cp <= 0x27BF)
+      || (cp >= 0x2B00 && cp <= 0x2BFF) || (cp >= 0x2190 && cp <= 0x21FF)
+      || (cp >= 0x1F1E6 && cp <= 0x1F1FF) || cp === 0x203C || cp === 0x2049;
+}
+function _isEmojiMod(ch) {
+  const cp = ch.codePointAt(0);
+  return cp === 0xFE0F || cp === 0x200D || cp === 0x20E3 || (cp >= 0x1F3FB && cp <= 0x1F3FF);
+}
+// vedoucí emoji → vlastní ikona (jen NE-blokové; blokové nechá detekci typu níže); vrací { icon, rest } nebo null
+function extractLeadingIcon(text) {
+  const cps = Array.from(text || '');
+  if (!cps.length || !_isEmojiCp(cps[0])) return null;
+  let i = 0, icon = '';
+  while (i < cps.length && (_isEmojiCp(cps[i]) || _isEmojiMod(cps[i]))) { icon += cps[i]; i++; }
+  if (_blockEmojiSet().has(icon.replace(/️/g, ''))) return null;
+  return { icon, rest: cps.slice(i).join('').replace(/^\s+/, '') };
+}
+// token → datum (d.m. / d.m.rrrr), číslo měsíce (m.) nebo český název měsíce → { mo, day, year } | null
+function parseMonthToken(tok) {
+  if (!tok) return null;
+  const t = tok.toLowerCase().replace(/[,;:]$/, '');
+  let m;
+  if ((m = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})?$/))) {
+    const d = +m[1], mo = +m[2];
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return { mo, day: d, year: m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : null };
+    return null;
+  }
+  if ((m = t.match(/^(\d{1,2})\.$/))) { const mo = +m[1]; return (mo >= 1 && mo <= 12) ? { mo, day: null, year: null } : null; }
+  const idx = MONTHS_CZ.indexOf(t);
+  return idx >= 0 ? { mo: idx + 1, day: null, year: null } : null;
+}
+// datum/měsíc na ZAČÁTKU nebo KONCI → { ym, dayLabel, rest }; bez zbytku textu nepřesměrovává
+function extractMonthRoute(text) {
+  text = (text || '').trim();
+  if (!text) return null;
+  const tokens = text.split(/\s+/);
+  for (const [pos, tok] of [['start', tokens[0]], ['end', tokens[tokens.length - 1]]]) {
+    const p = parseMonthToken(tok);
+    if (!p) continue;
+    const rest = (pos === 'start' ? tokens.slice(1) : tokens.slice(0, -1)).join(' ').trim();
+    if (!rest) continue;                                  // samotné datum bez úkolu → nepřesměrovávej
+    let y = p.year;
+    if (!y) { const now = new Date(); y = now.getFullYear(); if (p.mo - 1 < now.getMonth()) y++; }   // měsíc už letos byl → příští rok
+    return { ym: y + '-' + String(p.mo).padStart(2, '0'), dayLabel: p.day ? (p.day + '.' + p.mo + '.') : null, rest };
+  }
+  return null;
+}
+
 // ── COMPUTE TIMELINE ──────────────────────────────────────────────────────────
 
 function computeTimeline() {
@@ -1379,35 +1436,82 @@ function op_addQuickItems(ctx, forceType) {
   if (!lines.length) return;
   ctx.undo();
   const w = ctx.winStart();
-  const { map: blockMap } = presentBlockAbbrevs(ctx.list);   // -X cílí přednostně na blok-instanci na kartě (dle názvu)
-  lines.forEach(line => {
-    // -X na začátku / konci → konkrétní blok přítomný na kartě (dle zobrazeného názvu)
+  let addedHere = false, routedLater = false, lastYm = null;
+
+  lines.forEach(rawLine => {
+    let line = rawLine;
+    // (3) DATUM / MĚSÍC na začátku nebo konci → přesměruj do „Později" do daného měsíce
+    const route = extractMonthRoute(line);
+    const toLater = !!route;
+    const targetList = toLater ? laterBucket(route.ym).items : ctx.list;
+    if (toLater) line = route.rest;
+
+    // (1) vedoucí emoji (ne-blokové) → vlastní ikona řádku
+    let icon = null;
+    const ie = extractLeadingIcon(line);
+    if (ie) { icon = ie.icon; line = ie.rest; }
+
+    // -X (zkratka konkrétního bloku na cílovém seznamu) na začátku / konci
+    const { map: blockMap } = presentBlockAbbrevs(targetList);
     let targetBlockId = null, body = line, mm;
     if ((mm = body.match(/^-([a-zA-Z]+)\s+(.+)$/)) && blockMap[mm[1].toLowerCase()] != null) { targetBlockId = blockMap[mm[1].toLowerCase()]; body = mm[2].trim(); }
     else if ((mm = body.match(/^(.+?)\s+-([a-zA-Z]+)$/)) && blockMap[mm[2].toLowerCase()] != null) { targetBlockId = blockMap[mm[2].toLowerCase()]; body = mm[1].trim(); }
+
     const parsed = parseItemText(body);
+
+    // (2) vedoucí pomlčka bez zkratky → podúkol pod POSLEDNÍ blok cílového seznamu
+    let toLastBlock = false;
+    if (targetBlockId == null && !parsed.targetBlockKey && /^-/.test(parsed.text)) {
+      parsed.text = parsed.text.replace(/^-\s*/, '').trim();
+      if (parsed.text) toLastBlock = true;
+    }
+    if (!parsed.text) return;                               // prázdné (např. samotné datum) → přeskoč
+
     if (forceType === 'EVENT' && !parsed.isEvent) {
       parsed.isEvent = true;
       parsed.eventStart = minToTime(timeToMin(w));
       parsed.eventEnd = minToTime(timeToMin(w) + parsed.duration);
     }
     parsed.id = Date.now() + Math.random();
+    if (toLater && route.dayLabel) parsed.dayLabel = route.dayLabel;
+
     if (targetBlockId != null) {                            // pod konkrétní blok-instanci (jako klik na zkratku)
-      const list = ctx.list;
-      const bIdx = list.findIndex(it => String(it.id) === String(targetBlockId) && !it.isSubtask);
+      const bIdx = targetList.findIndex(it => String(it.id) === String(targetBlockId) && !it.isSubtask);
       if (bIdx >= 0) {
-        parsed.isSubtask = true; parsed.blockType = list[bIdx].blockType; parsed.targetBlockKey = null;
-        let ins = bIdx + 1; while (ins < list.length && list[ins].isSubtask) ins++;
-        list.splice(ins, 0, parsed);
-      } else { ctx.list.push(parsed); }
+        parsed.isSubtask = true; parsed.blockType = targetList[bIdx].blockType; parsed.targetBlockKey = null;
+        let ins = bIdx + 1; while (ins < targetList.length && targetList[ins].isSubtask) ins++;
+        targetList.splice(ins, 0, parsed);
+      } else { targetList.push(parsed); }
+    } else if (toLastBlock) {                               // pod poslední blok na kartě
+      let lastB = -1; for (let i = 0; i < targetList.length; i++) { if (!targetList[i].isSubtask) lastB = i; }
+      if (lastB >= 0) {
+        parsed.isSubtask = true; parsed.blockType = targetList[lastB].blockType; parsed.targetBlockKey = null;
+        let ins = lastB + 1; while (ins < targetList.length && targetList[ins].isSubtask) ins++;
+        targetList.splice(ins, 0, parsed);
+      } else { parsed.isSubtask = false; targetList.push(parsed); }   // žádný blok → top-level
     } else if (parsed.targetBlockKey) {                     // záloha dle TYPU (vytvoří blok, když na kartě chybí)
-      insertSubtaskUnderBlock(ctx.list, parsed.targetBlockKey, parsed);
+      insertSubtaskUnderBlock(targetList, parsed.targetBlockKey, parsed);
     } else {
-      ctx.list.push(parsed);
+      targetList.push(parsed);
     }
+
+    // ikona: bloky/události nesou item.icon, podúkoly si emoji nechají v textu
+    if (icon) { if (parsed.isSubtask) parsed.text = icon + ' ' + parsed.text; else parsed.icon = icon; }
+
+    if (toLater) { routedLater = true; lastYm = route.ym; } else { addedHere = true; }
   });
+
   ta.value = '';
-  ctx.save(); ctx.render();
+  if (addedHere) { ctx.save(); ctx.render(); }
+  if (routedLater) {
+    saveLater();
+    if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
+    populateLaterAddMonth();
+    const sel = el('laterAddMonth');
+    if (sel && lastYm && [...sel.options].some(o => o.value === lastYm)) { sel.value = lastYm; setAddCtxLater(); }
+    renderLater();
+    showStatusMsg('→ přidáno do Později · ' + monthLabel(lastYm), 2600);
+  }
 }
 
 // vytvoří hlavičku bloku (řádek bloku bez podúkolů)
