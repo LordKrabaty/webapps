@@ -923,11 +923,9 @@ function getBlockAbbrevMap() {
   for (const [k, a] of Object.entries(abbrevs)) map[a.toLowerCase()] = k;
   return { abbrevs, map };
 }
-function hlBlockText(rawText, btInfo, blockType) {
+// Podtrhne v názvu bloku tu část, která tvoří jeho zkratku (abbr se předává zvenčí — per-instance).
+function hlBlockText(rawText, btInfo, abbr) {
   const text = stripBlockEmoji(rawText, btInfo);
-  if (blockType === 'TASK') return esc(text);
-  const { abbrevs } = getBlockAbbrevMap();
-  const abbr = abbrevs[blockType];
   if (!abbr) return esc(text);
   let i = 0, c = 0;
   while (i < text.length && c < abbr.length) { if (text[i] !== ' ') c++; i++; }
@@ -1258,6 +1256,7 @@ function setAddCtx(x) { addCtx = (x === 'day') ? DAYCTX : (x === 'inbox') ? INBO
 // HTML řádků položek pro libovolný kontext (sdílí .item-row vzhled s denním plánem)
 function rowsHtml(ctx, insertBefore = {}) {
   const list = ctx.list;
+  const { byId: blockAbbrById } = presentBlockAbbrevs(list);   // zkratky bloků dle jejich názvů na této kartě
   return list.map((item, idx) => {
     const bt = item.blockType || 'TASK';
     const btInfo = BLOCK_TYPES[bt] || BLOCK_TYPES.TASK;
@@ -1313,7 +1312,7 @@ function rowsHtml(ctx, insertBefore = {}) {
       ${dayBadge}
       <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${toggle}</span>
       ${emoji}
-      <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, bt) : esc(item.text)}</span>
+      <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, blockAbbrById[item.id]) : esc(item.text)}</span>
       ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx===0?'disabled':''}>↑</button>
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx===list.length-1?'disabled':''}>↓</button>
@@ -1380,15 +1379,28 @@ function op_addQuickItems(ctx, forceType) {
   if (!lines.length) return;
   ctx.undo();
   const w = ctx.winStart();
+  const { map: blockMap } = presentBlockAbbrevs(ctx.list);   // -X cílí přednostně na blok-instanci na kartě (dle názvu)
   lines.forEach(line => {
-    const parsed = parseItemText(line);
+    // -X na začátku / konci → konkrétní blok přítomný na kartě (dle zobrazeného názvu)
+    let targetBlockId = null, body = line, mm;
+    if ((mm = body.match(/^-([a-zA-Z]+)\s+(.+)$/)) && blockMap[mm[1].toLowerCase()] != null) { targetBlockId = blockMap[mm[1].toLowerCase()]; body = mm[2].trim(); }
+    else if ((mm = body.match(/^(.+?)\s+-([a-zA-Z]+)$/)) && blockMap[mm[2].toLowerCase()] != null) { targetBlockId = blockMap[mm[2].toLowerCase()]; body = mm[1].trim(); }
+    const parsed = parseItemText(body);
     if (forceType === 'EVENT' && !parsed.isEvent) {
       parsed.isEvent = true;
       parsed.eventStart = minToTime(timeToMin(w));
       parsed.eventEnd = minToTime(timeToMin(w) + parsed.duration);
     }
     parsed.id = Date.now() + Math.random();
-    if (parsed.targetBlockKey) {
+    if (targetBlockId != null) {                            // pod konkrétní blok-instanci (jako klik na zkratku)
+      const list = ctx.list;
+      const bIdx = list.findIndex(it => String(it.id) === String(targetBlockId) && !it.isSubtask);
+      if (bIdx >= 0) {
+        parsed.isSubtask = true; parsed.blockType = list[bIdx].blockType; parsed.targetBlockKey = null;
+        let ins = bIdx + 1; while (ins < list.length && list[ins].isSubtask) ins++;
+        list.splice(ins, 0, parsed);
+      } else { ctx.list.push(parsed); }
+    } else if (parsed.targetBlockKey) {                     // záloha dle TYPU (vytvoří blok, když na kartě chybí)
       insertSubtaskUnderBlock(ctx.list, parsed.targetBlockKey, parsed);
     } else {
       ctx.list.push(parsed);
@@ -1447,27 +1459,33 @@ function op_addBlockItem(ctx, blockType) {
 function addQuickItems(forceType) { op_addQuickItems(addCtx, forceType); }
 function addBlockItem(blockType) { op_addBlockItem(addCtx, blockType); }
 
-// klik na zkratku bloku pod polem → vloží napsaný text jako podúkol(y) pod daný blok
-// (prázdné pole = přidá celý blok s výchozími úkoly, jako „+ Blok")
-function op_addToBlock(ctx, blockType) {
-  if (!BLOCK_TYPES[blockType]) return;
+// klik na zkratku bloku pod polem → vloží napsaný text jako podúkol(y) pod KONKRÉTNÍ blok (dle id)
+// (prázdné pole → jen zaměří pole pro psaní)
+function op_addUnderBlock(ctx, blockId) {
+  const list = ctx.list;
+  const bIdx = list.findIndex(it => String(it.id) === String(blockId) && !it.isSubtask);
+  if (bIdx < 0) return;
   const ta = el(ctx.input);
   const lines = (ta ? ta.value : '').split('\n').map(l => l.trim()).filter(Boolean);
-  if (!lines.length) { op_addBlockItem(ctx, blockType); return; }
+  if (!lines.length) { if (ta) ta.focus(); return; }
   ctx.undo();
+  const blockType = list[bIdx].blockType;
+  let ins = bIdx + 1;
+  while (ins < list.length && list[ins].isSubtask) ins++;   // za poslední podúkol bloku
   lines.forEach(line => {
     const parsed = parseItemText(line);
     parsed.id = Date.now() + Math.random();
     parsed.blockType = blockType;
-    parsed.targetBlockKey = blockType;
+    parsed.targetBlockKey = null;
     parsed.isSubtask = true;
-    insertSubtaskUnderBlock(ctx.list, blockType, parsed);
+    list.splice(ins, 0, parsed);
+    ins++;
   });
   if (ta) ta.value = '';
   ctx.save(); ctx.render();
   if (ta) ta.focus();
 }
-function addToBlock(blockType) { op_addToBlock(addCtx, blockType); }
+function addUnderBlock(blockId) { op_addUnderBlock(addCtx, blockId); }
 
 // ── ITEM OPERATIONS (kontextové: den i měsíc Později) ───────────────────────────
 function op_toggleDone(ctx, idx) {
@@ -2012,18 +2030,41 @@ function updateQuickInputPlaceholder() {
   updateAbbrevHint();
 }
 
-// hint pod polem: klikací zkratky všech bloků (na všech kartách — den / inbox / měsíc).
-// Klik vloží napsaný text jako podúkol pod daný blok (blok vytvoří, pokud v cíli chybí).
+// Zkratky bloků PŘÍTOMNÝCH na aktivní kartě — odvozené z jejich ZOBRAZENÝCH názvů (per blok-instance),
+// stejné pravidlo jako u typů: nejkratší unikátní prefix. Po přejmenování bloku se zkratka přepočítá.
+// Vrací: blocks [{id,name,abbr,emoji}], map (abbr→id pro psané -X), byId (id→abbr pro podtržení v názvu).
+function presentBlockAbbrevs(list) {
+  const blocks = [];
+  (list || []).forEach(it => {
+    if (!it || it.isSubtask || it.id == null || !it.blockType || it.blockType === 'TASK') return;
+    const bt = BLOCK_TYPES[it.blockType] || BLOCK_TYPES.TASK;
+    const name = (stripBlockEmoji(it.text || '', bt).trim()) || (bt.label || '');
+    blocks.push({ id: it.id, name, emoji: itemIcon(it) });
+  });
+  const norms = blocks.map(b => b.name.replace(/\s+/g, '').toUpperCase());
+  blocks.forEach((b, i) => {
+    const norm = norms[i];
+    let abbr = '';
+    for (let len = 1; len <= norm.length; len++) {
+      if (norms.every((n, j) => j === i || !n.startsWith(norm.slice(0, len)))) { abbr = _abbrevStr(b.name, len); break; }
+    }
+    b.abbr = abbr || _abbrevStr(b.name, 3) || ('B' + (i + 1));
+  });
+  const map = {}, byId = {};
+  blocks.forEach(b => { const k = b.abbr.toLowerCase(); if (map[k] == null) map[k] = b.id; byId[b.id] = b.abbr; });
+  return { blocks, map, byId };
+}
+
+// hint pod polem: klikací zkratky JEN bloků přítomných na aktivní kartě (per blok-instance).
+// Klik vloží napsaný text jako podúkol pod TEN konkrétní blok; psané -<zkratka> dělá totéž.
 function updateAbbrevHint() {
   const hint = el('abbrevHint');
   if (!hint) return;
-  const { abbrevs } = getBlockAbbrevMap();
-  const order = (blockTypeOrder && blockTypeOrder.length) ? blockTypeOrder : Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
-  hint.innerHTML = order.map(k => {
-    const ab = abbrevs[k]; const bt = BLOCK_TYPES[k];
-    if (!ab || !bt) return '';
-    return `<span class="ab" role="button" onclick="addToBlock('${k}')" title="${esc(bt.label || k)} → klikni (text pod blok) nebo napiš -${esc(ab)}"><b>${esc(ab)}</b>${bt.emoji ? esc(bt.emoji) : ''}</span>`;
-  }).filter(Boolean).join('');
+  const list = (addCtx && addCtx.list) ? addCtx.list : [];
+  const { blocks } = presentBlockAbbrevs(list);
+  hint.innerHTML = blocks.map(b =>
+    `<span class="ab" role="button" onclick="addUnderBlock('${b.id}')" title="${esc(b.name)} → klikni (vloží text pod tento blok) nebo napiš -${esc(b.abbr)}"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
+  ).join('');
 }
 
 function normalizeBlockKey(label) {
