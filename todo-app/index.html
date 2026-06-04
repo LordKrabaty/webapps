@@ -235,6 +235,10 @@ textarea::placeholder{color:var(--mid)}
 [contenteditable="true"].day-badge::after{display:none}
 
 /* ── INPUT AREA ── */
+.abbrev-hint{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.25rem;font-size:.72rem;color:var(--muted);line-height:1.5}
+.abbrev-hint:empty{display:none}
+.abbrev-hint .ab{white-space:nowrap}
+.abbrev-hint .ab b{font-family:'DM Mono',monospace;color:var(--black);font-weight:600}
 .input-btns{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
 .btn-add{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .55rem;cursor:pointer;white-space:nowrap}
 .btn-add:active{background:var(--light)}
@@ -491,6 +495,7 @@ textarea::placeholder{color:var(--mid)}
     <!-- sdílené přidávací pole — stejné pro Týden / Příští / Inbox / Později (cíl dle aktivní karty) -->
     <div id="notes-add" class="notes-add">
       <textarea id="quickInput" placeholder="úkol 20m  ·  9:30-10:00 standup  ·  -D text (pod blok)  ·  text -d" rows="2"></textarea>
+      <div id="abbrevHint" class="abbrev-hint" title="napiš -ZKRATKA na začátek (nebo -zkratka na konec) → úkol se vloží pod daný blok"></div>
       <div class="input-btns">
         <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
         <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
@@ -1829,6 +1834,16 @@ function updateQuickInputPlaceholder() {
   if (abbrevs['DEEP_WORK']) { ex = abbrevs['DEEP_WORK']; exLabel = BLOCK_TYPES['DEEP_WORK']?.label || 'Deep Work'; }
   else { const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; } }
   ta.placeholder = `úkol 20m  ·  9:30-10:00 standup  ·  -${ex} text (pod ${exLabel})  ·  text -${ex.toLowerCase()}`;
+
+  const hint = el('abbrevHint');
+  if (hint) {
+    const keys = (blockTypeOrder && blockTypeOrder.length) ? blockTypeOrder : Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
+    hint.innerHTML = keys.map(k => {
+      const ab = abbrevs[k]; const bt = BLOCK_TYPES[k];
+      if (!ab || !bt) return '';
+      return `<span class="ab" title="${esc(bt.label || k)} → -${ab}"><b>${esc(ab)}</b>${bt.emoji ? esc(bt.emoji) : ''}</span>`;
+    }).filter(Boolean).join('');
+  }
 }
 
 function normalizeBlockKey(label) {
