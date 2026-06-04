@@ -241,7 +241,9 @@ textarea::placeholder{color:var(--mid)}
 /* ── INPUT AREA ── */
 .abbrev-hint{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.25rem;font-size:.72rem;color:var(--muted);line-height:1.5}
 .abbrev-hint:empty{display:none}
-.abbrev-hint .ab{white-space:nowrap}
+.abbrev-hint .ab{white-space:nowrap;cursor:pointer;padding:.05rem .3rem;border:var(--b);border-radius:var(--r)}
+.abbrev-hint .ab:active{background:var(--light)}
+@media(hover:hover){.abbrev-hint .ab:hover{background:var(--light)}}
 .abbrev-hint .ab b{font-family:'DM Mono',monospace;color:var(--black);font-weight:600}
 .input-btns{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
 .btn-add{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .55rem;cursor:pointer;white-space:nowrap}
@@ -1387,15 +1389,7 @@ function op_addQuickItems(ctx, forceType) {
     }
     parsed.id = Date.now() + Math.random();
     if (parsed.targetBlockKey) {
-      const list = ctx.list;
-      let ins = list.length, inB = false;
-      for (let i = 0; i < list.length; i++) {
-        const it = list[i];
-        if (!it.isSubtask && it.blockType === parsed.targetBlockKey) { inB = true; ins = i + 1; }
-        else if (inB && !it.isSubtask) { ins = i; break; }
-        else if (inB) ins = i + 1;
-      }
-      list.splice(ins, 0, parsed);
+      insertSubtaskUnderBlock(ctx.list, parsed.targetBlockKey, parsed);
     } else {
       ctx.list.push(parsed);
     }
@@ -1404,10 +1398,10 @@ function op_addQuickItems(ctx, forceType) {
   ctx.save(); ctx.render();
 }
 
-function op_addBlockItem(ctx, blockType) {
+// vytvoří hlavičku bloku (řádek bloku bez podúkolů)
+function makeBlockHeader(blockType) {
   const bt = BLOCK_TYPES[blockType] || BLOCK_TYPES.TASK;
-  ctx.undo();
-  ctx.list.push({
+  return {
     id: Date.now() + Math.random(),
     text: bt.label,
     blockType, duration: bt.defaultDuration,
@@ -1415,7 +1409,26 @@ function op_addBlockItem(ctx, blockType) {
     eventStart: bt.isEvent ? (bt.eventStart || null) : null,
     eventEnd:   bt.isEvent ? (bt.eventEnd   || null) : null,
     isSubtask: false, done: false, urgent: false,
-  });
+  };
+}
+
+// vloží položku jako podúkol pod blok daného typu; pokud blok v seznamu není, vytvoří jeho hlavičku
+function insertSubtaskUnderBlock(list, blockType, item) {
+  if (!list.some(it => !it.isSubtask && it.blockType === blockType)) list.push(makeBlockHeader(blockType));
+  let ins = list.length, inB = false;
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    if (!it.isSubtask && it.blockType === blockType) { inB = true; ins = i + 1; }
+    else if (inB && !it.isSubtask) { ins = i; break; }
+    else if (inB) ins = i + 1;
+  }
+  list.splice(ins, 0, item);
+}
+
+function op_addBlockItem(ctx, blockType) {
+  const bt = BLOCK_TYPES[blockType] || BLOCK_TYPES.TASK;
+  ctx.undo();
+  ctx.list.push(makeBlockHeader(blockType));
   const tasks = bt.defaultTasks && bt.defaultTasks.length ? bt.defaultTasks : [{ text: '✒ úkol', duration: bt.defaultDuration || 30 }];
   tasks.forEach((task, i) => {
     ctx.list.push({
@@ -1433,6 +1446,28 @@ function op_addBlockItem(ctx, blockType) {
 // add-funkce míří na aktuální cíl (addCtx) — den nebo zvolený měsíc v Později
 function addQuickItems(forceType) { op_addQuickItems(addCtx, forceType); }
 function addBlockItem(blockType) { op_addBlockItem(addCtx, blockType); }
+
+// klik na zkratku bloku pod polem → vloží napsaný text jako podúkol(y) pod daný blok
+// (prázdné pole = přidá celý blok s výchozími úkoly, jako „+ Blok")
+function op_addToBlock(ctx, blockType) {
+  if (!BLOCK_TYPES[blockType]) return;
+  const ta = el(ctx.input);
+  const lines = (ta ? ta.value : '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) { op_addBlockItem(ctx, blockType); return; }
+  ctx.undo();
+  lines.forEach(line => {
+    const parsed = parseItemText(line);
+    parsed.id = Date.now() + Math.random();
+    parsed.blockType = blockType;
+    parsed.targetBlockKey = blockType;
+    parsed.isSubtask = true;
+    insertSubtaskUnderBlock(ctx.list, blockType, parsed);
+  });
+  if (ta) ta.value = '';
+  ctx.save(); ctx.render();
+  if (ta) ta.focus();
+}
+function addToBlock(blockType) { op_addToBlock(addCtx, blockType); }
 
 // ── ITEM OPERATIONS (kontextové: den i měsíc Později) ───────────────────────────
 function op_toggleDone(ctx, idx) {
@@ -1977,18 +2012,17 @@ function updateQuickInputPlaceholder() {
   updateAbbrevHint();
 }
 
-// hint pod polem: jen zkratky bloků, které jsou v právě aktivním cíli (addCtx — den / inbox / měsíc)
+// hint pod polem: klikací zkratky všech bloků (na všech kartách — den / inbox / měsíc).
+// Klik vloží napsaný text jako podúkol pod daný blok (blok vytvoří, pokud v cíli chybí).
 function updateAbbrevHint() {
   const hint = el('abbrevHint');
   if (!hint) return;
   const { abbrevs } = getBlockAbbrevMap();
-  const list = (addCtx && addCtx.list) ? addCtx.list : [];
-  const present = new Set(list.filter(it => !it.isSubtask && it.blockType && it.blockType !== 'TASK').map(it => it.blockType));
   const order = (blockTypeOrder && blockTypeOrder.length) ? blockTypeOrder : Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
-  hint.innerHTML = order.filter(k => present.has(k)).map(k => {
+  hint.innerHTML = order.map(k => {
     const ab = abbrevs[k]; const bt = BLOCK_TYPES[k];
     if (!ab || !bt) return '';
-    return `<span class="ab" title="${esc(bt.label || k)} → -${ab}"><b>${esc(ab)}</b>${bt.emoji ? esc(bt.emoji) : ''}</span>`;
+    return `<span class="ab" role="button" onclick="addToBlock('${k}')" title="${esc(bt.label || k)} → klikni (text pod blok) nebo napiš -${esc(ab)}"><b>${esc(ab)}</b>${bt.emoji ? esc(bt.emoji) : ''}</span>`;
   }).filter(Boolean).join('');
 }
 
