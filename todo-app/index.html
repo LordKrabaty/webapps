@@ -195,6 +195,8 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.item-row:hover{background:var(--off)}}
 .item-row.is-block{border-color:var(--light);background:var(--off);margin-top:.25rem}
 .item-row.is-block:first-child{margin-top:0}
+/* pseudo-blok / TASK-událost (top-level úkol bez vlastního typu bloku): bez výplně, jen levý proužek → mírně odliší od skutečného bloku */
+.item-row.is-block.is-pseudoblock{background:transparent;border-color:transparent;border-left:2px solid var(--mid)}
 .item-row.is-subtask{padding-left:1.4rem}
 .item-row.is-done .item-text{opacity:.45;text-decoration:line-through}
 .item-row.is-urgent .item-text{font-weight:600}
@@ -1362,6 +1364,7 @@ function rowsHtml(ctx, insertBefore = {}) {
 
     const cls = ['item-row',
       isBlock ? 'is-block' : 'is-subtask',
+      (isBlock && bt === 'TASK') ? 'is-pseudoblock' : '',   // top-level úkol bez vlastního typu bloku = pseudo-blok
       item.isEvent ? 'is-event-block' : '',
       item.done   ? 'is-done'   : '',
       item.urgent ? 'is-urgent' : '',
@@ -1534,6 +1537,18 @@ function op_addQuickItems(ctx, forceType) {
 
     // ikona: bloky/události nesou item.icon, podúkoly si emoji nechají v textu
     if (icon) { if (parsed.isSubtask) parsed.text = icon + ' ' + parsed.text; else parsed.icon = icon; }
+
+    // „blok nikdy prázdný": každá samostatná top-level položka (blok/pseudo-blok/událost) dostane
+    // rovnou podúkol stejného názvu → nikdy nevznikne prázdný blok-header. Stejná duration → čas se nezmění.
+    if (!parsed.isSubtask) {
+      const pi = targetList.indexOf(parsed);
+      if (pi >= 0) targetList.splice(pi + 1, 0, {
+        id: Date.now() + Math.random(),
+        text: parsed.text, blockType: parsed.blockType, duration: parsed.duration,
+        isEvent: false, eventStart: null, eventEnd: null,
+        isSubtask: true, done: false, urgent: false,
+      });
+    }
 
     if (toLater) { routedLater = true; lastYm = route.ym; } else { addedHere = true; }
   });
