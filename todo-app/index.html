@@ -1035,29 +1035,47 @@ function extractLeadingIcon(text) {
   if (_blockEmojiSet().has(icon.replace(/️/g, ''))) return null;
   return { icon, rest: cps.slice(i).join('').replace(/^\s+/, '') };
 }
-// token → datum (d.m. / d.m.rrrr), číslo měsíce (m.) nebo český název měsíce → { mo, day, year } | null
+// token → datum (d.m. / d.m / d.m.rrrr), holé číslo měsíce (m.) nebo český název měsíce
+// vrací { mo, day, year, kind } | null;  kind = 'date' | 'baremonth' | 'monthname' (rozhoduje, kde smí routovat)
 function parseMonthToken(tok) {
   if (!tok) return null;
   const t = tok.toLowerCase().replace(/[,;:]$/, '');
   let m;
-  if ((m = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})?$/))) {
+  // plný datum: tečka za měsícem i rok jsou VOLITELNÉ → "15.3." i "15.3" i "15.3.2026"
+  if ((m = t.match(/^(\d{1,2})\.(\d{1,2})\.?(\d{2,4})?$/))) {
     const d = +m[1], mo = +m[2];
-    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return { mo, day: d, year: m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : null };
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return { mo, day: d, year: m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : null, kind: 'date' };
     return null;
   }
-  if ((m = t.match(/^(\d{1,2})\.$/))) { const mo = +m[1]; return (mo >= 1 && mo <= 12) ? { mo, day: null, year: null } : null; }
+  if ((m = t.match(/^(\d{1,2})\.$/))) { const mo = +m[1]; return (mo >= 1 && mo <= 12) ? { mo, day: null, year: null, kind: 'baremonth' } : null; }
   const idx = MONTHS_CZ.indexOf(t);
-  return idx >= 0 ? { mo: idx + 1, day: null, year: null } : null;
+  return idx >= 0 ? { mo: idx + 1, day: null, year: null, kind: 'monthname' } : null;
 }
-// datum/měsíc na ZAČÁTKU nebo KONCI → { ym, dayLabel, rest }; bez zbytku textu nepřesměrovává
+// nejlepší kandidát pro daný konec: nejdřív zkus SLOUČIT dva tokeny (mezera v datu "15. 3." → "15.3."),
+// jen jako úplný datum; jinak vezmi jeden krajní token. Vrací { p, rest } | null.
+function _monthCandidate(tokens, pos) {
+  if (pos === 'start') {
+    if (tokens.length >= 2) { const mp = parseMonthToken(tokens[0] + tokens[1]); if (mp && mp.kind === 'date') return { p: mp, rest: tokens.slice(2) }; }
+    const sp = parseMonthToken(tokens[0]); if (sp) return { p: sp, rest: tokens.slice(1) };
+  } else {
+    const n = tokens.length;
+    if (n >= 2) { const mp = parseMonthToken(tokens[n - 2] + tokens[n - 1]); if (mp && mp.kind === 'date') return { p: mp, rest: tokens.slice(0, n - 2) }; }
+    const sp = parseMonthToken(tokens[n - 1]); if (sp) return { p: sp, rest: tokens.slice(0, n - 1) };
+  }
+  return null;
+}
+// datum/měsíc na ZAČÁTKU nebo KONCI → { ym, dayLabel, rest }; bez zbytku textu nepřesměrovává.
+// Holé číslo měsíce ("5.") přijmi JEN na začátku — jinak běžný úkol končící číslem ("zavolat 5.") falešně skočí do měsíce.
 function extractMonthRoute(text) {
   text = (text || '').trim();
   if (!text) return null;
   const tokens = text.split(/\s+/);
-  for (const [pos, tok] of [['start', tokens[0]], ['end', tokens[tokens.length - 1]]]) {
-    const p = parseMonthToken(tok);
-    if (!p) continue;
-    const rest = (pos === 'start' ? tokens.slice(1) : tokens.slice(0, -1)).join(' ').trim();
+  for (const pos of ['start', 'end']) {
+    const cand = _monthCandidate(tokens, pos);
+    if (!cand) continue;
+    const p = cand.p;
+    if (p.kind === 'baremonth' && pos !== 'start') continue;
+    const rest = cand.rest.join(' ').trim();
     if (!rest) continue;                                  // samotné datum bez úkolu → nepřesměrovávej
     let y = p.year;
     if (!y) { const now = new Date(); y = now.getFullYear(); if (p.mo - 1 < now.getMonth()) y++; }   // měsíc už letos byl → příští rok
@@ -2429,6 +2447,7 @@ function saveBlockType() {
   if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key);
   saveBlockTypes();
   renderBlockTypeList();
+  updateQuickInputPlaceholder();   // přepočítej zkratky typů + obnov hint/placeholder
   closeModal('blockEditModal');
   showSave('✓ blok uložen');
 }
@@ -2438,6 +2457,7 @@ function resetBlockType() {
   BLOCK_TYPES[_editingBlockKey] = { ...DEFAULT_BLOCK_TYPES[_editingBlockKey] };
   saveBlockTypes();
   renderBlockTypeList();
+  updateQuickInputPlaceholder();
   closeModal('blockEditModal');
   showSave('blok obnoven');
 }
@@ -2456,6 +2476,7 @@ async function deleteBlockType(key) {
   blockTypeOrder = blockTypeOrder.filter(k => k !== key);
   saveBlockTypes();
   renderBlockTypeList();
+  updateQuickInputPlaceholder();
   showSave('blok smazán');
 }
 
