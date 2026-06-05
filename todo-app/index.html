@@ -2240,7 +2240,7 @@ async function renameWindow(id) {
 async function deleteWindow(id) {
   if (id === 'main') return;
   const w = dayWindows.find(x => x.id === id); if (!w) return;
-  if (!await customConfirm('Smazat okno „' + esc(w.name) + '" i se všemi jeho úkoly, dny, šablonami a bloky? Akce je nevratná.', 'smazat okno')) return;
+  if (!await customConfirm('Smazat okno „' + w.name + '" i se všemi jeho úkoly, dny, šablonami a bloky? Akce je nevratná.', 'smazat okno')) return;
   try { winKeyBases().forEach(b => localStorage.removeItem(b + '::' + id)); } catch(e) {}
   try { sessionStorage.removeItem('todo-app-cloud-checked::' + id); } catch(e) {}
   const wasActive = (activeWin === id);
@@ -2444,7 +2444,7 @@ function resetBlockType() {
 
 async function deleteBlockType(key) {
   if (key === 'TASK') return;
-  if (!await customConfirm('Smazat typ bloku "' + esc(BLOCK_TYPES[key]?.label || key) + '"?', 'smazat')) return;
+  if (!await customConfirm('Smazat typ bloku "' + (BLOCK_TYPES[key]?.label || key) + '"?', 'smazat')) return;
   if (DEFAULT_BLOCK_TYPES[key]) {
     try {
       const del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]');
