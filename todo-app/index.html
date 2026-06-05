@@ -2154,6 +2154,11 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
   if (changed) { saveWindows(); saveWinTomb(); renderWindowTabs(); }
 }
 function pushRegistry() { try { if (typeof window.pushWindowRegistry === 'function') window.pushWindowRegistry(); } catch(e) {} }
+// má aktivní okno vůbec nějaká data? (rozhoduje, jestli autosync založí bin pro okno bez Bin ID)
+function windowHasData() {
+  return !!(library.length || archive.length || weekDays.length || weekPlans.length || inbox.length || later.length
+    || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
+}
 
 // per-okno klíče (pro mazání okna) — vč. sync klíčů z IIFE (hodnoty jsou stabilní)
 function winKeyBases() {
@@ -4631,22 +4636,28 @@ window.addEventListener('resize', updateAppGrid);
     let binId = localStorage.getItem(WK(JBID));
     const its = library.filter(e => exportSelected.has(e.id));
     const archs = archive.filter(e => exportArchSelected.has(e.id));
-    if (!its.length && !archs.length) { customAlert('Nic není vybráno.'); return; }
+    const wantWd = el('expWeekDays')?.checked && weekDays.length;
+    const wantWp = el('expWeekPlans')?.checked && weekPlans.length;
+    const wantIb = el('expInbox')?.checked && inbox.length;
+    const wantLt = el('expLater')?.checked && later.length;
+    const wantSt = el('expSettings')?.checked;
+    if (!its.length && !archs.length && !wantWd && !wantWp && !wantIb && !wantLt && !wantSt) { customAlert('Nic není vybráno.'); return; }
     const payload = {v:2, items: its, archive: archs,
       weekDays: el('expWeekDays')?.checked ? weekDays : [],
       weekPlans: el('expWeekPlans')?.checked ? weekPlans : []};
-    if (el('expSettings')?.checked) payload.settings = buildSettingsExport();
-    if (el('expInbox')?.checked && inbox.length) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
+    if (wantSt) payload.settings = buildSettingsExport();
+    if (wantIb) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
+    if (wantLt) payload.later = later;
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
       const url = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
       const hdrs = {'Content-Type':'application/json','X-Master-Key':key};
-      if (!binId) { hdrs['X-Bin-Name']='todo-app-sync'; hdrs['X-Bin-Private']='false'; }
+      if (!binId) { hdrs['X-Bin-Name']='todo-app-'+activeWin; hdrs['X-Bin-Private']='false'; }
       const res = await fetch(url, {method:binId?'PUT':'POST',mode:'cors',credentials:'omit',headers:hdrs,body:JSON.stringify(payload)});
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
       const json = await res.json();
-      if (!binId) { const newId = json.metadata?.id; if (newId) localStorage.setItem(WK(JBID), newId); }
+      if (!binId) { const newId = json.metadata?.id; if (newId) { localStorage.setItem(WK(JBID), newId); if (activeWin !== 'main') { try { pushWindowRegistry(); } catch(e) {} } } }
       showSyncTooltip('↑ nahráno ' + new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}));
     } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
   }
@@ -4671,7 +4682,12 @@ window.addEventListener('resize', updateAppGrid);
     finally { btn.disabled = false; }
   }
   async function checkCloudOnStartup() {
-    const binId = localStorage.getItem(WK(JBID)); if (!binId) return;
+    const binId = localStorage.getItem(WK(JBID));
+    if (!binId) {
+      // okno nemá vlastní bin → při zapnutém autosyncu a existujících datech ho rovnou založ
+      if (autosyncEnabled() && hasApiKey() && typeof windowHasData === 'function' && windowHasData()) scheduleAutoPush();
+      return;
+    }
     const checkedKey = 'todo-app-cloud-checked::' + activeWin;
     if (sessionStorage.getItem(checkedKey)) return;
     sessionStorage.setItem(checkedKey, '1');
@@ -4712,6 +4728,7 @@ window.addEventListener('resize', updateAppGrid);
   let applyingRemote = false;   // true během tichého mergeu → potlačí save-hook (žádná rekurze)
 
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
+  function hasApiKey() { try { return !!localStorage.getItem(JBKEY); } catch(e) { return false; } }   // stačí klíč → bin si autosync vytvoří sám
   function hasKeys() { try { return !!(localStorage.getItem(JBKEY) && localStorage.getItem(WK(JBID))); } catch(e) { return false; } }
 
   // ── TOMBSTONES (propagace mazání mezi zařízeními) ───────────────────────────
@@ -4797,7 +4814,7 @@ window.addEventListener('resize', updateAppGrid);
     const on = !autosyncEnabled();
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
-    if (on && !hasKeys()) { showStatusMsg('⚠ nejdřív nastav JSONBin přes ⚙ a jednou nahraj přes ↑', 4500); return; }
+    if (on && !hasApiKey()) { showStatusMsg('⚠ nejdřív nastav API klíč přes ⚙ (bin se vytvoří sám)', 4500); return; }
     if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
   }
 
@@ -4811,24 +4828,40 @@ window.addEventListener('resize', updateAppGrid);
     return payload;
   }
   function scheduleAutoPush() {
-    if (!autosyncEnabled() || !hasKeys()) return;
+    if (!autosyncEnabled() || !hasApiKey()) return;
     if (pushTimer) return;        // už naplánováno → coalesce
     const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs));
     pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
   }
   async function doAutoPush() {
-    if (!autosyncEnabled() || !hasKeys()) return;
+    if (!autosyncEnabled() || !hasApiKey()) return;
     if (pushing) { pushAgain = true; return; }
-    const key = localStorage.getItem(JBKEY), binId = localStorage.getItem(WK(JBID));
-    if (!key || !binId) return;
+    const key = localStorage.getItem(JBKEY);
+    if (!key) return;
+    // zachyť KLÍČ i okno synchronně — activeWin se může změnit při přepnutí okna,
+    // než se po awaitu vrátíme uložit nově vytvořené Bin ID (jinak by skončilo u špatného okna)
+    const jbKey = WK(JBID), winAtStart = activeWin;
+    let binId = localStorage.getItem(jbKey);
+    const creating = !binId;        // okno ještě nemá bin → autosync ho vytvoří (POST)
     pushing = true; setSyncState('syncing');
     try {
-      const res = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
-        method:'PUT', mode:'cors', credentials:'omit',
-        headers:{'Content-Type':'application/json','X-Master-Key':key},
+      const url = creating ? 'https://api.jsonbin.io/v3/b' : 'https://api.jsonbin.io/v3/b/' + binId;
+      const hdrs = { 'Content-Type':'application/json', 'X-Master-Key':key };
+      if (creating) { hdrs['X-Bin-Name'] = 'todo-app-' + winAtStart; hdrs['X-Bin-Private'] = 'false'; }
+      const res = await fetch(url, {
+        method: creating ? 'POST' : 'PUT', mode:'cors', credentials:'omit',
+        headers: hdrs,
         body: JSON.stringify(buildAutoPayload())
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (creating) {
+        const json = await res.json().catch(() => null);
+        const newId = json && json.metadata && json.metadata.id;
+        if (newId) {
+          try { localStorage.setItem(jbKey, newId); } catch(e) {}
+          if (winAtStart !== 'main') { try { pushWindowRegistry(); } catch(e) {} }   // propaguj nový bin do registru
+        }
+      }
       lastPushTs = Date.now(); setSyncState('ok');
     } catch(e) {
       console.warn('[autosync] push selhal:', (e && e.message) ? e.message : e);
@@ -4983,7 +5016,7 @@ window.addEventListener('resize', updateAppGrid);
   // hook po každé perzistenci: zaznamenej mazání (náhrobky) a naplánuj push
   function autoSyncOnSave() {
     if (applyingRemote) return;      // změny z mergeu nesmí spustit reconcile/push
-    if (!hasKeys()) return;          // bez nastaveného JSONBinu není co sledovat
+    if (!hasApiKey()) return;        // bez API klíče není co sledovat (bin si autosync vytvoří sám)
     reconcileTombstones();
     if (autosyncEnabled()) scheduleAutoPush();
   }
@@ -5008,7 +5041,9 @@ window.addEventListener('resize', updateAppGrid);
   // doAutoPush zachytí WK(JBID) i payload synchronně, ještě pro odchozí okno)
   window.flushWindowPush = function() {
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
-    if (autosyncEnabled() && hasKeys()) doAutoPush();
+    if (!autosyncEnabled() || !hasApiKey()) return;
+    // nezakládej prázdný bin jen kvůli přepnutí — buď už bin existuje, nebo okno má data
+    if (localStorage.getItem(WK(JBID)) || (typeof windowHasData === 'function' && windowHasData())) doAutoPush();
   };
   loadTombstones(); loadKnownIds();
   // obal perzistentní save-funkce, aby i mazání mimo schedSave (inbox, bloky, plány…) spustilo sync
