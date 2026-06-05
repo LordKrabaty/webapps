@@ -266,6 +266,18 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.notes-tab:not(.active):hover{color:var(--black)}}
 .notes-pane{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;gap:.35rem}
 .notes-pane.active{display:flex}
+/* okna dne (profily) — řada nad záložkami úkolů */
+.win-tabs{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.45rem;flex-shrink:0;align-items:center}
+.win-tab{display:inline-flex;align-items:center;gap:.28rem;font-family:'DM Sans',sans-serif;font-size:.74rem;padding:.24rem .5rem;background:var(--w);color:var(--black);border:var(--b);border-radius:var(--r);cursor:pointer;line-height:1.2;max-width:170px}
+.win-tab .win-tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+@media(hover:hover){.win-tab:not(.active):hover{background:var(--off);border-color:var(--dark)}}
+.win-tab:active{background:var(--off)}
+.win-tab.active{background:var(--black);color:var(--w);border-color:var(--black)}
+.win-tab-tool{font-size:.7rem;opacity:.65;padding:0 .1rem;flex-shrink:0}
+@media(hover:hover){.win-tab-tool:hover{opacity:1}}
+.win-tab-add{font-family:'DM Sans',sans-serif;font-size:.72rem;padding:.24rem .5rem;background:none;color:var(--muted);border:1.5px dashed var(--mid);border-radius:var(--r);cursor:pointer;line-height:1.2;white-space:nowrap}
+.win-tab-add:active{color:var(--black);border-color:var(--dark)}
+@media(hover:hover){.win-tab-add:hover{color:var(--black);border-color:var(--dark)}}
 /* ── DAY BUTTONS ── */
 .day-buttons{display:flex;gap:.3rem;margin-bottom:.35rem;flex-shrink:0}
 .day-btn-wrap{flex:1;display:flex;flex-direction:column;border:var(--bh);border-radius:var(--r);background:var(--w);cursor:pointer;overflow:hidden;min-width:0;user-select:none}
@@ -486,6 +498,7 @@ textarea::placeholder{color:var(--mid)}
       </button>
     </div>
     <div class="card-title"><span class="card-title-text">Úkoly</span></div>
+    <div class="win-tabs" id="winTabs"></div>
     <div class="notes-tabs">
       <button class="notes-tab active" id="tab-tyden" onclick="switchNotesTab('tyden')">Týden</button>
       <button class="notes-tab" id="tab-pristi" onclick="switchNotesTab('pristi')">Příští</button>
@@ -706,6 +719,7 @@ textarea::placeholder{color:var(--mid)}
   <div class="modal" style="max-width:400px;gap:.65rem">
     <h2>Nastavení JSONBin</h2>
     <p>Zadej svůj JSONBin API klíč a Bin ID.</p>
+    <p id="jbWinNote" style="font-size:.78rem;color:var(--muted)">Bin ID je pro <b id="jbWinName">toto okno</b> — každé okno dne se synchronizuje do vlastního binu (API klíč je společný).</p>
     <p style="font-size:.78rem;color:var(--muted)">Účet zdarma na <a href="https://jsonbin.io" target="_blank" rel="noopener" style="color:var(--black)">jsonbin.io</a> → API Keys.</p>
     <div class="jb-field"><label>X-Master-Key</label><input type="text" id="jbKeyInput" placeholder="$2a$10$…" spellcheck="false" autocomplete="off"></div>
     <div class="jb-field"><label>Bin ID <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(prázdné = vytvoří se)</span></label><input type="text" id="jbIdInput" placeholder="64a1b2c3…" spellcheck="false" autocomplete="off"></div>
@@ -766,6 +780,20 @@ const BLOCKTYPES_ORDER_KEY   = 'todo-app-v1-blocktypes-order';
 const BLOCKTYPES_DELETED_KEY = 'todo-app-v1-blocktypes-deleted';
 const WEEKPLANS_KEY   = 'todo-app-v1-weekplans';
 const WORKDAYS_KEY    = 'todo-app-working-days';
+
+// ── OKNA DNE (profily) ────────────────────────────────────────────────────────
+// Každé okno = samostatný svět (čas, bloky, šablony, úkoly, dny, inbox, později,
+// archiv + vlastní JSONBin). Do globálních proměnných je vždy načteno PRÁVĚ JEDNO okno.
+// Hlavní okno ('main') používá staré, neprefixované klíče → existující data i sync
+// zůstávají netknuté; další okna dostanou suffix '::'+id. WK(base) vrací klíč pro
+// aktivní okno — všechny per-okno load/save funkce ho používají.
+const WINDOWS_KEY    = 'todo-app-v1-windows';        // [{id,name,mt}] — registr
+const WINTOMB_KEY    = 'todo-app-v1-windows-tomb';   // { "<winId>": deletedAtTs } — náhrobky oken
+const ACTIVE_WIN_KEY = 'todo-app-v1-active-window';
+let dayWindows = [{ id: 'main', name: 'Den' }];
+let winTombstones = {};
+let activeWin = 'main';
+function WK(base) { return activeWin === 'main' ? base : base + '::' + activeWin; }
 
 // ── BLOCK TYPES ───────────────────────────────────────────────────────────────
 const DEFAULT_BLOCK_TYPES = {
@@ -2039,11 +2067,11 @@ function applySessionData(d) {
 }
 function sessionSnap() { return JSON.stringify(getSessionData()); }
 function saveSession() {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...getSessionData(), activeLibId })); } catch(e) {}
+  try { localStorage.setItem(WK(SESSION_KEY), JSON.stringify({ ...getSessionData(), activeLibId })); } catch(e) {}
 }
 function loadSession() {
   try {
-    const s = localStorage.getItem(SESSION_KEY);
+    const s = localStorage.getItem(WK(SESSION_KEY));
     if (!s) return false;
     const d = JSON.parse(s);
     applySessionData(d);
@@ -2059,14 +2087,14 @@ function updateDirtyState() {
 }
 
 // ── LIBRARY ───────────────────────────────────────────────────────────────────
-function loadLibrary() { try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch(e) { library = []; } }
-function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
-function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch(e) { archive = []; } }
-function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
-function loadWeekPlans() { try { weekPlans = JSON.parse(localStorage.getItem(WEEKPLANS_KEY) || '[]'); } catch(e) { weekPlans = []; } }
-function saveWeekPlans() { try { localStorage.setItem(WEEKPLANS_KEY, JSON.stringify(weekPlans)); } catch(e) {} }
-function loadWorkingDays() { try { const s = localStorage.getItem(WORKDAYS_KEY); if (s) workingDaysByWeek = JSON.parse(s); } catch(e) {} }
-function saveWorkingDays() { try { localStorage.setItem(WORKDAYS_KEY, JSON.stringify(workingDaysByWeek)); } catch(e) {} }
+function loadLibrary() { try { library = JSON.parse(localStorage.getItem(WK(LIBRARY_KEY)) || '[]'); } catch(e) { library = []; } }
+function saveLibrary() { try { localStorage.setItem(WK(LIBRARY_KEY), JSON.stringify(library)); } catch(e) {} }
+function loadArchive() { try { archive = JSON.parse(localStorage.getItem(WK(ARCHIVE_KEY)) || '[]'); } catch(e) { archive = []; } }
+function saveArchive() { try { localStorage.setItem(WK(ARCHIVE_KEY), JSON.stringify(archive)); } catch(e) {} }
+function loadWeekPlans() { try { weekPlans = JSON.parse(localStorage.getItem(WK(WEEKPLANS_KEY)) || '[]'); } catch(e) { weekPlans = []; } }
+function saveWeekPlans() { try { localStorage.setItem(WK(WEEKPLANS_KEY), JSON.stringify(weekPlans)); } catch(e) {} }
+function loadWorkingDays() { workingDaysByWeek = {}; try { const s = localStorage.getItem(WK(WORKDAYS_KEY)); if (s) workingDaysByWeek = JSON.parse(s); } catch(e) {} }
+function saveWorkingDays() { try { localStorage.setItem(WK(WORKDAYS_KEY), JSON.stringify(workingDaysByWeek)); } catch(e) {} }
 function getMondayIso(weekOffset = 0) {
   const today = new Date(), dow = today.getDay();
   const m = new Date(today);
@@ -2077,11 +2105,153 @@ function getWorkingDays(weekOffset = 0) {
   return workingDaysByWeek[getMondayIso(weekOffset)] || [1, 2, 3, 4, 5];
 }
 
+// ── OKNA DNE (profily) — registr + přepínání ──────────────────────────────────
+function windowName(id) { const w = dayWindows.find(x => x.id === id); return w ? w.name : ''; }
+function loadWindows() {
+  try { const s = JSON.parse(localStorage.getItem(WINDOWS_KEY) || 'null'); if (Array.isArray(s) && s.length) dayWindows = s; } catch(e) {}
+  if (!dayWindows.some(w => w.id === 'main')) dayWindows.unshift({ id: 'main', name: 'Den' });
+}
+function saveWindows() { try { localStorage.setItem(WINDOWS_KEY, JSON.stringify(dayWindows)); } catch(e) {} }
+function loadWinTomb() { try { winTombstones = JSON.parse(localStorage.getItem(WINTOMB_KEY) || '{}') || {}; } catch(e) { winTombstones = {}; } }
+function saveWinTomb() { try { localStorage.setItem(WINTOMB_KEY, JSON.stringify(winTombstones)); } catch(e) {} }
+function newWinId() { return 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+// ── HYBRID SYNC REGISTRU OKEN ─────────────────────────────────────────────────
+// Seznam oken + jejich Bin ID jede ve sdíleném hlavním binu (todo-app-jsonbin-id).
+// Datový LWW engine se NEMĚNÍ — data každého okna zůstávají ve vlastním binu.
+function winBinId(id) { try { return localStorage.getItem(id === 'main' ? 'todo-app-jsonbin-id' : 'todo-app-jsonbin-id::' + id) || ''; } catch(e) { return ''; } }
+function registryForPush() {
+  return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; const b = winBinId(w.id); if (b) o.binId = b; return o; });
+}
+// sloučí cloud registr (LWW podle mt + náhrobky), předpropojí Bin ID nových oken
+function mergeWindowRegistry(cloudWins, cloudTomb) {
+  let changed = false;
+  if (cloudTomb && typeof cloudTomb === 'object') {
+    Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!winTombstones[k] || t > winTombstones[k]) { winTombstones[k] = t; changed = true; } });
+  }
+  const byId = new Map(dayWindows.map(w => [w.id, w]));
+  (Array.isArray(cloudWins) ? cloudWins : []).forEach(cw => {
+    if (!cw || !cw.id) return;
+    if (cw.binId && cw.id !== 'main') {               // předpropoj Bin ID (jen doplň, nepřepisuj lokální)
+      const k = 'todo-app-jsonbin-id::' + cw.id;
+      try { if (!localStorage.getItem(k)) localStorage.setItem(k, cw.binId); } catch(e) {}
+    }
+    const cmt = +cw.mt || 0, ex = byId.get(cw.id), tomb = winTombstones[cw.id] || 0;
+    if (ex) { if (cmt > (+ex.mt || 0)) { ex.name = cw.name || ex.name; ex.mt = cmt; changed = true; } }
+    else if (cmt >= tomb) { const w = { id: cw.id, name: cw.name || cw.id, mt: cmt }; dayWindows.push(w); byId.set(cw.id, w); changed = true; }
+  });
+  // aplikuj náhrobky lokálně (okno smazané jinde) — nikdy ne hlavní/aktivní
+  Object.keys(winTombstones).forEach(id => {
+    if (id === 'main' || id === activeWin) return;
+    const ex = byId.get(id);
+    if (ex && winTombstones[id] >= (+ex.mt || 0)) {
+      dayWindows = dayWindows.filter(w => w.id !== id);
+      try { winKeyBases().forEach(b => localStorage.removeItem(b + '::' + id)); } catch(e) {}
+      try { sessionStorage.removeItem('todo-app-cloud-checked::' + id); } catch(e) {}
+      changed = true;
+    }
+  });
+  if (changed) { saveWindows(); saveWinTomb(); renderWindowTabs(); }
+}
+function pushRegistry() { try { if (typeof window.pushWindowRegistry === 'function') window.pushWindowRegistry(); } catch(e) {} }
+
+// per-okno klíče (pro mazání okna) — vč. sync klíčů z IIFE (hodnoty jsou stabilní)
+function winKeyBases() {
+  return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
+    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY,
+    'todo-app-jsonbin-id', 'todo-app-tombstones', 'todo-app-syncknown'];
+}
+
+function renderWindowTabs() {
+  const c = el('winTabs'); if (!c) return;
+  if (dayWindows.length <= 1) {
+    // jediné okno → nenápadný „+ okno" = opt-in přepínač na víc oken dne
+    c.innerHTML = `<button class="win-tab-add" onclick="addWindow()" title="přidat okno dne (např. Práce / Doma)">+ okno dne</button>`;
+    return;
+  }
+  const tabs = dayWindows.map(w => {
+    const act = w.id === activeWin;
+    const tools = act
+      ? `<span class="win-tab-tool" title="přejmenovat" onclick="event.stopPropagation();renameWindow('${w.id}')">✎</span>`
+        + (w.id !== 'main' ? `<span class="win-tab-tool" title="smazat okno" onclick="event.stopPropagation();deleteWindow('${w.id}')">✕</span>` : '')
+      : '';
+    return `<button class="win-tab${act ? ' active' : ''}" onclick="switchWindow('${w.id}')"><span class="win-tab-name">${esc(w.name)}</span>${tools}</button>`;
+  }).join('');
+  c.innerHTML = tabs + `<button class="win-tab-add" onclick="addWindow()" title="přidat okno dne">+</button>`;
+}
+
+// načte cílové okno do globálních proměnných a překreslí (BEZ ukládání odchozího)
+function activateWindow(id) {
+  activeWin = id;
+  try { localStorage.setItem(ACTIVE_WIN_KEY, id); } catch(e) {}
+  activeLibId = null; savedSnapshot = null;
+  undoStack = []; redoStack = []; highlightedId = null; planWeekOffset = 0;
+  BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater();
+  activePlanDate = todayIso();
+  const todayEntry = weekDays.find(d => d.date === activePlanDate);
+  if (todayEntry) applySessionData(todayEntry);
+  else {
+    items = []; windowStart = '6:00'; windowEnd = '14:00';
+    if (el('winStart')) el('winStart').value = windowStart;
+    if (el('winEnd'))   el('winEnd').value   = windowEnd;
+  }
+  renderWindowTabs(); renderLibrary(); renderBlockTypeList(); renderWorkDayPicker();
+  renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
+  populateLaterAddMonth(); renderLater(); updateUndoBtn(); updateQuickInputPlaceholder();
+  switchNotesTab('tyden');   // sjednotit pohled (dnešek je vždy v aktuálním týdnu → bez pushUndo)
+  if (typeof window.reloadWindowSync === 'function') { try { window.reloadWindowSync(); } catch(e) {} }
+}
+
+function switchWindow(id) {
+  if (id === activeWin) return;
+  if (!dayWindows.some(w => w.id === id)) return;
+  // 1) persist odchozí okno do jeho namespace
+  autoSavePlanDay(); saveSession();
+  // 2) best-effort flush pushe odchozího okna do JEHO binu (engine čte WK(JBID) synchronně)
+  if (typeof window.flushWindowPush === 'function') { try { window.flushWindowPush(); } catch(e) {} }
+  // 3-8) přepni namespace + načti cílové + překresli + reload sync
+  activateWindow(id);
+  showStatusMsg('okno: ' + (windowName(id) || id), 1800);
+}
+
+async function addWindow() {
+  const name = await customPrompt('Název okna (např. Práce, Doma):', 'Doma');
+  if (name == null) return;
+  const id = newWinId();
+  dayWindows.push({ id, name: name, mt: Date.now() });
+  saveWindows(); pushRegistry();
+  switchWindow(id);
+}
+
+async function renameWindow(id) {
+  const w = dayWindows.find(x => x.id === id); if (!w) return;
+  const name = await customPrompt('Přejmenovat okno:', w.name);
+  if (name == null) return;
+  w.name = name; w.mt = Date.now();
+  saveWindows(); pushRegistry(); renderWindowTabs();
+}
+
+async function deleteWindow(id) {
+  if (id === 'main') return;
+  const w = dayWindows.find(x => x.id === id); if (!w) return;
+  if (!await customConfirm('Smazat okno „' + esc(w.name) + '" i se všemi jeho úkoly, dny, šablonami a bloky? Akce je nevratná.', 'smazat okno')) return;
+  try { winKeyBases().forEach(b => localStorage.removeItem(b + '::' + id)); } catch(e) {}
+  try { sessionStorage.removeItem('todo-app-cloud-checked::' + id); } catch(e) {}
+  const wasActive = (activeWin === id);
+  dayWindows = dayWindows.filter(x => x.id !== id);
+  winTombstones[id] = Date.now();           // propagace smazání na ostatní zařízení
+  saveWindows(); saveWinTomb(); pushRegistry();
+  if (wasActive) activateWindow('main');   // bez persistu mazaného okna
+  else renderWindowTabs();
+  showStatusMsg('okno smazáno', 1800);
+}
+
 // ── BLOCK TYPES MANAGEMENT ────────────────────────────────────────────────────
 function loadBlockTypes() {
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES };
   try {
-    const saved = JSON.parse(localStorage.getItem(BLOCKTYPES_KEY) || '[]');
+    const saved = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_KEY)) || '[]');
     saved.forEach(bt => {
       if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
         defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
@@ -2089,12 +2259,12 @@ function loadBlockTypes() {
     });
   } catch(e) {}
   try {
-    const del = JSON.parse(localStorage.getItem(BLOCKTYPES_DELETED_KEY) || '[]');
+    const del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]');
     del.forEach(k => { if (DEFAULT_BLOCK_TYPES[k]) delete BLOCK_TYPES[k]; });
   } catch(e) {}
   const allKeys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
   try {
-    const savedOrder = JSON.parse(localStorage.getItem(BLOCKTYPES_ORDER_KEY) || 'null');
+    const savedOrder = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_ORDER_KEY)) || 'null');
     if (Array.isArray(savedOrder)) {
       blockTypeOrder = savedOrder.filter(k => BLOCK_TYPES[k] && k !== 'TASK');
       allKeys.forEach(k => { if (!blockTypeOrder.includes(k)) blockTypeOrder.push(k); });
@@ -2108,8 +2278,8 @@ function saveBlockTypes() {
       || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent;
   }).map(([key, bt]) => ({ key, ...bt }));
   try {
-    localStorage.setItem(BLOCKTYPES_KEY, JSON.stringify(overrides));
-    localStorage.setItem(BLOCKTYPES_ORDER_KEY, JSON.stringify(blockTypeOrder));
+    localStorage.setItem(WK(BLOCKTYPES_KEY), JSON.stringify(overrides));
+    localStorage.setItem(WK(BLOCKTYPES_ORDER_KEY), JSON.stringify(blockTypeOrder));
   } catch(e) {}
   updateQuickInputPlaceholder();
 }
@@ -2272,9 +2442,9 @@ async function deleteBlockType(key) {
   if (!await customConfirm('Smazat typ bloku "' + esc(BLOCK_TYPES[key]?.label || key) + '"?', 'smazat')) return;
   if (DEFAULT_BLOCK_TYPES[key]) {
     try {
-      const del = JSON.parse(localStorage.getItem(BLOCKTYPES_DELETED_KEY) || '[]');
+      const del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]');
       if (!del.includes(key)) del.push(key);
-      localStorage.setItem(BLOCKTYPES_DELETED_KEY, JSON.stringify(del));
+      localStorage.setItem(WK(BLOCKTYPES_DELETED_KEY), JSON.stringify(del));
     } catch(e) {}
   }
   delete BLOCK_TYPES[key];
@@ -2980,12 +3150,12 @@ function toggleAllClear() {
 }
 async function doSelectiveClear() {
   const toDelete = [];
-  if (el('clr-session').checked)    toDelete.push('todo-app-v1-session');
-  if (el('clr-library').checked)    toDelete.push('todo-app-v1-library');
-  if (el('clr-archive').checked)    toDelete.push('todo-app-v1-archive');
-  if (el('clr-week').checked)       toDelete.push('todo-app-v1-week');
-  if (el('clr-weekplans').checked)  toDelete.push('todo-app-v1-weekplans');
-  if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs',WORKDAYS_KEY);
+  if (el('clr-session').checked)    toDelete.push(WK(SESSION_KEY));
+  if (el('clr-library').checked)    toDelete.push(WK(LIBRARY_KEY));
+  if (el('clr-archive').checked)    toDelete.push(WK(ARCHIVE_KEY));
+  if (el('clr-week').checked)       toDelete.push(WK(WEEK_KEY));
+  if (el('clr-weekplans').checked)  toDelete.push(WK(WEEKPLANS_KEY));
+  if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs',WK(WORKDAYS_KEY));
   if (!toDelete.length) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
   if (!await customConfirm('Opravdu smazat vybraná data?', 'smazat')) return;
@@ -3501,8 +3671,8 @@ async function loadHolidays() {
   if (el('pane-pozdeji')?.classList.contains('active')) renderLater();
 }
 
-function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WEEK_KEY) || '[]'); } catch(e) { weekDays = []; } }
-function saveWeek()  { try { localStorage.setItem(WEEK_KEY, JSON.stringify(weekDays)); } catch(e) {} }
+function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WK(WEEK_KEY)) || '[]'); } catch(e) { weekDays = []; } }
+function saveWeek()  { try { localStorage.setItem(WK(WEEK_KEY), JSON.stringify(weekDays)); } catch(e) {} }
 
 // ── INBOX ───────────────────────────────────────────────────────────────────
 // Volné úkoly / bloky / události na příště. STEJNÝ model položek jako den/měsíc
@@ -3512,7 +3682,7 @@ let inbox = [];
 let inboxMt = 0;
 function loadInbox() {
   let raw = null;
-  try { raw = JSON.parse(localStorage.getItem(INBOX_KEY) || 'null'); } catch(e) { raw = null; }
+  try { raw = JSON.parse(localStorage.getItem(WK(INBOX_KEY)) || 'null'); } catch(e) { raw = null; }
   if (Array.isArray(raw)) {                         // starý plochý tvar [{id,text,mt}]
     inbox = raw.map(normItem).filter(Boolean);
     inboxMt = raw.reduce((mx, it) => Math.max(mx, +(it && it.mt) || 0), 0);
@@ -3521,7 +3691,7 @@ function loadInbox() {
     inboxMt = +raw.mt || 0;
   } else { inbox = []; inboxMt = 0; }
 }
-function saveInbox() { try { localStorage.setItem(INBOX_KEY, JSON.stringify({ items: inbox, mt: inboxMt })); } catch(e) {} }
+function saveInbox() { try { localStorage.setItem(WK(INBOX_KEY), JSON.stringify({ items: inbox, mt: inboxMt })); } catch(e) {} }
 
 function renderInbox() {
   const c = el('inbox-list'); if (!c) return;
@@ -3587,7 +3757,7 @@ function migrateFlatLater(arr) {
 }
 function loadLater() {
   let raw = [];
-  try { raw = JSON.parse(localStorage.getItem(LATER_KEY) || '[]') || []; } catch(e) { raw = []; }
+  try { raw = JSON.parse(localStorage.getItem(WK(LATER_KEY)) || '[]') || []; } catch(e) { raw = []; }
   // starý plochý tvar má položky s `text`/`ym` přímo (bez vnořeného `items`)
   if (raw.length && raw[0] && raw[0].ym && !Array.isArray(raw[0].items)) {
     later = migrateFlatLater(raw);
@@ -3597,7 +3767,7 @@ function loadLater() {
 }
 function saveLater() {
   later = later.filter(b => b && Array.isArray(b.items) && b.items.length);   // prázdné měsíce zahoď
-  try { localStorage.setItem(LATER_KEY, JSON.stringify(later)); } catch(e) {}
+  try { localStorage.setItem(WK(LATER_KEY), JSON.stringify(later)); } catch(e) {}
 }
 function laterBucket(ym) {
   let b = later.find(x => x.ym === ym);
@@ -4369,6 +4539,9 @@ function initBlockTypeDnd() {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init() {
   initAutoSave(); initFs(); initDark(); loadPanelFs();
+  // okna dne — nejdřív registr + aktivní okno, pak už vše běží WK-namespacovaně
+  loadWindows(); loadWinTomb();
+  try { const a = localStorage.getItem(ACTIVE_WIN_KEY); if (a && dayWindows.some(w => w.id === a)) activeWin = a; } catch(e) {}
   loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater();
 
   const today = todayIso();
@@ -4376,7 +4549,7 @@ function init() {
 
   // Přečíst session jednou
   let rawSession = null;
-  try { rawSession = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) {}
+  try { rawSession = JSON.parse(localStorage.getItem(WK(SESSION_KEY))); } catch(e) {}
 
   // Auto-archivace: session patří jinému dni a má položky → uložit do weekDays
   let staleArchived = null;
@@ -4410,6 +4583,7 @@ function init() {
     if (todayEntry) applySessionData(todayEntry);
   }
 
+  renderWindowTabs();
   renderLibrary(); renderBlockTypeList(); renderWorkDayPicker(); renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
   populateLaterAddMonth(); renderLater();
   if (activeLibId) markSaved();
@@ -4431,15 +4605,17 @@ window.addEventListener('resize', updateAppGrid);
   const JBKEY = 'todo-app-jsonbin-key';
   const JBID  = 'todo-app-jsonbin-id';
   function openJsonBinSettings() {
-    try { el('jbKeyInput').value = localStorage.getItem(JBKEY)||''; el('jbIdInput').value = localStorage.getItem(JBID)||''; } catch(e) {}
+    try { el('jbKeyInput').value = localStorage.getItem(JBKEY)||''; el('jbIdInput').value = localStorage.getItem(WK(JBID))||''; } catch(e) {}
+    try { const n = el('jbWinName'); if (n) n.textContent = (typeof windowName === 'function' ? windowName(activeWin) : '') || 'toto okno'; } catch(e) {}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
     try {
       const key = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
       if (key) localStorage.setItem(JBKEY, key); else localStorage.removeItem(JBKEY);
-      if (id)  localStorage.setItem(JBID,  id);  else localStorage.removeItem(JBID);
+      if (id)  localStorage.setItem(WK(JBID),  id);  else localStorage.removeItem(WK(JBID));
     } catch(e) {}
+    try { pushWindowRegistry(); } catch(e) {}   // nové/změněné Bin ID propaguj do registru
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
@@ -4452,7 +4628,7 @@ window.addEventListener('resize', updateAppGrid);
   async function doCloudUpload() {
     const key = localStorage.getItem(JBKEY);
     if (!key) { showSyncTooltip('⚠ chybí API klíč — otevři ⚙'); return; }
-    let binId = localStorage.getItem(JBID);
+    let binId = localStorage.getItem(WK(JBID));
     const its = library.filter(e => exportSelected.has(e.id));
     const archs = archive.filter(e => exportArchSelected.has(e.id));
     if (!its.length && !archs.length) { customAlert('Nic není vybráno.'); return; }
@@ -4461,6 +4637,7 @@ window.addEventListener('resize', updateAppGrid);
       weekPlans: el('expWeekPlans')?.checked ? weekPlans : []};
     if (el('expSettings')?.checked) payload.settings = buildSettingsExport();
     if (el('expInbox')?.checked && inbox.length) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
+    if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
       const url = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
@@ -4469,12 +4646,12 @@ window.addEventListener('resize', updateAppGrid);
       const res = await fetch(url, {method:binId?'PUT':'POST',mode:'cors',credentials:'omit',headers:hdrs,body:JSON.stringify(payload)});
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
       const json = await res.json();
-      if (!binId) { const newId = json.metadata?.id; if (newId) localStorage.setItem(JBID, newId); }
+      if (!binId) { const newId = json.metadata?.id; if (newId) localStorage.setItem(WK(JBID), newId); }
       showSyncTooltip('↑ nahráno ' + new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}));
     } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
   }
   async function syncDownload() {
-    const binId = localStorage.getItem(JBID);
+    const binId = localStorage.getItem(WK(JBID));
     if (!binId) { showSyncTooltip('⚠ chybí Bin ID — otevři ⚙'); return; }
     const btn = el('syncDownBtn'); btn.disabled = true; showSyncTooltip('↓ stahuji…');
     try {
@@ -4494,9 +4671,10 @@ window.addEventListener('resize', updateAppGrid);
     finally { btn.disabled = false; }
   }
   async function checkCloudOnStartup() {
-    const binId = localStorage.getItem(JBID); if (!binId) return;
-    if (sessionStorage.getItem('todo-app-cloud-checked')) return;
-    sessionStorage.setItem('todo-app-cloud-checked','1');
+    const binId = localStorage.getItem(WK(JBID)); if (!binId) return;
+    const checkedKey = 'todo-app-cloud-checked::' + activeWin;
+    if (sessionStorage.getItem(checkedKey)) return;
+    sessionStorage.setItem(checkedKey, '1');
     const btn = el('syncDownBtn'); const origTitle = btn.title;
     btn.disabled = true; btn.title = 'kontroluji cloud…';
     try {
@@ -4505,6 +4683,8 @@ window.addEventListener('resize', updateAppGrid);
       const json = await res.json();
       let record = json.record;
       if (typeof record !== 'object' || record === null) return;
+      // HYBRID: registr oken (jen hlavní bin ho nese) sluč vždy — i když se data nezměnila
+      if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       // AUTOSYNC: tichý obousměrný merge (vč. mazání) — kompletní porovnání stavu
       if (autosyncEnabled()) {
         if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
@@ -4532,7 +4712,7 @@ window.addEventListener('resize', updateAppGrid);
   let applyingRemote = false;   // true během tichého mergeu → potlačí save-hook (žádná rekurze)
 
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
-  function hasKeys() { try { return !!(localStorage.getItem(JBKEY) && localStorage.getItem(JBID)); } catch(e) { return false; } }
+  function hasKeys() { try { return !!(localStorage.getItem(JBKEY) && localStorage.getItem(WK(JBID))); } catch(e) { return false; } }
 
   // ── TOMBSTONES (propagace mazání mezi zařízeními) ───────────────────────────
   const TOMB_KEY  = 'todo-app-tombstones';   // { "<ns>:<id>": deletedAtTs }
@@ -4540,10 +4720,10 @@ window.addEventListener('resize', updateAppGrid);
   const TOMB_TTL  = 90 * 864e5;              // náhrobky starší než 90 dní zahodit
   let tombstones = {};
   let knownIds = null;                        // null = ještě nesledováno
-  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(TOMB_KEY) || '{}') || {}; } catch(e) { tombstones = {}; } }
-  function saveTombstones() { try { localStorage.setItem(TOMB_KEY, JSON.stringify(tombstones)); } catch(e) {} }
-  function loadKnownIds()   { try { const s = localStorage.getItem(KNOWN_KEY); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
-  function saveKnownIds()   { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...(knownIds || [])])); } catch(e) {} }
+  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(WK(TOMB_KEY)) || '{}') || {}; } catch(e) { tombstones = {}; } }
+  function saveTombstones() { try { localStorage.setItem(WK(TOMB_KEY), JSON.stringify(tombstones)); } catch(e) {} }
+  function loadKnownIds()   { try { const s = localStorage.getItem(WK(KNOWN_KEY)); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
+  function saveKnownIds()   { try { localStorage.setItem(WK(KNOWN_KEY), JSON.stringify([...(knownIds || [])])); } catch(e) {} }
   function isTombstoned(key) { return !!tombstones[key]; }
   // množina "<ns>:<id>" všech aktuálně existujících položek
   function currentKeySet() {
@@ -4626,6 +4806,8 @@ window.addEventListener('resize', updateAppGrid);
     const payload = { v:2, items: library, archive: archive, weekDays: weekDays, weekPlans: weekPlans, settings: buildSettingsExport(), tombstones: tombstones };
     payload.inbox = inbox; payload.inboxMt = inboxMt;   // celý seznam + mt (i prázdný, ať se propíše smazání)
     if (later.length) payload.later = later;
+    // registr oken jede jen v hlavním binu (data ostatních oken jsou v jejich vlastních binech)
+    if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }
     return payload;
   }
   function scheduleAutoPush() {
@@ -4637,7 +4819,7 @@ window.addEventListener('resize', updateAppGrid);
   async function doAutoPush() {
     if (!autosyncEnabled() || !hasKeys()) return;
     if (pushing) { pushAgain = true; return; }
-    const key = localStorage.getItem(JBKEY), binId = localStorage.getItem(JBID);
+    const key = localStorage.getItem(JBKEY), binId = localStorage.getItem(WK(JBID));
     if (!key || !binId) return;
     pushing = true; setSyncState('syncing');
     try {
@@ -4655,6 +4837,21 @@ window.addEventListener('resize', updateAppGrid);
       pushing = false;
       if (pushAgain) { pushAgain = false; scheduleAutoPush(); }
     }
+  }
+
+  // Registr oken do hlavního binu (read-modify-write — NEpřepíše data hlavního okna v cloudu).
+  // Volá se po add/rename/delete okna a po nastavení Bin ID, ať se okna objeví na ostatních zařízeních.
+  async function pushWindowRegistry() {
+    const key = localStorage.getItem(JBKEY), mainBin = localStorage.getItem('todo-app-jsonbin-id');
+    if (!key || !mainBin) return;        // bez hlavního binu se registr nemá kam uložit
+    try {
+      const res = await jbGet(mainBin, key); if (!res.ok) return;
+      const json = await res.json(); const rec = (json && json.record && typeof json.record === 'object') ? json.record : {};
+      rec.windows = registryForPush();
+      rec.winTomb = winTombstones;
+      await fetch('https://api.jsonbin.io/v3/b/' + mainBin, { method:'PUT', mode:'cors', credentials:'omit',
+        headers:{'Content-Type':'application/json','X-Master-Key':key}, body: JSON.stringify(rec) });
+    } catch(e) { /* tiché — registr se propíše i příštím pushem hlavního okna */ }
   }
 
   // LWW slučování klíčovaného pole (šablony / dny / plány):
@@ -4798,6 +4995,21 @@ window.addEventListener('resize', updateAppGrid);
   window.checkCloudOnStartup  = checkCloudOnStartup;
   window.toggleAutoSync       = toggleAutoSync;
   window.autoSyncOnSave       = autoSyncOnSave;     // hook volaný z schedSave()
+  window.pushWindowRegistry   = pushWindowRegistry; // registr oken → hlavní bin (hybrid)
+  // ── OKNA DNE: přepnutí okna přenačte sync stav (náhrobky/known) + cloud-check ──
+  window.reloadWindowSync = function() {
+    loadTombstones(); loadKnownIds();
+    lastPushTs = 0;
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+    checkCloudOnStartup();
+  };
+  // best-effort push odchozího okna do JEHO binu (volá se PŘED přepnutím activeWin —
+  // doAutoPush zachytí WK(JBID) i payload synchronně, ještě pro odchozí okno)
+  window.flushWindowPush = function() {
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    if (autosyncEnabled() && hasKeys()) doAutoPush();
+  };
   loadTombstones(); loadKnownIds();
   // obal perzistentní save-funkce, aby i mazání mimo schedSave (inbox, bloky, plány…) spustilo sync
   ['saveInbox','saveLater','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive'].forEach(fn => {
