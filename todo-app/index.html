@@ -304,6 +304,8 @@ textarea::placeholder{color:var(--mid)}
 .preview-item-chk{flex-shrink:0;width:13px;height:13px;accent-color:var(--black);cursor:pointer}
 .preview-item-text{flex:1;font-size:.82rem;line-height:1.35;cursor:text;word-break:break-word}
 .preview-item-text.done{text-decoration:line-through;color:var(--muted)}
+.preview-item-note{font-size:.76rem;color:var(--muted);white-space:pre-wrap;word-break:break-word;line-height:1.5;padding:.1rem .1rem .28rem 1.5rem;cursor:pointer;border-bottom:1px solid var(--light)}
+@media(hover:hover){.preview-item-note:hover{color:var(--dark)}}
 .preview-item-dur{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap;cursor:pointer;border-bottom:1px dashed transparent}
 @media(hover:hover){.preview-item-dur:hover{border-bottom-color:var(--mid)}}
 .preview-item-move{display:flex;flex-direction:column;gap:0;flex-shrink:0;opacity:0}
@@ -765,6 +767,10 @@ textarea::placeholder{color:var(--mid)}
       <label>Přednastavené úkoly</label>
       <div id="blockEditTasks" style="display:flex;flex-direction:column;gap:.3rem;margin-top:.3rem"></div>
       <button class="btn-add" onclick="addBlockEditTask()" style="margin-top:.3rem;width:100%;text-align:center">+ přidat úkol</button>
+    </div>
+    <div class="field">
+      <label>Přednastavený popis / poznámka</label>
+      <textarea id="blockEditNote" rows="3" placeholder="Volný text — předvyplní se do popisu bloku při vložení" style="resize:vertical"></textarea>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" id="blockEditResetBtn" onclick="resetBlockType()">obnovit výchozí</button>
@@ -1545,6 +1551,7 @@ function op_addQuickItems(ctx, forceType) {
     }
 
     const parsed = parseItemText(body);
+    if (parsed.text && _sendNotes[parsed.text]) parsed.note = _sendNotes[parsed.text];   // poznámka přenesená přes → (přesun)
 
     // (2) Den: prostý úkol i „-úkol" jdou pod blok jako podúkol → bloky se tvoří jen z presetů (žádné pseudo-bloky)
     let toLastBlock = false;
@@ -1590,6 +1597,7 @@ function op_addQuickItems(ctx, forceType) {
   });
 
   ta.value = '';
+  _sendNotes = {};                       // přenesené poznámky spotřebovány tímto přidáním
   if (addedHere) { ctx.save(); ctx.render(); }
   if (routedLater) {
     saveLater();
@@ -1613,6 +1621,7 @@ function makeBlockHeader(blockType) {
     eventStart: bt.isEvent ? (bt.eventStart || null) : null,
     eventEnd:   bt.isEvent ? (bt.eventEnd   || null) : null,
     isSubtask: false, done: false, urgent: false,
+    note: bt.note || '',                 // přednastavený popis typu bloku
   };
 }
 
@@ -2369,7 +2378,7 @@ function loadBlockTypes() {
     saved.forEach(bt => {
       if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
         defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
-        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], mt: +bt.mt || 0 };
+        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], note: bt.note || '', mt: +bt.mt || 0 };
     });
   } catch(e) {}
   try {
@@ -2389,7 +2398,7 @@ function saveBlockTypes() {
   const overrides = Object.entries(BLOCK_TYPES).filter(([key, bt]) => {
     const def = DEFAULT_BLOCK_TYPES[key];
     return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration
-      || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent;
+      || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent || bt.note;
   }).map(([key, bt]) => ({ key, ...bt }));
   try {
     localStorage.setItem(WK(BLOCKTYPES_KEY), JSON.stringify(overrides));
@@ -2487,6 +2496,7 @@ function openBlockTypeEdit(key) {
   el('blockEditEventTimes').style.display = _blockEditIsEvent ? '' : 'none';
   el('blockEditEventStart').value = bt.eventStart || '';
   el('blockEditEventEnd').value = bt.eventEnd || '';
+  el('blockEditNote').value = bt.note || '';
 
   const tasksEl = el('blockEditTasks');
   tasksEl.innerHTML = '';
@@ -2529,13 +2539,14 @@ function saveBlockType() {
   let isEvent = _blockEditIsEvent;
   let eventStart = isEvent ? el('blockEditEventStart').value.trim() || null : null;
   let eventEnd   = isEvent ? el('blockEditEventEnd').value.trim()   || null : null;
+  const note = el('blockEditNote').value.trim() ? el('blockEditNote').value : '';
 
   let key = _editingBlockKey;
   if (!key) {
     key = normalizeBlockKey(label);
     if (BLOCK_TYPES[key]) key = key + '_' + Date.now();
   }
-  BLOCK_TYPES[key] = { emoji, label, defaultDuration: duration, isEvent, eventStart, eventEnd, defaultTasks, mt: Date.now() };
+  BLOCK_TYPES[key] = { emoji, label, defaultDuration: duration, isEvent, eventStart, eventEnd, defaultTasks, note, mt: Date.now() };
   if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key);
   saveBlockTypes();
   renderBlockTypeList();
@@ -2885,7 +2896,7 @@ function renderPreviewList() {
       <button class="preview-item-del" onclick="deletePreviewItem(${i})" title="smazat">
         <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
       </button>
-    </div>`;
+    </div>` + (item.note ? `<div class="preview-item-note" onclick="startPreviewNoteEdit(${i},this)" title="upravit popis / poznámku">${esc(item.note)}</div>` : '');
   }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné položky.</div>';
   container.innerHTML = itemsHtml + `<div class="preview-add-row">
     <input id="previewAddText" class="preview-add-text" placeholder="nová položka…"
@@ -2922,6 +2933,28 @@ function startPreviewEdit(i, span) {
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
     if (e.key === 'Escape') { saved = true; renderPreviewList(); }
+  });
+}
+
+// inline úprava popisu/poznámky v náhledu (textarea — víceřádkové; Esc zruší)
+function startPreviewNoteEdit(i, span) {
+  if (!_previewSource) return;
+  const item = _previewSource.items[i];
+  const ta = document.createElement('textarea');
+  ta.className = 'preview-item-input';
+  ta.style.cssText = 'width:100%;min-height:52px;resize:vertical;line-height:1.5';
+  ta.value = item.note || '';
+  span.replaceWith(ta);
+  ta.focus();
+  let saved = false;
+  const finish = () => {
+    if (saved) return; saved = true;
+    item.note = ta.value.trim() ? ta.value : '';
+    renderPreviewList();
+  };
+  ta.addEventListener('blur', finish);
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { saved = true; renderPreviewList(); }   // Enter = nový řádek; uloží se na blur
   });
 }
 
@@ -3495,7 +3528,7 @@ function buildSettingsExport() {
   const blockOverrides = Object.entries(BLOCK_TYPES).filter(([key, bt]) => {
     const def = DEFAULT_BLOCK_TYPES[key];
     return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration
-      || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent;
+      || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent || bt.note;
   }).map(([key, bt]) => ({ key, ...bt }));
   return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek };
 }
@@ -3948,6 +3981,8 @@ function mEditDay(ym, idx) {
 // Jako inbox: serializuje položku (blok + podúkoly / úkol / událost) do TEXTu a vloží
 // ho do sdíleného pole. Uživatel pak přepne na žádanou kartu a Enterem přidá kamkoliv.
 // Položku nemaže (přesun proběhne ručně přidáním + případným smazáním zdroje).
+// poznámky přenášené přes → (pole je jen text; poznámku neseme stranou podle čistého textu položky)
+let _sendNotes = {};
 function sendItemToField(ctx, idx) {
   const list = ctx.list;
   const it = list[idx]; if (!it) return;
@@ -3962,6 +3997,7 @@ function sendItemToField(ctx, idx) {
     let suffix = '';
     if (x.isEvent && x.eventStart) suffix = ' ' + x.eventStart + '-' + (x.eventEnd || x.eventStart);
     else if (x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // u bloku délku nese až podúkol
+    if (x.note) _sendNotes[x.text || ''] = x.note;                                         // poznámku pones podle čistého textu
     lines.push(prefix + emoji + (x.text || '') + suffix);
   }
   const txt = lines.join('\n');
@@ -4434,6 +4470,7 @@ function _itemLines(items) {
       durStr = ' · ' + formatDur(item.duration);
     }
     out.push(indent + check + ' ' + item.text + durStr);
+    if (item.note) item.note.split('\n').forEach(nl => out.push(indent + '    ' + nl));   // popis / poznámka pod položkou
   });
   return out;
 }
@@ -5041,7 +5078,7 @@ window.addEventListener('resize', updateAppGrid);
     let added = 0, updated = 0, removed = 0;
     const norm = b => ({ emoji: b.emoji ?? '', label: b.label || b.key, defaultDuration: b.defaultDuration || 15,
       isEvent: !!b.isEvent, eventStart: b.eventStart || null, eventEnd: b.eventEnd || null,
-      defaultTasks: b.defaultTasks || [], mt: +b.mt || 0 });
+      defaultTasks: b.defaultTasks || [], note: b.note || '', mt: +b.mt || 0 });
     (cloudBlocks || []).forEach(b => {
       if (!b || !b.key || b.key === 'TASK') return;
       const key = b.key, cmt = +b.mt || 0, local = BLOCK_TYPES[key];
