@@ -48,7 +48,8 @@ Klíče v šabloně používají prefix `APP_NAME` — při kopírování nahrad
 
 - `APP_NAME-v1-session` · `APP_NAME-v1-library` · `APP_NAME-v1-archive`
 - `APP_NAME-fs` · `APP_NAME-dark` · `APP_NAME-panel-fs`
-- `APP_NAME-autosave` · `APP_NAME-jsonbin-key` · `APP_NAME-jsonbin-id`
+- `APP_NAME-autosave` · `APP_NAME-gist-token` · `APP_NAME-gist-id`
+- `APP_NAME-autosync` · `APP_NAME-tombstones` · `APP_NAME-syncknown` (auto-sync — viz níže)
 
 ---
 
@@ -71,7 +72,7 @@ Každý panel má per-panel zoom + fullscreen expand — **neimplementovat znovu
 ```
 
 Import podporuje i starší klíč `teas` místo `items` (backward compat).
-Import je bez merge flow — duplicity se přidají jako nové položky.
+Import **slučuje podle `id`/data** (deduplikace, LWW — viz „Auto-sync" níže), neduplikuje. *(V `_template` zatím staré chování bez merge — portovat až na pokyn.)*
 
 ---
 
@@ -135,13 +136,55 @@ toggleDark()                      // přepínač dark mode
 
 ---
 
-## JSONBin sync — hotová infrastruktura
+## GitHub Gist sync — hotová infrastruktura
 
-Při kopírování šablony stačí:
+Data jedou v jednom **privátním GitHub gistu** (soubor `APP_NAME-sync.json`, obsah = JSON string). Při kopírování šablony stačí:
 
-- Nahradit `APP_NAME` → klíče jsou správné automaticky
-- Upravit `payload` v `doCloudUpload()` pokud app ukládá víc než `items + archive`
-- API klíč a Bin ID zadá uživatel přes ⚙ modal — **nikam hardcoded**
+- Nahradit `APP_NAME` → klíče i jméno sync souboru jsou správné automaticky
+- Upravit `payload` v `doCloudUpload()` (ruční výběr) i `buildAutoPayload()` (autosync) pokud app ukládá víc než `items + archive`
+- GitHub token (scope `gist`) a Gist ID zadá uživatel přes ⚙ modal — **nikam hardcoded**. Gist ID může nechat prázdné → sync ho při prvním pushi sám založí (`POST`); neplatné/smazané Gist ID se samo zotaví (404 → nový gist)
+- Auto-sync (`☁`) běží na stejné infrastruktuře — rozšíření kolekcí viz „Auto-sync" níže
+- Šablona nese jednorázovou migraci starých `APP_NAME-jsonbin-*` klíčů → `gist-*` sloty (u nově založené app ji můžeš smazat). **Pozor:** JSONBin klíč ≠ GitHub token a Bin ID ≠ Gist ID — migrace jen přesune hodnotu do nového slotu, uživatel ji musí v ⚙ ručně přepsat.
+
+API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH = přepis souboru; POST = nový gist) je hotový v `gistGet` / `gistRecord` / `gistWriteInit`.
+
+---
+
+## Auto-sync (tichý obousměrný LWW) — jak to chci obecně
+
+**Cíl:** přecházet mezi zařízeními a nemyslet na to. Stáhnout při startu, nahrát po editaci, žádné ruční řešení konfliktů.
+
+**Princip:** každá synchronizovaná položka nese `mt` (čas poslední editace, `Date.now()`). Při slučování **vyhrává novější `mt`** (last-write-wins) — **po celých záznamech, ne po jednotlivých polích**.
+
+### Strategie podle entity
+
+| Entita | Klíč | Slučování |
+|---|---|---|
+| dny / plány / šablony | datum / `id` | **LWW** (novější `mt`) |
+| bloky (typy) | `key` | **LWW** (novější `mt`); defaultní nejdou smazat |
+| inbox | `id` | **LWW** (novější `mt`) |
+| archiv | `id` | union (jen doplnit chybějící) |
+| pracovní dny | week key | union (zatím) |
+| pořadí typů bloků (`blockTypeOrder`) | — | **nesynchronizuje se** (kosmetické) |
+
+Mazání = **tombstones** `{ "<ns>:<id>": deletedAtTs }`. Konflikt edit-vs-delete řeší čas: pozdější akce vyhrává (editace po smazání = vzkříšení).
+
+### Pasti — NUTNÉ dodržet (jinak ztráta dat / nesynchronizuje se)
+
+1. **`mt` razítkuj JEN při skutečné změně obsahu.** Razítkovat naslepo = prázdné přeuložení přebije novější verzi z druhého zařízení. Před razítkem porovnej `JSON.stringify` starého a nového obsahu.
+2. **`mt` musí být v podpisu stavu (`sigOf`).** Jinak se editace (stejné `id`/datum/`key`) nedetekuje a merge se nespustí — změna se jen nahraje, ale nestáhne. Platí i pro entity uvnitř `settings` (bloky) — bez nich v podpisu se nesynchronizují.
+3. **Živý buffer (`items`) nesmí sdílet referenci s uloženým záznamem.** `applySessionData()` dělá hlubokou kopii; sdílení reference rozbije detekci změny (`mt`).
+4. **Editaci aktivního záznamu flushni do úložiště i bez přepnutí.** `schedSave()` volá `autoSavePlanDay()`, aby se změna nasynchronizovala i když uživatel jen zavře appku.
+5. **Po mergi obnov živý buffer aktivního záznamu** z čerstvě sloučeného stavu — jinak ho příští flush přepíše starou verzí.
+6. **Merge nesmí spustit push/reconcile** — po dobu slučování `applyingRemote = true` (žádná rekurze přes obalené save-funkce).
+
+### Pořadí položek uvnitř záznamu
+Pořadí (sekvence úkolů/bloků ve dni) je **součást obsahu** — přenáší se celé a atomicky, nikdy se neslučuje po položkách ani nepřerovnává. Přeuspořádání = editace → razítkne `mt` → propíše se.
+
+### Migrace
+Stará data mají `mt = 0`. LWW při `0 vs 0` **nepřepisuje** (jen doplní chybějící) a baseline se nerazítkuje → žádná ztráta při prvním spuštění. První skutečná editace nastaví `mt` a od té chvíle vyhrává novější verze.
+
+**Stav:** základ je v `_template/index.html` (LWW pro `library`, append-only pro `archive`, tombstones, `lwwMerge`, `autoImportSilent`, `sigOf`, `☁` tlačítko). Rozšiřovací body jsou označené `// APP LOGIC` — při přidání kolekce uprav: `currentKeySet()`, `buildAutoPayload()`, `autoImportSilent()`, `sigOf()`, `applyTombstones()` (jen append-only), seznam obalených save-funkcí a u object-map (bloky) přidej vlastní `mergeBlocksLww`. **Plný příklad se všemi typy kolekcí:** `todo-app/index.html` (dny, plány, šablony, inbox = LWW; bloky = LWW object-mapa; archiv = union).
 
 ---
 

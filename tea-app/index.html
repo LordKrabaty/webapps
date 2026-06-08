@@ -40,12 +40,15 @@ html.dark input[type="range"]::-webkit-slider-thumb{background:var(--w)}
 #darkToggle{font-size:1rem;width:34px;height:34px;border:var(--bh);border-radius:50%;background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
 @media(hover:hover){#darkToggle:hover{background:var(--light)}}
 
-/* JSONBin sync */
+/* Gist sync */
 .sync-group{display:flex;align-items:center;gap:.15rem}
 .btn-sync{font-size:.85rem;width:32px;height:32px;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s;font-family:'DM Mono',monospace}
 @media(hover:hover){.btn-sync:hover{background:var(--light)}}
 .btn-sync:active{background:var(--light)}
 .btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync.on{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.btn-sync.on:hover{background:var(--dark)}}
+.btn-sync.syncing{animation:blink 1s step-end infinite}
 .btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
 @media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
 #statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
@@ -486,10 +489,11 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
   <div class="header-right">
     <span id="statusMsg"></span>
     <div class="sync-group">
-      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (JSONBin)">↑</button>
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (Gist)">↑</button>
       <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
-      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
-      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení Gist synchronizace">⚙</button>
     </div>
     <div class="fs-ctrl" title="velikost písma">
       <button class="fs-btn" onclick="changeFs(-1)" title="zmenšit písmo">−</button>
@@ -500,10 +504,6 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <button id="libToggleBtn" onclick="toggleLibPanel()" title="knihovna">☰</button>
     <button id="undoBtn" onclick="undo()" disabled title="zpět (Ctrl+Z)">↩</button>
     <button id="redoBtn" onclick="redo()" disabled title="vpřed (Ctrl+Y)">↪</button>
-    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automaticky ukládat změny do knihovny">
-      <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
-      ⟳
-    </label>
     <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="uložit změny do knihovny">✓</button>
     <div style="position:relative;display:inline-flex">
       <button class="btn-sm" onclick="toggleNewMenu(event)" title="nové/ uložit jako">+</button>
@@ -606,7 +606,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <div class="modal-row" style="margin-top:.5rem">
       <button class="modal-btn" onclick="selectAllExport()">vybrat vše</button>
       <button class="modal-btn" onclick="closeModal('exportModal')">zrušit</button>
-      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do JSONBin</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do Gistu</button>
       <button class="modal-btn primary" onclick="doExport()">stáhnout JSON</button>
     </div>
   </div>
@@ -1002,7 +1002,6 @@ function updateCoolGuide(){
 let library=[],activeLibId=null;
 let archive=[],archiveOpen=false;
 let undoStack=[],redoStack=[],savedSnapshot=null;
-let autoSave=false;
 const UNDO_MAX=40;
 const defaultSteeps=[45,55,70,90];
 
@@ -1041,7 +1040,7 @@ function showStatusMsg(msg,duration=2200){
   e._to=setTimeout(()=>{e.style.opacity='0';e._hide=setTimeout(()=>{e.style.display='none';},400);},duration);
 }
 function showSave(msg='✓ uloženo'){showStatusMsg(msg,2200);}
-function schedSave(){clearTimeout(saveT);saveT=setTimeout(()=>{saveSession();renderLog();if(autoSave&&activeLibId)updateLibraryEntry();else showSave();},300)}
+function schedSave(){clearTimeout(saveT);saveT=setTimeout(()=>{saveSession();renderLog();if(activeLibId)updateLibraryEntry();else showSave();},300)}
 
 function updateHeaderTeaName(){
   const name=el('teaName').value.trim();
@@ -1171,17 +1170,6 @@ function updateUndoBtn(){
   const r=el('redoBtn');if(r){r.disabled=redoStack.length===0;r.title=redoStack.length?'vpřed '+redoStack.length+' (Ctrl+Y)':'nic vpřed';}
 }
 
-/* ── AUTO-SAVE ─── */
-function initAutoSave(){
-  try{autoSave=!!localStorage.getItem('cajovy-autosave');}catch(e){}
-  const chk=el('autoSaveChk');if(chk)chk.checked=autoSave;
-}
-function toggleAutoSave(on){
-  autoSave=on;
-  try{if(on)localStorage.setItem('cajovy-autosave','1');else localStorage.removeItem('cajovy-autosave');}catch(e){}
-  if(on&&activeLibId&&isDirty())updateLibraryEntry();
-}
-
 /* ── DIRTY TRACKING ─── */
 function markSaved(){savedSnapshot=sessionSnap();renderLibrary();}
 function isDirty(){
@@ -1245,7 +1233,7 @@ function entryData(){
 
 function saveToLibrary(){
   const name=el('teaName').value.trim()||'Bez názvu';
-  const entry={id:Date.now(),name,data:entryData(),logs:[]};
+  const entry={id:Date.now(),name,data:entryData(),logs:[],mt:Date.now()};
   library.push(entry);saveLibrary();
   activeLibId=entry.id;markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();showSave('✓ uloženo do knihovny');
 }
@@ -1253,8 +1241,13 @@ function saveToLibrary(){
 function updateLibraryEntry(){
   if(!activeLibId)return;
   const entry=library.find(e=>e.id===activeLibId);if(!entry)return;
-  entry.name=el('teaName').value.trim()||entry.name;
-  entry.data=entryData();
+  const newName=el('teaName').value.trim()||entry.name;
+  const newData=entryData();
+  // razítkuj mt JEN při skutečné změně obsahu (jinak prázdné přeuložení přebije novější verzi z jiného zařízení)
+  const changed=entry.name!==newName||JSON.stringify(entry.data)!==JSON.stringify(newData);
+  entry.name=newName;
+  entry.data=newData;
+  if(changed)entry.mt=Date.now();
   saveLibrary();markSaved();showSave('✓ změny uloženy');
 }
 
@@ -1266,6 +1259,18 @@ function loadFromLibrary(id){
   nextId=sw.length+1;
   applySessionData({...d,steeps:sw,nextId});
   saveSession();markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();renderLog();showSave('↓ načteno');
+}
+
+// znovu načti aktivní záznam do formuláře po tichém autosync mergi (živý buffer nesmí zůstat na staré verzi)
+function refreshActiveFromLibrary(){
+  if(!activeLibId)return;
+  const entry=library.find(e=>e.id===activeLibId);if(!entry)return;
+  clearAllTimers();warmDone=false;measureDone=false;coolPours=0;
+  const d=entry.data;nextId=1;
+  const sw=(d.steeps||[]).map((s,i)=>({...s,id:i+1,remaining:s.sec,state:'idle'}));
+  nextId=sw.length+1;
+  applySessionData({...d,steeps:sw,nextId});
+  saveSession();markSaved();renderLog();
 }
 
 async function deleteFromLibrary(id){
@@ -1286,7 +1291,7 @@ async function deleteFromLibrary(id){
 }
 function restoreFromArchive(id){
   const entry=archive.find(e=>e.id===id);if(!entry)return;
-  const restored={...entry};delete restored.archivedAt;
+  const restored={...entry};delete restored.archivedAt;restored.mt=Date.now();
   library.push(restored);
   archive=archive.filter(e=>e.id!==id);
   saveLibrary();saveArchive();renderLibrary();renderArchive();
@@ -1377,7 +1382,7 @@ function buildArchSetupText(d){
 }
 function dupArchiveToLibrary(id){
   const entry=archive.find(e=>e.id===id);if(!entry)return;
-  library.push({id:Date.now(),name:entry.name,data:{...entry.data},logs:(entry.logs||[]).map(l=>({...l}))});
+  library.push({id:Date.now(),name:entry.name,data:{...entry.data},logs:(entry.logs||[]).map(l=>({...l})),mt:Date.now()});
   saveLibrary();renderLibrary();
   closeModal('archPreviewModal');
   showSave('← duplikováno do knihovny');
@@ -1497,20 +1502,9 @@ function renderLibrary(){
       return`<div class="lib-cat-header">${esc(label)}</div>`+groups.get(cat).map(libItemHtml).join('');
     }).join('');
   }
-  const hSave=el('headerSaveBtn'),hNew=el('headerSaveNewBtn'),asl=el('autoSaveLbl');
-  if(activeLibId){
-    const dirty=isDirty();
-    hSave.style.display=autoSave?'none':'';
-    hSave.classList.toggle('dirty',dirty);
-    hSave.classList.toggle('saved',!dirty);
-    hSave.textContent=dirty?'uložit změny':'✓ uloženo';
-    hNew.textContent='uložit jako nový';
-    if(asl)asl.style.display='flex';
-  }else{
-    hSave.style.display='none';
-    hNew.textContent='+ uložit jako nový čaj';
-    if(asl)asl.style.display='none';
-  }
+  const hSave=el('headerSaveBtn'),hNew=el('headerSaveNewBtn');
+  hSave.style.display='none';   // změny se ukládají automaticky → ruční tlačítko netřeba
+  hNew.textContent=activeLibId?'uložit jako nový':'+ uložit jako nový čaj';
 }
 
 function updateMeasureRow(){
@@ -1523,13 +1517,7 @@ function updateMeasureRow(){
 }
 function updateDirtyState(){
   const hSave=el('headerSaveBtn');
-  if(!hSave)return;
-  if(!activeLibId){hSave.style.display='none';return;}
-  const dirty=isDirty();
-  hSave.style.display=autoSave?'none':'';
-  hSave.classList.toggle('dirty',dirty);
-  hSave.classList.toggle('saved',!dirty);
-  hSave.textContent=dirty?'uložit změny':'✓ uloženo';
+  if(hSave)hSave.style.display='none';   // autosave je vždy zapnutý
 }
 
 function addSteep(sec=60,temp='',silent=false){
@@ -1780,6 +1768,12 @@ async function doSelectiveClear(){
   if(el('clr-archive').checked) toDelete.push('cajovy-v3-archive');
   if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs');
   if(!toDelete.length){closeModal('clearStorageModal');return;}
+  // Maže-li se synchronizovaná kolekce, vynuluj i autosync baseline + náhrobky — jinak by lokální
+  // reset vygeneroval náhrobky a tiše smazal data i na ostatních zařízeních. Po reloadu se obsah
+  // znovu stáhne z cloudu (pokud je autosync zapnutý), místo nechtěného rozšíření mazání.
+  if(el('clr-library').checked||el('clr-templates').checked||el('clr-archive').checked){
+    toDelete.push('cajovy-syncknown','cajovy-tombstones');
+  }
   closeModal('clearStorageModal');
   if(!await customConfirm('Opravdu smazat vybraná data?','smazat'))return;
   try{toDelete.forEach(k=>localStorage.removeItem(k));}catch(e){}
@@ -2460,6 +2454,7 @@ function doImport(){
         else if(_na==='merge-both')existing.data.notes=(_exNotes&&_impNotes)?_exNotes+'\n\n---\n\n'+_impNotes:_exNotes||_impNotes;
         else existing.data.notes=_exNotes;
         if(t._idMatchRenamed&&cfg?.renameLib)existing.name=t.name;
+        existing.mt=Date.now();
         merged++;
       }
     } else {
@@ -2467,6 +2462,7 @@ function doImport(){
       const renamedVal=el('iact-name-'+t.id)?.value;
       if(renamedVal!==undefined)entry.name=renamedVal.trim()||t.name;
       if(existingIds.has(entry.id)){entry.id=genUniqueId(existingIds);}
+      entry.mt=Date.now();
       library.push(entry);added++;
     }
   });
@@ -2474,6 +2470,7 @@ function doImport(){
   closeModal('mergePreviewModal');closeModal('libPickModal');
   const existingTpls=new Set(templates.map(x=>x.id));
   const tplsToAdd=importTplData.filter(t=>importTplSelected.has(t.id)&&!existingTpls.has(t.id));
+  tplsToAdd.forEach(t=>{t.mt=Date.now();});
   templates.push(...tplsToAdd);
   saveTemplates();renderTemplates();
   const existingArchIds2=new Set(archive.map(x=>x.id));
@@ -2557,7 +2554,7 @@ function saveTplFromModal(){
   const name=el('tplNameInput').value.trim()||'Šablona';
   const data=pendingLogTplData||getTemplateData();
   pendingLogTplData=null;
-  const tpl={id:Date.now(),name,data};
+  const tpl={id:Date.now(),name,data,mt:Date.now()};
   templates.push(tpl);
   saveTemplates();renderTemplates();
   closeModal('tplNameModal');
@@ -2622,7 +2619,7 @@ async function overwriteTemplate(){
   const tpl=templates.find(t=>t.id===activeTplId);if(!tpl)return;
   closeModal('tplApplyModal');
   if(!await customConfirm('Přepsat šablonu "'+tpl.name+'" aktuálním nastavením?','přepsat'))return;
-  tpl.data=getTemplateData();
+  tpl.data=getTemplateData();tpl.mt=Date.now();
   saveTemplates();renderTemplates();showSave('✓ šablona upravena');
 }
 
@@ -2637,7 +2634,7 @@ function openTplRenameModal(id){
 function saveTplRename(){
   const tpl=templates.find(t=>t.id===activeTplId);if(!tpl)return;
   const name=el('tplRenameInput').value.trim();if(!name)return;
-  tpl.name=name;
+  tpl.name=name;tpl.mt=Date.now();
   saveTemplates();renderTemplates();
   closeModal('tplRenameModal');showSave('✓ přejmenováno');
 }
@@ -2784,7 +2781,7 @@ function getActiveLogs(){
   if(!entry.logs)entry.logs=[];
   return entry.logs;
 }
-function saveLog(){saveLibrary();}
+function saveLog(){const e=library.find(x=>x.id===activeLibId);if(e)e.mt=Date.now();saveLibrary();}
 
 function buildSetupSnapshot(){
   const name=el('teaName').value.trim()||'—';
@@ -2943,7 +2940,7 @@ function saveTplEdit(){
   d.checks={chkWarm:el('le-chkWarm').checked,chkRinse:el('le-chkRinse').checked,chkSieve:el('le-chkSieve').checked,chkCover:el('le-chkCover').checked,chkThermometer:el('le-chkThermometer').checked};
   d.coolPours=el('le-chkThermometer').checked?0:leEditCoolPours;
   d.steeps=leEditSteeps.map(s=>({sec:s.sec,temp:s.temp}));
-  tpl.data=d;
+  tpl.data=d;tpl.mt=Date.now();
   editingTplId=null;
   saveTemplates();renderTemplates();
   closeModal('logEditModal');
@@ -3120,7 +3117,6 @@ function renderLog(){
 
 function init(){
   try{libGroupByCat=!!localStorage.getItem('cajovy-lib-group-cat');}catch(e){}
-  initAutoSave();
   initFs();
   initDark();
   loadPanelFs();
@@ -3248,19 +3244,19 @@ document.addEventListener('keydown',e=>{
   </div>
 </div>
 
-<!-- JSONBin settings modal -->
+<!-- Gist settings modal -->
 <div class="modal-bg" id="jsonbinModal">
   <div class="modal" style="max-width:400px;gap:.65rem">
-    <h2>Nastavení JSONBin</h2>
-    <p>Zadej svůj JSONBin API klíč a Bin ID. Data se ukládají pouze v tomto prohlížeči.</p>
-    <p style="font-size:.78rem;color:var(--muted)">Účet a klíč zdarma na <a href="https://jsonbin.io" target="_blank" rel="noopener" style="color:var(--black)">jsonbin.io</a> → Dashboard → API Keys.</p>
+    <h2>Nastavení Gist synchronizace</h2>
+    <p>Zadej svůj GitHub token a Gist ID. Data se ukládají pouze v tomto prohlížeči.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Token vytvoříš na <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). Gisty najdeš na <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
     <div class="jb-field">
-      <label>X-Master-Key (API klíč)</label>
-      <input type="text" id="jbKeyInput" placeholder="$2a$10$…" spellcheck="false" autocomplete="off">
+      <label>GitHub Token</label>
+      <input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off">
     </div>
     <div class="jb-field">
-      <label>Bin ID <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(prázdné = při prvním uploadu se vytvoří)</span></label>
-      <input type="text" id="jbIdInput" placeholder="64a1b2c3d4e5f6…" spellcheck="false" autocomplete="off">
+      <label>Gist ID</label>
+      <input type="text" id="jbIdInput" placeholder="abc123def456… (prázdné = vytvoří se)" spellcheck="false" autocomplete="off">
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
@@ -3270,44 +3266,300 @@ document.addEventListener('keydown',e=>{
 </div>
 
 <script>
-/* ── JSONBIN SYNC ─── */
+/* ── GITHUB GIST SYNC + AUTO-SYNC (tichý obousměrný LWW) ───
+   Pravidla a pasti viz CLAUDE.md → "Auto-sync (tichý obousměrný LWW)".
+   Data jedou v jednom privátním gistu (soubor cajovy-sync.json).
+   Kolekce: čaje (library) + šablony (templates) = LWW dle id; archiv = union (append-only). */
 (function(){
-  const JBKEY='cajovy-jsonbin-key';
-  const JBID='cajovy-jsonbin-id';
+  const GHTOKEN='cajovy-gist-token';        // GitHub token (scope gist)
+  const GISTID='cajovy-gist-id';            // Gist ID (prázdné = sync ho při prvním pushi vytvoří)
+  const ASKEY='cajovy-autosync';
+  const GIST_API='https://api.github.com/gists';
+  const GIST_FILE='cajovy-sync.json';       // jméno souboru uvnitř gistu (data = JSON string)
+  const PUSH_MIN_INTERVAL=4000;             // max 1 push / 4 s
+  let pushTimer=null,lastPushTs=0,pushing=false,pushAgain=false,stateTimer=null;
+  let applyingRemote=false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
+
+  // Jednorázová migrace ze starého JSONBin syncu → Gist sloty. JSONBin klíč ≠ GitHub token a
+  // Bin ID ≠ Gist ID — hodnoty se jen přesunou do správného slotu, uživatel je musí v ⚙ ručně
+  // přepsat; neplatné Gist ID se samo zotaví (404 → založí nový gist).
+  (function migrateJsonbinToGist(){
+    try{
+      const move=(o,n)=>{const v=localStorage.getItem(o);if(v==null)return;if(localStorage.getItem(n)==null)localStorage.setItem(n,v);localStorage.removeItem(o);};
+      move('cajovy-jsonbin-key',GHTOKEN);
+      move('cajovy-jsonbin-id',GISTID);
+    }catch(e){}
+  })();
+
+  function autosyncEnabled(){try{return !!localStorage.getItem(ASKEY);}catch(e){return false;}}
+  function hasToken(){try{return !!localStorage.getItem(GHTOKEN);}catch(e){return false;}}   // stačí token → gist si sync vytvoří sám
+
+  /* ── TOMBSTONES (propagace mazání mezi zařízeními) ── */
+  const TOMB_KEY='cajovy-tombstones';       // { "<ns>:<id>": deletedAtTs }
+  const KNOWN_KEY='cajovy-syncknown';       // [ "<ns>:<id>", … ] stav z minulé reconcile
+  const TOMB_TTL=90*864e5;                   // náhrobky starší než 90 dní zahodit
+  let tombstones={};
+  let knownIds=null;                         // null = ještě nesledováno
+  function loadTombstones(){try{tombstones=JSON.parse(localStorage.getItem(TOMB_KEY)||'{}')||{};}catch(e){tombstones={};}}
+  function saveTombstones(){try{localStorage.setItem(TOMB_KEY,JSON.stringify(tombstones));}catch(e){}}
+  function loadKnownIds(){try{const s=localStorage.getItem(KNOWN_KEY);knownIds=s?new Set(JSON.parse(s)):null;}catch(e){knownIds=null;}}
+  function saveKnownIds(){try{localStorage.setItem(KNOWN_KEY,JSON.stringify([...(knownIds||[])]));}catch(e){}}
+  function isTombstoned(key){return !!tombstones[key];}
+  // množina "<ns>:<id>" všech aktuálně existujících položek
+  function currentKeySet(){
+    const s=new Set();
+    library.forEach(e=>{if(e&&e.id!=null)s.add('lib:'+e.id);});
+    templates.forEach(t=>{if(t&&t.id!=null)s.add('tpl:'+t.id);});
+    archive.forEach(e=>{if(e&&e.id!=null)s.add('arc:'+e.id);});
+    return s;
+  }
+  function pruneTombstones(){
+    const cutoff=Date.now()-TOMB_TTL;
+    Object.keys(tombstones).forEach(k=>{if(!(tombstones[k]>cutoff))delete tombstones[k];});
+  }
+  // diff aktuálního stavu proti poslednímu známému → mazání zapíše jako náhrobek
+  function reconcileTombstones(){
+    const cur=currentKeySet(),now=Date.now();
+    if(knownIds)knownIds.forEach(k=>{if(!cur.has(k))tombstones[k]=now;});
+    cur.forEach(k=>{if(tombstones[k])delete tombstones[k];});   // existuje ⇒ žije
+    knownIds=cur;
+    pruneTombstones();
+    saveKnownIds();saveTombstones();
+  }
+  function mergeCloudTombstones(cloudTomb){
+    if(!cloudTomb||typeof cloudTomb!=='object')return;
+    Object.entries(cloudTomb).forEach(([k,ts])=>{const t=+ts||0;if(!tombstones[k]||t>tombstones[k])tombstones[k]=t;});
+  }
+  // smaž lokálně append-only kolekce, které mají náhrobek (LWW kolekce řeší lwwMerge)
+  function applyTombstones(){
+    let removed=0;
+    archive=archive.filter(x=>{if(tombstones['arc:'+x.id]){removed++;return false;}return true;});
+    return removed;
+  }
+  // souhrnný podpis stavu (vč. mt a náhrobků) pro detekci rozdílu cloud↔local
+  function sigOf(teas,tpls,arch,tomb){
+    const idS=arr=>arr.map(x=>String((x&&x.id)||'')+'@'+((x&&x.mt)||0)).sort().join(',')+':'+arr.length;
+    const arcS=arr=>arr.map(x=>String((x&&x.id)||'')).sort().join(',')+':'+arr.length;
+    const tS=o=>Object.keys(o||{}).sort().join(',');
+    return [idS(teas),idS(tpls),arcS(arch),tS(tomb)].join('||');
+  }
+  function localStateSig(){return sigOf(library,templates,archive,tombstones);}
+  function cloudStateSig(r){return sigOf(r.teas||r.items||[],r.templates||[],r.archive||[],r.tombstones||{});}
+
+  // tlačítko v toolbaru = zároveň stavový indikátor
+  function updateAutoSyncBtn(){
+    const b=el('autoSyncBtn');if(!b)return;
+    const on=autosyncEnabled();
+    b.classList.toggle('on',on);
+    if(!b.classList.contains('syncing'))b.textContent='☁';
+    b.title=on?'automatická synchronizace zapnutá — klikni pro vypnutí':'zapnout automatickou synchronizaci (Gist)';
+  }
+  function setSyncState(state){
+    const b=el('autoSyncBtn');if(!b)return;
+    clearTimeout(stateTimer);
+    b.classList.remove('syncing');
+    if(state==='syncing'){b.textContent='↑';b.classList.add('syncing');}
+    else if(state==='ok'){b.textContent='☁';stateTimer=setTimeout(updateAutoSyncBtn,3000);}
+    else if(state==='err'){b.textContent='⚠';stateTimer=setTimeout(updateAutoSyncBtn,5000);}
+    else updateAutoSyncBtn();
+  }
+  function toggleAutoSync(){
+    const on=!autosyncEnabled();
+    try{if(on)localStorage.setItem(ASKEY,'1');else localStorage.removeItem(ASKEY);}catch(e){}
+    updateAutoSyncBtn();
+    if(on&&!hasToken()){showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)',4500);return;}
+    if(on){reconcileTombstones();scheduleAutoPush();}   // baseline + push aktuálního stavu
+  }
+
+  // autosync nahrává celý stav + náhrobky (ne výběr jako doCloudUpload)
+  function buildAutoPayload(){
+    return {v:1,teas:library,templates:templates,archive:archive,tombstones:tombstones};
+  }
+  function scheduleAutoPush(){
+    if(!autosyncEnabled()||!hasToken())return;
+    if(pushTimer)return;        // už naplánováno → coalesce
+    const wait=Math.max(0,PUSH_MIN_INTERVAL-(Date.now()-lastPushTs));
+    pushTimer=setTimeout(()=>{pushTimer=null;doAutoPush();},wait);
+  }
+  async function doAutoPush(){
+    if(!autosyncEnabled()||!hasToken())return;
+    if(pushing){pushAgain=true;return;}
+    const token=localStorage.getItem(GHTOKEN);
+    if(!token)return;
+    let gistId=localStorage.getItem(GISTID);
+    let creating=!gistId;        // gist ještě neexistuje → autosync ho vytvoří (POST)
+    pushing=true;setSyncState('syncing');
+    try{
+      const payload=buildAutoPayload();
+      let res=await fetch(gistUrl(gistId),gistWriteInit(token,creating,payload));
+      if(!creating&&res.status===404){   // migrovaný/smazaný gist → založ nový
+        creating=true;gistId='';
+        res=await fetch(gistUrl(''),gistWriteInit(token,true,payload));
+      }
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      if(creating){const json=await res.json().catch(()=>null);const newId=json&&json.id;if(newId){try{localStorage.setItem(GISTID,newId);}catch(e){}}}
+      lastPushTs=Date.now();setSyncState('ok');
+    }catch(e){
+      console.warn('[autosync] push selhal:',(e&&e.message)?e.message:e);
+      setSyncState('err');
+    }finally{
+      pushing=false;
+      if(pushAgain){pushAgain=false;scheduleAutoPush();}
+    }
+  }
+
+  // LWW slučování klíčovaného pole: novější mt vyhrává; mazání vyhraje jen pokud je novější
+  // než poslední editace (editace po smazání = vzkříšení). Vrací nové pole + počty.
+  function lwwMerge(localArr,cloudArr,ns,keyOf,normalize){
+    const byKey=new Map();
+    (localArr||[]).forEach(x=>{if(x&&keyOf(x)!=null)byKey.set(String(keyOf(x)),x);});
+    let added=0,updated=0,removed=0;
+    (cloudArr||[]).forEach(c=>{
+      if(!c||keyOf(c)==null)return;
+      const k=String(keyOf(c)),cmt=+c.mt||0,ex=byKey.get(k);
+      if(ex){
+        if(cmt>(+ex.mt||0)){byKey.set(k,normalize(c));updated++;}
+      }else{
+        const tomb=tombstones[ns+':'+k]||0;
+        if(cmt>=tomb){byKey.set(k,normalize(c));added++;if(tomb&&cmt>tomb)delete tombstones[ns+':'+k];}
+      }
+    });
+    for(const [k,x] of byKey){
+      const tomb=tombstones[ns+':'+k]||0;
+      if(tomb&&tomb>=(+x.mt||0)){byKey.delete(k);removed++;}
+      else if(tomb)delete tombstones[ns+':'+k];   // lokální editace novější než smazání → ponech, zahoď náhrobek
+    }
+    return {arr:[...byKey.values()],added,updated,removed};
+  }
+
+  // tichý obousměrný merge cloud → local
+  function autoImportSilent(record){
+    if(!record||typeof record!=='object')return;
+    applyingRemote=true;
+    try{
+      mergeCloudTombstones(record.tombstones);
+      let removed=applyTombstones();           // append-only kolekce (archiv)
+      let added=0,updated=0;
+      const beforeActive=activeLibId?JSON.stringify((library.find(e=>e.id===activeLibId)||{}).data||null):null;
+      // čaje — LWW dle id
+      const libR=lwwMerge(library,(record.teas||record.items||[]),'lib',x=>x.id,c=>c);
+      library=libR.arr;added+=libR.added;updated+=libR.updated;removed+=libR.removed;
+      // šablony — LWW dle id
+      const tplR=lwwMerge(templates,(record.templates||[]),'tpl',x=>x.id,c=>c);
+      templates=tplR.arr;added+=tplR.added;updated+=tplR.updated;removed+=tplR.removed;
+      // archiv — jen doplnit chybějící (append-only)
+      const arcIds=new Set(archive.map(x=>String(x.id)));
+      (record.archive||[]).forEach(it=>{
+        if(it&&it.id!=null&&!arcIds.has(String(it.id))&&!isTombstoned('arc:'+it.id)){archive.push(it);arcIds.add(String(it.id));added++;}
+      });
+
+      if(added||updated||removed){
+        saveLibrary();saveTemplates();saveArchive();
+        if(typeof renderLibrary==='function')renderLibrary();
+        if(typeof renderTemplates==='function')renderTemplates();
+        if(typeof renderArchive==='function')renderArchive();
+        // pokud merge změnil/smazal právě editovaný čaj, promítni to do formuláře (jinak ho příští flush přepíše starou verzí)
+        if(activeLibId){
+          const cur=library.find(e=>e.id===activeLibId);
+          if(!cur){activeLibId=null;savedSnapshot=null;if(typeof renderLog==='function')renderLog();}
+          else if(JSON.stringify(cur.data||null)!==beforeActive&&typeof refreshActiveFromLibrary==='function')refreshActiveFromLibrary();
+        }
+        const parts=[];
+        if(added)parts.push('+'+added);
+        if(updated)parts.push('~'+updated);
+        if(removed)parts.push('−'+removed);
+        showStatusMsg('☁ sync '+parts.join(' '),3000);
+      }
+      // srovnej baseline na nový stav a ulož náhrobky
+      knownIds=currentKeySet();
+      pruneTombstones();
+      saveKnownIds();saveTombstones();
+    }finally{applyingRemote=false;}
+  }
+
+  // hook po každé perzistenci synchronizované kolekce: zaznamenej mazání (náhrobky) a naplánuj push
+  function autoSyncOnSave(){
+    if(applyingRemote)return;      // změny z mergeu nesmí spustit reconcile/push
+    if(!hasToken())return;         // bez tokenu není co sledovat (gist si sync vytvoří sám)
+    reconcileTombstones();
+    if(autosyncEnabled())scheduleAutoPush();
+  }
+
+  // tichý PULL (focus / visibilitychange / interval): stáhni cloud a sluč, pokud se liší — bez spinneru
+  let lastPullTs=0;
+  const PULL_MIN_INTERVAL=30000;            // max 1 pull / 30 s (focus + visibility se spouští spolu)
+  async function silentPull(){
+    if(Date.now()-lastPullTs<PULL_MIN_INTERVAL)return;
+    lastPullTs=Date.now();
+    const token=localStorage.getItem(GHTOKEN),gistId=localStorage.getItem(GISTID);
+    if(!token||!gistId)return;               // bez tokenu i Gist ID není odkud stahovat
+    if(pushing)return;                       // probíhá push → nech ho dokončit
+    try{
+      const res=await gistGet(gistId,token);if(!res.ok)return;
+      let record=await gistRecord(res);
+      if(typeof record!=='object'||record===null)return;
+      if('cajovy-v3-library' in record){     // backward compat: starý formát raw localStorage stringů
+        record={v:1,teas:JSON.parse(record['cajovy-v3-library']||'[]'),templates:JSON.parse(record['cajovy-v3-templates']||'[]'),archive:JSON.parse(record['cajovy-v3-archive']||'[]')};
+      }
+      if(localStateSig()!==cloudStateSig(record))autoImportSilent(record);
+      if(autosyncEnabled())scheduleAutoPush();
+    }catch(e){console.warn('[silentPull] selhal:',(e&&e.message)?e.message:e);}
+  }
 
   function openJsonBinSettings(){
     try{
-      el('jbKeyInput').value=localStorage.getItem(JBKEY)||'';
-      el('jbIdInput').value=localStorage.getItem(JBID)||'';
+      el('jbKeyInput').value=localStorage.getItem(GHTOKEN)||'';
+      el('jbIdInput').value=localStorage.getItem(GISTID)||'';
     }catch(e){}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings(){
     try{
-      const key=el('jbKeyInput').value.trim();
+      const token=el('jbKeyInput').value.trim();
       const id=el('jbIdInput').value.trim();
-      if(key) localStorage.setItem(JBKEY,key); else localStorage.removeItem(JBKEY);
-      if(id) localStorage.setItem(JBID,id); else localStorage.removeItem(JBID);
+      if(token) localStorage.setItem(GHTOKEN,token); else localStorage.removeItem(GHTOKEN);
+      if(id) localStorage.setItem(GISTID,id); else localStorage.removeItem(GISTID);
     }catch(e){}
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg){showStatusMsg(msg,3500);}
   function isCorsErr(e){return(e instanceof TypeError)&&/fetch/i.test(e.message);}
-  async function jbGet(binId,key){
-    let res=await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest',{mode:'cors',credentials:'omit'});
-    if((res.status===401||res.status===403)&&key){
-      res=await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest',{
-        mode:'cors',credentials:'omit',headers:{'X-Master-Key':key}
-      });
+  // hlavičky: čtení (GET) nepotřebuje Content-Type, zápis (POST/PATCH) ano
+  function ghHeaders(token,write){
+    const h={'Accept':'application/vnd.github+json'};
+    if(token)h['Authorization']='Bearer '+token;
+    if(write)h['Content-Type']='application/json';
+    return h;
+  }
+  function gistUrl(gistId){return gistId?GIST_API+'/'+gistId:GIST_API;}
+  // fetch-init pro zápis: PATCH (existující) přepíše obsah souboru; POST (nový) navíc nastaví popis + private
+  function gistWriteInit(token,creating,payload){
+    const files={};files[GIST_FILE]={content:JSON.stringify(payload)};
+    const body=creating?{description:'cajovy-sync',public:false,files}:{files};
+    return {method:creating?'POST':'PATCH',mode:'cors',credentials:'omit',headers:ghHeaders(token,true),body:JSON.stringify(body)};
+  }
+  // GET gistu — vrací surovou Response (volající kontroluje res.ok)
+  async function gistGet(gistId,token){
+    return fetch(gistUrl(gistId),{mode:'cors',credentials:'omit',headers:ghHeaders(token,false)});
+  }
+  // z odpovědi GET vytáhne uložená data (obsah GIST_FILE) jako objekt; null = nejde přečíst
+  async function gistRecord(res){
+    let json;try{json=await res.json();}catch(e){return null;}
+    const file=json&&json.files&&json.files[GIST_FILE];
+    if(!file)return null;
+    let content=file.content;
+    if(file.truncated&&file.raw_url){   // GitHub ořízne obsah > ~1 MB → dotáhni přes raw_url
+      try{content=await(await fetch(file.raw_url,{mode:'cors',credentials:'omit'})).text();}catch(e){}
     }
-    return res;
+    if(!content)return null;
+    try{return JSON.parse(content);}catch(e){return null;}
   }
 
   /* ↑ spouštěno tlačítkem v export modalu — bere výběr ze stejných Sets jako doExport() */
   async function doCloudUpload(){
-    const key=localStorage.getItem(JBKEY);
-    if(!key){showSyncTooltip('⚠ chybí API klíč — otevři ⚙');return;}
-    let binId=localStorage.getItem(JBID);
+    const token=localStorage.getItem(GHTOKEN);
+    if(!token){showSyncTooltip('⚠ chybí GitHub token — otevři ⚙');return;}
+    let gistId=localStorage.getItem(GISTID);
     const items=library.filter(e=>exportSelected.has(e.id));
     const tpls=templates.filter(t=>exportTplSelected.has(t.id));
     const archItems=archive.filter(e=>exportArchSelected.has(e.id));
@@ -3316,20 +3568,14 @@ document.addEventListener('keydown',e=>{
     closeModal('exportModal');
     showSyncTooltip('↑ nahrávám…');
     try{
-      const url=binId?'https://api.jsonbin.io/v3/b/'+binId:'https://api.jsonbin.io/v3/b';
-      const hdrs={'Content-Type':'application/json','X-Master-Key':key};
-      if(!binId){hdrs['X-Bin-Name']='cajovy-sync';hdrs['X-Bin-Private']='false';}
-      const res=await fetch(url,{
-        method:binId?'PUT':'POST',
-        mode:'cors',credentials:'omit',
-        headers:hdrs,body:JSON.stringify(payload)
-      });
-      if(!res.ok){const e=await res.text();throw new Error('HTTP '+res.status+': '+e.slice(0,120));}
-      const json=await res.json();
-      if(!binId){
-        const newId=json.metadata&&json.metadata.id?json.metadata.id:null;
-        if(newId) localStorage.setItem(JBID,newId);
+      let creating=!gistId;
+      let res=await fetch(gistUrl(gistId),gistWriteInit(token,creating,payload));
+      if(!creating&&res.status===404){   // migrovaný/smazaný gist → založ nový
+        creating=true;gistId='';
+        res=await fetch(gistUrl(''),gistWriteInit(token,true,payload));
       }
+      if(!res.ok){const e=await res.text();throw new Error('HTTP '+res.status+': '+e.slice(0,120));}
+      if(creating){const json=await res.json().catch(()=>null);const newId=json&&json.id;if(newId) localStorage.setItem(GISTID,newId);}
       const t=new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
       showSyncTooltip('↑ nahráno '+t+' ('+items.length+'č '+tpls.length+'š '+archItems.length+'a)');
     }catch(e){
@@ -3337,20 +3583,19 @@ document.addEventListener('keydown',e=>{
     }
   }
 
-  /* ↓ stáhne z JSONBin a otevře import modal s plným merge/duplicate flow */
+  /* ↓ stáhne z gistu a otevře import modal s plným merge/duplicate flow */
   async function syncDownload(){
-    const binId=localStorage.getItem(JBID);
-    if(!binId){showSyncTooltip('⚠ chybí Bin ID — otevři ⚙');return;}
+    const gistId=localStorage.getItem(GISTID);
+    if(!gistId){showSyncTooltip('⚠ chybí Gist ID — otevři ⚙');return;}
     const btn=el('syncDownBtn');
     btn.disabled=true;
     showSyncTooltip('↓ stahuji…');
     try{
-      const key=localStorage.getItem(JBKEY);
-      const res=await jbGet(binId,key);
+      const token=localStorage.getItem(GHTOKEN);
+      const res=await gistGet(gistId,token);
       if(!res.ok){const e=await res.text();throw new Error('HTTP '+res.status+': '+e.slice(0,120));}
-      const json=await res.json();
-      let record=json.record;
-      if(typeof record!=='object'||record===null) throw new Error('Neplatná data v binu');
+      let record=await gistRecord(res);
+      if(typeof record!=='object'||record===null) throw new Error('Neplatná data v gistu');
       // Backward compat: starý formát ukládal raw localStorage stringy pod klíči cajovy-v3-*
       if('cajovy-v3-library' in record){
         record={
@@ -3361,12 +3606,12 @@ document.addEventListener('keydown',e=>{
         };
       }
       if(!record.teas&&!record.templates&&!record.archive){
-        throw new Error('Bin neobsahuje čaje ani šablony');
+        throw new Error('Gist neobsahuje čaje ani šablony');
       }
       // Otevřu import modal a naplním ho stažená daty — reuse celý merge/duplicate flow
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent='Import z JSONBin';
+      el('importModal').querySelector('h2').textContent='Import z Gistu';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('↓ staženo — zkontroluj výběr a importuj');
     }catch(e){
@@ -3375,19 +3620,22 @@ document.addEventListener('keydown',e=>{
   }
 
   async function checkCloudOnStartup(){
-    const binId=localStorage.getItem(JBID);
-    if(!binId) return;
+    const gistId=localStorage.getItem(GISTID);
+    if(!gistId){
+      // gist ještě neexistuje → při zapnutém autosyncu a existujících datech ho rovnou založ
+      if(autosyncEnabled()&&hasToken()&&(library.length||templates.length||archive.length)) scheduleAutoPush();
+      return;
+    }
     if(sessionStorage.getItem('cajovy-cloud-checked')) return;
     sessionStorage.setItem('cajovy-cloud-checked','1');
     const btn=el('syncDownBtn');
     const origTitle=btn.title;
     btn.disabled=true;btn.title='kontroluji cloud…';
     try{
-      const key=localStorage.getItem(JBKEY);
-      const res=await jbGet(binId,key);
+      const token=localStorage.getItem(GHTOKEN);
+      const res=await gistGet(gistId,token);
       if(!res.ok) return;
-      const json=await res.json();
-      let record=json.record;
+      let record=await gistRecord(res);
       if(typeof record!=='object'||record===null) return;
       if('cajovy-v3-library' in record){
         record={
@@ -3397,6 +3645,12 @@ document.addEventListener('keydown',e=>{
           archive:JSON.parse(record['cajovy-v3-archive']||'[]')
         };
       }
+      // AUTOSYNC: tichý obousměrný merge (vč. mazání i editací)
+      if(autosyncEnabled()){
+        if(localStateSig()!==cloudStateSig(record)){autoImportSilent(record);scheduleAutoPush();}
+        return;
+      }
+      // jinak (autosync vypnutý): nabídni ruční import, pokud se data liší
       const cloudTeas=record.teas||[];
       const cloudTpls=record.templates||[];
       const cloudArch=record.archive||[];
@@ -3406,7 +3660,7 @@ document.addEventListener('keydown',e=>{
       if(localSig===cloudSig) return;
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent='Import z JSONBin';
+      el('importModal').querySelector('h2').textContent='Import z Gistu';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
     }catch(e){}finally{
@@ -3419,6 +3673,20 @@ document.addEventListener('keydown',e=>{
   window.doCloudUpload=doCloudUpload;
   window.syncDownload=syncDownload;
   window.checkCloudOnStartup=checkCloudOnStartup;
+  window.toggleAutoSync=toggleAutoSync;
+  window.autoSyncOnSave=autoSyncOnSave;   // hook po změně synchronizované kolekce (obalené save-funkce ho volají samy)
+  loadTombstones();loadKnownIds();
+  // obal perzistentní save-funkce, aby i mazání spustilo reconcile (náhrobek) + push
+  ['saveLibrary','saveTemplates','saveArchive'].forEach(fn=>{
+    const orig=window[fn];
+    if(typeof orig==='function')window[fn]=function(){const r=orig.apply(this,arguments);try{autoSyncOnSave();}catch(e){}return r;};
+  });
+  // PULL ON FOCUS — návrat k tabu/oknu hned stáhne změny z jiného zařízení
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&autosyncEnabled())silentPull();});
+  window.addEventListener('focus',()=>{if(autosyncEnabled())silentPull();});
+  // PULL každých 5 minut (jen když je tab viditelný)
+  setInterval(()=>{if(autosyncEnabled()&&document.visibilityState==='visible')silentPull();},5*60*1000);
+  updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
 </script>
