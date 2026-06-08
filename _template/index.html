@@ -966,7 +966,7 @@ document.addEventListener('keydown', e => {
   const ASKEY   = 'APP_NAME-autosync';
   const GIST_API  = 'https://api.github.com/gists';
   const GIST_FILE = 'APP_NAME-sync.json';      // jméno souboru uvnitř gistu (data = JSON string)
-  const PUSH_MIN_INTERVAL = 10000;            // max 1 push / 10 s
+  const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
   let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null;
   let applyingRemote = false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
 
@@ -1223,6 +1223,24 @@ document.addEventListener('keydown', e => {
     if (autosyncEnabled()) scheduleAutoPush();
   }
 
+  // tichý PULL (focus / visibilitychange / interval): stáhni cloud a sluč, pokud se liší — bez spinneru
+  let lastPullTs = 0;
+  const PULL_MIN_INTERVAL = 30000;            // max 1 pull / 30 s (focus + visibility se spouští spolu)
+  async function silentPull() {
+    if (Date.now() - lastPullTs < PULL_MIN_INTERVAL) return;
+    lastPullTs = Date.now();
+    const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(GISTID);
+    if (!token || !gistId) return;             // bez tokenu i Gist ID není odkud stahovat
+    if (pushing) return;                       // probíhá push → nech ho dokončit
+    try {
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) return;
+      if (localSig() !== cloudSig(record)) autoImportSilent(record);
+      if (autosyncEnabled()) scheduleAutoPush();
+    } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); }
+  }
+
   async function doCloudUpload() {
     const token = localStorage.getItem(GHTOKEN);
     if (!token) { showSyncTooltip('⚠ chybí GitHub token — otevři ⚙'); return; }
@@ -1319,6 +1337,11 @@ document.addEventListener('keydown', e => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
+  // PULL ON FOCUS — návrat k tabu/oknu hned stáhne změny z jiného zařízení
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autosyncEnabled()) silentPull(); });
+  window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
+  // PULL každých 5 minut (jen když je tab viditelný)
+  setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
   updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
