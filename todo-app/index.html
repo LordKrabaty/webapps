@@ -2610,11 +2610,24 @@ function formatDateCz(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return CZ_DAYS[d.getDay()] + ' ' + d.getDate() + '. ' + CZ_MONTHS[d.getMonth()];
 }
+// Pondělí (ISO) týdne, do kterého spadá zadané datum
+function mondayIsoOf(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+// Je daný den pracovní (dle pracovních dnů daného týdne)?
+function isWorkDay(dateStr) {
+  const wDays = workingDaysByWeek[mondayIsoOf(dateStr)] || [1, 2, 3, 4, 5];
+  return wDays.includes(new Date(dateStr + 'T12:00:00').getDay());
+}
 function updateHeaderDay() {
   const sub = el('headerSub'), sep = el('headerSep');
   if (!sub || !sep) return;
   if (activePlanDate) {
-    sub.textContent = formatDateCz(activePlanDate) + (activePlanDate === todayIso() ? ' · dnes' : '');
+    const mode = isWorkDay(activePlanDate) ? 'práce' : 'doma';
+    sub.textContent = formatDateCz(activePlanDate) + (activePlanDate === todayIso() ? ' · dnes' : '') + ' · ' + mode;
     sub.style.display = 'inline';
     sep.style.display = 'inline';
   } else {
