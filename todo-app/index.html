@@ -195,8 +195,8 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.item-row:hover{background:var(--off)}}
 .item-row.is-block{border-color:var(--light);background:var(--off);margin-top:.25rem}
 .item-row.is-block:first-child{margin-top:0}
-/* pseudo-blok / TASK-událost (top-level úkol bez vlastního typu bloku): bez výplně, jen levý proužek → mírně odliší od skutečného bloku */
-.item-row.is-block.is-pseudoblock{background:transparent;border-color:transparent;border-left:2px solid var(--mid)}
+/* prostý řádek (Inbox / Později / obyč. top-level úkol na Dni): bez rámečku a výplně */
+.item-row.is-line{border-color:transparent;background:transparent;margin-top:0}
 .item-row.is-subtask{padding-left:1.4rem}
 .item-row.is-done .item-text{opacity:.45;text-decoration:line-through}
 .item-row.is-urgent .item-text{font-weight:600}
@@ -512,7 +512,7 @@ textarea::placeholder{color:var(--mid)}
     <div id="notes-add" class="notes-add">
       <textarea id="quickInput" placeholder="úkol 20m  ·  9:30-10:00 standup  ·  -D text (pod blok)  ·  text -d" rows="2"></textarea>
       <div id="abbrevHint" class="abbrev-hint" title="napiš -ZKRATKA na začátek (nebo -zkratka na konec) → úkol se vloží pod daný blok"></div>
-      <div class="input-btns">
+      <div class="input-btns" id="inputBtns">
         <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Úkol ▾</button>
         <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Blok ▾</button>
         <button class="btn-add" id="btnEvent" onclick="toggleEventMenu(event)">+ Událost ▾</button>
@@ -1354,17 +1354,51 @@ function rowsHtml(ctx, insertBefore = {}) {
   const list = ctx.list;
   const { byId: blockAbbrById } = presentBlockAbbrevs(list);   // zkratky bloků dle jejich názvů na této kartě
   return list.map((item, idx) => {
+    // ── INBOX: prostý jednořádkový úkol (bez bloku, bez času, bez rámečku) ──
+    if (ctx.kind === 'inbox') {
+      const tg = item.done ? '☑' : '☐';
+      const c = ['item-row', 'is-line', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : ''].filter(Boolean).join(' ');
+      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" draggable="true">
+        <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${tg}</span>
+        <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
+        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx === 0 ? 'disabled' : ''}>↑</button>
+        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu)">→</button>
+        <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="smazat">✕</button>
+      </div>`;
+    }
+    // ── MĚSÍC (Později): prostý řádek; datum + případný čas události VLEVO, vpravo žádný čas ──
+    if (ctx.kind === 'month') {
+      const tg = item.done ? '☑' : '☐';
+      const _pd = item.dayLabel ? parseDayLabel(item.dayLabel, ctx.ym) : null;
+      const _da = _pd ? ` data-day="${DAY_ABBREV_CZ[_pd.getDay()]}"` : '';
+      const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo konec června)">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`;
+      const timeBadge = (item.isEvent && item.eventStart)
+        ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → bez času · -/✒ → úkol">${item.eventStart}–${item.eventEnd || '?'}</span>`
+        : '';
+      const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : ''].filter(Boolean).join(' ');
+      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" draggable="true">
+        ${dayBadge}${timeBadge}
+        <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${tg}</span>
+        <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
+        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx === 0 ? 'disabled' : ''}>↑</button>
+        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu)">→</button>
+        <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="smazat">✕</button>
+      </div>`;
+    }
+    // ── DEN (Týden/Příští): bloky z presetů + podúkoly + události; rámeček jen pro skutečný blok/událost ──
     const bt = item.blockType || 'TASK';
     const btInfo = BLOCK_TYPES[bt] || BLOCK_TYPES.TASK;
     const isBlock = !item.isSubtask;
-    const isHL = ctx.kind === 'day' && item.id === highlightedId;
+    const isBoxed = isBlock && (bt !== 'TASK' || item.isEvent);   // skutečný blok (preset) nebo událost → rámeček
+    const isHL = item.id === highlightedId;
 
     const parentIdx = item.isSubtask ? findParentBlock(idx, list) : -1;
     const parentIsEvent = parentIdx >= 0 && list[parentIdx]?.isEvent;
 
     const cls = ['item-row',
-      isBlock ? 'is-block' : 'is-subtask',
-      (isBlock && bt === 'TASK') ? 'is-pseudoblock' : '',   // top-level úkol bez vlastního typu bloku = pseudo-blok
+      isBoxed ? 'is-block' : (item.isSubtask ? 'is-subtask' : 'is-line'),
       item.isEvent ? 'is-event-block' : '',
       item.done   ? 'is-done'   : '',
       item.urgent ? 'is-urgent' : '',
@@ -1372,9 +1406,9 @@ function rowsHtml(ctx, insertBefore = {}) {
     ].filter(Boolean).join(' ');
 
     const toggle = item.isSubtask ? (item.done ? '☑' : '✒') : (item.done ? '☑' : '☐');
-    // bloky i události: klikací ikona (přepis řádku / „-“,0,✒ → úkol); chybí-li, klikací placeholder „+“
+    // skutečné bloky i události: klikací ikona (přepis řádku / „-“,0,✒ → úkol); chybí-li, klikací placeholder „+“
     const iconChar = itemIcon(item);
-    const emoji = isBlock
+    const emoji = isBoxed
       ? `<span class="item-emoji${iconChar ? '' : ' empty'}" onclick="${ctx.call(ctx.h.icon, idx)}" title="klikni: jiný emoji změní ikonu · &quot;-&quot; / 0 / ✒ → úkol">${iconChar ? esc(iconChar) : '+'}</span>`
       : '';
 
@@ -1390,30 +1424,15 @@ function rowsHtml(ctx, insertBefore = {}) {
       durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="klikni: 9:00-10:00 → událost · -/✒ → úkol"`;
     }
 
-    // den: jen ne-události (události drží čas na časové ose); inbox/měsíc: vše (žádná osa)
-    const canDrag = (ctx.kind === 'day') ? !item.isEvent : true;
-    const draggable = canDrag ? 'draggable="true"' : '';
-
-    // odznak dne: jen v Později a jen u položek nejvyšší úrovně
-    const _pd = (ctx.kind === 'month' && !item.isSubtask && item.dayLabel) ? parseDayLabel(item.dayLabel, ctx.ym) : null;
-    const _da = _pd ? ` data-day="${DAY_ABBREV_CZ[_pd.getDay()]}"` : '';
-    const dayBadge = (ctx.kind === 'month' && !item.isSubtask)
-      ? `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo konec června)">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`
-      : '';
-    // šipka „vložit do pole": v Později i Inboxu — u bloků (celá skupina) i jednotlivých podúkolů
-    const sendBtn = (ctx.kind === 'month' || ctx.kind === 'inbox')
-      ? `<button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu)">→</button>`
-      : '';
+    const draggable = !item.isEvent ? 'draggable="true"' : '';   // události drží čas na časové ose
 
     return (insertBefore[idx] || '') + `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
-      ${dayBadge}
       <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${toggle}</span>
       ${emoji}
       <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, blockAbbrById[item.id]) : esc(item.text)}</span>
       ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx===0?'disabled':''}>↑</button>
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx===list.length-1?'disabled':''}>↓</button>
-      ${sendBtn}
       <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="smazat">✕</button>
     </div>`;
   }).join('');
@@ -1486,24 +1505,29 @@ function op_addQuickItems(ctx, forceType) {
     const targetList = toLater ? laterBucket(route.ym).items : ctx.list;
     if (toLater) line = route.rest;
 
-    // (1) vedoucí emoji (ne-blokové) → vlastní ikona řádku
-    let icon = null;
-    const ie = extractLeadingIcon(line);
-    if (ie) { icon = ie.icon; line = ie.rest; }
+    // Bloky / podbloky / zkratky / vedoucí emoji jen při přidávání na DEN (Týden/Příští).
+    // Routing do Později i karty Inbox/Měsíc = ploché jednořádkové položky (žádné bloky).
+    const onDay = !toLater && ctx.kind === 'day';
 
-    // -X (zkratka konkrétního bloku na cílovém seznamu) na začátku / konci
-    const { map: blockMap } = presentBlockAbbrevs(targetList);
+    // (1) vedoucí emoji (ne-blokové) → vlastní ikona řádku (jen Den)
+    let icon = null;
+    if (onDay) { const ie = extractLeadingIcon(line); if (ie) { icon = ie.icon; line = ie.rest; } }
+
+    // -X (zkratka konkrétního bloku na cílovém seznamu) na začátku / konci (jen Den)
     let targetBlockId = null, body = line, mm;
-    if ((mm = body.match(/^-([a-zA-Z]+)\s+(.+)$/)) && blockMap[mm[1].toLowerCase()] != null) { targetBlockId = blockMap[mm[1].toLowerCase()]; body = mm[2].trim(); }
-    else if ((mm = body.match(/^(.+?)\s+-([a-zA-Z]+)$/)) && blockMap[mm[2].toLowerCase()] != null) { targetBlockId = blockMap[mm[2].toLowerCase()]; body = mm[1].trim(); }
+    if (onDay) {
+      const { map: blockMap } = presentBlockAbbrevs(targetList);
+      if ((mm = body.match(/^-([a-zA-Z]+)\s+(.+)$/)) && blockMap[mm[1].toLowerCase()] != null) { targetBlockId = blockMap[mm[1].toLowerCase()]; body = mm[2].trim(); }
+      else if ((mm = body.match(/^(.+?)\s+-([a-zA-Z]+)$/)) && blockMap[mm[2].toLowerCase()] != null) { targetBlockId = blockMap[mm[2].toLowerCase()]; body = mm[1].trim(); }
+    }
 
     const parsed = parseItemText(body);
 
-    // (2) vedoucí pomlčka bez zkratky → podúkol pod POSLEDNÍ blok cílového seznamu
+    // (2) Den: prostý úkol i „-úkol" jdou pod blok jako podúkol → bloky se tvoří jen z presetů (žádné pseudo-bloky)
     let toLastBlock = false;
-    if (targetBlockId == null && !parsed.targetBlockKey && /^-/.test(parsed.text)) {
-      parsed.text = parsed.text.replace(/^-\s*/, '').trim();
-      if (parsed.text) toLastBlock = true;
+    if (onDay && targetBlockId == null && !parsed.targetBlockKey && forceType !== 'EVENT') {
+      if (/^-/.test(parsed.text)) parsed.text = parsed.text.replace(/^-\s*/, '').trim();
+      if (parsed.text && !parsed.isEvent && parsed.blockType === 'TASK') toLastBlock = true;
     }
     if (!parsed.text) return;                               // prázdné (např. samotné datum) → přeskoč
 
@@ -1515,40 +1539,29 @@ function op_addQuickItems(ctx, forceType) {
     parsed.id = Date.now() + Math.random();
     if (toLater && route.dayLabel) parsed.dayLabel = route.dayLabel;
 
-    if (targetBlockId != null) {                            // pod konkrétní blok-instanci (jako klik na zkratku)
+    if (onDay && targetBlockId != null) {                   // pod konkrétní blok-instanci (jako klik na zkratku)
       const bIdx = targetList.findIndex(it => String(it.id) === String(targetBlockId) && !it.isSubtask);
       if (bIdx >= 0) {
         parsed.isSubtask = true; parsed.blockType = targetList[bIdx].blockType; parsed.targetBlockKey = null;
         let ins = bIdx + 1; while (ins < targetList.length && targetList[ins].isSubtask) ins++;
         targetList.splice(ins, 0, parsed);
-      } else { targetList.push(parsed); }
-    } else if (toLastBlock) {                               // pod poslední blok na kartě
+      } else { parsed.isSubtask = true; parsed.targetBlockKey = null; targetList.push(parsed); }
+    } else if (onDay && toLastBlock) {                      // pod poslední blok na kartě
       let lastB = -1; for (let i = 0; i < targetList.length; i++) { if (!targetList[i].isSubtask) lastB = i; }
       if (lastB >= 0) {
         parsed.isSubtask = true; parsed.blockType = targetList[lastB].blockType; parsed.targetBlockKey = null;
         let ins = lastB + 1; while (ins < targetList.length && targetList[ins].isSubtask) ins++;
         targetList.splice(ins, 0, parsed);
-      } else { parsed.isSubtask = false; targetList.push(parsed); }   // žádný blok → top-level
-    } else if (parsed.targetBlockKey) {                     // záloha dle TYPU (vytvoří blok, když na kartě chybí)
+      } else { parsed.isSubtask = true; parsed.targetBlockKey = null; targetList.push(parsed); }   // žádný blok → odsazený podúkol-sirotek
+    } else if (onDay && parsed.targetBlockKey) {            // záloha dle TYPU (vytvoří blok, když na kartě chybí)
       insertSubtaskUnderBlock(targetList, parsed.targetBlockKey, parsed);
-    } else {
+    } else {                                                // Inbox / Později / routed = plochá top-level položka
+      parsed.isSubtask = false; parsed.targetBlockKey = null;
       targetList.push(parsed);
     }
 
-    // ikona: bloky/události nesou item.icon, podúkoly si emoji nechají v textu
+    // ikona: bloky/události nesou item.icon, podúkoly si emoji nechají v textu (jen Den)
     if (icon) { if (parsed.isSubtask) parsed.text = icon + ' ' + parsed.text; else parsed.icon = icon; }
-
-    // „blok nikdy prázdný": každá samostatná top-level položka (blok/pseudo-blok/událost) dostane
-    // rovnou podúkol stejného názvu → nikdy nevznikne prázdný blok-header. Stejná duration → čas se nezmění.
-    if (!parsed.isSubtask) {
-      const pi = targetList.indexOf(parsed);
-      if (pi >= 0) targetList.splice(pi + 1, 0, {
-        id: Date.now() + Math.random(),
-        text: parsed.text, blockType: parsed.blockType, duration: parsed.duration,
-        isEvent: false, eventStart: null, eventEnd: null,
-        isSubtask: true, done: false, urgent: false,
-      });
-    }
 
     if (toLater) { routedLater = true; lastYm = route.ym; } else { addedHere = true; }
   });
@@ -2363,7 +2376,8 @@ function presentBlockAbbrevs(list) {
 function updateAbbrevHint() {
   const hint = el('abbrevHint');
   if (!hint) return;
-  const list = (addCtx && addCtx.list) ? addCtx.list : [];
+  if (!addCtx || addCtx.kind !== 'day') { hint.innerHTML = ''; return; }   // zkratky bloků jen na Dni (Týden/Příští)
+  const list = addCtx.list || [];
   const { blocks } = presentBlockAbbrevs(list);
   hint.innerHTML = blocks.map(b =>
     `<span class="ab" role="button" onclick="addUnderBlock('${b.id}')" title="${esc(b.name)} → klikni (vloží text pod tento blok) nebo napiš -${esc(b.abbr)}"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
@@ -4146,6 +4160,14 @@ function switchNotesTab(name) {
   // cíl přidávání (addCtx) podle aktivní karty
   if (isPlan) setAddCtx('day');
   else if (name === 'inbox') setAddCtx('inbox');
+  // tlačítka +Úkol/+Blok/+Událost a zkratky bloků jen na Dni; Inbox/Později = ploché jednořádkové položky
+  const btns = el('inputBtns'); if (btns) btns.style.display = isPlan ? '' : 'none';
+  const qta = el('quickInput');
+  if (qta) {
+    if (isPlan) updateQuickInputPlaceholder();
+    else if (name === 'inbox') qta.placeholder = 'úkol…';
+    else if (name === 'pozdeji') qta.placeholder = '15.6. úkol  ·  15.6. 9:00-10:00 událost';
+  }
   if (name === 'tyden') {
     planWeekOffset = 0;
     renderWorkDayPicker();
