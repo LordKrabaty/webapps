@@ -48,7 +48,7 @@ Klíče v šabloně používají prefix `APP_NAME` — při kopírování nahrad
 
 - `APP_NAME-v1-session` · `APP_NAME-v1-library` · `APP_NAME-v1-archive`
 - `APP_NAME-fs` · `APP_NAME-dark` · `APP_NAME-panel-fs`
-- `APP_NAME-autosave` · `APP_NAME-jsonbin-key` · `APP_NAME-jsonbin-id`
+- `APP_NAME-autosave` · `APP_NAME-gist-token` · `APP_NAME-gist-id`
 - `APP_NAME-autosync` · `APP_NAME-tombstones` · `APP_NAME-syncknown` (auto-sync — viz níže)
 
 ---
@@ -136,14 +136,17 @@ toggleDark()                      // přepínač dark mode
 
 ---
 
-## JSONBin sync — hotová infrastruktura
+## GitHub Gist sync — hotová infrastruktura
 
-Při kopírování šablony stačí:
+Data jedou v jednom **privátním GitHub gistu** (soubor `APP_NAME-sync.json`, obsah = JSON string). Při kopírování šablony stačí:
 
-- Nahradit `APP_NAME` → klíče jsou správné automaticky
+- Nahradit `APP_NAME` → klíče i jméno sync souboru jsou správné automaticky
 - Upravit `payload` v `doCloudUpload()` (ruční výběr) i `buildAutoPayload()` (autosync) pokud app ukládá víc než `items + archive`
-- API klíč a Bin ID zadá uživatel přes ⚙ modal — **nikam hardcoded**
+- GitHub token (scope `gist`) a Gist ID zadá uživatel přes ⚙ modal — **nikam hardcoded**. Gist ID může nechat prázdné → sync ho při prvním pushi sám založí (`POST`); neplatné/smazané Gist ID se samo zotaví (404 → nový gist)
 - Auto-sync (`☁`) běží na stejné infrastruktuře — rozšíření kolekcí viz „Auto-sync" níže
+- Šablona nese jednorázovou migraci starých `APP_NAME-jsonbin-*` klíčů → `gist-*` sloty (u nově založené app ji můžeš smazat). **Pozor:** JSONBin klíč ≠ GitHub token a Bin ID ≠ Gist ID — migrace jen přesune hodnotu do nového slotu, uživatel ji musí v ⚙ ručně přepsat.
+
+API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH = přepis souboru; POST = nový gist) je hotový v `gistGet` / `gistRecord` / `gistWriteInit`.
 
 ---
 

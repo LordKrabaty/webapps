@@ -32,7 +32,7 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 #darkToggle{font-size:1rem;width:34px;height:34px;border:var(--bh);border-radius:50%;background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
 @media(hover:hover){#darkToggle:hover{background:var(--light)}}
 
-/* JSONBin sync */
+/* Gist sync */
 .sync-group{display:flex;align-items:center;gap:.15rem}
 .btn-sync{font-size:.85rem;width:32px;height:32px;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s;font-family:'DM Mono',monospace}
 @media(hover:hover){.btn-sync:hover{background:var(--light)}}
@@ -274,11 +274,11 @@ textarea::placeholder{color:var(--mid)}
   <div class="header-right">
     <span id="statusMsg"></span>
     <div class="sync-group">
-      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (JSONBin)">↑</button>
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (Gist)">↑</button>
       <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
-      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
-      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (JSONBin)">☁</button>
-      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení Gist synchronizace">⚙</button>
     </div>
     <div class="fs-ctrl" title="velikost písma">
       <button class="fs-btn" onclick="changeFs(-1)" title="zmenšit písmo">−</button>
@@ -375,7 +375,7 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" style="margin-top:.5rem">
       <button class="modal-btn" onclick="selectAllExport()">vybrat vše</button>
       <button class="modal-btn" onclick="closeModal('exportModal')">zrušit</button>
-      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do JSONBin</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do Gistu</button>
       <button class="modal-btn primary" onclick="doExport()">stáhnout JSON</button>
     </div>
   </div>
@@ -933,19 +933,19 @@ document.addEventListener('keydown', e => {
   </div>
 </div>
 
-<!-- JSONBin settings modal -->
+<!-- Gist settings modal -->
 <div class="modal-bg" id="jsonbinModal">
   <div class="modal" style="max-width:400px;gap:.65rem">
-    <h2>Nastavení JSONBin</h2>
-    <p>Zadej svůj JSONBin API klíč a Bin ID. Data se ukládají pouze v tomto prohlížeči.</p>
-    <p style="font-size:.78rem;color:var(--muted)">Účet a klíč zdarma na <a href="https://jsonbin.io" target="_blank" rel="noopener" style="color:var(--black)">jsonbin.io</a> → Dashboard → API Keys.</p>
+    <h2>Nastavení Gist synchronizace</h2>
+    <p>Zadej svůj GitHub token a Gist ID. Data se ukládají pouze v tomto prohlížeči.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Token vytvoříš na <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). Gisty najdeš na <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
     <div class="jb-field">
-      <label>X-Master-Key (API klíč)</label>
-      <input type="text" id="jbKeyInput" placeholder="$2a$10$…" spellcheck="false" autocomplete="off">
+      <label>GitHub Token</label>
+      <input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off">
     </div>
     <div class="jb-field">
-      <label>Bin ID <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(prázdné = při prvním uploadu se vytvoří)</span></label>
-      <input type="text" id="jbIdInput" placeholder="64a1b2c3d4e5f6…" spellcheck="false" autocomplete="off">
+      <label>Gist ID</label>
+      <input type="text" id="jbIdInput" placeholder="abc123def456… (prázdné = vytvoří se)" spellcheck="false" autocomplete="off">
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
@@ -955,41 +955,80 @@ document.addEventListener('keydown', e => {
 </div>
 
 <script>
-/* ── JSONBIN SYNC + AUTO-SYNC (tichý obousměrný LWW) ───
+/* ── GITHUB GIST SYNC + AUTO-SYNC (tichý obousměrný LWW) ───
    Pravidla a pasti viz CLAUDE.md → "Auto-sync (tichý obousměrný LWW)".
+   Data jedou v jednom privátním gistu (soubor APP_NAME-sync.json).
    Base kolekce: library (LWW dle id) + archive (append-only union).
    Další kolekce přidej na místech označených // APP LOGIC. */
 (function(){
-  const JBKEY = 'APP_NAME-jsonbin-key';
-  const JBID  = 'APP_NAME-jsonbin-id';
-  const ASKEY = 'APP_NAME-autosync';
+  const GHTOKEN = 'APP_NAME-gist-token';      // GitHub token (scope gist)
+  const GISTID  = 'APP_NAME-gist-id';          // Gist ID (prázdné = sync ho při prvním pushi vytvoří)
+  const ASKEY   = 'APP_NAME-autosync';
+  const GIST_API  = 'https://api.github.com/gists';
+  const GIST_FILE = 'APP_NAME-sync.json';      // jméno souboru uvnitř gistu (data = JSON string)
   const PUSH_MIN_INTERVAL = 10000;            // max 1 push / 10 s
   let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null;
   let applyingRemote = false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
 
+  // Jednorázová migrace ze starého JSONBin syncu → Gist sloty (u nově založené app můžeš smazat).
+  // POZOR: JSONBin klíč ≠ GitHub token a JSONBin Bin ID ≠ Gist ID — hodnoty se jen přesunou do
+  // správného slotu, uživatel je musí v ⚙ ručně přepsat. Neplatné Gist ID se samo zotaví (404 →
+  // založí nový gist). Běží před prvním čtením sync klíčů.
+  (function migrateJsonbinToGist(){
+    try {
+      const move = (oldK, newK) => { const v = localStorage.getItem(oldK); if (v == null) return;
+        if (localStorage.getItem(newK) == null) localStorage.setItem(newK, v); localStorage.removeItem(oldK); };
+      move('APP_NAME-jsonbin-key', GHTOKEN);
+      move('APP_NAME-jsonbin-id',  GISTID);
+    } catch(e) {}
+  })();
+
+  // hlavičky: čtení (GET) nepotřebuje Content-Type, zápis (POST/PATCH) ano
+  function ghHeaders(token, write) {
+    const h = { 'Accept': 'application/vnd.github+json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    if (write) h['Content-Type'] = 'application/json';
+    return h;
+  }
+  function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
+  // fetch-init pro zápis: PATCH (existující) přepíše obsah souboru; POST (nový) navíc nastaví popis + private
+  function gistWriteInit(token, creating, payload) {
+    const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
+    const body = creating ? { description: 'APP_NAME-sync', public: false, files } : { files };
+    return { method: creating ? 'POST' : 'PATCH', mode:'cors', credentials:'omit', headers: ghHeaders(token, true), body: JSON.stringify(body) };
+  }
   function openJsonBinSettings() {
-    try { el('jbKeyInput').value = localStorage.getItem(JBKEY)||''; el('jbIdInput').value = localStorage.getItem(JBID)||''; } catch(e) {}
+    try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(GISTID)||''; } catch(e) {}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
     try {
-      const key = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
-      if (key) localStorage.setItem(JBKEY, key); else localStorage.removeItem(JBKEY);
-      if (id)  localStorage.setItem(JBID,  id);  else localStorage.removeItem(JBID);
+      const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
+      if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
     } catch(e) {}
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
   function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
-  async function jbGet(binId, key) {
-    let res = await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest', {mode:'cors',credentials:'omit'});
-    if ((res.status===401||res.status===403) && key) {
-      res = await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest', {mode:'cors',credentials:'omit',headers:{'X-Master-Key':key}});
+  // GET gistu — vrací surovou Response (volající kontroluje res.ok)
+  async function gistGet(gistId, token) {
+    return fetch(gistUrl(gistId), { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+  }
+  // z odpovědi GET vytáhne uložená data (obsah GIST_FILE) jako objekt; null = nejde přečíst
+  async function gistRecord(res) {
+    let json; try { json = await res.json(); } catch(e) { return null; }
+    const file = json && json.files && json.files[GIST_FILE];
+    if (!file) return null;
+    let content = file.content;
+    if (file.truncated && file.raw_url) {   // GitHub ořízne obsah > ~1 MB → dotáhni přes raw_url
+      try { content = await (await fetch(file.raw_url, { mode:'cors', credentials:'omit' })).text(); } catch(e) {}
     }
-    return res;
+    if (!content) return null;
+    try { return JSON.parse(content); } catch(e) { return null; }
   }
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
-  function hasKeys() { try { return !!(localStorage.getItem(JBKEY) && localStorage.getItem(JBID)); } catch(e) { return false; } }
+  function hasToken() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // stačí token → gist si sync vytvoří sám
 
   /* ── TOMBSTONES (propagace mazání mezi zařízeními) ── */
   const TOMB_KEY  = 'APP_NAME-tombstones';    // { "<ns>:<id>": deletedAtTs }
@@ -1053,7 +1092,7 @@ document.addEventListener('keydown', e => {
     b.classList.toggle('on', on);
     if (!b.classList.contains('syncing')) b.textContent = '☁';
     b.title = on ? 'automatická synchronizace zapnutá — klikni pro vypnutí'
-                 : 'zapnout automatickou synchronizaci (JSONBin)';
+                 : 'zapnout automatickou synchronizaci (Gist)';
   }
   function setSyncState(state) {
     const b = el('autoSyncBtn'); if (!b) return;
@@ -1068,7 +1107,7 @@ document.addEventListener('keydown', e => {
     const on = !autosyncEnabled();
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
-    if (on && !hasKeys()) { showStatusMsg('⚠ nejdřív nastav JSONBin přes ⚙ a jednou nahraj přes ↑', 4500); return; }
+    if (on && !hasToken()) { showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)', 4500); return; }
     if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
   }
 
@@ -1078,24 +1117,32 @@ document.addEventListener('keydown', e => {
     return { v:1, items: library, archive: archive, tombstones: tombstones };
   }
   function scheduleAutoPush() {
-    if (!autosyncEnabled() || !hasKeys()) return;
+    if (!autosyncEnabled() || !hasToken()) return;
     if (pushTimer) return;        // už naplánováno → coalesce
     const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs));
     pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
   }
   async function doAutoPush() {
-    if (!autosyncEnabled() || !hasKeys()) return;
+    if (!autosyncEnabled() || !hasToken()) return;
     if (pushing) { pushAgain = true; return; }
-    const key = localStorage.getItem(JBKEY), binId = localStorage.getItem(JBID);
-    if (!key || !binId) return;
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) return;
+    let gistId = localStorage.getItem(GISTID);
+    let creating = !gistId;        // gist ještě neexistuje → autosync ho vytvoří (POST)
     pushing = true; setSyncState('syncing');
     try {
-      const res = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
-        method:'PUT', mode:'cors', credentials:'omit',
-        headers:{'Content-Type':'application/json','X-Master-Key':key},
-        body: JSON.stringify(buildAutoPayload())
-      });
+      const payload = buildAutoPayload();
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrovaný/smazaný gist → založ nový
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (creating) {
+        const json = await res.json().catch(() => null);
+        const newId = json && json.id;
+        if (newId) { try { localStorage.setItem(GISTID, newId); } catch(e) {} }
+      }
       lastPushTs = Date.now(); setSyncState('ok');
     } catch(e) {
       console.warn('[autosync] push selhal:', (e && e.message) ? e.message : e);
@@ -1171,15 +1218,15 @@ document.addEventListener('keydown', e => {
   // hook po každé perzistenci synchronizované kolekce: zaznamenej mazání (náhrobky) a naplánuj push
   function autoSyncOnSave() {
     if (applyingRemote) return;      // změny z mergeu nesmí spustit reconcile/push
-    if (!hasKeys()) return;          // bez nastaveného JSONBinu není co sledovat
+    if (!hasToken()) return;         // bez tokenu není co sledovat (gist si sync vytvoří sám)
     reconcileTombstones();
     if (autosyncEnabled()) scheduleAutoPush();
   }
 
   async function doCloudUpload() {
-    const key = localStorage.getItem(JBKEY);
-    if (!key) { showSyncTooltip('⚠ chybí API klíč — otevři ⚙'); return; }
-    let binId = localStorage.getItem(JBID);
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) { showSyncTooltip('⚠ chybí GitHub token — otevři ⚙'); return; }
+    let gistId = localStorage.getItem(GISTID);
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nic není vybráno.'); return; }
@@ -1187,13 +1234,14 @@ document.addEventListener('keydown', e => {
     closeModal('exportModal');
     showSyncTooltip('↑ nahrávám…');
     try {
-      const url  = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
-      const hdrs = {'Content-Type':'application/json','X-Master-Key':key};
-      if (!binId) { hdrs['X-Bin-Name']='APP_NAME-sync'; hdrs['X-Bin-Private']='false'; }
-      const res = await fetch(url, {method:binId?'PUT':'POST',mode:'cors',credentials:'omit',headers:hdrs,body:JSON.stringify(payload)});
+      let creating = !gistId;
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrovaný/smazaný gist → založ nový
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
-      const json = await res.json();
-      if (!binId) { const newId = json.metadata?.id; if (newId) localStorage.setItem(JBID, newId); }
+      if (creating) { const json = await res.json().catch(() => null); const newId = json && json.id; if (newId) localStorage.setItem(GISTID, newId); }
       const t = new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
       showSyncTooltip('↑ nahráno '+t+' ('+items.length+'i '+archItems.length+'a)');
     } catch(e) {
@@ -1202,21 +1250,20 @@ document.addEventListener('keydown', e => {
   }
 
   async function syncDownload() {
-    const binId = localStorage.getItem(JBID);
-    if (!binId) { showSyncTooltip('⚠ chybí Bin ID — otevři ⚙'); return; }
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) { showSyncTooltip('⚠ chybí Gist ID — otevři ⚙'); return; }
     const btn = el('syncDownBtn'); btn.disabled = true;
     showSyncTooltip('↓ stahuji…');
     try {
-      const key = localStorage.getItem(JBKEY);
-      const res = await jbGet(binId, key);
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token);
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
-      const json = await res.json();
-      let record = json.record;
-      if (typeof record !== 'object' || record === null) throw new Error('Neplatná data v binu');
-      if (!record.items && !record.teas && !record.archive) throw new Error('Bin neobsahuje položky');
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) throw new Error('Neplatná data v gistu');
+      if (!record.items && !record.teas && !record.archive) throw new Error('Gist neobsahuje položky');
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent = 'Import z JSONBin';
+      el('importModal').querySelector('h2').textContent = 'Import z Gistu';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('↓ staženo — zkontroluj výběr a importuj');
     } catch(e) {
@@ -1225,16 +1272,20 @@ document.addEventListener('keydown', e => {
   }
 
   async function checkCloudOnStartup() {
-    const binId = localStorage.getItem(JBID); if (!binId) return;
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) {
+      // gist ještě neexistuje → při zapnutém autosyncu a existujících datech ho rovnou založ
+      if (autosyncEnabled() && hasToken() && (library.length || archive.length)) scheduleAutoPush();
+      return;
+    }
     if (sessionStorage.getItem('APP_NAME-cloud-checked')) return;
     sessionStorage.setItem('APP_NAME-cloud-checked','1');
     const btn = el('syncDownBtn'); const origTitle = btn.title;
     btn.disabled = true; btn.title = 'kontroluji cloud…';
     try {
-      const key = localStorage.getItem(JBKEY);
-      const res = await jbGet(binId, key); if (!res.ok) return;
-      const json = await res.json();
-      let record = json.record;
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
       // AUTOSYNC: tichý obousměrný merge (vč. mazání i editací)
       if (autosyncEnabled()) {
@@ -1248,7 +1299,7 @@ document.addEventListener('keydown', e => {
       if (idSig(library)+'|'+idSig(archive) === idSig(cloudItems)+'|'+idSig(cloudArch)) return;
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent = 'Import z JSONBin';
+      el('importModal').querySelector('h2').textContent = 'Import z Gistu';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
     } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
