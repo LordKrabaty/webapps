@@ -4914,6 +4914,7 @@ window.addEventListener('resize', updateAppGrid);
     const checkedKey = 'todo-app-cloud-checked::' + activeWin;
     if (sessionStorage.getItem(checkedKey)) return;
     sessionStorage.setItem(checkedKey, '1');
+    const winAtStart = activeWin;              // okno, pro které kontrolujeme cloud (activeWin se může přepnout během fetch)
     const btn = el('syncDownBtn'); const origTitle = btn.title;
     btn.disabled = true; btn.title = 'kontroluji cloud…';
     try {
@@ -4921,8 +4922,10 @@ window.addEventListener('resize', updateAppGrid);
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
-      // HYBRID: registr oken (jen hlavní gist ho nese) sluč vždy — i když se data nezměnila
+      // HYBRID: registr oken (jen hlavní gist ho nese) sluč vždy — globální (ne per-okno), bezpečné i po přepnutí okna
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
+      // KRITICKÉ: mezitím se mohlo přepnout okno → data tohoto gistu patří JINÉMU oknu, neaplikuj je na aktuální
+      if (activeWin !== winAtStart) return;
       // AUTOSYNC: tichý obousměrný merge (vč. mazání) — kompletní porovnání stavu
       if (autosyncEnabled()) {
         if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
@@ -5252,13 +5255,17 @@ window.addEventListener('resize', updateAppGrid);
     lastPullTs = Date.now();
     if (!hasKeys()) return;                    // bez tokenu i Gist ID není odkud stahovat
     if (pushing) return;                       // probíhá push → nech ho dokončit
+    const winAtStart = activeWin;              // okno, pro které stahujeme (activeWin se může přepnout během fetch)
     try {
       const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(WK(GISTID));
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
-      // registr oken (jen hlavní gist ho nese) sluč i bez změny dat → nová okna z jiných zařízení se objeví hned
+      // registr oken (jen hlavní gist ho nese) sluč i bez změny dat → nová okna z jiných zařízení se objeví hned.
+      // Registr je globální (ne per-okno) → bezpečné sloučit i po přepnutí okna.
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
+      // KRITICKÉ: mezitím se mohlo přepnout okno → tato per-okno data patří JINÉMU oknu, nesmí přepsat aktuální
+      if (activeWin !== winAtStart) return;
       if (localSig() !== cloudSig(record)) autoImportSilent(record);
       if (autosyncEnabled()) scheduleAutoPush();
     } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); }
