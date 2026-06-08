@@ -5096,6 +5096,10 @@ window.addEventListener('resize', updateAppGrid);
     try {
       const res = await gistGet(mainGist, token); if (!res.ok) return;
       const rec = (await gistRecord(res)) || {};
+      // NEJDŘÍV sluč cloud registr → doplní okna z jiných zařízení (+ jejich Gist ID, náhrobky) do lokálního.
+      // Bez toho by nové zařízení (zná jen 'main') přepsalo cloud registr svým podmnožinovým seznamem
+      // a smazalo ostatním zařízením jejich okna. Po sloučení je registryForPush() union → žádná ztráta.
+      try { mergeWindowRegistry(rec.windows, rec.winTomb); } catch(e) {}
       rec.windows = registryForPush();
       rec.winTomb = winTombstones;
       await fetch(gistUrl(mainGist), gistWriteInit(token, false, rec, 'main'));
@@ -5249,6 +5253,8 @@ window.addEventListener('resize', updateAppGrid);
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
+      // registr oken (jen hlavní gist ho nese) sluč i bez změny dat → nová okna z jiných zařízení se objeví hned
+      if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       if (localSig() !== cloudSig(record)) autoImportSilent(record);
       if (autosyncEnabled()) scheduleAutoPush();
     } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); }
