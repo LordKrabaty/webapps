@@ -391,11 +391,11 @@ textarea::placeholder{color:var(--mid)}
   <div class="header-right">
     <span id="statusMsg"></span>
     <div class="sync-group">
-      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (JSONBin)">↑</button>
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (Gist)">↑</button>
       <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
-      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (JSONBin)">↓</button>
-      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (JSONBin)">☁</button>
-      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení JSONBin synchronizace">⚙</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení Gist synchronizace">⚙</button>
     </div>
     <div class="fs-ctrl" title="velikost písma">
       <button class="fs-btn" onclick="changeFs(-1)" title="zmenšit písmo">−</button>
@@ -591,7 +591,7 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" style="margin-top:.5rem">
       <button class="modal-btn" onclick="selectAllExport()">vybrat vše</button>
       <button class="modal-btn" onclick="closeModal('exportModal')">zrušit</button>
-      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do JSONBin</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do Gistu</button>
       <button class="modal-btn primary" onclick="doExport()">stáhnout JSON</button>
     </div>
   </div>
@@ -723,12 +723,12 @@ textarea::placeholder{color:var(--mid)}
 </div>
 <div class="modal-bg" id="jsonbinModal">
   <div class="modal" style="max-width:400px;gap:.65rem">
-    <h2>Nastavení JSONBin</h2>
-    <p>Zadej svůj JSONBin API klíč a Bin ID.</p>
-    <p id="jbWinNote" style="font-size:.78rem;color:var(--muted)">Bin ID je pro <b id="jbWinName">toto okno</b> — každé okno dne se synchronizuje do vlastního binu (API klíč je společný).</p>
-    <p style="font-size:.78rem;color:var(--muted)">Účet zdarma na <a href="https://jsonbin.io" target="_blank" rel="noopener" style="color:var(--black)">jsonbin.io</a> → API Keys.</p>
-    <div class="jb-field"><label>X-Master-Key</label><input type="text" id="jbKeyInput" placeholder="$2a$10$…" spellcheck="false" autocomplete="off"></div>
-    <div class="jb-field"><label>Bin ID <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(prázdné = vytvoří se)</span></label><input type="text" id="jbIdInput" placeholder="64a1b2c3…" spellcheck="false" autocomplete="off"></div>
+    <h2>Nastavení Gist synchronizace</h2>
+    <p>Zadej svůj GitHub token a Gist ID.</p>
+    <p id="jbWinNote" style="font-size:.78rem;color:var(--muted)">Gist ID je pro <b id="jbWinName">toto okno</b> — každé okno dne se synchronizuje do vlastního gistu (token je společný).</p>
+    <p style="font-size:.78rem;color:var(--muted)">Token vytvoříš na <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). Gisty najdeš na <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
+    <div class="jb-field"><label>GitHub Token</label><input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off"></div>
+    <div class="jb-field"><label>Gist ID</label><input type="text" id="jbIdInput" placeholder="abc123def456… (prázdné = vytvoří se)" spellcheck="false" autocomplete="off"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
       <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
@@ -813,7 +813,7 @@ const WORKDAYS_KEY    = 'todo-app-working-days';
 
 // ── OKNA DNE (profily) ────────────────────────────────────────────────────────
 // Každé okno = samostatný svět (čas, bloky, šablony, úkoly, dny, inbox, později,
-// archiv + vlastní JSONBin). Do globálních proměnných je vždy načteno PRÁVĚ JEDNO okno.
+// archiv + vlastní gist). Do globálních proměnných je vždy načteno PRÁVĚ JEDNO okno.
 // Hlavní okno ('main') používá staré, neprefixované klíče → existující data i sync
 // zůstávají netknuté; další okna dostanou suffix '::'+id. WK(base) vrací klíč pro
 // aktivní okno — všechny per-okno load/save funkce ho používají.
@@ -2235,13 +2235,13 @@ function saveWinTomb() { try { localStorage.setItem(WINTOMB_KEY, JSON.stringify(
 function newWinId() { return 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 // ── HYBRID SYNC REGISTRU OKEN ─────────────────────────────────────────────────
-// Seznam oken + jejich Bin ID jede ve sdíleném hlavním binu (todo-app-jsonbin-id).
-// Datový LWW engine se NEMĚNÍ — data každého okna zůstávají ve vlastním binu.
-function winBinId(id) { try { return localStorage.getItem(id === 'main' ? 'todo-app-jsonbin-id' : 'todo-app-jsonbin-id::' + id) || ''; } catch(e) { return ''; } }
+// Seznam oken + jejich Gist ID jede ve sdíleném hlavním gistu (todo-app-gist-id).
+// Datový LWW engine se NEMĚNÍ — data každého okna zůstávají ve vlastním gistu.
+function winBinId(id) { try { return localStorage.getItem(id === 'main' ? 'todo-app-gist-id' : 'todo-app-gist-id::' + id) || ''; } catch(e) { return ''; } }
 function registryForPush() {
   return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; const b = winBinId(w.id); if (b) o.binId = b; return o; });
 }
-// sloučí cloud registr (LWW podle mt + náhrobky), předpropojí Bin ID nových oken
+// sloučí cloud registr (LWW podle mt + náhrobky), předpropojí Gist ID nových oken
 function mergeWindowRegistry(cloudWins, cloudTomb) {
   let changed = false;
   if (cloudTomb && typeof cloudTomb === 'object') {
@@ -2250,8 +2250,8 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
   const byId = new Map(dayWindows.map(w => [w.id, w]));
   (Array.isArray(cloudWins) ? cloudWins : []).forEach(cw => {
     if (!cw || !cw.id) return;
-    if (cw.binId && cw.id !== 'main') {               // předpropoj Bin ID (jen doplň, nepřepisuj lokální)
-      const k = 'todo-app-jsonbin-id::' + cw.id;
+    if (cw.binId && cw.id !== 'main') {               // předpropoj Gist ID (jen doplň, nepřepisuj lokální)
+      const k = 'todo-app-gist-id::' + cw.id;
       try { if (!localStorage.getItem(k)) localStorage.setItem(k, cw.binId); } catch(e) {}
     }
     const cmt = +cw.mt || 0, ex = byId.get(cw.id), tomb = winTombstones[cw.id] || 0;
@@ -2272,7 +2272,7 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
   if (changed) { saveWindows(); saveWinTomb(); renderWindowTabs(); }
 }
 function pushRegistry() { try { if (typeof window.pushWindowRegistry === 'function') window.pushWindowRegistry(); } catch(e) {} }
-// má aktivní okno vůbec nějaká data? (rozhoduje, jestli autosync založí bin pro okno bez Bin ID)
+// má aktivní okno vůbec nějaká data? (rozhoduje, jestli autosync založí gist pro okno bez Gist ID)
 function windowHasData() {
   return !!(library.length || archive.length || weekDays.length || weekPlans.length || inbox.length || later.length
     || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
@@ -2282,7 +2282,7 @@ function windowHasData() {
 function winKeyBases() {
   return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
     WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY,
-    'todo-app-jsonbin-id', 'todo-app-tombstones', 'todo-app-syncknown'];
+    'todo-app-gist-id', 'todo-app-tombstones', 'todo-app-syncknown'];
 }
 
 function renderWindowTabs() {
@@ -2331,7 +2331,7 @@ function switchWindow(id) {
   if (!dayWindows.some(w => w.id === id)) return;
   // 1) persist odchozí okno do jeho namespace
   autoSavePlanDay(); saveSession();
-  // 2) best-effort flush pushe odchozího okna do JEHO binu (engine čte WK(JBID) synchronně)
+  // 2) best-effort flush pushe odchozího okna do JEHO gistu (engine čte WK(GISTID) synchronně)
   if (typeof window.flushWindowPush === 'function') { try { window.flushWindowPush(); } catch(e) {} }
   // 3-8) přepni namespace + načti cílové + překresli + reload sync
   activateWindow(id);
@@ -4701,7 +4701,34 @@ function initBlockTypeDnd() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+// ── MIGRACE JSONBin → GitHub Gist ─────────────────────────────────────────────
+// Přesune staré JSONBin klíče do nových Gist slotů a staré smaže. POZOR: hodnoty
+// jsou z JINÉ služby (JSONBin master-key ≠ GitHub token, JSONBin Bin ID ≠ Gist ID),
+// takže je uživatel musí v ⚙ ručně přepsat. Migrace se postará jen o přesun do
+// správného slotu a úklid; Gist sync se z neplatného Gist ID sám zotaví (404 →
+// založí nový gist, viz doAutoPush/doCloudUpload). Spouští se jednou (klíče po
+// přesunu zmizí), idempotentně.
+function migrateJsonbinToGist() {
+  try {
+    const move = (oldK, newK) => {
+      const v = localStorage.getItem(oldK);
+      if (v == null) return;
+      if (localStorage.getItem(newK) == null) localStorage.setItem(newK, v);
+      localStorage.removeItem(oldK);
+    };
+    move('todo-app-jsonbin-key', 'todo-app-gist-token');   // token (společný pro všechna okna)
+    move('todo-app-jsonbin-id',  'todo-app-gist-id');      // Gist ID hlavního okna
+    // per-okno Bin ID (todo-app-jsonbin-id::<win>) → gist-id::<win>
+    const PFX = 'todo-app-jsonbin-id::';
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(PFX) === 0) move(k, 'todo-app-gist-id::' + k.slice(PFX.length));
+    }
+  } catch(e) {}
+}
+
 function init() {
+  migrateJsonbinToGist();   // staré JSONBin klíče → Gist sloty (před prvním čtením sync klíčů)
   initAutoSave(); initFs(); initDark(); loadPanelFs();
   // okna dne — nejdřív registr + aktivní okno, pak už vše běží WK-namespacovaně
   loadWindows(); loadWinTomb();
@@ -4764,35 +4791,64 @@ window.addEventListener('resize', updateAppGrid);
 </script>
 
 <script>
-/* ── JSONBIN SYNC ─── */
+/* ── GITHUB GIST SYNC ─── */
 (function(){
-  const JBKEY = 'todo-app-jsonbin-key';
-  const JBID  = 'todo-app-jsonbin-id';
+  const GHTOKEN = 'todo-app-gist-token';    // GitHub token (společný pro všechna okna)
+  const GISTID  = 'todo-app-gist-id';        // Gist ID aktivního okna (per-okno přes WK())
+  const GIST_API  = 'https://api.github.com/gists';
+  const GIST_FILE = 'todo-app-sync.json';    // jméno souboru uvnitř gistu (data = JSON string)
+
+  // hlavičky: čtení (GET) nepotřebuje Content-Type, zápis (POST/PATCH) ano
+  function ghHeaders(token, write) {
+    const h = { 'Accept': 'application/vnd.github+json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    if (write) h['Content-Type'] = 'application/json';
+    return h;
+  }
+  function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
+  function gistDesc(win) { return 'todo-app-sync' + (win && win !== 'main' ? ' · ' + win : ''); }
+  // fetch-init pro zápis: PATCH (existující) přepíše obsah souboru; POST (nový) navíc nastaví popis + private
+  function gistWriteInit(token, creating, payload, win) {
+    const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
+    const body = creating ? { description: gistDesc(win), public: false, files } : { files };
+    return { method: creating ? 'POST' : 'PATCH', mode:'cors', credentials:'omit', headers: ghHeaders(token, true), body: JSON.stringify(body) };
+  }
   function openJsonBinSettings() {
-    try { el('jbKeyInput').value = localStorage.getItem(JBKEY)||''; el('jbIdInput').value = localStorage.getItem(WK(JBID))||''; } catch(e) {}
+    try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(WK(GISTID))||''; } catch(e) {}
     try { const n = el('jbWinName'); if (n) n.textContent = (typeof windowName === 'function' ? windowName(activeWin) : '') || 'toto okno'; } catch(e) {}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
     try {
-      const key = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
-      if (key) localStorage.setItem(JBKEY, key); else localStorage.removeItem(JBKEY);
-      if (id)  localStorage.setItem(WK(JBID),  id);  else localStorage.removeItem(WK(JBID));
+      const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
+      if (id)    localStorage.setItem(WK(GISTID), id);  else localStorage.removeItem(WK(GISTID));
     } catch(e) {}
-    try { pushWindowRegistry(); } catch(e) {}   // nové/změněné Bin ID propaguj do registru
+    try { pushWindowRegistry(); } catch(e) {}   // nové/změněné Gist ID propaguj do registru
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
   function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
-  async function jbGet(binId, key) {
-    let res = await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest', {mode:'cors',credentials:'omit'});
-    if ((res.status===401||res.status===403) && key) res = await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest', {mode:'cors',credentials:'omit',headers:{'X-Master-Key':key}});
-    return res;
+  // GET gistu — vrací surovou Response (volající kontroluje res.ok)
+  async function gistGet(gistId, token) {
+    return fetch(gistUrl(gistId), { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+  }
+  // z odpovědi GET vytáhne uložená data (obsah GIST_FILE) jako objekt; null = nejde přečíst
+  async function gistRecord(res) {
+    let json; try { json = await res.json(); } catch(e) { return null; }
+    const file = json && json.files && json.files[GIST_FILE];
+    if (!file) return null;
+    let content = file.content;
+    if (file.truncated && file.raw_url) {   // GitHub ořízne obsah > ~1 MB → dotáhni přes raw_url
+      try { content = await (await fetch(file.raw_url, { mode:'cors', credentials:'omit' })).text(); } catch(e) {}
+    }
+    if (!content) return null;
+    try { return JSON.parse(content); } catch(e) { return null; }
   }
   async function doCloudUpload() {
-    const key = localStorage.getItem(JBKEY);
-    if (!key) { showSyncTooltip('⚠ chybí API klíč — otevři ⚙'); return; }
-    let binId = localStorage.getItem(WK(JBID));
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) { showSyncTooltip('⚠ chybí GitHub token — otevři ⚙'); return; }
+    let gistId = localStorage.getItem(WK(GISTID));
     const its = library.filter(e => exportSelected.has(e.id));
     const archs = archive.filter(e => exportArchSelected.has(e.id));
     const wantWd = el('expWeekDays')?.checked && weekDays.length;
@@ -4810,40 +4866,44 @@ window.addEventListener('resize', updateAppGrid);
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
-      const url = binId ? 'https://api.jsonbin.io/v3/b/'+binId : 'https://api.jsonbin.io/v3/b';
-      const hdrs = {'Content-Type':'application/json','X-Master-Key':key};
-      if (!binId) { hdrs['X-Bin-Name']='todo-app-'+activeWin; hdrs['X-Bin-Private']='false'; }
-      const res = await fetch(url, {method:binId?'PUT':'POST',mode:'cors',credentials:'omit',headers:hdrs,body:JSON.stringify(payload)});
+      let creating = !gistId;
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload, activeWin));
+      if (!creating && res.status === 404) {   // migrovaný/smazaný gist → založ nový
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload, activeWin));
+      }
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
-      const json = await res.json();
-      if (!binId) { const newId = json.metadata?.id; if (newId) { localStorage.setItem(WK(JBID), newId); if (activeWin !== 'main') { try { pushWindowRegistry(); } catch(e) {} } } }
+      if (creating) {
+        const json = await res.json().catch(() => null);
+        const newId = json && json.id;
+        if (newId) { localStorage.setItem(WK(GISTID), newId); if (activeWin !== 'main') { try { pushWindowRegistry(); } catch(e) {} } }
+      }
       showSyncTooltip('↑ nahráno ' + new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}));
     } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
   }
   async function syncDownload() {
-    const binId = localStorage.getItem(WK(JBID));
-    if (!binId) { showSyncTooltip('⚠ chybí Bin ID — otevři ⚙'); return; }
+    const gistId = localStorage.getItem(WK(GISTID));
+    if (!gistId) { showSyncTooltip('⚠ chybí Gist ID — otevři ⚙'); return; }
     const btn = el('syncDownBtn'); btn.disabled = true; showSyncTooltip('↓ stahuji…');
     try {
-      const key = localStorage.getItem(JBKEY);
-      const res = await jbGet(binId, key);
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token);
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
-      const json = await res.json();
-      let record = json.record;
-      if (typeof record !== 'object' || record === null) throw new Error('Neplatná data v binu');
-      if (!record.items && !record.teas && !record.archive) throw new Error('Bin neobsahuje položky');
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) throw new Error('Neplatná data v gistu');
+      if (!record.items && !record.teas && !record.archive) throw new Error('Gist neobsahuje položky');
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent = 'Import z JSONBin';
+      el('importModal').querySelector('h2').textContent = 'Import z Gistu';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('↓ staženo — zkontroluj výběr a importuj');
     } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
     finally { btn.disabled = false; }
   }
   async function checkCloudOnStartup() {
-    const binId = localStorage.getItem(WK(JBID));
-    if (!binId) {
-      // okno nemá vlastní bin → při zapnutém autosyncu a existujících datech ho rovnou založ
+    const gistId = localStorage.getItem(WK(GISTID));
+    if (!gistId) {
+      // okno nemá vlastní gist → při zapnutém autosyncu a existujících datech ho rovnou založ
       if (autosyncEnabled() && hasApiKey() && typeof windowHasData === 'function' && windowHasData()) scheduleAutoPush();
       return;
     }
@@ -4853,12 +4913,11 @@ window.addEventListener('resize', updateAppGrid);
     const btn = el('syncDownBtn'); const origTitle = btn.title;
     btn.disabled = true; btn.title = 'kontroluji cloud…';
     try {
-      const key = localStorage.getItem(JBKEY);
-      const res = await jbGet(binId, key); if (!res.ok) return;
-      const json = await res.json();
-      let record = json.record;
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
-      // HYBRID: registr oken (jen hlavní bin ho nese) sluč vždy — i když se data nezměnila
+      // HYBRID: registr oken (jen hlavní gist ho nese) sluč vždy — i když se data nezměnila
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       // AUTOSYNC: tichý obousměrný merge (vč. mazání) — kompletní porovnání stavu
       if (autosyncEnabled()) {
@@ -4874,7 +4933,7 @@ window.addEventListener('resize', updateAppGrid);
       if (idSig(library)+'|'+idSig(archive)+'|'+inboxSig(inbox) === idSig(cloudItems)+'|'+idSig(cloudArch)+'|'+inboxSig(cloudInbox)) return;
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent = 'Import z JSONBin';
+      el('importModal').querySelector('h2').textContent = 'Import z Gistu';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
     } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
@@ -4887,8 +4946,8 @@ window.addEventListener('resize', updateAppGrid);
   let applyingRemote = false;   // true během tichého mergeu → potlačí save-hook (žádná rekurze)
 
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
-  function hasApiKey() { try { return !!localStorage.getItem(JBKEY); } catch(e) { return false; } }   // stačí klíč → bin si autosync vytvoří sám
-  function hasKeys() { try { return !!(localStorage.getItem(JBKEY) && localStorage.getItem(WK(JBID))); } catch(e) { return false; } }
+  function hasApiKey() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // stačí token → gist si autosync vytvoří sám
+  function hasKeys() { try { return !!(localStorage.getItem(GHTOKEN) && localStorage.getItem(WK(GISTID))); } catch(e) { return false; } }
 
   // ── TOMBSTONES (propagace mazání mezi zařízeními) ───────────────────────────
   const TOMB_KEY  = 'todo-app-tombstones';   // { "<ns>:<id>": deletedAtTs }
@@ -4958,7 +5017,7 @@ window.addEventListener('resize', updateAppGrid);
     b.classList.toggle('on', on);
     if (!b.classList.contains('syncing')) b.textContent = '☁';
     b.title = on ? 'automatická synchronizace zapnutá — klikni pro vypnutí'
-                 : 'zapnout automatickou synchronizaci (JSONBin)';
+                 : 'zapnout automatickou synchronizaci (Gist)';
   }
   function setSyncState(state) {
     const b = el('autoSyncBtn'); if (!b) return;
@@ -4973,7 +5032,7 @@ window.addEventListener('resize', updateAppGrid);
     const on = !autosyncEnabled();
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
-    if (on && !hasApiKey()) { showStatusMsg('⚠ nejdřív nastav API klíč přes ⚙ (bin se vytvoří sám)', 4500); return; }
+    if (on && !hasApiKey()) { showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)', 4500); return; }
     if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
   }
 
@@ -4995,30 +5054,28 @@ window.addEventListener('resize', updateAppGrid);
   async function doAutoPush() {
     if (!autosyncEnabled() || !hasApiKey()) return;
     if (pushing) { pushAgain = true; return; }
-    const key = localStorage.getItem(JBKEY);
-    if (!key) return;
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) return;
     // zachyť KLÍČ i okno synchronně — activeWin se může změnit při přepnutí okna,
-    // než se po awaitu vrátíme uložit nově vytvořené Bin ID (jinak by skončilo u špatného okna)
-    const jbKey = WK(JBID), winAtStart = activeWin;
-    let binId = localStorage.getItem(jbKey);
-    const creating = !binId;        // okno ještě nemá bin → autosync ho vytvoří (POST)
+    // než se po awaitu vrátíme uložit nově vytvořené Gist ID (jinak by skončilo u špatného okna)
+    const idKey = WK(GISTID), winAtStart = activeWin;
+    let gistId = localStorage.getItem(idKey);
+    let creating = !gistId;        // okno ještě nemá gist → autosync ho vytvoří (POST)
     pushing = true; setSyncState('syncing');
     try {
-      const url = creating ? 'https://api.jsonbin.io/v3/b' : 'https://api.jsonbin.io/v3/b/' + binId;
-      const hdrs = { 'Content-Type':'application/json', 'X-Master-Key':key };
-      if (creating) { hdrs['X-Bin-Name'] = 'todo-app-' + winAtStart; hdrs['X-Bin-Private'] = 'false'; }
-      const res = await fetch(url, {
-        method: creating ? 'POST' : 'PUT', mode:'cors', credentials:'omit',
-        headers: hdrs,
-        body: JSON.stringify(buildAutoPayload())
-      });
+      const payload = buildAutoPayload();
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload, winAtStart));
+      if (!creating && res.status === 404) {   // migrovaný/smazaný gist → založ nový
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload, winAtStart));
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       if (creating) {
         const json = await res.json().catch(() => null);
-        const newId = json && json.metadata && json.metadata.id;
+        const newId = json && json.id;
         if (newId) {
-          try { localStorage.setItem(jbKey, newId); } catch(e) {}
-          if (winAtStart !== 'main') { try { pushWindowRegistry(); } catch(e) {} }   // propaguj nový bin do registru
+          try { localStorage.setItem(idKey, newId); } catch(e) {}
+          if (winAtStart !== 'main') { try { pushWindowRegistry(); } catch(e) {} }   // propaguj nový gist do registru
         }
       }
       lastPushTs = Date.now(); setSyncState('ok');
@@ -5031,18 +5088,17 @@ window.addEventListener('resize', updateAppGrid);
     }
   }
 
-  // Registr oken do hlavního binu (read-modify-write — NEpřepíše data hlavního okna v cloudu).
-  // Volá se po add/rename/delete okna a po nastavení Bin ID, ať se okna objeví na ostatních zařízeních.
+  // Registr oken do hlavního gistu (read-modify-write — NEpřepíše data hlavního okna v cloudu).
+  // Volá se po add/rename/delete okna a po nastavení Gist ID, ať se okna objeví na ostatních zařízeních.
   async function pushWindowRegistry() {
-    const key = localStorage.getItem(JBKEY), mainBin = localStorage.getItem('todo-app-jsonbin-id');
-    if (!key || !mainBin) return;        // bez hlavního binu se registr nemá kam uložit
+    const token = localStorage.getItem(GHTOKEN), mainGist = localStorage.getItem('todo-app-gist-id');
+    if (!token || !mainGist) return;        // bez hlavního gistu se registr nemá kam uložit
     try {
-      const res = await jbGet(mainBin, key); if (!res.ok) return;
-      const json = await res.json(); const rec = (json && json.record && typeof json.record === 'object') ? json.record : {};
+      const res = await gistGet(mainGist, token); if (!res.ok) return;
+      const rec = (await gistRecord(res)) || {};
       rec.windows = registryForPush();
       rec.winTomb = winTombstones;
-      await fetch('https://api.jsonbin.io/v3/b/' + mainBin, { method:'PUT', mode:'cors', credentials:'omit',
-        headers:{'Content-Type':'application/json','X-Master-Key':key}, body: JSON.stringify(rec) });
+      await fetch(gistUrl(mainGist), gistWriteInit(token, false, rec, 'main'));
     } catch(e) { /* tiché — registr se propíše i příštím pushem hlavního okna */ }
   }
 
@@ -5175,7 +5231,7 @@ window.addEventListener('resize', updateAppGrid);
   // hook po každé perzistenci: zaznamenej mazání (náhrobky) a naplánuj push
   function autoSyncOnSave() {
     if (applyingRemote) return;      // změny z mergeu nesmí spustit reconcile/push
-    if (!hasApiKey()) return;        // bez API klíče není co sledovat (bin si autosync vytvoří sám)
+    if (!hasApiKey()) return;        // bez tokenu není co sledovat (gist si autosync vytvoří sám)
     reconcileTombstones();
     if (autosyncEnabled()) scheduleAutoPush();
   }
@@ -5196,13 +5252,13 @@ window.addEventListener('resize', updateAppGrid);
     try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
     checkCloudOnStartup();
   };
-  // best-effort push odchozího okna do JEHO binu (volá se PŘED přepnutím activeWin —
-  // doAutoPush zachytí WK(JBID) i payload synchronně, ještě pro odchozí okno)
+  // best-effort push odchozího okna do JEHO gistu (volá se PŘED přepnutím activeWin —
+  // doAutoPush zachytí WK(GISTID) i payload synchronně, ještě pro odchozí okno)
   window.flushWindowPush = function() {
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     if (!autosyncEnabled() || !hasApiKey()) return;
-    // nezakládej prázdný bin jen kvůli přepnutí — buď už bin existuje, nebo okno má data
-    if (localStorage.getItem(WK(JBID)) || (typeof windowHasData === 'function' && windowHasData())) doAutoPush();
+    // nezakládej prázdný gist jen kvůli přepnutí — buď už gist existuje, nebo okno má data
+    if (localStorage.getItem(WK(GISTID)) || (typeof windowHasData === 'function' && windowHasData())) doAutoPush();
   };
   loadTombstones(); loadKnownIds();
   // obal perzistentní save-funkce, aby i mazání mimo schedSave (inbox, bloky, plány…) spustilo sync
