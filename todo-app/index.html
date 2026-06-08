@@ -70,7 +70,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 @media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
 html{-webkit-text-size-adjust:100%;overflow-x:clip}
 body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
-.app{padding:1.25rem 1.25rem 1.5rem;display:grid;grid-template-columns:210px minmax(0,1fr) 330px;gap:1.25rem;overflow-x:clip;max-width:1480px;margin:0 auto}
+.app{padding:1.25rem 1.25rem 1.5rem;display:grid;grid-template-columns:210px minmax(0,1fr) 440px;gap:1.25rem;overflow-x:clip;max-width:1480px;margin:0 auto}
 header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-items:baseline;justify-content:space-between;padding:.9rem 1.25rem .85rem;border-bottom:2.5px solid var(--black);flex-wrap:wrap;gap:.5rem}
 .brand{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
 .brand h1{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:600;color:var(--black);letter-spacing:-.02em;line-height:1}
@@ -209,8 +209,8 @@ textarea::placeholder{color:var(--mid)}
 .item-emoji.empty{color:var(--muted);font-size:.72rem;border:1px dashed var(--light);padding:0 .18rem}
 @media(hover:hover){.item-emoji:hover{outline:1px dashed var(--mid)}}
 [contenteditable="true"].item-emoji{background:var(--off);outline:1.5px solid var(--black);cursor:text;padding:0 2px;min-width:1ch;font-size:.95rem}
-.item-text{flex:1;font-size:.84rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4;cursor:pointer;border-radius:2px;padding:0 2px}
-[contenteditable="true"].item-text{background:var(--off);outline:1.5px solid var(--black);white-space:normal;overflow:visible;cursor:text}
+.item-text{flex:1;font-size:.84rem;min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.4;cursor:pointer;border-radius:2px;padding:0 2px}
+[contenteditable="true"].item-text{background:var(--off);outline:1.5px solid var(--black);white-space:normal;overflow:visible;cursor:text;display:block;-webkit-line-clamp:unset;line-clamp:unset}
 .dur-badge{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
 .dur-badge.editable{cursor:pointer;border-bottom:1px dashed var(--mid)}
 @media(hover:hover){.dur-badge.editable:hover{color:var(--black);border-bottom-color:var(--black)}}
@@ -2322,7 +2322,9 @@ function activateWindow(id) {
   renderWindowTabs(); renderLibrary(); renderBlockTypeList(); renderWorkDayPicker();
   renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
   populateLaterAddMonth(); renderLater(); updateUndoBtn(); updateQuickInputPlaceholder();
-  switchNotesTab('tyden');   // sjednotit pohled (dnešek je vždy v aktuálním týdnu → bez pushUndo)
+  // zachovej aktuálně otevřenou kartu při přepnutí okna (např. zůstaň na „Později", nehoď zpět na „Týden")
+  const keepTab = ['tyden','pristi','pozdeji','inbox','hotovo'].find(n => el('tab-' + n)?.classList.contains('active')) || 'tyden';
+  switchNotesTab(keepTab);
   if (typeof window.reloadWindowSync === 'function') { try { window.reloadWindowSync(); } catch(e) {} }
 }
 
