@@ -198,6 +198,8 @@ textarea::placeholder{color:var(--mid)}
 /* prostý řádek (Inbox / Později / obyč. top-level úkol na Dni): bez rámečku a výplně */
 .item-row.is-line{border-color:transparent;background:transparent;margin-top:0}
 .item-row.is-subtask{padding-left:1.4rem}
+/* položka obsahující poznámku (popis / podúkoly) — odlišená kurzívou názvu */
+.item-row.has-note .item-text{font-style:italic}
 .item-row.is-done .item-text{opacity:.45;text-decoration:line-through}
 .item-row.is-urgent .item-text{font-weight:600}
 .item-row.tl-highlight{background:var(--light)!important;border-color:var(--mid)!important}
@@ -768,6 +770,26 @@ textarea::placeholder{color:var(--mid)}
       <button class="modal-btn danger" id="blockEditResetBtn" onclick="resetBlockType()">obnovit výchozí</button>
       <button class="modal-btn" onclick="closeModal('blockEditModal')">zrušit</button>
       <button class="modal-btn primary" onclick="saveBlockType()">uložit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Item detail / rename modal -->
+<div class="modal-bg" id="itemEditModal">
+  <div class="modal" style="max-width:460px;gap:.6rem;max-height:90vh;overflow-y:auto">
+    <h2 id="itemEditTitle">Upravit položku</h2>
+    <div class="field">
+      <label>Název</label>
+      <input type="text" id="itemEditName" placeholder="Název položky" onkeydown="if(event.key==='Enter'){event.preventDefault();saveItemEdit();}if(event.key==='Escape')closeModal('itemEditModal')">
+    </div>
+    <div class="field">
+      <label>Popis / podúkoly</label>
+      <textarea id="itemEditNote" rows="7" placeholder="Další text — popis, poznámky, podúkoly…" style="resize:vertical"></textarea>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn danger" onclick="deleteItemEdit()">smazat</button>
+      <button class="modal-btn" onclick="closeModal('itemEditModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="saveItemEdit()">uložit</button>
     </div>
   </div>
 </div>
@@ -1357,7 +1379,7 @@ function rowsHtml(ctx, insertBefore = {}) {
     // ── INBOX: prostý jednořádkový úkol (bez bloku, bez času, bez rámečku) ──
     if (ctx.kind === 'inbox') {
       const tg = item.done ? '☑' : '☐';
-      const c = ['item-row', 'is-line', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : ''].filter(Boolean).join(' ');
+      const c = ['item-row', 'is-line', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : ''].filter(Boolean).join(' ');
       return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" draggable="true">
         <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${tg}</span>
         <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
@@ -1376,7 +1398,7 @@ function rowsHtml(ctx, insertBefore = {}) {
       const timeBadge = (item.isEvent && item.eventStart)
         ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → bez času · -/✒ → úkol">${item.eventStart}–${item.eventEnd || '?'}</span>`
         : '';
-      const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : ''].filter(Boolean).join(' ');
+      const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : ''].filter(Boolean).join(' ');
       return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" draggable="true">
         ${dayBadge}${timeBadge}
         <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${tg}</span>
@@ -1402,6 +1424,7 @@ function rowsHtml(ctx, insertBefore = {}) {
       item.isEvent ? 'is-event-block' : '',
       item.done   ? 'is-done'   : '',
       item.urgent ? 'is-urgent' : '',
+      item.note   ? 'has-note'  : '',
       isHL        ? 'tl-highlight' : '',
     ].filter(Boolean).join(' ');
 
@@ -1782,9 +1805,49 @@ function op_startEdit(ctx, idx) {
     if (e.key === 'Escape') { textEl.textContent = item.text; textEl.blur(); }
   });
 }
-function startEdit(idx) { op_startEdit(DAYCTX, idx); }
-function mStartEdit(ym, idx) { op_startEdit(MCTX(ym), idx); }
-function iStartEdit(idx) { op_startEdit(INBOXCTX, idx); }
+function startEdit(idx) { openItemEdit(DAYCTX, idx); }
+function mStartEdit(ym, idx) { openItemEdit(MCTX(ym), idx); }
+function iStartEdit(idx) { openItemEdit(INBOXCTX, idx); }
+
+// ── DETAIL POLOŽKY (modal: název + volný text — popis / podúkoly) ──────────────
+// Klik na název položky (blok / událost / úkol) otevře okno místo inline přejmenování.
+let _itemEditCtx = null, _itemEditItem = null;
+function openItemEdit(ctx, idx) {
+  const item = ctx.list[idx];
+  if (!item) return;
+  _itemEditCtx = ctx; _itemEditItem = item;
+  const type = item.isSubtask ? 'úkol' : (item.isEvent ? 'událost' : ((item.blockType && item.blockType !== 'TASK') ? 'blok' : 'položku'));
+  el('itemEditTitle').textContent = 'Upravit ' + type;
+  el('itemEditName').value = item.text || '';
+  el('itemEditNote').value = item.note || '';
+  el('itemEditModal').classList.add('open');
+  const nameEl = el('itemEditName'); nameEl.focus(); nameEl.select();
+}
+function saveItemEdit() {
+  const ctx = _itemEditCtx, item = _itemEditItem;
+  if (!ctx || !item) { closeModal('itemEditModal'); return; }
+  const name = el('itemEditName').value.trim();
+  const noteRaw = el('itemEditNote').value;
+  const note = noteRaw.trim() ? noteRaw : '';
+  const nameChanged = name && name !== item.text;
+  const noteChanged = (item.note || '') !== note;
+  _itemEditCtx = null; _itemEditItem = null;
+  closeModal('itemEditModal');
+  if (nameChanged || noteChanged) {
+    ctx.undo();
+    if (nameChanged) item.text = name;
+    item.note = note;
+    ctx.save(); ctx.render();
+  }
+}
+function deleteItemEdit() {
+  const ctx = _itemEditCtx, item = _itemEditItem;
+  _itemEditCtx = null; _itemEditItem = null;
+  closeModal('itemEditModal');
+  if (!ctx || !item) return;
+  const idx = ctx.list.indexOf(item);
+  if (idx >= 0) op_deleteItem(ctx, idx);
+}
 
 // ── DURATION HELPERS ──────────────────────────────────────────────────────────
 function findParentBlock(idx, arr = items) {
@@ -3338,7 +3401,7 @@ function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeBlockMenu();
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','blockEditModal','weekTplLoadModal','previewModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','blockEditModal','weekTplLoadModal','previewModal','itemEditModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -3785,6 +3848,7 @@ function normItem(it) {
     dayLabel: it.dayLabel || null,    // volný štítek dne (jen položky nejvyšší úrovně): „7.6.“ / „konec června“
     done: !!it.done,
     urgent: !!it.urgent,
+    note: it.note || '',              // volný text: popis / podúkoly
   };
 }
 function normLaterBucket(b) {
