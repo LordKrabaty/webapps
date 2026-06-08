@@ -210,6 +210,23 @@ Nikdy horizontální scroll. Tlačítko ☰ skryje `library-panel`.
 
 Vše musí být použitelné na všech třech bez nutnosti zoomu nebo horizontálního scrollu.
 
+## Browser pro preview a testy
+
+Při otevírání URL, spouštění preview nebo jakémkoliv příkazu vyžadujícím prohlížeč vždy použij **Chrome**, nikdy Edge ani msedge.
+
+- PowerShell: `Start-Process "chrome" -ArgumentList "<url>"`
+- CMD / batch: `start chrome <url>`
+- Přímá cesta: `& "C:\Program Files\Google\Chrome\Application\chrome.exe" "<url>"`
+
+## Prostředí a nástroje
+
+- Node.js není nainstalován — nepouštěj syntax check přes `node`
+- Prohlížeč pro headless testy: Chrome (`C:\Program Files\Google\Chrome\Application\chrome.exe`)
+- Edge není funkční — nikdy nepoužívej msedge
+- Smoke testy přes headless Chrome jsou volitelné — spusť je pouze pokud o to výslovně požádám
+- PowerShell je dostupný, ale preferuj přímé souborové operace kde to jde
+
+
 ---
 
 ## Zákazy
