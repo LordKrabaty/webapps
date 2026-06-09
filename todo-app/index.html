@@ -1338,7 +1338,7 @@ function renderTimeline() {
 // na op_*(MCTX(ym),…) → jedna implementace logiky, žádná duplikace.
 const DAYCTX = {
   kind: 'day',
-  h: { toggle:'toggleDone', edit:'startEdit', ev:'startEventEdit', dur:'startDurEdit', move:'moveItem', del:'deleteItem', icon:'startIconEdit', btime:'startBlockTimeEdit' },
+  h: { toggle:'toggleDone', edit:'startEdit', ev:'startEventEdit', dur:'startDurEdit', move:'moveItem', del:'deleteItem', send:'sendToField', icon:'startIconEdit', btime:'startBlockTimeEdit' },
   get list() { return items; },
   rowsEl() { return el('item-list')?.querySelectorAll('.item-row'); },
   input: 'quickInput',
@@ -1391,7 +1391,7 @@ function rowsHtml(ctx, insertBefore = {}) {
         <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
         <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx === 0 ? 'disabled' : ''}>↑</button>
         <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
-        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu)">→</button>
+        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu) · pak na cílové kartě přidej; „.del&quot; v poli = přesun (smaže zdroj)">→</button>
         <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="smazat">✕</button>
       </div>`;
     }
@@ -1411,7 +1411,7 @@ function rowsHtml(ctx, insertBefore = {}) {
         <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
         <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx === 0 ? 'disabled' : ''}>↑</button>
         <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
-        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu)">→</button>
+        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu) · pak na cílové kartě přidej; „.del&quot; v poli = přesun (smaže zdroj)">→</button>
         <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="smazat">✕</button>
       </div>`;
     }
@@ -1462,6 +1462,7 @@ function rowsHtml(ctx, insertBefore = {}) {
       ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx===0?'disabled':''}>↑</button>
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="dolů" ${idx===list.length-1?'disabled':''}>↓</button>
+      <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="vložit do pole (přesun na jinou kartu) · pak na cílové kartě přidej; „.del&quot; v poli = přesun (smaže zdroj)">→</button>
       <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="smazat">✕</button>
     </div>`;
   }).join('');
@@ -1520,8 +1521,15 @@ function highlightItem(id) {
 function op_addQuickItems(ctx, forceType) {
   const ta = el(ctx.input);
   if (!ta) return;
-  const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
-  if (!lines.length) return;
+  // „.del" na konci pole = přesun: po přidání smaž zdroj(e) odeslané přes → (sledované v _sendSources)
+  let raw = ta.value, wantDelSrc = false;
+  const delM = raw.match(/(^|\s)\.del\s*$/i);
+  if (delM) { wantDelSrc = true; raw = raw.slice(0, delM.index); }
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) {                                   // jen „.del" bez obsahu → nic nepřidávej, jen smaž zdroj
+    if (wantDelSrc) { const removed = deleteSentSources(); ta.value = ''; if (removed) showStatusMsg('→ zdroj smazán (přesun)', 2200); }
+    return;
+  }
   ctx.undo();
   const w = ctx.winStart();
   let addedHere = false, routedLater = false, lastYm = null;
@@ -1608,6 +1616,9 @@ function op_addQuickItems(ctx, forceType) {
     renderLater();
     showStatusMsg('→ přidáno do Později · ' + monthLabel(lastYm), 2600);
   }
+  // přesun (→ + „.del"): po přidání na cílovou kartu smaž zdroj; jinak (kopie hotová) zahoď sledování
+  if (wantDelSrc) { const removed = deleteSentSources(); if (removed) showStatusMsg('→ přesunuto — zdroj smazán', 2400); }
+  else _sendSources = [];
 }
 
 // vytvoří hlavičku bloku (řádek bloku bez podúkolů)
@@ -1667,8 +1678,14 @@ function op_addUnderBlock(ctx, blockId) {
   const bIdx = list.findIndex(it => String(it.id) === String(blockId) && !it.isSubtask);
   if (bIdx < 0) return;
   const ta = el(ctx.input);
-  const lines = (ta ? ta.value : '').split('\n').map(l => l.trim()).filter(Boolean);
-  if (!lines.length) { if (ta) ta.focus(); return; }
+  let raw = ta ? ta.value : '', wantDelSrc = false;
+  const delM = raw.match(/(^|\s)\.del\s*$/i);              // „.del" na konci = přesun (smaž zdroj po vložení)
+  if (delM) { wantDelSrc = true; raw = raw.slice(0, delM.index); }
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) {
+    if (wantDelSrc) { const removed = deleteSentSources(); if (ta) ta.value = ''; if (removed) showStatusMsg('→ zdroj smazán (přesun)', 2200); else if (ta) ta.focus(); return; }
+    if (ta) ta.focus(); return;
+  }
   ctx.undo();
   const blockType = list[bIdx].blockType;
   let ins = bIdx + 1;
@@ -1684,6 +1701,8 @@ function op_addUnderBlock(ctx, blockId) {
   });
   if (ta) ta.value = '';
   ctx.save(); ctx.render();
+  if (wantDelSrc) { const removed = deleteSentSources(); if (removed) showStatusMsg('→ přesunuto — zdroj smazán', 2400); }
+  else _sendSources = [];
   if (ta) ta.focus();
 }
 function addUnderBlock(blockId) { op_addUnderBlock(addCtx, blockId); }
@@ -1763,6 +1782,7 @@ function op_moveItem(ctx, idx, dir) {
 function toggleDone(idx) { op_toggleDone(DAYCTX, idx); }
 function deleteItem(idx) { op_deleteItem(DAYCTX, idx); }
 function moveItem(idx, dir) { op_moveItem(DAYCTX, idx, dir); }
+function sendToField(idx) { sendItemToField(DAYCTX, idx); }
 // měsíční varianty (volané z řádků v Později)
 function mToggleDone(ym, idx) { op_toggleDone(MCTX(ym), idx); }
 function mDeleteItem(ym, idx) { op_deleteItem(MCTX(ym), idx); }
@@ -3980,20 +4000,25 @@ function mEditDay(ym, idx) {
   });
 }
 
-// Jako inbox: serializuje položku (blok + podúkoly / úkol / událost) do TEXTu a vloží
-// ho do sdíleného pole. Uživatel pak přepne na žádanou kartu a Enterem přidá kamkoliv.
-// Položku nemaže (přesun proběhne ručně přidáním + případným smazáním zdroje).
+// Serializuje položku (blok + podúkoly / úkol / událost) do TEXTu a vloží ho do sdíleného
+// pole. Uživatel pak přepne na žádanou kartu a Enterem přidá kamkoliv (= kopie). Zdroj se
+// zapamatuje v _sendSources: dopíše-li uživatel do pole „.del", po přidání se zdroj smaže
+// (= přesun) — viz deleteSentSources(). Blok jde vždy i s podúkoly.
 // poznámky přenášené přes → (pole je jen text; poznámku neseme stranou podle čistého textu položky)
 let _sendNotes = {};
+// zdroje odeslané přes → (pro „.del" přesun): [{ kind:'day'|'month'|'inbox', date?, ym?, ids:[…] }]
+// nahromadí se přes víc kliknutí → a vynulují se při nejbližším přidání (kopie hotová) / přesunu.
+let _sendSources = [];
 function sendItemToField(ctx, idx) {
   const list = ctx.list;
   const it = list[idx]; if (!it) return;
   let count = 1;
   if (!it.isSubtask) { while (idx + count < list.length && list[idx + count].isSubtask) count++; }
   const hasSubs = count > 1;
-  const lines = [];
+  const lines = [], ids = [];
   for (let i = idx; i < idx + count; i++) {
     const x = list[i];
+    ids.push(x.id);
     const emoji = (!x.isSubtask && itemIcon(x)) ? itemIcon(x) + ' ' : '';
     const prefix = x.isSubtask ? '✒ ' : '';
     let suffix = '';
@@ -4002,12 +4027,55 @@ function sendItemToField(ctx, idx) {
     if (x.note) _sendNotes[x.text || ''] = x.note;                                         // poznámku pones podle čistého textu
     lines.push(prefix + emoji + (x.text || '') + suffix);
   }
+  // zapamatuj zdroj — „.del" v poli ho po přidání na cílovou kartu smaže (= přesun, ne kopie)
+  if (ctx.kind === 'day')        _sendSources.push({ kind: 'day',   date: activePlanDate, ids });
+  else if (ctx.kind === 'month') _sendSources.push({ kind: 'month', ym: ctx.ym,            ids });
+  else if (ctx.kind === 'inbox') _sendSources.push({ kind: 'inbox',                         ids });
   const txt = lines.join('\n');
   const ta = el('quickInput');
   if (ta) { ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + txt : txt; ta.focus(); }
-  showStatusMsg('→ vloženo do pole — přepni na kartu a přidej (Enter)', 2800);
+  showStatusMsg('→ vloženo do pole — přepni na kartu a přidej (Enter) · „.del" = přesun (smaže zdroj)', 3200);
 }
 function mSendToField(ym, idx) { sendItemToField(MCTX(ym), idx); }
+
+// Smaže zdroje odeslané přes → (po přidání s „.del" = přesun). Maže podle id ze SPRÁVNÉHO
+// úložiště: aktivní den z živého bufferu (items), jiný den z weekDays, měsíc z later, inbox z inbox.
+// Blok byl odeslán i s podúkoly (ids je nese všechny), takže se smaže celý.
+function deleteSentSources() {
+  if (!_sendSources.length) return false;
+  if (activePlanDate) autoSavePlanDay();   // flushni cílový den do weekDays, ať saveWeek nepřebije živé změny
+  let liveDay = false, week = false, inboxT = false, laterT = false;
+  _sendSources.forEach(src => {
+    const idset = new Set((src.ids || []).map(String));
+    if (!idset.size) return;
+    if (src.kind === 'day') {
+      if (src.date === activePlanDate) {     // zdroj = aktuálně zobrazený den → maž z živého bufferu
+        const b = items.length;
+        for (let i = items.length - 1; i >= 0; i--) if (idset.has(String(items[i].id))) items.splice(i, 1);
+        if (items.length !== b) liveDay = true;
+      } else {                               // jiný den → maž v jeho záznamu ve weekDays
+        const wd = weekDays.find(d => d.date === src.date);
+        if (wd) { const b = wd.items.length; wd.items = wd.items.filter(x => !idset.has(String(x.id))); if (wd.items.length !== b) { wd.mt = Date.now(); week = true; } }
+      }
+    } else if (src.kind === 'month') {
+      const bk = later.find(x => x.ym === src.ym);
+      if (bk) { const b = bk.items.length; bk.items = bk.items.filter(x => !idset.has(String(x.id))); if (bk.items.length !== b) { bk.mt = Date.now(); laterT = true; } }
+    } else if (src.kind === 'inbox') {
+      const b = inbox.length;
+      for (let i = inbox.length - 1; i >= 0; i--) if (idset.has(String(inbox[i].id))) inbox.splice(i, 1);
+      if (inbox.length !== b) inboxT = true;
+    }
+  });
+  if (liveDay) autoSavePlanDay();             // přepíše weekDays[aktivní den] + razítkne mt
+  if (liveDay || week) saveWeek();
+  if (inboxT) { inboxMt = Date.now(); saveInbox(); }
+  if (laterT) saveLater();
+  _sendSources = [];
+  renderAll(); renderDayButtons(); renderWeekTab();
+  if (inboxT) renderInbox();
+  if (laterT) renderLater();
+  return (liveDay || week || inboxT || laterT);
+}
 
 const DAY_ABBREV_CZ  = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
 const DAY_NAMES_CZ_LONG = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
