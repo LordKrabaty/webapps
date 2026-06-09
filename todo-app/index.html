@@ -53,6 +53,7 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
 html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-bg.open{display:flex}
+#confirmModal{z-index:200}   /* univerzální prompt/confirm/alert vždy nad ostatními modaly */
 .modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem;max-height:90vh;overflow-y:auto}
 .modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
 .modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
@@ -85,6 +86,22 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 @media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
 .modal-btn.danger{border-color:#c0392b;color:#c0392b}
 @media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
+.recur-rule{display:flex;flex-direction:column;gap:.18rem;padding:.45rem .55rem;border:var(--b);border-radius:var(--r)}
+.recur-rule-head{display:flex;align-items:baseline;gap:.5rem;justify-content:space-between}
+.recur-rule-text{font-size:.86rem;color:var(--black);font-weight:500;min-width:0;word-break:break-word}
+.recur-rule-toks{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
+.recur-rule-desc{font-size:.76rem;color:var(--dark)}
+.recur-rule-next{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.recur-rule-next s{opacity:.6}
+.recur-rule-btns{display:flex;gap:.35rem;margin-top:.2rem}
+.recur-rule-btns .btn-io{flex:0 0 auto;padding:.26rem .6rem}
+.btn-io.danger{border-color:#c0392b;color:#c0392b}
+@media(hover:hover){.btn-io.danger:hover{background:#c0392b;color:var(--w)}}
+.recur-legend{font-size:.76rem;color:var(--muted);line-height:1.55;border:var(--b);border-radius:var(--r);padding:.5rem .6rem}
+.recur-legend summary{cursor:pointer;color:var(--black);font-size:.8rem;font-weight:500}
+.recur-legend table{border-collapse:collapse;margin-top:.4rem;width:100%}
+.recur-legend td{padding:.12rem .3rem .12rem 0;vertical-align:top}
+.recur-legend code{font-family:'DM Mono',monospace;color:var(--black);white-space:nowrap}
 html{-webkit-text-size-adjust:100%;overflow-x:clip}
 body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
 .app{padding:1.25rem 1.25rem 1.5rem;display:grid;grid-template-columns:210px minmax(0,1fr) 440px;gap:1.25rem;overflow-x:clip;max-width:1480px;margin:0 auto}
@@ -220,6 +237,9 @@ textarea::placeholder{color:var(--mid)}
 .item-row.is-done .item-text{opacity:.45;text-decoration:line-through}
 .item-row.is-urgent .item-text{font-weight:600}
 .item-row.tl-highlight{background:var(--light)!important;border-color:var(--mid)!important}
+.item-row.is-ghost{border-style:dashed;border-color:var(--mid);background:transparent}
+.item-row.is-ghost .item-text{color:var(--muted);font-style:italic}
+.recur-ghost-badge{font-size:.72rem;color:var(--muted);flex:0 0 auto;cursor:default}
 .item-toggle{font-size:.85rem;cursor:pointer;flex-shrink:0;width:18px;text-align:center;color:var(--muted);line-height:1;user-select:none}
 @media(hover:hover){.item-toggle:hover{color:var(--black)}}
 .item-emoji{flex-shrink:0;margin-right:.1rem;line-height:1;cursor:pointer;border-radius:2px;user-select:none}
@@ -557,6 +577,7 @@ textarea::placeholder{color:var(--mid)}
       <div class="later-add-row" style="align-items:center">
         <span style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">přidat do měsíce</span>
         <select id="laterAddMonth" class="later-sel" title="do kterého měsíce přidávat" onchange="setAddCtxLater()"></select>
+        <button class="btn-sm" onclick="openRecurManage()" title="správa opakování + legenda zkratek" style="flex:0 0 auto">↻ opakování</button>
       </div>
       <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.1rem"></div>
     </div>
@@ -1123,6 +1144,79 @@ function extractMonthRoute(text) {
   return null;
 }
 
+// ── OPAKOVÁNÍ (recurrence mini-jazyk) ──────────────────────────────────────────
+// r-token kdekoli na řádku → pravidlo opakování. Kombinovatelné (r12.m r24.m).
+// Diskriminátor:  N+písmeno = interval · tečka+m = den v měsíci · D.M. = výročí
+//                 holé 2 číslice = měsíc v roce · zkratka dne = den v týdnu
+//   r4w          → každé 4 týdny (interval, kotva = datum karty)
+//   r12.m r24.m  → 12. a 24. každý měsíc
+//   r06 r09      → každý rok v červnu a září
+//   r24.7.       → každý rok 24.7.
+//   rpo rst      → každé pondělí a středu
+function parseRecurToken(tok) {
+  if (!tok) return null;
+  const t = tok.toLowerCase().replace(/[,;]+$/, '');
+  if (t[0] !== 'r' || t.length < 2) return null;
+  const b = t.slice(1);
+  let m;
+  if ((m = b.match(/^(\d+)([dwmy])$/)))           { const n = +m[1]; return n >= 1 ? { t:'interval', n, u:m[2] } : null; }              // r4w
+  if ((m = b.match(/^(\d{1,2})\.m$/)))            { const d = +m[1]; return (d>=1 && d<=31) ? { t:'dom', day:d } : null; }             // r12.m
+  if ((m = b.match(/^(\d{1,2})\.(\d{1,2})\.?$/))) { const d=+m[1], mo=+m[2]; return (d>=1&&d<=31&&mo>=1&&mo<=12) ? { t:'yearly', day:d, mo } : null; }  // r24.7.
+  if ((m = b.match(/^(\d{2})$/)))                 { const mo = +m[1]; return (mo>=1 && mo<=12) ? { t:'month', mo } : null; }           // r06
+  const wd = DAY_ABBREV_CZ.findIndex(a => a.toLowerCase() === b);                                                                      // rpo
+  return wd >= 0 ? { t:'weekday', d: wd } : null;   // d = getDay() index (0=Ne)
+}
+// rozparsuj všechny r-tokeny z řádku (kdekoli), vrať { rules, rest } | null
+function extractRecurRoute(text) {
+  text = (text || '').trim();
+  if (!text) return null;
+  const rules = [], rest = [], seen = new Set();
+  text.split(/\s+/).forEach(tok => {
+    const p = parseRecurToken(tok);
+    if (!p) { rest.push(tok); return; }
+    const k = JSON.stringify(p);
+    if (!seen.has(k)) { seen.add(k); rules.push(p); }   // deduplikace shodných pravidel
+  });
+  return rules.length ? { rules, rest: rest.join(' ').trim() } : null;
+}
+// lidsky čitelný popis jednoho pravidla (konzole / pozdější správa)
+function describeRecurRule(r) {
+  if (!r) return '';
+  if (r.t === 'interval') {
+    const one  = { d:'den',  w:'týden',  m:'měsíc',  y:'rok'  }[r.u];
+    const few  = { d:'dny',  w:'týdny',  m:'měsíce', y:'roky' }[r.u];   // 2–4
+    const many = { d:'dní',  w:'týdnů',  m:'měsíců', y:'let'  }[r.u];   // 5+
+    if (r.n === 1) return 'každý ' + one;
+    return r.n <= 4 ? ('každé ' + r.n + ' ' + few) : ('každých ' + r.n + ' ' + many);
+  }
+  if (r.t === 'dom')     return 'každého ' + r.day + '. v měsíci';
+  if (r.t === 'yearly')  return 'každý rok ' + r.day + '.' + r.mo + '.';
+  if (r.t === 'month')   return 'každý rok – ' + (MONTHS_CZ[r.mo - 1] || ('měsíc ' + r.mo));
+  if (r.t === 'weekday') return 'každý týden – ' + (DAY_ABBREV_CZ[r.d] || '?');
+  return '?';
+}
+function describeRecur(rec) { return ((rec && rec.rules) || []).map(describeRecurRule).join(' + '); }
+// sestav záznam pravidla z rozparsovaných r-tokenů + payloadu (parseItemText)
+function buildRecurEntry(rules, pItem, anchor) {
+  return {
+    id: Date.now() + Math.random(),
+    mt: Date.now(),                       // LWW razítko (jako ostatní entity)
+    rules,
+    anchor: anchor || todayIso(),         // kotva intervalu = datum karty
+    payload: {
+      text: pItem.text,
+      icon: pItem.icon || null,
+      dur: pItem.duration || null,
+      blockType: pItem.blockType || 'TASK',
+      isEvent: !!pItem.isEvent,
+      eventStart: pItem.eventStart || null,
+      eventEnd: pItem.eventEnd || null
+    },
+    exceptions: {},                       // F2: { '<iso>': 'skip' | <upravený item> }
+    until: null                           // volitelný konec opakování
+  };
+}
+
 // ── COMPUTE TIMELINE ──────────────────────────────────────────────────────────
 
 function computeTimeline() {
@@ -1413,9 +1507,10 @@ function rowsHtml(ctx, insertBefore = {}) {
       const timeBadge = (item.isEvent && item.eventStart)
         ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → bez času · -/✒ → úkol">${item.eventStart}–${item.eventEnd || '?'}</span>`
         : '';
-      const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : ''].filter(Boolean).join(' ');
-      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" draggable="true">
-        ${dayBadge}${timeBadge}
+      const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : '', item.isGhost ? 'is-ghost' : ''].filter(Boolean).join(' ');
+      const gBadge = item.isGhost ? '<span class="recur-ghost-badge" title="opakování — klikni pro potvrzení do tohoto měsíce">↻</span>' : '';
+      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" ${item.isGhost ? '' : 'draggable="true"'}>
+        ${dayBadge}${timeBadge}${gBadge}
         <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${tg}</span>
         <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
         <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -1440,8 +1535,10 @@ function rowsHtml(ctx, insertBefore = {}) {
       item.done   ? 'is-done'   : '',
       item.urgent ? 'is-urgent' : '',
       item.note   ? 'has-note'  : '',
+      item.isGhost ? 'is-ghost' : '',
       isHL        ? 'tl-highlight' : '',
     ].filter(Boolean).join(' ');
+    const ghostBadge = item.isGhost ? '<span class="recur-ghost-badge" title="opakování — klikni pro potvrzení do tohoto dne">↻</span>' : '';
 
     const toggle = item.isSubtask ? (item.done ? '☑' : '✒') : (item.done ? '☑' : '☐');
     // skutečné bloky i události: klikací ikona (přepis řádku / „-“,0,✒ → úkol); chybí-li, klikací placeholder „+“
@@ -1462,11 +1559,11 @@ function rowsHtml(ctx, insertBefore = {}) {
       durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="klikni: 9:00-10:00 → událost · -/✒ → úkol"`;
     }
 
-    const draggable = !item.isEvent ? 'draggable="true"' : '';   // události drží čas na časové ose
+    const draggable = (!item.isEvent && !item.isGhost) ? 'draggable="true"' : '';   // události drží čas; duchové se nepřetahují
 
     return (insertBefore[idx] || '') + `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
       <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${toggle}</span>
-      ${emoji}
+      ${ghostBadge}${emoji}
       <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, blockAbbrById[item.id]) : esc(item.text)}</span>
       ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
       <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="nahoru" ${idx===0?'disabled':''}>↑</button>
@@ -1509,6 +1606,7 @@ function updateStats() {
 
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
 function renderAll() {
+  // F2: duchy opakování zatím jen na kartě Později (denní karty „časem") → syncDayGhosts() vypnuto
   renderTimeline();
   renderItemList();
   updateStats();
@@ -1541,10 +1639,24 @@ function op_addQuickItems(ctx, forceType) {
   }
   ctx.undo();
   const w = ctx.winStart();
-  let addedHere = false, routedLater = false, lastYm = null;
+  let addedHere = false, routedLater = false, lastYm = null, addedRecur = 0;
 
   lines.forEach(rawLine => {
     let line = rawLine;
+    // (0) OPAKOVÁNÍ: r-tokeny kdekoli na řádku → vytvoř pravidlo, NEpřidávej jako item.
+    // Projeví se jako duchové v měsíčních bucketech karty Později (denní karty „časem").
+    const recur = extractRecurRoute(line);
+    if (recur) {
+      const pItem = parseItemText(recur.rest);
+      if (pItem.text) {                                     // bez payloadu (jen „r4w") přeskoč
+        const anchor = (ctx.kind === 'day' && activePlanDate) ? activePlanDate
+                     : (ctx.kind === 'month' && ctx.ym)       ? (ctx.ym + '-01')
+                     : todayIso();
+        recurrences.push(buildRecurEntry(recur.rules, pItem, anchor));
+        addedRecur++;
+      }
+      return;                                               // r-řádek se nepřidává jako běžný úkol
+    }
     // (3) DATUM / MĚSÍC na začátku nebo konci → přesměruj do „Později" do daného měsíce
     const route = extractMonthRoute(line);
     const toLater = !!route;
@@ -1615,6 +1727,12 @@ function op_addQuickItems(ctx, forceType) {
 
   ta.value = '';
   _sendNotes = {};                       // přenesené poznámky spotřebovány tímto přidáním
+  if (addedRecur) {                      // pravidlo → duchové v Později; přepni tam a ukaž
+    saveRecur();
+    if (typeof renderLater === 'function') renderLater();
+    if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
+    showStatusMsg('↻ opakování přidáno (' + addedRecur + '×) — viz Později', 2800);
+  }
   if (addedHere) { ctx.save(); ctx.render(); }
   if (routedLater) {
     saveLater();
@@ -1788,14 +1906,26 @@ function op_moveItem(ctx, idx, dir) {
 }
 
 // veřejné denní funkce (volané z řádků denního plánu) — beze změny chování
-function toggleDone(idx) { op_toggleDone(DAYCTX, idx); }
-function deleteItem(idx) { op_deleteItem(DAYCTX, idx); }
-function moveItem(idx, dir) { op_moveItem(DAYCTX, idx, dir); }
-function sendToField(idx) { sendItemToField(DAYCTX, idx); }
+// F2: dotek ducha ho nejdřív zhmotní (smazání místo toho zapíše „skip" výjimku)
+function toggleDone(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_toggleDone(DAYCTX, idx); }
+function deleteItem(idx) {
+  if (items[idx] && items[idx].recurId != null) {        // duch i zhmotněný výskyt → „skip" výjimka (jinak by se duch vrátil)
+    pushUndo();
+    if (skipGhostOccurrence(idx)) { schedSave(); renderAll(); return; }
+  }
+  op_deleteItem(DAYCTX, idx);
+}
+function moveItem(idx, dir) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_moveItem(DAYCTX, idx, dir); }
+function sendToField(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); sendItemToField(DAYCTX, idx); }
 // měsíční varianty (volané z řádků v Později)
-function mToggleDone(ym, idx) { op_toggleDone(MCTX(ym), idx); }
-function mDeleteItem(ym, idx) { op_deleteItem(MCTX(ym), idx); }
-function mMoveItem(ym, idx, dir) { op_moveItem(MCTX(ym), idx, dir); }
+// F2: dotek měsíčního ducha ho zhmotní; smazání čehokoli s recurId zapíše „skip" výjimku
+function mToggleDone(ym, idx) { materializeLaterGhost(ym, idx); op_toggleDone(MCTX(ym), idx); }
+function mDeleteItem(ym, idx) {
+  const b = later.find(x => x.ym === ym), it = b && b.items[idx];
+  if (it && it.recurId != null) { if (skipLaterOccurrence(ym, idx)) { renderLater(); return; } }
+  op_deleteItem(MCTX(ym), idx);
+}
+function mMoveItem(ym, idx, dir) { materializeLaterGhost(ym, idx); op_moveItem(MCTX(ym), idx, dir); }
 // inbox varianty (volané z řádků v Inboxu)
 function iToggleDone(idx) { op_toggleDone(INBOXCTX, idx); }
 function iDeleteItem(idx) { op_deleteItem(INBOXCTX, idx); }
@@ -1843,8 +1973,8 @@ function op_startEdit(ctx, idx) {
     if (e.key === 'Escape') { textEl.textContent = item.text; textEl.blur(); }
   });
 }
-function startEdit(idx) { openItemEdit(DAYCTX, idx); }
-function mStartEdit(ym, idx) { openItemEdit(MCTX(ym), idx); }
+function startEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); openItemEdit(DAYCTX, idx); }
+function mStartEdit(ym, idx) { materializeLaterGhost(ym, idx); openItemEdit(MCTX(ym), idx); }
 function iStartEdit(idx) { openItemEdit(INBOXCTX, idx); }
 
 // ── DETAIL POLOŽKY (modal: název + volný text — popis / podúkoly) ──────────────
@@ -2085,10 +2215,10 @@ function op_startEventEdit(ctx, idx) {
     if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
   });
 }
-function startDurEdit(idx) { op_startDurEdit(DAYCTX, idx); }
-function startEventEdit(idx) { op_startEventEdit(DAYCTX, idx); }
-function mStartDurEdit(ym, idx) { op_startDurEdit(MCTX(ym), idx); }
-function mStartEventEdit(ym, idx) { op_startEventEdit(MCTX(ym), idx); }
+function startDurEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startDurEdit(DAYCTX, idx); }
+function startEventEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startEventEdit(DAYCTX, idx); }
+function mStartDurEdit(ym, idx) { materializeLaterGhost(ym, idx); op_startDurEdit(MCTX(ym), idx); }
+function mStartEventEdit(ym, idx) { materializeLaterGhost(ym, idx); op_startEventEdit(MCTX(ym), idx); }
 function iStartDurEdit(idx) { op_startDurEdit(INBOXCTX, idx); }
 function iStartEventEdit(idx) { op_startEventEdit(INBOXCTX, idx); }
 
@@ -2173,10 +2303,10 @@ function op_startBlockTimeEdit(ctx, idx) {
     if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
   });
 }
-function startIconEdit(idx) { op_startIconEdit(DAYCTX, idx); }
-function startBlockTimeEdit(idx) { op_startBlockTimeEdit(DAYCTX, idx); }
-function mStartIconEdit(ym, idx) { op_startIconEdit(MCTX(ym), idx); }
-function mStartBlockTimeEdit(ym, idx) { op_startBlockTimeEdit(MCTX(ym), idx); }
+function startIconEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startIconEdit(DAYCTX, idx); }
+function startBlockTimeEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startBlockTimeEdit(DAYCTX, idx); }
+function mStartIconEdit(ym, idx) { materializeLaterGhost(ym, idx); op_startIconEdit(MCTX(ym), idx); }
+function mStartBlockTimeEdit(ym, idx) { materializeLaterGhost(ym, idx); op_startBlockTimeEdit(MCTX(ym), idx); }
 function iStartIconEdit(idx) { op_startIconEdit(INBOXCTX, idx); }
 function iStartBlockTimeEdit(idx) { op_startBlockTimeEdit(INBOXCTX, idx); }
 
@@ -2200,7 +2330,7 @@ function onWindowChange() {
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
 function getSessionData() {
-  return { items, windowStart, windowEnd, planDate: activePlanDate };
+  return { items: stripGhosts(items), windowStart, windowEnd, planDate: activePlanDate };   // duchy se neukládají
 }
 function applySessionData(d) {
   if (!d) return;
@@ -2303,8 +2433,8 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
 function pushRegistry() { try { if (typeof window.pushWindowRegistry === 'function') window.pushWindowRegistry(); } catch(e) {} }
 // má aktivní okno vůbec nějaká data? (rozhoduje, jestli autosync založí gist pro okno bez Gist ID)
 function windowHasData() {
-  return !!(library.length || archive.length || weekDays.length || weekPlans.length || inbox.length || later.length
-    || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
+  return !!(library.length || archive.length || weekDays.length || weekPlans.length || inbox.length || cleanLater().length
+    || recurrences.length || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
 }
 
 // per-okno klíče (pro mazání okna) — vč. sync klíčů z IIFE (hodnoty jsou stabilní)
@@ -2339,7 +2469,7 @@ function activateWindow(id) {
   activeLibId = null; savedSnapshot = null;
   undoStack = []; redoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
   activePlanDate = todayIso();
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
   if (todayEntry) applySessionData(todayEntry);
@@ -3465,7 +3595,7 @@ function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeBlockMenu();
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','blockEditModal','weekTplLoadModal','previewModal','itemEditModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','blockEditModal','weekTplLoadModal','previewModal','itemEditModal','recurModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -3641,7 +3771,7 @@ function openExportModal() {
   // dny / plány / později — výběrové stromy (skupiny = týdny / roky), vše vybráno
   setupSelTree('exportDayList', 'exDay', weekDays, 'expWdLbl', 'Uložené dny', dayWeekGroups, updateExportFilename);
   setupSelTree('exportPlanList', 'exPlan', weekPlans, 'expWpLbl', 'Plán týdne', dayWeekGroups, updateExportFilename);
-  setupSelTree('exportLaterList', 'exLat', later, 'expLtLbl', 'Později', monthYearGroups, updateExportFilename);
+  setupSelTree('exportLaterList', 'exLat', cleanLater(), 'expLtLbl', 'Později', monthYearGroups, updateExportFilename);
   const setRow = el('expSetRow'), inboxRow = el('expInboxRow');
   if (setRow) setRow.style.display = '';
   if (inboxRow) { inboxRow.style.display = inbox.length ? '' : 'none'; if (inbox.length) el('expInboxLbl').textContent = 'Inbox (' + inbox.length + ')'; }
@@ -3689,7 +3819,7 @@ function doExport() {
   const wplans = weekPlans.filter(p => planSel.has(p.date));
   const settings = el('expSettings')?.checked ? buildSettingsExport() : null;
   const inb = el('expInbox')?.checked ? inbox : [];
-  const lat = later.filter(b => latSel.has(b.ym));
+  const lat = cleanLater().filter(b => latSel.has(b.ym));   // bez duchů
   if (!its.length && !archs.length && !wdays.length && !wplans.length && !settings && !inb.length && !lat.length) { customAlert('Nic není vybráno.'); return; }
   const payload = {v:2, items: its, archive: archs, weekDays: wdays, weekPlans: wplans};
   if (settings) payload.settings = settings;
@@ -4011,6 +4141,287 @@ async function loadHolidays() {
 function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WK(WEEK_KEY)) || '[]'); } catch(e) { weekDays = []; } }
 function saveWeek()  { try { localStorage.setItem(WK(WEEK_KEY), JSON.stringify(weekDays)); } catch(e) {} }
 
+// ── OPAKOVÁNÍ: kolekce pravidel (per-okno jako weekDays). F3: chybí jen správa-modal ──
+const RECUR_KEY = 'todo-app-v1-recur';
+let recurrences = [];
+function loadRecur()  { try { recurrences = JSON.parse(localStorage.getItem(WK(RECUR_KEY)) || '[]'); } catch(e) { recurrences = []; } }
+function saveRecur()  { try { localStorage.setItem(WK(RECUR_KEY), JSON.stringify(recurrences)); } catch(e) {} }
+window.dumpRecur = () => recurrences;   // konzole: dumpRecur() → aktuální pravidla (reference je čerstvá)
+
+// ── EXPANDÉR (F2): pravidlo → výskyty v konkrétním dni ──────────────────────────
+// Vrací true, pokud pravidlo „padá" na dané ISO datum. Pravidla uvnitř záznamu = OR.
+function recurRuleFires(r, d, anchorIso) {
+  if (!r) return false;
+  if (r.t === 'weekday') return d.getDay() === r.d;
+  if (r.t === 'dom')     return d.getDate() === r.day;
+  if (r.t === 'yearly')  return d.getDate() === r.day && (d.getMonth() + 1) === r.mo;
+  if (r.t === 'month')   return (d.getMonth() + 1) === r.mo && d.getDate() === 1;   // měsíc v roce → 1. den
+  if (r.t === 'interval') {
+    const a = new Date((anchorIso || '') + 'T12:00:00');
+    if (isNaN(a) || d < a) return false;
+    const days = Math.round((d - a) / 864e5);
+    if (r.u === 'd') return days % r.n === 0;
+    if (r.u === 'w') return days % (7 * r.n) === 0;
+    if (r.u === 'm') {
+      if (d.getDate() !== a.getDate()) return false;                                 // jiný den v měsíci → nefiruje (kratší měsíc se přeskočí)
+      const md = (d.getFullYear() - a.getFullYear()) * 12 + (d.getMonth() - a.getMonth());
+      return md >= 0 && md % r.n === 0;
+    }
+    if (r.u === 'y') {
+      if (d.getDate() !== a.getDate() || d.getMonth() !== a.getMonth()) return false;
+      const yd = d.getFullYear() - a.getFullYear();
+      return yd >= 0 && yd % r.n === 0;
+    }
+  }
+  return false;
+}
+function recurOccursOn(rec, iso) {
+  if (!rec || !iso) return false;
+  if (rec.anchor && iso < rec.anchor) return false;       // pravidlo ještě neexistovalo
+  if (rec.until && iso > rec.until) return false;
+  const d = new Date(iso + 'T12:00:00');
+  if (isNaN(d)) return false;
+  return (rec.rules || []).some(r => recurRuleFires(r, d, rec.anchor));
+}
+// duch = neuložená položka odvozená z pravidla pro daný den (stabilní id 'g_<recId>')
+function makeGhostItem(rec, iso) {
+  const p = rec.payload || {};
+  const bt = BLOCK_TYPES[p.blockType] || BLOCK_TYPES.TASK;
+  return {
+    id: 'g_' + rec.id, recurId: rec.id, isGhost: true,
+    text: p.text || '(opakování)',
+    blockType: p.blockType || 'TASK',
+    duration: p.dur || bt.defaultDuration || 30,
+    isEvent: !!p.isEvent,
+    eventStart: p.isEvent ? (p.eventStart || null) : null,
+    eventEnd:   p.isEvent ? (p.eventEnd   || null) : null,
+    isSubtask: false, done: false, urgent: false,
+    icon: p.icon || null, note: '',
+  };
+}
+function stripGhosts(arr) { return (arr || []).filter(it => it && !it.isGhost); }
+// přepočítej duchy v živém bufferu aktivního dne (idempotentní — volá se z renderAll)
+function syncDayGhosts() {
+  if (!Array.isArray(items)) return;
+  if (items.some(it => it && it.isGhost)) items = items.filter(it => !it.isGhost);   // zahoď staré duchy
+  const iso = activePlanDate;
+  if (!iso) return;
+  recurrences.forEach(rec => {
+    if (!recurOccursOn(rec, iso)) return;
+    if (rec.exceptions && rec.exceptions[iso]) return;                 // smazaný výskyt (skip)
+    if (items.some(it => it && it.recurId === rec.id)) return;         // už zhmotněný v tomto dni
+    items.push(makeGhostItem(rec, iso));
+  });
+}
+// dotek ducha → stane se reálnou položkou dne (zachová recurId, dostane reálné id)
+function materializeGhost(idx) {
+  const it = items[idx];
+  if (!it || !it.isGhost) return false;
+  delete it.isGhost;
+  it.id = Date.now() + Math.random();
+  schedSave();                                                         // commit do weekDays (i kdyby op sám neukládal)
+  return true;
+}
+// smazání opakovaného výskytu (ducha i zhmotněného) → zapiš výjimku „skip" na pravidlo, odeber z bufferu
+function skipGhostOccurrence(idx) {
+  const it = items[idx];
+  if (!it || it.recurId == null || !activePlanDate) return false;
+  const rec = recurrences.find(r => r.id === it.recurId);
+  if (rec) {
+    rec.exceptions = rec.exceptions || {};
+    rec.exceptions[activePlanDate] = 'skip';
+    rec.mt = Date.now();                                               // změna obsahu pravidla → razítko (LWW)
+    saveRecur();
+  }
+  items.splice(idx, 1);
+  return true;
+}
+
+// ── OPAKOVÁNÍ → KARTA POZDĚJI (F2): duchové v měsíčních bucketech ───────────────
+const RECUR_HORIZON_M = 18;   // kolik měsíců dopředu zobrazovat duchy opakování
+// dayLabel pravidla pro měsíc | false = nefiruje | null = celý měsíc (bez konkrétního dne)
+function ruleMonthDayLabel(r, Y, M, anchorIso) {   // M = 1..12
+  if (!r) return false;
+  if (r.t === 'dom')    return r.day + '.';                                   // každý měsíc, na daný den
+  if (r.t === 'yearly') return (M === r.mo) ? (r.day + '.' + r.mo + '.') : false;
+  if (r.t === 'month')  return (M === r.mo) ? null : false;                   // celý měsíc
+  if (r.t === 'interval') {
+    const aY = +String(anchorIso).slice(0, 4), aM = +String(anchorIso).slice(5, 7);
+    if (r.u === 'm') { const md = (Y - aY) * 12 + (M - aM); return (md >= 0 && md % r.n === 0) ? null : false; }
+    if (r.u === 'y') { const yd = Y - aY; return (M === aM && yd >= 0 && yd % r.n === 0) ? null : false; }
+    return false;                                                            // d/w → sub-měsíční, zatím jen denní karty (časem)
+  }
+  if (r.t === 'weekday') return false;                                       // časem (denní karty)
+  return false;
+}
+// výskyt pravidla v měsíci ym → { dayLabel } | null  (pravidla uvnitř = OR, bere první firující)
+function recurMonthOccurrence(rec, ym) {
+  if (!rec) return null;
+  if (rec.anchor && ym < String(rec.anchor).slice(0, 7)) return null;
+  if (rec.until  && ym > String(rec.until).slice(0, 7))  return null;
+  const [Y, M] = ym.split('-').map(Number);
+  for (const r of (rec.rules || [])) {
+    const dl = ruleMonthDayLabel(r, Y, M, rec.anchor);
+    if (dl !== false) return { dayLabel: dl };
+  }
+  return null;
+}
+function makeLaterGhost(rec, dayLabel) {
+  const p = rec.payload || {};
+  const bt = BLOCK_TYPES[p.blockType] || BLOCK_TYPES.TASK;
+  return {
+    id: 'g_' + rec.id, recurId: rec.id, isGhost: true,
+    text: p.text || '(opakování)',
+    blockType: p.blockType || 'TASK',
+    duration: p.dur || bt.defaultDuration || 15,
+    isEvent: !!p.isEvent,
+    eventStart: p.isEvent ? (p.eventStart || null) : null,
+    eventEnd:   p.isEvent ? (p.eventEnd   || null) : null,
+    isSubtask: false, dayLabel: dayLabel || null,
+    done: false, urgent: false, note: '',
+  };
+}
+// live `later` bez duchů a bez prázdných měsíců → JEDINÝ tvar pro perzistenci a sync (duchové se nikdy neukládají)
+function cleanLater() {
+  return later.map(b => ({ ...b, items: stripGhosts(b.items) })).filter(b => b && b.items.length);
+}
+// přepočítej duchy opakování ve všech měsíčních bucketech (idempotentní — volá se z renderLater)
+function syncLaterGhosts() {
+  later.forEach(b => { if (b && b.items.some(it => it.isGhost)) b.items = b.items.filter(it => !it.isGhost); });
+  later = later.filter(b => b && b.items.length);          // zahoď měsíce prázdné po odebrání duchů
+  if (!recurrences.length) return;
+  const now = new Date();
+  for (let i = 0; i < RECUR_HORIZON_M; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    recurrences.forEach(rec => {
+      const occ = recurMonthOccurrence(rec, ym);
+      if (!occ) return;
+      if (rec.exceptions && rec.exceptions[ym]) return;     // smazaný výskyt (skip)
+      let b = later.find(x => x.ym === ym);
+      if (b && b.items.some(it => it.recurId === rec.id)) return;   // už tam je (reálný i duch)
+      if (!b) { b = { ym, items: [], mt: 0 }; later.push(b); }      // ghost bucket: mt:0 → neviditelný pro sync
+      b.items.push(makeLaterGhost(rec, occ.dayLabel));
+    });
+  }
+}
+// dotek měsíčního ducha → reálná položka (commit do bucketu); vrací false pokud to není duch
+function materializeLaterGhost(ym, idx) {
+  const b = later.find(x => x.ym === ym); if (!b) return false;
+  const it = b.items[idx];
+  if (!it || !it.isGhost) return false;
+  delete it.isGhost; it.id = Date.now() + Math.random();
+  b.mt = Date.now(); saveLater();
+  return true;
+}
+// smazání měsíčního výskytu (duch i zhmotněný) → „skip" výjimka na pravidlo
+function skipLaterOccurrence(ym, idx) {
+  const b = later.find(x => x.ym === ym); if (!b) return false;
+  const it = b.items[idx];
+  if (!it || it.recurId == null) return false;
+  const rec = recurrences.find(r => r.id === it.recurId);
+  if (rec) { rec.exceptions = rec.exceptions || {}; rec.exceptions[ym] = 'skip'; rec.mt = Date.now(); saveRecur(); }
+  b.items.splice(idx, 1); b.mt = Date.now(); saveLater();
+  return true;
+}
+// zápis r-pravidla do pole data (dayLabel) → převeď existující položku na opakování (kotva = tento měsíc)
+function convertItemToRecur(ym, idx, rules) {
+  const b = later.find(x => x.ym === ym); if (!b) return false;
+  const item = b.items[idx]; if (!item) return false;
+  const rec = buildRecurEntry(rules, item, ym + '-01');
+  recurrences.push(rec); saveRecur();
+  item.recurId = rec.id; delete item.isGhost;            // ponech položku jako reálnou kotvu
+  const occ = recurMonthOccurrence(rec, ym);
+  item.dayLabel = (occ && occ.dayLabel) || null;
+  b.mt = Date.now(); saveLater();
+  renderLater();
+  showStatusMsg('↻ změněno na opakování — viz další měsíce', 2800);
+  return true;
+}
+
+// ── SPRÁVA OPAKOVÁNÍ (F3): modal se seznamem pravidel + náhled výskytů ──────────
+const MONTHS_SHORT_CZ = ['led','úno','bře','dub','kvě','čvn','čvc','srp','zář','říj','lis','pro'];
+function monthShort(ym) { const [y, m] = String(ym).split('-').map(Number); return (MONTHS_SHORT_CZ[m - 1] || '?') + ' ' + String(y).slice(2); }
+// pravidlo → textová zkratka (zpětně k editaci)
+function recurRuleToToken(r) {
+  if (!r) return '';
+  if (r.t === 'interval') return 'r' + r.n + r.u;
+  if (r.t === 'dom')      return 'r' + r.day + '.m';
+  if (r.t === 'yearly')   return 'r' + r.day + '.' + r.mo + '.';
+  if (r.t === 'month')    return 'r' + String(r.mo).padStart(2, '0');
+  if (r.t === 'weekday')  return 'r' + (DAY_ABBREV_CZ[r.d] || '').toLowerCase();
+  return '';
+}
+function recurTokens(rec) { return (rec.rules || []).map(recurRuleToToken).join(' '); }
+// příštích n měsíčních výskytů (vč. přeskočených) pro náhled
+function nextRecurOccurrences(rec, n) {
+  const out = [], now = new Date();
+  for (let i = 0; i < 36 && out.length < n; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const occ = recurMonthOccurrence(rec, ym);
+    if (!occ) continue;
+    out.push({ ym, dayLabel: occ.dayLabel, skipped: !!(rec.exceptions && rec.exceptions[ym] === 'skip') });
+  }
+  return out;
+}
+function openRecurManage() { renderRecurList(); el('recurModal').classList.add('open'); }
+function renderRecurList() {
+  const c = el('recurList'); if (!c) return;
+  if (!recurrences.length) {
+    c.innerHTML = '<p style="color:var(--muted);font-size:.82rem;font-style:italic">Zatím žádná pravidla. Přidej je zápisem zkratky (viz legenda nahoře).</p>';
+    return;
+  }
+  c.innerHTML = recurrences.slice()
+    .sort((a, b) => (a.payload?.text || '').localeCompare(b.payload?.text || '', 'cs'))
+    .map(rec => {
+      const occ = nextRecurOccurrences(rec, 5);
+      const occHtml = occ.length
+        ? occ.map(o => { const lbl = monthShort(o.ym) + (o.dayLabel ? ' ' + o.dayLabel : ''); return o.skipped ? '<s>' + esc(lbl) + '</s>' : esc(lbl); }).join(' · ')
+        : '—';
+      return `<div class="recur-rule">
+        <div class="recur-rule-head">
+          <span class="recur-rule-text">${esc(rec.payload?.text || '(bez textu)')}</span>
+          <span class="recur-rule-toks">${esc(recurTokens(rec))}</span>
+        </div>
+        <div class="recur-rule-desc">${esc(describeRecur(rec))}</div>
+        <div class="recur-rule-next">příště: ${occHtml}</div>
+        <div class="recur-rule-btns">
+          <button class="btn-io" onclick="editRecurText(${rec.id})">text</button>
+          <button class="btn-io" onclick="editRecurRules(${rec.id})">pravidlo</button>
+          <button class="btn-io danger" onclick="deleteRecur(${rec.id})">smazat</button>
+        </div>
+      </div>`;
+    }).join('');
+}
+// Pozn.: recur modal zavíráme PŘED promptem/confirmem a po něm zase otevřeme —
+// sdílený confirmModal se jinak vykreslí pod ním a klik na potvrzení nereaguje (viz výše u náhledu).
+async function editRecurText(id) {
+  const rec = recurrences.find(r => r.id === id); if (!rec) return;
+  closeModal('recurModal');
+  const v = await customPrompt('Text opakované události:', rec.payload?.text || '');
+  if (v != null) { rec.payload = rec.payload || {}; rec.payload.text = v; rec.mt = Date.now(); saveRecur(); renderLater(); }
+  openRecurManage();
+}
+async function editRecurRules(id) {
+  const rec = recurrences.find(r => r.id === id); if (!rec) return;
+  closeModal('recurModal');
+  const v = await customPrompt('Pravidla opakování (např. r2m r12.m):', recurTokens(rec));
+  if (v != null) {
+    const rr = extractRecurRoute(v);
+    if (rr && rr.rules.length) { rec.rules = rr.rules; rec.mt = Date.now(); saveRecur(); renderLater(); }
+    else await customAlert('Nerozpoznané pravidlo. Příklady: r2m · r12.m · r06 · r24.7.');
+  }
+  openRecurManage();
+}
+async function deleteRecur(id) {
+  const rec = recurrences.find(r => r.id === id); if (!rec) return;
+  closeModal('recurModal');
+  const ok = await customConfirm('Smazat pravidlo „' + (rec.payload?.text || '') + '"? Už zhmotněné položky v měsících zůstanou.', 'smazat');
+  if (ok) { recurrences = recurrences.filter(r => r.id !== id); saveRecur(); renderLater(); }
+  openRecurManage();
+}
+
 // ── INBOX ───────────────────────────────────────────────────────────────────
 // Volné úkoly / bloky / události na příště. STEJNÝ model položek jako den/měsíc
 // (sdílený editor přes INBOXCTX). Synchronizace: LWW celého seznamu podle inboxMt.
@@ -4104,8 +4515,8 @@ function loadLater() {
   }
 }
 function saveLater() {
-  later = later.filter(b => b && Array.isArray(b.items) && b.items.length);   // prázdné měsíce zahoď
-  try { localStorage.setItem(WK(LATER_KEY), JSON.stringify(later)); } catch(e) {}
+  later = later.filter(b => b && Array.isArray(b.items) && b.items.length);   // prázdné měsíce zahoď (duchové se počítají)
+  try { localStorage.setItem(WK(LATER_KEY), JSON.stringify(cleanLater())); } catch(e) {}   // duchové se NIKDY neukládají
 }
 function laterBucket(ym) {
   let b = later.find(x => x.ym === ym);
@@ -4153,6 +4564,10 @@ function mEditDay(ym, idx) {
     if (committed) return; committed = true;
     badge.contentEditable = 'false';
     let v = badge.textContent.trim();
+    // r-pravidlo v poli data → převeď položku na opakování (kotva = tento měsíc)
+    const rr = extractRecurRoute(v);
+    if (rr && rr.rules.length) { convertItemToRecur(ym, idx, rr.rules); return; }
+    if (materializeLaterGhost(ym, idx)) { ctx.render(); }   // editace dne ducha → zhmotni (přepočti idx-stabilní)
     if (/^\d{1,2}\.?$/.test(v)) { const m = +String(ym).split('-')[1]; v = v.replace(/\.$/, '') + '.' + m + '.'; }
     if (v !== (item.dayLabel || '')) { item.dayLabel = v || null; ctx.save(); }
     ctx.render();
@@ -4200,7 +4615,7 @@ function sendItemToField(ctx, idx) {
   if (ta) { ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + txt : txt; ta.focus(); }
   showStatusMsg('→ vloženo do pole — přepni na kartu a přidej (Enter) · „.del" = přesun (smaže zdroj)', 3200);
 }
-function mSendToField(ym, idx) { sendItemToField(MCTX(ym), idx); }
+function mSendToField(ym, idx) { materializeLaterGhost(ym, idx); sendItemToField(MCTX(ym), idx); }
 
 // Smaže zdroje odeslané přes → (po přidání s „.del" = přesun). Maže podle id ze SPRÁVNÉHO
 // úložiště: aktivní den z živého bufferu (items), jiný den z weekDays, měsíc z later, inbox z inbox.
@@ -4309,6 +4724,7 @@ function buildWeekHeaders(items, ym) {
 function renderLater() {
   const c = el('later-list'); if (!c) return;
   updateAbbrevHint();
+  syncLaterGhosts();        // F2: doplň/obnov duchy opakování do měsíčních bucketů (idempotentní)
   const buckets = later.filter(b => b && b.items && b.items.length).slice().sort((a, b) => a.ym.localeCompare(b.ym));
   const now = new Date();
   const todayHtml = `<div class="later-today-bar">Dnes: <b>${DAY_NAMES_CZ_LONG[now.getDay()]}</b> ${now.getDate()}. ${now.getMonth()+1}. ${now.getFullYear()}</div>`;
@@ -4332,7 +4748,7 @@ function renderLater() {
 
 function autoSavePlanDay() {
   if (!activePlanDate) return;
-  const snap = JSON.parse(JSON.stringify(items));
+  const snap = JSON.parse(JSON.stringify(stripGhosts(items)));   // duchy se neukládají do weekDays
   const existing = weekDays.find(d => d.date === activePlanDate);
   if (existing) {
     // mt (čas editace) razítkuj jen při SKUTEČNÉ změně obsahu — jinak by prázdné přeuložení
@@ -4342,7 +4758,7 @@ function autoSavePlanDay() {
     existing.items = snap; existing.windowStart = windowStart; existing.windowEnd = windowEnd;
     if (changed) existing.mt = Date.now();
   } else {
-    if (!items.length) return;
+    if (!snap.length) return;        // jen duchy (nezhmotněné) → nezakládej prázdný den
     weekDays.push({ id: Date.now(), date: activePlanDate, items: snap, windowStart, windowEnd, mt: Date.now() });
   }
   saveWeek();
@@ -5018,7 +5434,7 @@ function init() {
   // okna dne — nejdřív registr + aktivní okno, pak už vše běží WK-namespacovaně
   loadWindows(); loadWinTomb();
   try { const a = localStorage.getItem(ACTIVE_WIN_KEY); if (a && dayWindows.some(w => w.id === a)) activeWin = a; } catch(e) {}
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
 
   const today = todayIso();
   activePlanDate = today;
@@ -5140,7 +5556,7 @@ window.addEventListener('resize', updateAppGrid);
     const daySel = selTreeSet('exDay'), planSel = selTreeSet('exPlan'), latSel = selTreeSet('exLat');
     const wDays = weekDays.filter(d => daySel.has(d.date));
     const wPlans = weekPlans.filter(p => planSel.has(p.date));
-    const lat = later.filter(b => latSel.has(b.ym));
+    const lat = cleanLater().filter(b => latSel.has(b.ym));   // bez duchů
     const wantIb = el('expInbox')?.checked && inbox.length;
     const wantSt = el('expSettings')?.checked;
     if (!its.length && !archs.length && !wDays.length && !wPlans.length && !wantIb && !lat.length && !wantSt) { customAlert('Nic není vybráno.'); return; }
@@ -5253,9 +5669,10 @@ window.addEventListener('resize', updateAppGrid);
     const s = new Set();
     library.forEach(e   => { if (e && e.id   != null) s.add('lib:' + e.id); });
     archive.forEach(e   => { if (e && e.id   != null) s.add('arc:' + e.id); });
-    later.forEach(b     => { if (b && b.ym)           s.add('lat:' + b.ym); });
+    cleanLater().forEach(b => { if (b && b.ym)        s.add('lat:' + b.ym); });   // duchové se do sync klíčů nepočítají
     weekDays.forEach(d  => { if (d && d.date)         s.add('wd:'  + d.date); });
     weekPlans.forEach(p => { if (p && p.date)         s.add('wp:'  + p.date); });
+    recurrences.forEach(e => { if (e && e.id != null)  s.add('rec:' + e.id); });
     Object.keys(BLOCK_TYPES).forEach(k => { if (!DEFAULT_BLOCK_TYPES[k]) s.add('bt:' + k); });
     return s;
   }
@@ -5285,7 +5702,7 @@ window.addEventListener('resize', updateAppGrid);
   }
   // souhrnný podpis stavu (vč. náhrobků) pro detekci rozdílu cloud↔local
   // mt je součástí podpisu → rozpozná i editaci existující položky (stejné id/datum, jiný obsah)
-  function sigOf(items, arch, inb, wd, wp, tomb, bt, lat) {
+  function sigOf(items, arch, inb, wd, wp, tomb, bt, lat, rec) {
     const idS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const inS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join('|') + ':' + arr.length;
     const dS  = arr => arr.map(x => String((x && x.date) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
@@ -5293,10 +5710,10 @@ window.addEventListener('resize', updateAppGrid);
     const btS = arr => (arr || []).map(b => String((b && b.key) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
     const ymS = arr => (arr || []).map(b => String((b && b.ym) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
     const ibS = o => (((o && o.items) || []).length) + '@' + ((o && o.mt) || 0);   // inbox = celý seznam podle mt
-    return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || [])].join('||');
+    return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || []), idS(rec || [])].join('||');
   }
-  function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, later); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], { items: r.inbox || [], mt: +r.inboxMt || 0 }, r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || []); }
+  function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, cleanLater(), recurrences); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], { items: r.inbox || [], mt: +r.inboxMt || 0 }, r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || [], r.recurrences || []); }
 
   // tlačítko v toolbaru slouží zároveň jako stavový indikátor
   function updateAutoSyncBtn() {
@@ -5328,7 +5745,8 @@ window.addEventListener('resize', updateAppGrid);
   function buildAutoPayload() {
     const payload = { v:2, items: library, archive: archive, weekDays: weekDays, weekPlans: weekPlans, settings: buildSettingsExport(), tombstones: tombstones };
     payload.inbox = inbox; payload.inboxMt = inboxMt;   // celý seznam + mt (i prázdný, ať se propíše smazání)
-    if (later.length) payload.later = later;
+    payload.recurrences = recurrences;                  // pravidla opakování (vždy, i prázdné — propagace mazání)
+    const cl = cleanLater(); if (cl.length) payload.later = cl;   // duchové se nesynchronizují
     // registr oken jede jen v hlavním binu (data ostatních oken jsou v jejich vlastních binech)
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }
     return payload;
@@ -5467,6 +5885,9 @@ window.addEventListener('resize', updateAppGrid);
     // plány (Plán) — LWW podle data
     const wpR = lwwMerge(weekPlans, (record.weekPlans || []), 'wp', x => x.date, c => ({ ...c, id: c.id || (Date.now() + Math.random()) }));
     weekPlans = wpR.arr; added += wpR.added; updated += wpR.updated; removed += wpR.removed;
+    // pravidla opakování — LWW podle id (exceptions se nesou celé v záznamu, ne merge po položkách)
+    const recR = lwwMerge(recurrences, (record.recurrences || []), 'rec', x => x.id, c => c);
+    recurrences = recR.arr; added += recR.added; updated += recR.updated; removed += recR.removed;
     // archiv — jen doplnit chybějící (append-only)
     const arcIds = new Set(archive.map(x => String(x.id)));
     (record.archive || []).forEach(it => {
@@ -5498,7 +5919,7 @@ window.addEventListener('resize', updateAppGrid);
       if (curDay && JSON.stringify(curDay) !== prevActiveSnap) applySessionData(curDay);
     }
     if (added || updated || removed) {
-      saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans();
+      saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans(); saveRecur();
       if (typeof saveInbox === 'function') saveInbox();
       if (typeof saveLater === 'function') saveLater();
       if (typeof renderLibrary === 'function') renderLibrary();
@@ -5654,7 +6075,7 @@ window.addEventListener('resize', updateAppGrid);
   };
   loadTombstones(); loadKnownIds();
   // obal perzistentní save-funkce, aby i mazání mimo schedSave (inbox, bloky, plány…) spustilo sync
-  ['saveInbox','saveLater','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive'].forEach(fn => {
+  ['saveInbox','saveLater','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive','saveRecur'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
@@ -5678,6 +6099,31 @@ window.addEventListener('resize', updateAppGrid);
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn" onclick="closeModal('gistHistoryModal')">zavřít</button>
+    </div>
+  </div>
+</div>
+
+<!-- Správa opakování (recurrence) -->
+<div class="modal-bg" id="recurModal">
+  <div class="modal" style="max-width:480px;gap:.6rem">
+    <h2>Opakování</h2>
+    <details class="recur-legend" open>
+      <summary>Zkratky — jak zadat opakování</summary>
+      <p style="margin:.35rem 0 0">Napiš zkratku do pole úkolu (s vybraným měsícem) nebo do pole data u existující položky. Lze kombinovat víc pravidel za sebou.</p>
+      <table>
+        <tr><td><code>r1m</code> <code>r2m</code></td><td>každý / každý 2. měsíc</td></tr>
+        <tr><td><code>r4w</code> <code>r10d</code> <code>r1y</code></td><td>každé 4 týdny · 10 dní · 1 rok</td></tr>
+        <tr><td><code>r12.m</code></td><td>každého 12. v měsíci</td></tr>
+        <tr><td><code>r12.m r24.m</code></td><td>12. i 24. každý měsíc (kombinace)</td></tr>
+        <tr><td><code>r06</code> <code>r09</code> <code>r12</code></td><td>každý rok daný měsíc (06 = červen)</td></tr>
+        <tr><td><code>r24.7.</code></td><td>každý rok 24. 7.</td></tr>
+        <tr><td><code>rpo</code> <code>rst</code></td><td>den v týdnu — <i>zatím jen denní karty (časem)</i></td></tr>
+      </table>
+      <p style="margin:.4rem 0 0"><b>Měsíc zápisu = kotva.</b> Pravidlo se ukáže v daném měsíci a dál podle pravidla jako čárkovaný „duch" (↻). Klik = potvrdit, ✕ = přeskočit ten měsíc.</p>
+    </details>
+    <div class="modal-list" id="recurList"></div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('recurModal')">zavřít</button>
     </div>
   </div>
 </div>
