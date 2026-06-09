@@ -71,6 +71,13 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .sel-grp{font-weight:600}
 .sel-leaf{margin-left:1.2rem}
 .sel-count{font-size:.78rem;opacity:.6;margin-left:.25rem}
+.sel-caret{cursor:pointer;user-select:none;color:var(--muted);font-size:.7rem;flex-shrink:0;width:.9rem;text-align:center}
+@media(hover:hover){.sel-caret:hover{color:var(--black)}}
+.sel-grp-row{display:flex;align-items:center;gap:.25rem}
+.sel-grp-row .sel-grp{flex:1;margin-left:0}
+.sel-grp-leaves{display:flex;flex-direction:column;gap:.3rem}
+.week-hdr-toggle{display:flex;align-items:center;gap:.4rem;flex:1;cursor:pointer;min-width:0}
+.week-section-body{display:flex;flex-direction:column;gap:.15rem}
 .modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
 .modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
 @media(hover:hover){.modal-btn:hover{background:var(--light)}}
@@ -3534,20 +3541,34 @@ function monthYearGroups(arr) {
 }
 function leafKeyOf(x) { return x.date != null ? x.date : x.ym; }
 // vykreslí strom do kontejneru; sel = množina vybraných klíčů listů
-function buildSelTree(listId, prefix, groups, sel, after) {
-  selTrees[prefix] = { groups, sel, after, listId };
+function buildSelTree(listId, prefix, groups, sel, after, collapsed) {
+  collapsed = collapsed || new Set();
+  selTrees[prefix] = { groups, sel, after, listId, collapsed };
   const c = el(listId); if (!c) return;
   c.innerHTML = groups.map(g => {
+    const kid = _treeKeyId(g.key);
+    const isColl = collapsed.has(g.key);
     const leaves = g.leaves.map(lf => {
       const on = sel.has(lf.key);
       return `<label class="modal-item sel-leaf${on ? ' sel' : ''}" id="${prefix}-l-${_treeKeyId(lf.key)}">`
         + `<input type="checkbox" ${on ? 'checked' : ''} onchange="selTreeLeaf('${prefix}','${lf.key}',this.checked)">`
         + `${esc(lf.label)}<span class="sel-count">${lf.count}×</span></label>`;
     }).join('');
-    return `<label class="modal-item sel-grp" id="${prefix}-g-${_treeKeyId(g.key)}">`
-      + `<input type="checkbox" onchange="selTreeGroup('${prefix}','${g.key}',this.checked)">${esc(g.label)}</label>` + leaves;
+    return `<div class="sel-grp-row">`
+      + `<span class="sel-caret" onclick="selTreeToggleCollapse('${prefix}','${g.key}')">${isColl ? '▸' : '▾'}</span>`
+      + `<label class="modal-item sel-grp" id="${prefix}-g-${kid}"><input type="checkbox" onchange="selTreeGroup('${prefix}','${g.key}',this.checked)">${esc(g.label)}</label>`
+      + `</div>`
+      + `<div class="sel-grp-leaves" id="${prefix}-lv-${kid}"${isColl ? ' style="display:none"' : ''}>${leaves}</div>`;
   }).join('');
   syncSelTreeGroups(prefix);
+}
+function selTreeToggleCollapse(prefix, gkey) {
+  const t = selTrees[prefix]; if (!t) return;
+  if (!t.collapsed) t.collapsed = new Set();
+  const wrap = el(prefix + '-lv-' + _treeKeyId(gkey));
+  const caret = wrap && wrap.previousElementSibling ? wrap.previousElementSibling.querySelector('.sel-caret') : null;
+  if (t.collapsed.has(gkey)) { t.collapsed.delete(gkey); if (wrap) wrap.style.display = ''; if (caret) caret.textContent = '▾'; }
+  else { t.collapsed.add(gkey); if (wrap) wrap.style.display = 'none'; if (caret) caret.textContent = '▸'; }
 }
 function syncSelTreeGroups(prefix) {
   const t = selTrees[prefix]; if (!t) return;
@@ -3580,10 +3601,12 @@ function selTreeGroup(prefix, gkey, on) {
 function selTreeSelectAll(prefix) {
   const t = selTrees[prefix]; if (!t) return;
   t.groups.forEach(g => g.leaves.forEach(lf => t.sel.add(lf.key)));
-  buildSelTree(t.listId, prefix, t.groups, t.sel, t.after);
+  buildSelTree(t.listId, prefix, t.groups, t.sel, t.after, t.collapsed);
 }
 // připraví sekci (popisek + kontejner) a vykreslí strom; prázdné pole → skryje
-function setupSelTree(listId, prefix, arr, lblId, lblBase, grouper, after) {
+// recentOf (volitelné): predikát „je položka primární?" — když je dán, ve výchozím stavu se
+// zaškrtnou jen primární listy a skupiny bez primárního listu se sbalí (méně přehlcení daty).
+function setupSelTree(listId, prefix, arr, lblId, lblBase, grouper, after, recentOf) {
   const lbl = el(lblId), list = el(listId);
   if (!arr || !arr.length) {
     if (lbl) lbl.style.display = 'none';
@@ -3593,7 +3616,17 @@ function setupSelTree(listId, prefix, arr, lblId, lblBase, grouper, after) {
   }
   if (lbl) { lbl.style.display = ''; lbl.textContent = lblBase + ' (' + arr.length + ')'; }
   if (list) list.style.display = '';
-  buildSelTree(listId, prefix, grouper(arr), new Set(arr.map(leafKeyOf)), after);
+  const groups = grouper(arr);
+  let sel, collapsed = new Set();
+  if (recentOf) {
+    sel = new Set();
+    arr.forEach(x => { if (recentOf(x)) sel.add(leafKeyOf(x)); });
+    if (sel.size) groups.forEach(g => { if (!g.leaves.some(lf => sel.has(lf.key))) collapsed.add(g.key); });
+    else sel = new Set(arr.map(leafKeyOf));   // žádná primární data → fallback na vše (původní chování)
+  } else {
+    sel = new Set(arr.map(leafKeyOf));
+  }
+  buildSelTree(listId, prefix, groups, sel, after, collapsed);
 }
 let exportSelected = new Set(), exportArchSelected = new Set();
 function openExportModal() {
@@ -3737,8 +3770,8 @@ function parseImportJson(text) {
     const hasWorkDays = !!(parsed.settings && Object.keys(parsed.settings.workingDaysByWeek || {}).length);
     const hasSettings = hasBlocks || hasWorkDays;
     // dny / plány / později — výběrové stromy (skupiny = týdny / roky), vše vybráno
-    setupSelTree('importDayList', 'imDay', window._importWeekDays, 'impWdLbl', 'Uložené dny', dayWeekGroups, null);
-    setupSelTree('importPlanList', 'imPlan', window._importWeekPlans, 'impWpLbl', 'Plán týdne', dayWeekGroups, null);
+    setupSelTree('importDayList', 'imDay', window._importWeekDays, 'impWdLbl', 'Uložené dny', dayWeekGroups, null, d => isRecentWeekDate(d.date));
+    setupSelTree('importPlanList', 'imPlan', window._importWeekPlans, 'impWpLbl', 'Plán týdne', dayWeekGroups, null, d => isRecentWeekDate(d.date));
     setupSelTree('importLaterList', 'imLat', window._importLater, 'impLtLbl', 'Později', monthYearGroups, null);
     renderImportBlocks(impBlocks);   // jednotlivé bloky jako zaškrtávací seznam (vše vybráno)
     const wdRow = el('impWorkDaysRow'), inboxRow = el('impInboxRow'), daysSection = el('importDaysSection');
@@ -4518,6 +4551,11 @@ function getISOWeekYear(dateStr) {
   d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
   return d.getFullYear();
 }
+// kanonický klíč ISO týdne (rok-číslo) — sjednocuje varianty klíčů (-T / -W) pro porovnání
+function isoWeekKey(dateStr) { return getISOWeekYear(dateStr) + '-' + String(getISOWeek(dateStr)).padStart(2, '0'); }
+// "primární" týdny = minulý + tento + příští (dle pondělků); zbytek se ve výchozím stavu sbalí
+function recentWeekKeySet() { const s = new Set(); [-1, 0, 1].forEach(off => s.add(isoWeekKey(getMondayIso(off)))); return s; }
+function isRecentWeekDate(dateStr) { return recentWeekKeySet().has(isoWeekKey(dateStr)); }
 function groupByWeek() {
   const map = new Map();
   weekDays.slice().sort((a,b) => a.date.localeCompare(b.date)).forEach(day => {
@@ -4560,6 +4598,7 @@ function renderDayRow(d) {
   </div>`;
 }
 
+let hotovoCollapsed = null;   // Set klíčů sbalených týdnů na kartě Hotovo; null = ještě neinicializováno
 function renderWeekTab() {
   const list = el('week-list'); if (!list) return;
   const planMap = new Map(groupPlansByWeek());
@@ -4568,13 +4607,24 @@ function renderWeekTab() {
 
   if (!allKeys.length) {
     list.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné uložené dny.</div>';
+    hotovoCollapsed = null;
     return;
+  }
+
+  // první vykreslení: sbal všechny týdny mimo primární okno (minulý+tento+příští); uživatelské přepnutí pak zůstává
+  const canonOf = key => { const g = planMap.get(key) || realMap.get(key); return g.year + '-' + String(g.week).padStart(2, '0'); };
+  if (hotovoCollapsed === null) {
+    const recent = recentWeekKeySet();
+    hotovoCollapsed = new Set();
+    allKeys.forEach(key => { if (!recent.has(canonOf(key))) hotovoCollapsed.add(key); });
   }
 
   list.innerHTML = allKeys.map((key, gi) => {
     const pg = planMap.get(key);
     const rg = realMap.get(key);
     const { week, year } = pg || rg;
+    const isColl = hotovoCollapsed.has(key);
+    const dayCount = (pg ? pg.days.length : 0) + (rg ? rg.days.length : 0);
     const planSection = pg
       ? `<div class="week-sub-hdr">Plán</div>${pg.days.map(renderPlanRow).join('')}`
       : '';
@@ -4585,10 +4635,17 @@ function renderWeekTab() {
       ? `<button class="week-section-sel" style="background:none;border:none;font-family:inherit" onclick="weekGroupToTemplate('${key}')" title="uložit celý týden jako šablonu">+ šablona</button>`
       : '';
     return `<div class="week-section">
-      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">Týden ${week} &middot; ${year}${tplBtn}</div>
-      ${planSection}${realSection}
+      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">
+        <span class="week-hdr-toggle" onclick="toggleHotovoWeek('${key}')"><span class="sel-caret">${isColl ? '▸' : '▾'}</span>Týden ${week} &middot; ${year}${isColl ? ` <span class="sel-count">${dayCount}×</span>` : ''}</span>${tplBtn}
+      </div>
+      <div class="week-section-body"${isColl ? ' style="display:none"' : ''}>${planSection}${realSection}</div>
     </div>`;
   }).join('');
+}
+function toggleHotovoWeek(key) {
+  if (!hotovoCollapsed) hotovoCollapsed = new Set();
+  if (hotovoCollapsed.has(key)) hotovoCollapsed.delete(key); else hotovoCollapsed.add(key);
+  renderWeekTab();
 }
 
 // Uloží celý uložený týden (realita) z Hotova jako týdenní šablonu — bez odškrtnutí.
@@ -4613,35 +4670,62 @@ async function weekGroupToTemplate(key) {
 // ── EXPORT VÝBĚR ──────────────────────────────────────────────────────────────
 let weekExportSelected = new Set();
 let _weekGroups = new Map();
+let _weekExportCollapsed = new Set();
 
 function exportWeekAsText() {
   if (!weekDays.length) { customAlert('Žádné uložené dny k exportu.'); return; }
-  weekExportSelected = new Set(weekDays.map(d => d.id));
   _weekGroups = new Map(groupByWeek());
-  el('weekExportList').innerHTML = [..._weekGroups.entries()].map(([key, { week, year, days }]) => `
-    <div style="margin-bottom:.5rem">
-      <label class="modal-item sel" style="font-weight:500" id="wexp-wk-${key}">
-        <input type="checkbox" checked onchange="toggleWeekExportAll('${key}',this.checked)">
-        <span>Týden ${week} &middot; ${year}</span>
-      </label>
-      ${days.map(d => `
-      <label class="modal-item sel" id="wexp-${d.id}" style="padding-left:1.75rem">
-        <input type="checkbox" checked onchange="toggleWeekExportDay(${d.id},'${key}',this.checked)">
-        <span>${formatDateCz(d.date)}</span>
-      </label>`).join('')}
-    </div>`).join('');
+  // ve výchozím stavu vybrat jen primární týdny (minulý+tento+příští), starší sbalit; nic primárního → fallback vše
+  const recentDays = weekDays.filter(d => isRecentWeekDate(d.date));
+  weekExportSelected = new Set((recentDays.length ? recentDays : weekDays).map(d => d.id));
+  _weekExportCollapsed = new Set();
+  if (recentDays.length) {
+    const recent = recentWeekKeySet();
+    _weekGroups.forEach((g, key) => { if (!recent.has(g.year + '-' + String(g.week).padStart(2, '0'))) _weekExportCollapsed.add(key); });
+  }
+  renderWeekExportList();
   el('weekExportModal').classList.add('open');
+}
+function renderWeekExportList() {
+  el('weekExportList').innerHTML = [..._weekGroups.entries()].map(([key, { week, year, days }]) => {
+    const isColl = _weekExportCollapsed.has(key);
+    const selN = days.filter(d => weekExportSelected.has(d.id)).length;
+    const allSel = selN === days.length;
+    return `<div style="margin-bottom:.5rem">
+      <div class="sel-grp-row">
+        <span class="sel-caret" onclick="toggleWeekExportCollapse('${key}')">${isColl ? '▸' : '▾'}</span>
+        <label class="modal-item sel-grp${allSel ? ' sel' : ''}" id="wexp-wk-${key}">
+          <input type="checkbox" ${allSel ? 'checked' : ''} onchange="toggleWeekExportAll('${key}',this.checked)">
+          <span>Týden ${week} &middot; ${year}${isColl ? ` <span class="sel-count">${selN}/${days.length}</span>` : ''}</span>
+        </label>
+      </div>
+      <div class="sel-grp-leaves" id="wexp-days-${key}"${isColl ? ' style="display:none"' : ''}>
+      ${days.map(d => `
+        <label class="modal-item sel-leaf${weekExportSelected.has(d.id) ? ' sel' : ''}" id="wexp-${d.id}">
+          <input type="checkbox" ${weekExportSelected.has(d.id) ? 'checked' : ''} onchange="toggleWeekExportDay(${d.id},'${key}',this.checked)">
+          <span>${formatDateCz(d.date)}</span>
+        </label>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  _weekGroups.forEach((g, key) => {
+    const wk = el('wexp-wk-' + key), cb = wk ? wk.querySelector('input') : null;
+    if (cb) { const selN = g.days.filter(d => weekExportSelected.has(d.id)).length; cb.indeterminate = selN > 0 && selN < g.days.length; }
+  });
+}
+function toggleWeekExportCollapse(key) {
+  if (_weekExportCollapsed.has(key)) _weekExportCollapsed.delete(key); else _weekExportCollapsed.add(key);
+  const isColl = _weekExportCollapsed.has(key);
+  const body = el('wexp-days-' + key);
+  const caret = body && body.previousElementSibling ? body.previousElementSibling.querySelector('.sel-caret') : null;
+  if (body) body.style.display = isColl ? 'none' : '';
+  if (caret) caret.textContent = isColl ? '▸' : '▾';
 }
 
 function toggleWeekExportAll(key, checked) {
   const group = _weekGroups.get(key); if (!group) return;
-  group.days.forEach(d => {
-    checked ? weekExportSelected.add(d.id) : weekExportSelected.delete(d.id);
-    const lbl = el('wexp-' + d.id);
-    lbl?.classList.toggle('sel', checked);
-    const cb = lbl?.querySelector('input'); if (cb) cb.checked = checked;
-  });
-  el('wexp-wk-' + key)?.classList.toggle('sel', checked);
+  group.days.forEach(d => { checked ? weekExportSelected.add(d.id) : weekExportSelected.delete(d.id); });
+  renderWeekExportList();   // re-render → správný badge i u sbaleného týdne
 }
 
 function toggleWeekExportDay(id, key, checked) {
