@@ -72,6 +72,12 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
 .modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
 .modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+.gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
+.gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
+.gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
+.gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
+.gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
 .dup-name-tag{font-size:.68rem;padding:.05rem .28rem;background:rgba(0,0,0,.08);border-radius:3px;color:var(--muted);margin-left:auto;white-space:nowrap;flex-shrink:0}
 .dup-act-row{display:flex;gap:.3rem;padding:.2rem .5rem .1rem}
 .dup-act-btn{font-family:'DM Sans',sans-serif;font-size:.74rem;padding:.15rem .4rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--dark)}
@@ -1901,7 +1907,7 @@ function initDark(){
 function closeModal(id){el(id).classList.remove('open');}
 document.addEventListener('click',e=>{
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','tplNameModal','tplApplyModal','tplRenameModal','logExportModal','multiLogModal','mergePreviewModal','libPickModal','clearStorageModal','jsonbinModal'].forEach(id=>{
+  ['exportModal','importModal','exportCopyModal','tplNameModal','tplApplyModal','tplRenameModal','logExportModal','multiLogModal','mergePreviewModal','libPickModal','clearStorageModal','jsonbinModal','gistHistoryModal'].forEach(id=>{
     const m=el(id);if(m&&m.classList.contains('open')&&e.target===m)m.classList.remove('open');
   });
   // confirmModal needs special handling: must resolve promise on outside click
@@ -3258,6 +3264,9 @@ document.addEventListener('keydown',e=>{
       <label>Gist ID</label>
       <input type="text" id="jbIdInput" placeholder="abc123def456… (prázdné = vytvoří se)" spellcheck="false" autocomplete="off">
     </div>
+    <div class="modal-row" id="gistHistoryRow" style="display:none">
+      <button class="btn-io" onclick="openGistHistory()">⏱ historie verzí</button>
+    </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
       <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
@@ -3511,6 +3520,7 @@ document.addEventListener('keydown',e=>{
       el('jbKeyInput').value=localStorage.getItem(GHTOKEN)||'';
       el('jbIdInput').value=localStorage.getItem(GISTID)||'';
     }catch(e){}
+    try{const r=el('gistHistoryRow');if(r)r.style.display=localStorage.getItem(GISTID)?'flex':'none';}catch(e){}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings(){
@@ -3668,6 +3678,88 @@ document.addEventListener('keydown',e=>{
     }
   }
 
+  /* ── HISTORIE VERZÍ (Gist revize) ───
+     Načte history[] gistu, umožní náhled (přes import modal) i obnovu
+     (přes standardní LWW merge autoImportSilent + push). */
+  let gistRevs=[];   // posledních ≤20 revizí z openGistHistory (index = pořadí v seznamu)
+  function historyGistId(){try{return localStorage.getItem(GISTID);}catch(e){return null;}}
+  async function openGistHistory(){
+    const token=localStorage.getItem(GHTOKEN),gistId=historyGistId();
+    if(!token||!gistId){showStatusMsg('⚠ chybí Gist token nebo ID',3000);return;}
+    closeModal('jsonbinModal');
+    gistRevs=[];
+    el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">načítám historii…</p>';
+    el('gistHistoryModal').classList.add('open');
+    try{
+      const res=await gistGet(gistId,token);
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const json=await res.json();
+      gistRevs=((json&&json.history)||[]).slice(0,20);
+      renderGistHistory();
+    }catch(e){
+      el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
+    }
+  }
+  function renderGistHistory(){
+    if(!gistRevs.length){el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Žádná historie k dispozici</p>';return;}
+    el('gistHistoryList').innerHTML=gistRevs.map((rev,i)=>{
+      const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('cs-CZ'):'?';
+      const cs=rev.change_status||{};
+      const chg='+'+(cs.additions||0)+' / −'+(cs.deletions||0);
+      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">'+esc(d)+'</span><span class="gh-rev-chg">'+chg+'</span></div>'
+        +'<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview('+i+')">náhled</button>'
+        +'<button class="btn-io" onclick="gistHistoryRestore('+i+')">obnovit</button></div></div>';
+    }).join('');
+  }
+  // stáhne obsah konkrétní revize → record (objekt) nebo null
+  async function fetchGistRevision(version){
+    const token=localStorage.getItem(GHTOKEN),gistId=historyGistId();
+    const res=await fetch(gistUrl(gistId)+'/'+version,{mode:'cors',credentials:'omit',headers:ghHeaders(token,false)});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const json=await res.json();
+    const file=json&&json.files&&json.files[GIST_FILE];
+    if(!file||!file.content)return null;
+    let record=JSON.parse(file.content);
+    // Backward compat: starý formát ukládal raw localStorage stringy pod klíči cajovy-v3-*
+    if(record&&'cajovy-v3-library' in record){
+      record={v:1,teas:JSON.parse(record['cajovy-v3-library']||'[]'),templates:JSON.parse(record['cajovy-v3-templates']||'[]'),archive:JSON.parse(record['cajovy-v3-archive']||'[]')};
+    }
+    return record;
+  }
+  async function gistHistoryPreview(i){
+    const rev=gistRevs[i];if(!rev)return;
+    try{
+      const record=await fetchGistRevision(rev.version);
+      if(!record)throw new Error('prázdná revize');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent='Náhled revize';
+      parseImportJson(JSON.stringify(record));
+      closeModal('gistHistoryModal');
+    }catch(e){
+      el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
+    }
+  }
+  async function gistHistoryRestore(i){
+    const rev=gistRevs[i];if(!rev)return;
+    const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('cs-CZ'):'?';
+    if(!await customConfirm('Obnovit verzi z '+d+'? Aktuální data zůstanou — starší verze se sloučí přes standardní merge.','obnovit'))return;
+    const winAtStart=(typeof activeWin!=='undefined')?activeWin:null;
+    try{
+      const record=await fetchGistRevision(rev.version);
+      if(!record)throw new Error('prázdná revize');
+      if(typeof activeWin!=='undefined'&&activeWin!==winAtStart)return;   // okno se přepnulo → data patří jinému oknu
+      autoImportSilent(record);
+      scheduleAutoPush();
+      showStatusMsg('↩ verze obnovena',3000);
+      closeModal('gistHistoryModal');
+    }catch(e){
+      showStatusMsg('⚠ obnovení selhalo',3000);
+    }
+  }
+  window.openGistHistory=openGistHistory;
+  window.gistHistoryPreview=gistHistoryPreview;
+  window.gistHistoryRestore=gistHistoryRestore;
   window.openJsonBinSettings=openJsonBinSettings;
   window.saveJsonBinSettings=saveJsonBinSettings;
   window.doCloudUpload=doCloudUpload;
@@ -3693,5 +3785,16 @@ document.addEventListener('keydown',e=>{
 <footer style="text-align:center; padding: 8px; font-size: 0.75rem; color: #999;">
   This site is powered by <a href="https://www.netlify.com" style="color:#999;">Netlify</a>
 </footer>
+
+<!-- Gist history modal -->
+<div class="modal-bg" id="gistHistoryModal">
+  <div class="modal" style="max-width:460px;gap:.65rem">
+    <h2>Historie verzí</h2>
+    <div class="modal-list" id="gistHistoryList"></div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">zavřít</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
