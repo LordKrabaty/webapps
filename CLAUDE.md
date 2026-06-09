@@ -177,6 +177,7 @@ Mazání = **tombstones** `{ "<ns>:<id>": deletedAtTs }`. Konflikt edit-vs-delet
 4. **Editaci aktivního záznamu flushni do úložiště i bez přepnutí.** `schedSave()` volá `autoSavePlanDay()`, aby se změna nasynchronizovala i když uživatel jen zavře appku.
 5. **Po mergi obnov živý buffer aktivního záznamu** z čerstvě sloučeného stavu — jinak ho příští flush přepíše starou verzí.
 6. **Merge nesmí spustit push/reconcile** — po dobu slučování `applyingRemote = true` (žádná rekurze přes obalené save-funkce).
+7. **Async cloud odpověď ulož jen do okna, pro které se stahovala** (jen u app s víc okny dne / per-okno `WK()` namespace). `silentPull()` i `checkCloudOnStartup()` si vezmou `gistId` synchronně, ale `await gistGet()` trvá — když mezitím uživatel překlikne okno, `autoImportSilent()` by sloučil stažená data do globálů (`library`/`weekDays`/…) a `saveLibrary()`/`saveWeek()` je uloží do `WK()` **aktuálního** okna → data jednoho okna přepíšou druhé. Zachyť `const winAtStart = activeWin;` na začátku a před aplikací dej `if (activeWin !== winAtStart) return;`. Registr oken (`mergeWindowRegistry`) je globální → ten slučuj **před** kontrolou. Push (`doAutoPush`/`doCloudUpload`) řešit netřeba — `gistId` i `payload` bere synchronně pohromadě, takže je vždy konzistentní.
 
 ### Pořadí položek uvnitř záznamu
 Pořadí (sekvence úkolů/bloků ve dni) je **součást obsahu** — přenáší se celé a atomicky, nikdy se neslučuje po položkách ani nepřerovnává. Přeuspořádání = editace → razítkne `mt` → propíše se.
@@ -208,6 +209,23 @@ Nikdy horizontální scroll. Tlačítko ☰ skryje `library-panel`.
 - Onyx Boox Note Air2 Plus (e-ink, pomalý refresh)
 
 Vše musí být použitelné na všech třech bez nutnosti zoomu nebo horizontálního scrollu.
+
+## Browser pro preview a testy
+
+Při otevírání URL, spouštění preview nebo jakémkoliv příkazu vyžadujícím prohlížeč vždy použij **Chrome**, nikdy Edge ani msedge.
+
+- PowerShell: `Start-Process "chrome" -ArgumentList "<url>"`
+- CMD / batch: `start chrome <url>`
+- Přímá cesta: `& "C:\Program Files\Google\Chrome\Application\chrome.exe" "<url>"`
+
+## Prostředí a nástroje
+
+- Node.js není nainstalován — nepouštěj syntax check přes `node`
+- Prohlížeč pro headless testy: Chrome (`C:\Program Files\Google\Chrome\Application\chrome.exe`)
+- Edge není funkční — nikdy nepoužívej msedge
+- Smoke testy přes headless Chrome jsou volitelné — spusť je pouze pokud o to výslovně požádám
+- PowerShell je dostupný, ale preferuj přímé souborové operace kde to jde
+
 
 ---
 

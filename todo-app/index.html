@@ -53,7 +53,7 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
 html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-bg.open{display:flex}
-.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem;max-height:90vh;overflow-y:auto}
 .modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
 .modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
 .modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
@@ -61,6 +61,10 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 @media(hover:hover){.modal-item:hover{background:var(--off)}}
 .modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
 .modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.sel-list{max-height:180px}
+.sel-grp{font-weight:600}
+.sel-leaf{margin-left:1.2rem}
+.sel-count{font-size:.78rem;opacity:.6;margin-left:.25rem}
 .modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
 .modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
 @media(hover:hover){.modal-btn:hover{background:var(--light)}}
@@ -560,16 +564,13 @@ textarea::placeholder{color:var(--mid)}
     <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archivované</p>
     <div class="modal-list" id="exportArchList"></div>
     <div id="exportDaysSection">
-      <p id="expDaysLbl" style="font-size:.8rem;color:var(--muted);margin-top:.6rem;margin-bottom:.3rem;display:none">Dny a plány</p>
-      <div style="display:flex;flex-direction:column;gap:.25rem">
-      <label id="expWdRow" class="modal-item" style="cursor:pointer;display:none">
-        <input type="checkbox" id="expWeekDays" checked onchange="updateExportFilename()">
-        <span id="expWeekDaysLbl">Uložené dny</span>
-      </label>
-      <label id="expWpRow" class="modal-item" style="cursor:pointer;display:none">
-        <input type="checkbox" id="expWeekPlans" checked onchange="updateExportFilename()">
-        <span id="expWeekPlansLbl">Plán týdne</span>
-      </label>
+      <p id="expWdLbl" style="font-size:.8rem;color:var(--muted);margin-top:.6rem;margin-bottom:.25rem;display:none">Uložené dny</p>
+      <div class="modal-list sel-list" id="exportDayList" style="display:none"></div>
+      <p id="expWpLbl" style="font-size:.8rem;color:var(--muted);margin-top:.6rem;margin-bottom:.25rem;display:none">Plán týdne</p>
+      <div class="modal-list sel-list" id="exportPlanList" style="display:none"></div>
+      <p id="expLtLbl" style="font-size:.8rem;color:var(--muted);margin-top:.6rem;margin-bottom:.25rem;display:none">Později</p>
+      <div class="modal-list sel-list" id="exportLaterList" style="display:none"></div>
+      <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.6rem">
       <label id="expSetRow" class="modal-item" style="cursor:pointer;display:none">
         <input type="checkbox" id="expSettings" checked onchange="updateExportFilename()">
         <span id="expSettingsLbl">Nastavení (bloky, pracovní dny)</span>
@@ -577,10 +578,6 @@ textarea::placeholder{color:var(--mid)}
       <label id="expInboxRow" class="modal-item" style="cursor:pointer;display:none">
         <input type="checkbox" id="expInbox" checked onchange="updateExportFilename()">
         <span id="expInboxLbl">Inbox</span>
-      </label>
-      <label id="expLaterRow" class="modal-item" style="cursor:pointer;display:none">
-        <input type="checkbox" id="expLater" checked onchange="updateExportFilename()">
-        <span id="expLaterLbl">Později</span>
       </label>
       </div>
     </div>
@@ -619,16 +616,13 @@ textarea::placeholder{color:var(--mid)}
       <div class="modal-list" id="importList"></div>
     </div>
     <div id="importDaysSection" style="display:none">
-      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Dny a plány</p>
-      <div style="display:flex;flex-direction:column;gap:.25rem">
-        <label id="impWdRow" class="modal-item" style="cursor:pointer;display:none">
-          <input type="checkbox" id="impWeekDays" checked>
-          <span id="impWeekDaysLbl">Uložené dny</span>
-        </label>
-        <label id="impWpRow" class="modal-item" style="cursor:pointer;display:none">
-          <input type="checkbox" id="impWeekPlans" checked>
-          <span id="impWeekPlansLbl">Plán týdne</span>
-        </label>
+      <p id="impWdLbl" style="font-size:.78rem;color:var(--muted);margin:.5rem 0 .2rem;display:none">Uložené dny</p>
+      <div class="modal-list sel-list" id="importDayList" style="display:none"></div>
+      <p id="impWpLbl" style="font-size:.78rem;color:var(--muted);margin:.5rem 0 .2rem;display:none">Plán týdne</p>
+      <div class="modal-list sel-list" id="importPlanList" style="display:none"></div>
+      <p id="impLtLbl" style="font-size:.78rem;color:var(--muted);margin:.5rem 0 .2rem;display:none">Později</p>
+      <div class="modal-list sel-list" id="importLaterList" style="display:none"></div>
+      <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.5rem">
         <label id="impSetRow" class="modal-item" style="cursor:pointer;display:none">
           <input type="checkbox" id="impSettings" checked>
           <span id="impSettingsLbl">Nastavení (bloky, pracovní dny)</span>
@@ -636,10 +630,6 @@ textarea::placeholder{color:var(--mid)}
         <label id="impInboxRow" class="modal-item" style="cursor:pointer;display:none">
           <input type="checkbox" id="impInbox" checked>
           <span id="impInboxLbl">Inbox</span>
-        </label>
-        <label id="impLaterRow" class="modal-item" style="cursor:pointer;display:none">
-          <input type="checkbox" id="impLater" checked>
-          <span id="impLaterLbl">Později</span>
         </label>
       </div>
     </div>
@@ -2374,7 +2364,7 @@ async function renameWindow(id) {
   const name = await customPrompt('Přejmenovat okno:', w.name);
   if (name == null) return;
   w.name = name; w.mt = Date.now();
-  saveWindows(); pushRegistry(); renderWindowTabs();
+  saveWindows(); pushRegistry(); renderWindowTabs(); updateHeaderDay();
 }
 
 async function deleteWindow(id) {
@@ -2388,7 +2378,7 @@ async function deleteWindow(id) {
   winTombstones[id] = Date.now();           // propagace smazání na ostatní zařízení
   saveWindows(); saveWinTomb(); pushRegistry();
   if (wasActive) activateWindow('main');   // bez persistu mazaného okna
-  else renderWindowTabs();
+  else { renderWindowTabs(); updateHeaderDay(); }
   showStatusMsg('okno smazáno', 1800);
 }
 
@@ -3500,7 +3490,99 @@ function toggleNewMenu(e) {
 }
 function closeNewMenu() { const m = el('newMenu'); if (m) m.style.display = 'none'; }
 
-// ── EXPORT ────────────────────────────────────────────────────────────────────
+// ── VÝBĚROVÝ STROM (skupina → položky) — sdílený pro export i import ───────────
+// Den (datum) / měsíc (ym) = list; týden / rok = skupina s vlastním checkboxem,
+// který přepíná všechny své listy (a ukazuje indeterminate při částečném výběru).
+const selTrees = {};   // prefix → { groups, sel:Set, after, listId }
+function _treeKeyId(k) { return String(k).replace(/[^A-Za-z0-9_-]/g, '_'); }
+function selTreeSet(prefix) { return (selTrees[prefix] && selTrees[prefix].sel) || new Set(); }
+// dny (weekDays / weekPlans) → skupiny po ISO týdnech
+function dayWeekGroups(arr) {
+  const m = new Map();
+  arr.slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(d => {
+    if (!d || !d.date) return;
+    const wn = getISOWeek(d.date), wy = getISOWeekYear(d.date);
+    const gkey = wy + '-T' + String(wn).padStart(2, '0');
+    if (!m.has(gkey)) m.set(gkey, { key: gkey, label: 'Týden ' + wn + ' · ' + wy, leaves: [] });
+    const dt = new Date(d.date + 'T12:00:00');
+    m.get(gkey).leaves.push({ key: d.date, label: DAY_ABBREV_CZ[dt.getDay()] + ' ' + dt.getDate() + '. ' + (dt.getMonth() + 1) + '.', count: (d.items || []).length });
+  });
+  return [...m.values()];
+}
+// měsíce (later) → skupiny po letech
+function monthYearGroups(arr) {
+  const m = new Map();
+  arr.slice().sort((a, b) => String(a.ym).localeCompare(String(b.ym))).forEach(b => {
+    if (!b || !b.ym) return;
+    const [y, mo] = String(b.ym).split('-');
+    if (!m.has(y)) m.set(y, { key: y, label: 'Rok ' + y, leaves: [] });
+    m.get(y).leaves.push({ key: b.ym, label: (MONTHS_CZ[+mo - 1] || '?'), count: (b.items || []).length });
+  });
+  return [...m.values()];
+}
+function leafKeyOf(x) { return x.date != null ? x.date : x.ym; }
+// vykreslí strom do kontejneru; sel = množina vybraných klíčů listů
+function buildSelTree(listId, prefix, groups, sel, after) {
+  selTrees[prefix] = { groups, sel, after, listId };
+  const c = el(listId); if (!c) return;
+  c.innerHTML = groups.map(g => {
+    const leaves = g.leaves.map(lf => {
+      const on = sel.has(lf.key);
+      return `<label class="modal-item sel-leaf${on ? ' sel' : ''}" id="${prefix}-l-${_treeKeyId(lf.key)}">`
+        + `<input type="checkbox" ${on ? 'checked' : ''} onchange="selTreeLeaf('${prefix}','${lf.key}',this.checked)">`
+        + `${esc(lf.label)}<span class="sel-count">${lf.count}×</span></label>`;
+    }).join('');
+    return `<label class="modal-item sel-grp" id="${prefix}-g-${_treeKeyId(g.key)}">`
+      + `<input type="checkbox" onchange="selTreeGroup('${prefix}','${g.key}',this.checked)">${esc(g.label)}</label>` + leaves;
+  }).join('');
+  syncSelTreeGroups(prefix);
+}
+function syncSelTreeGroups(prefix) {
+  const t = selTrees[prefix]; if (!t) return;
+  t.groups.forEach(g => {
+    const cb = el(prefix + '-g-' + _treeKeyId(g.key))?.querySelector('input'); if (!cb) return;
+    const n = g.leaves.filter(lf => t.sel.has(lf.key)).length;
+    cb.checked = n > 0 && n === g.leaves.length;
+    cb.indeterminate = n > 0 && n < g.leaves.length;
+  });
+}
+function selTreeLeaf(prefix, key, on) {
+  const t = selTrees[prefix]; if (!t) return;
+  on ? t.sel.add(key) : t.sel.delete(key);
+  el(prefix + '-l-' + _treeKeyId(key))?.classList.toggle('sel', on);
+  syncSelTreeGroups(prefix);
+  if (t.after) t.after();
+}
+function selTreeGroup(prefix, gkey, on) {
+  const t = selTrees[prefix]; if (!t) return;
+  const g = t.groups.find(x => x.key === gkey); if (!g) return;
+  g.leaves.forEach(lf => {
+    on ? t.sel.add(lf.key) : t.sel.delete(lf.key);
+    const lel = el(prefix + '-l-' + _treeKeyId(lf.key));
+    lel?.classList.toggle('sel', on);
+    const cb = lel?.querySelector('input'); if (cb) cb.checked = on;
+  });
+  syncSelTreeGroups(prefix);
+  if (t.after) t.after();
+}
+function selTreeSelectAll(prefix) {
+  const t = selTrees[prefix]; if (!t) return;
+  t.groups.forEach(g => g.leaves.forEach(lf => t.sel.add(lf.key)));
+  buildSelTree(t.listId, prefix, t.groups, t.sel, t.after);
+}
+// připraví sekci (popisek + kontejner) a vykreslí strom; prázdné pole → skryje
+function setupSelTree(listId, prefix, arr, lblId, lblBase, grouper, after) {
+  const lbl = el(lblId), list = el(listId);
+  if (!arr || !arr.length) {
+    if (lbl) lbl.style.display = 'none';
+    if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+    delete selTrees[prefix];
+    return;
+  }
+  if (lbl) { lbl.style.display = ''; lbl.textContent = lblBase + ' (' + arr.length + ')'; }
+  if (list) list.style.display = '';
+  buildSelTree(listId, prefix, grouper(arr), new Set(arr.map(leafKeyOf)), after);
+}
 let exportSelected = new Set(), exportArchSelected = new Set();
 function openExportModal() {
   exportSelected = new Set(library.map(e => e.id));
@@ -3511,29 +3593,26 @@ function openExportModal() {
   el('exportArchList').innerHTML = archive.length
     ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archiv je prázdný.</p>';
-  const wdRow = el('expWdRow'), wpRow = el('expWpRow'), daysLbl = el('expDaysLbl'), setRow = el('expSetRow'), inboxRow = el('expInboxRow'), laterRow = el('expLaterRow');
-  const hasAnyDays = weekDays.length > 0 || weekPlans.length > 0;
-  const hasCustomBlocks = Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]);
-  const hasSettings = hasCustomBlocks || Object.keys(workingDaysByWeek).length > 0;
-  if (daysLbl) daysLbl.style.display = (hasAnyDays || hasSettings || inbox.length || later.length) ? '' : 'none';
-  if (wdRow) { wdRow.style.display = weekDays.length ? '' : 'none'; if (weekDays.length) el('expWeekDaysLbl').textContent = 'Uložené dny (' + weekDays.length + ')'; }
-  if (wpRow) { wpRow.style.display = weekPlans.length ? '' : 'none'; if (weekPlans.length) el('expWeekPlansLbl').textContent = 'Plán týdne (' + weekPlans.length + ')'; }
+  // dny / plány / později — výběrové stromy (skupiny = týdny / roky), vše vybráno
+  setupSelTree('exportDayList', 'exDay', weekDays, 'expWdLbl', 'Uložené dny', dayWeekGroups, updateExportFilename);
+  setupSelTree('exportPlanList', 'exPlan', weekPlans, 'expWpLbl', 'Plán týdne', dayWeekGroups, updateExportFilename);
+  setupSelTree('exportLaterList', 'exLat', later, 'expLtLbl', 'Později', monthYearGroups, updateExportFilename);
+  const setRow = el('expSetRow'), inboxRow = el('expInboxRow');
   if (setRow) setRow.style.display = '';
   if (inboxRow) { inboxRow.style.display = inbox.length ? '' : 'none'; if (inbox.length) el('expInboxLbl').textContent = 'Inbox (' + inbox.length + ')'; }
-  if (laterRow) { laterRow.style.display = later.length ? '' : 'none'; if (later.length) el('expLaterLbl').textContent = 'Později (' + later.length + ' měs.)'; }
-  const expWd = el('expWeekDays'), expWp = el('expWeekPlans'), expSt = el('expSettings'), expIb = el('expInbox'), expLt = el('expLater');
-  if (expWd) expWd.checked = true; if (expWp) expWp.checked = true; if (expSt) expSt.checked = true; if (expIb) expIb.checked = true; if (expLt) expLt.checked = true;
+  const expSt = el('expSettings'), expIb = el('expInbox');
+  if (expSt) expSt.checked = true; if (expIb) expIb.checked = true;
   updateExportFilename();
   el('exportModal').classList.add('open');
 }
 function updateExportFilename() {
   const d = new Date();
   const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-  const wdCount = el('expWeekDays')?.checked ? weekDays.length : 0;
-  const wpCount = el('expWeekPlans')?.checked ? weekPlans.length : 0;
+  const wdCount = selTreeSet('exDay').size;
+  const wpCount = selTreeSet('exPlan').size;
   const stFlag = el('expSettings')?.checked ? 'S' : '';
   const ibCount = el('expInbox')?.checked ? inbox.length : 0;
-  const ltCount = el('expLater')?.checked ? later.length : 0;
+  const ltCount = selTreeSet('exLat').size;
   el('exportFilename').value = 'todo_' + yymmdd + '_I' + exportSelected.size + 'A' + exportArchSelected.size
     + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + (ibCount ? 'B' + ibCount : '') + (ltCount ? 'L' + ltCount : '') + stFlag + '.json';
 }
@@ -3542,8 +3621,9 @@ function toggleExportArchSel(id, on) { on ? exportArchSelected.add(id) : exportA
 function selectAllExport() {
   library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
   archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
-  const wd = el('expWeekDays'), wp = el('expWeekPlans'), st = el('expSettings'), ib = el('expInbox'), lt = el('expLater');
-  if (wd) wd.checked = true; if (wp) wp.checked = true; if (st) st.checked = true; if (ib) ib.checked = true; if (lt) lt.checked = true;
+  ['exDay','exPlan','exLat'].forEach(p => { if (selTrees[p]) selTreeSelectAll(p); });
+  const st = el('expSettings'), ib = el('expInbox');
+  if (st) st.checked = true; if (ib) ib.checked = true;
   updateExportFilename();
 }
 function buildSettingsExport() {
@@ -3552,16 +3632,19 @@ function buildSettingsExport() {
     return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration
       || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent || bt.note;
   }).map(([key, bt]) => ({ key, ...bt }));
-  return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek };
+  let blockTypesDeleted = [];   // smazané defaultní bloky — bez nich by se po importu na jiném zařízení vrátily
+  try { blockTypesDeleted = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]') || []; } catch(e) {}
+  return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek, blockTypesDeleted };
 }
 function doExport() {
   const its = library.filter(e => exportSelected.has(e.id));
   const archs = archive.filter(e => exportArchSelected.has(e.id));
-  const wdays = el('expWeekDays')?.checked ? weekDays : [];
-  const wplans = el('expWeekPlans')?.checked ? weekPlans : [];
+  const daySel = selTreeSet('exDay'), planSel = selTreeSet('exPlan'), latSel = selTreeSet('exLat');
+  const wdays = weekDays.filter(d => daySel.has(d.date));
+  const wplans = weekPlans.filter(p => planSel.has(p.date));
   const settings = el('expSettings')?.checked ? buildSettingsExport() : null;
   const inb = el('expInbox')?.checked ? inbox : [];
-  const lat = el('expLater')?.checked ? later : [];
+  const lat = later.filter(b => latSel.has(b.ym));
   if (!its.length && !archs.length && !wdays.length && !wplans.length && !settings && !inb.length && !lat.length) { customAlert('Nic není vybráno.'); return; }
   const payload = {v:2, items: its, archive: archs, weekDays: wdays, weekPlans: wplans};
   if (settings) payload.settings = settings;
@@ -3600,8 +3683,11 @@ function openImportModal() {
   el('importFile').value = ''; el('importPaste').value = '';
   el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
   const ds = el('importDaysSection'); if (ds) ds.style.display = 'none';
-  const wr = el('impWdRow'), pr = el('impWpRow'), sr = el('impSetRow'), ir = el('impInboxRow'), lr = el('impLaterRow');
-  if (wr) wr.style.display = 'none'; if (pr) pr.style.display = 'none'; if (sr) sr.style.display = 'none'; if (ir) ir.style.display = 'none'; if (lr) lr.style.display = 'none';
+  ['importDayList','importPlanList','importLaterList'].forEach(id => { const e = el(id); if (e) { e.innerHTML = ''; e.style.display = 'none'; } });
+  ['impWdLbl','impWpLbl','impLtLbl'].forEach(id => { const e = el(id); if (e) e.style.display = 'none'; });
+  ['imDay','imPlan','imLat'].forEach(p => delete selTrees[p]);
+  const sr = el('impSetRow'), ir = el('impInboxRow');
+  if (sr) sr.style.display = 'none'; if (ir) ir.style.display = 'none';
   el('importActions').style.display = 'none'; el('importCancel').style.display = 'flex';
   el('importModal').classList.add('open');
 }
@@ -3625,20 +3711,22 @@ function parseImportJson(text) {
     window._importWeekPlans = parsed.weekPlans || [];
     window._importSettings = parsed.settings || null;
     window._importInbox = parsed.inbox || [];
-    window._importLater = parsed.later || [];
+    // později: starý plochý tvar převeď na měsíční buckety hned, ať se strom správně seskupí podle let
+    let impLater = parsed.later || [];
+    if (impLater.length && impLater[0] && impLater[0].ym && !Array.isArray(impLater[0].items)) impLater = migrateFlatLater(impLater);
+    window._importLater = impLater;
     const hasSettings = !!(parsed.settings && (
       (parsed.settings.blockTypes && parsed.settings.blockTypes.length) ||
+      (parsed.settings.blockTypesDeleted && parsed.settings.blockTypesDeleted.length) ||
       Object.keys(parsed.settings.workingDaysByWeek || {}).length));
-    const wdRow = el('impWdRow'), wpRow = el('impWpRow'), setRow = el('impSetRow'), inboxRow = el('impInboxRow'), laterRow = el('impLaterRow'), daysSection = el('importDaysSection');
-    if (wdRow) wdRow.style.display = hasDays ? '' : 'none';
-    if (wpRow) wpRow.style.display = hasPlans ? '' : 'none';
+    // dny / plány / později — výběrové stromy (skupiny = týdny / roky), vše vybráno
+    setupSelTree('importDayList', 'imDay', window._importWeekDays, 'impWdLbl', 'Uložené dny', dayWeekGroups, null);
+    setupSelTree('importPlanList', 'imPlan', window._importWeekPlans, 'impWpLbl', 'Plán týdne', dayWeekGroups, null);
+    setupSelTree('importLaterList', 'imLat', window._importLater, 'impLtLbl', 'Později', monthYearGroups, null);
+    const setRow = el('impSetRow'), inboxRow = el('impInboxRow'), daysSection = el('importDaysSection');
     if (setRow) setRow.style.display = hasSettings ? '' : 'none';
     if (inboxRow) inboxRow.style.display = hasInbox ? '' : 'none';
-    if (laterRow) laterRow.style.display = hasLater ? '' : 'none';
-    if (hasDays && el('impWeekDaysLbl')) el('impWeekDaysLbl').textContent = 'Uložené dny (' + parsed.weekDays.length + ')';
-    if (hasPlans && el('impWeekPlansLbl')) el('impWeekPlansLbl').textContent = 'Plán týdne (' + parsed.weekPlans.length + ')';
     if (hasInbox && el('impInboxLbl')) el('impInboxLbl').textContent = 'Inbox (' + parsed.inbox.length + ')';
-    if (hasLater && el('impLaterLbl')) el('impLaterLbl').textContent = 'Později (' + parsed.later.length + ' měs.)';
     if (daysSection) daysSection.style.display = (hasDays || hasPlans || hasSettings || hasInbox || hasLater) ? '' : 'none';
     el('importActions').style.display = 'flex'; el('importCancel').style.display = 'none';
   } catch(err) {
@@ -3652,11 +3740,15 @@ function previewImport() { const file = el('importFile').files[0]; if (!file) re
 function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
-  const addWdays = el('impWeekDays')?.checked && window._importWeekDays?.length;
-  const addWplans = el('impWeekPlans')?.checked && window._importWeekPlans?.length;
+  const daySel = selTreeSet('imDay'), planSel = selTreeSet('imPlan'), latSel = selTreeSet('imLat');
+  const wdaysSrc = (window._importWeekDays || []).filter(d => daySel.has(d.date));
+  const wplansSrc = (window._importWeekPlans || []).filter(p => planSel.has(p.date));
+  const laterSrc = (window._importLater || []).filter(b => latSel.has(b.ym));
+  const addWdays = wdaysSrc.length;
+  const addWplans = wplansSrc.length;
   const addSettings = el('impSettings')?.checked && window._importSettings;
   const addInbox = el('impInbox')?.checked && window._importInbox?.length;
-  const addLater = el('impLater')?.checked && window._importLater?.length;
+  const addLater = laterSrc.length;
   if (!toAdd.length && !addWdays && !addWplans && !addSettings && !addInbox && !addLater) { customAlert('Nic není vybráno.'); return; }
   let tplAdded = 0, tplUpdated = 0;
   if (toAdd.length) {
@@ -3670,7 +3762,7 @@ function doImport() {
     saveLibrary(); renderLibrary();
   }
   if (addWdays) {
-    (window._importWeekDays || []).forEach(d => {
+    wdaysSrc.forEach(d => {
       const ex = weekDays.find(w => w.date === d.date);
       if (ex) { ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = Date.now(); }
       else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: Date.now() });
@@ -3678,7 +3770,7 @@ function doImport() {
     saveWeek(); renderWeekTab(); renderDayButtons();
   }
   if (addWplans) {
-    (window._importWeekPlans || []).forEach(p => {
+    wplansSrc.forEach(p => {
       const ex = weekPlans.find(w => w.date === p.date);
       if (ex) { ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = Date.now(); }
       else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: Date.now() });
@@ -3705,6 +3797,18 @@ function doImport() {
       Object.assign(workingDaysByWeek, s.workingDaysByWeek);
       saveWorkingDays(); renderWorkDayPicker();
     }
+    if (Array.isArray(s.blockTypesDeleted) && s.blockTypesDeleted.length) {
+      // smazané defaultní bloky — odeber je i lokálně a zapiš do seznamu smazaných (jinak by se vrátily)
+      let del = []; try { del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]') || []; } catch(e) {}
+      s.blockTypesDeleted.forEach(k => {
+        if (!DEFAULT_BLOCK_TYPES[k]) return;
+        if (!del.includes(k)) del.push(k);
+        delete BLOCK_TYPES[k];
+        blockTypeOrder = blockTypeOrder.filter(x => x !== k);
+      });
+      try { localStorage.setItem(WK(BLOCKTYPES_DELETED_KEY), JSON.stringify(del)); } catch(e) {}
+      saveBlockTypes(); renderBlockTypeList();
+    }
   }
   let inboxAdded = 0;
   if (addInbox) {
@@ -3722,10 +3826,7 @@ function doImport() {
   }
   let laterAdded = 0;
   if (addLater) {
-    let src = window._importLater || [];
-    // starý plochý tvar importu → převeď na měsíční buckety
-    if (src.length && src[0] && src[0].ym && !Array.isArray(src[0].items)) src = migrateFlatLater(src);
-    src.forEach(b => {
+    laterSrc.forEach(b => {
       const nb = normLaterBucket(b); if (!nb || !nb.items.length) return;
       const ex = later.find(x => x.ym === nb.ym);
       if (ex) { ex.items = nb.items; ex.mt = Date.now(); } else { later.push({ ...nb, mt: Date.now() }); }
@@ -3740,8 +3841,8 @@ function doImport() {
   }
   const msgs = [];
   if (toAdd.length) msgs.push(toAdd.length + ' šablon' + (tplUpdated ? ' (' + tplUpdated + ' aktualiz.)' : ''));
-  if (addWdays) msgs.push((window._importWeekDays || []).length + ' dní');
-  if (addWplans) msgs.push((window._importWeekPlans || []).length + ' plánů');
+  if (addWdays) msgs.push(wdaysSrc.length + ' dní');
+  if (addWplans) msgs.push(wplansSrc.length + ' plánů');
   if (addSettings) msgs.push('nastavení');
   if (addInbox) msgs.push(inboxAdded + ' do inboxu');
   if (addLater) msgs.push(laterAdded + ' měsíců do Později');
@@ -3783,7 +3884,9 @@ function updateHeaderDay() {
   const sub = el('headerSub'), sep = el('headerSep');
   if (!sub || !sep) return;
   if (activePlanDate) {
-    sub.textContent = formatDateCz(activePlanDate) + (activePlanDate === todayIso() ? ' · dnes' : '');
+    // u víc oken dne přidej název aktivního okna (např. „Práce" / „Doma" / emoji)
+    const win = dayWindows.length > 1 ? ' · ' + windowName(activeWin) : '';
+    sub.textContent = formatDateCz(activePlanDate) + (activePlanDate === todayIso() ? ' · dnes' : '') + win;
     sub.style.display = 'inline';
     sep.style.display = 'inline';
   } else {
@@ -4921,18 +5024,17 @@ window.addEventListener('resize', updateAppGrid);
     let gistId = localStorage.getItem(WK(GISTID));
     const its = library.filter(e => exportSelected.has(e.id));
     const archs = archive.filter(e => exportArchSelected.has(e.id));
-    const wantWd = el('expWeekDays')?.checked && weekDays.length;
-    const wantWp = el('expWeekPlans')?.checked && weekPlans.length;
+    const daySel = selTreeSet('exDay'), planSel = selTreeSet('exPlan'), latSel = selTreeSet('exLat');
+    const wDays = weekDays.filter(d => daySel.has(d.date));
+    const wPlans = weekPlans.filter(p => planSel.has(p.date));
+    const lat = later.filter(b => latSel.has(b.ym));
     const wantIb = el('expInbox')?.checked && inbox.length;
-    const wantLt = el('expLater')?.checked && later.length;
     const wantSt = el('expSettings')?.checked;
-    if (!its.length && !archs.length && !wantWd && !wantWp && !wantIb && !wantLt && !wantSt) { customAlert('Nic není vybráno.'); return; }
-    const payload = {v:2, items: its, archive: archs,
-      weekDays: el('expWeekDays')?.checked ? weekDays : [],
-      weekPlans: el('expWeekPlans')?.checked ? weekPlans : []};
+    if (!its.length && !archs.length && !wDays.length && !wPlans.length && !wantIb && !lat.length && !wantSt) { customAlert('Nic není vybráno.'); return; }
+    const payload = {v:2, items: its, archive: archs, weekDays: wDays, weekPlans: wPlans};
     if (wantSt) payload.settings = buildSettingsExport();
     if (wantIb) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
-    if (wantLt) payload.later = later;
+    if (lat.length) payload.later = lat;
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
@@ -4980,6 +5082,7 @@ window.addEventListener('resize', updateAppGrid);
     const checkedKey = 'todo-app-cloud-checked::' + activeWin;
     if (sessionStorage.getItem(checkedKey)) return;
     sessionStorage.setItem(checkedKey, '1');
+    const winAtStart = activeWin;              // okno, pro které kontrolujeme cloud (activeWin se může přepnout během fetch)
     const btn = el('syncDownBtn'); const origTitle = btn.title;
     btn.disabled = true; btn.title = 'kontroluji cloud…';
     try {
@@ -4987,8 +5090,10 @@ window.addEventListener('resize', updateAppGrid);
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
-      // HYBRID: registr oken (jen hlavní gist ho nese) sluč vždy — i když se data nezměnila
+      // HYBRID: registr oken (jen hlavní gist ho nese) sluč vždy — globální (ne per-okno), bezpečné i po přepnutí okna
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
+      // KRITICKÉ: mezitím se mohlo přepnout okno → data tohoto gistu patří JINÉMU oknu, neaplikuj je na aktuální
+      if (activeWin !== winAtStart) return;
       // AUTOSYNC: tichý obousměrný merge (vč. mazání) — kompletní porovnání stavu
       if (autosyncEnabled()) {
         if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
@@ -5318,13 +5423,17 @@ window.addEventListener('resize', updateAppGrid);
     lastPullTs = Date.now();
     if (!hasKeys()) return;                    // bez tokenu i Gist ID není odkud stahovat
     if (pushing) return;                       // probíhá push → nech ho dokončit
+    const winAtStart = activeWin;              // okno, pro které stahujeme (activeWin se může přepnout během fetch)
     try {
       const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(WK(GISTID));
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
-      // registr oken (jen hlavní gist ho nese) sluč i bez změny dat → nová okna z jiných zařízení se objeví hned
+      // registr oken (jen hlavní gist ho nese) sluč i bez změny dat → nová okna z jiných zařízení se objeví hned.
+      // Registr je globální (ne per-okno) → bezpečné sloučit i po přepnutí okna.
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
+      // KRITICKÉ: mezitím se mohlo přepnout okno → tato per-okno data patří JINÉMU oknu, nesmí přepsat aktuální
+      if (activeWin !== winAtStart) return;
       if (localSig() !== cloudSig(record)) autoImportSilent(record);
       if (autosyncEnabled()) scheduleAutoPush();
     } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); }
