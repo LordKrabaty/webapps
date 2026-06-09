@@ -3694,7 +3694,7 @@ document.addEventListener('keydown',e=>{
       const res=await gistGet(gistId,token);
       if(!res.ok)throw new Error('HTTP '+res.status);
       const json=await res.json();
-      gistRevs=((json&&json.history)||[]).slice(0,20);
+      gistRevs=((json&&json.history)||[]).slice(0,100);
       renderGistHistory();
     }catch(e){
       el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
@@ -3704,9 +3704,8 @@ document.addEventListener('keydown',e=>{
     if(!gistRevs.length){el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Žádná historie k dispozici</p>';return;}
     el('gistHistoryList').innerHTML=gistRevs.map((rev,i)=>{
       const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('cs-CZ'):'?';
-      const cs=rev.change_status||{};
-      const chg='+'+(cs.additions||0)+' / −'+(cs.deletions||0);
-      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">'+esc(d)+'</span><span class="gh-rev-chg">'+chg+'</span></div>'
+      const tag=i===0?'<span class="gh-rev-chg">nejnovější</span>':'';
+      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">'+esc(d)+'</span>'+tag+'</div>'
         +'<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview('+i+')">náhled</button>'
         +'<button class="btn-io" onclick="gistHistoryRestore('+i+')">obnovit</button></div></div>';
     }).join('');

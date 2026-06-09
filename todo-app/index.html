@@ -613,6 +613,7 @@ textarea::placeholder{color:var(--mid)}
 <div class="modal-bg" id="importModal">
   <div class="modal" style="max-width:460px">
     <h2>Import</h2>
+    <p id="importWinNote" style="font-size:.78rem;color:var(--muted);margin:0">Importuji do okna dne: <b id="importWinName">Den</b></p>
     <p class="jb-import-hide">Vyber JSON soubor exportovaný z této aplikace.</p>
     <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
     <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">nebo vlož obsah JSON:</p>
@@ -628,10 +629,12 @@ textarea::placeholder{color:var(--mid)}
       <div class="modal-list sel-list" id="importPlanList" style="display:none"></div>
       <p id="impLtLbl" style="font-size:.78rem;color:var(--muted);margin:.5rem 0 .2rem;display:none">Později</p>
       <div class="modal-list sel-list" id="importLaterList" style="display:none"></div>
+      <p id="impBlkLbl" style="font-size:.78rem;color:var(--muted);margin:.5rem 0 .2rem;display:none">Bloky</p>
+      <div class="modal-list" id="importBlockList" style="display:none"></div>
       <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.5rem">
-        <label id="impSetRow" class="modal-item" style="cursor:pointer;display:none">
-          <input type="checkbox" id="impSettings" checked>
-          <span id="impSettingsLbl">Nastavení (bloky, pracovní dny)</span>
+        <label id="impWorkDaysRow" class="modal-item" style="cursor:pointer;display:none">
+          <input type="checkbox" id="impWorkDays" checked>
+          <span id="impWorkDaysLbl">Pracovní dny</span>
         </label>
         <label id="impInboxRow" class="modal-item" style="cursor:pointer;display:none">
           <input type="checkbox" id="impInbox" checked>
@@ -3682,7 +3685,7 @@ function copyExportText() {
 }
 
 // ── IMPORT ────────────────────────────────────────────────────────────────────
-let importData = [], importSelected = new Set();
+let importData = [], importSelected = new Set(), importBlockSel = new Set();
 window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
   importData = []; importSelected = new Set();
@@ -3695,8 +3698,13 @@ function openImportModal() {
   ['importDayList','importPlanList','importLaterList'].forEach(id => { const e = el(id); if (e) { e.innerHTML = ''; e.style.display = 'none'; } });
   ['impWdLbl','impWpLbl','impLtLbl'].forEach(id => { const e = el(id); if (e) e.style.display = 'none'; });
   ['imDay','imPlan','imLat'].forEach(p => delete selTrees[p]);
-  const sr = el('impSetRow'), ir = el('impInboxRow');
-  if (sr) sr.style.display = 'none'; if (ir) ir.style.display = 'none';
+  importBlockSel = new Set();
+  const blkLbl = el('impBlkLbl'), blkList = el('importBlockList');
+  if (blkLbl) blkLbl.style.display = 'none';
+  if (blkList) { blkList.innerHTML = ''; blkList.style.display = 'none'; }
+  const wdr = el('impWorkDaysRow'), ir = el('impInboxRow');
+  if (wdr) wdr.style.display = 'none'; if (ir) ir.style.display = 'none';
+  const wn = el('importWinName'); if (wn) wn.textContent = (typeof windowName === 'function' ? windowName(activeWin) : '') || 'Den';
   el('importActions').style.display = 'none'; el('importCancel').style.display = 'flex';
   el('importModal').classList.add('open');
 }
@@ -3724,16 +3732,18 @@ function parseImportJson(text) {
     let impLater = parsed.later || [];
     if (impLater.length && impLater[0] && impLater[0].ym && !Array.isArray(impLater[0].items)) impLater = migrateFlatLater(impLater);
     window._importLater = impLater;
-    const hasSettings = !!(parsed.settings && (
-      (parsed.settings.blockTypes && parsed.settings.blockTypes.length) ||
-      (parsed.settings.blockTypesDeleted && parsed.settings.blockTypesDeleted.length) ||
-      Object.keys(parsed.settings.workingDaysByWeek || {}).length));
+    const impBlocks = (parsed.settings && parsed.settings.blockTypes) || [];
+    const hasBlocks = impBlocks.length > 0;
+    const hasWorkDays = !!(parsed.settings && Object.keys(parsed.settings.workingDaysByWeek || {}).length);
+    const hasSettings = hasBlocks || hasWorkDays;
     // dny / plány / později — výběrové stromy (skupiny = týdny / roky), vše vybráno
     setupSelTree('importDayList', 'imDay', window._importWeekDays, 'impWdLbl', 'Uložené dny', dayWeekGroups, null);
     setupSelTree('importPlanList', 'imPlan', window._importWeekPlans, 'impWpLbl', 'Plán týdne', dayWeekGroups, null);
     setupSelTree('importLaterList', 'imLat', window._importLater, 'impLtLbl', 'Později', monthYearGroups, null);
-    const setRow = el('impSetRow'), inboxRow = el('impInboxRow'), daysSection = el('importDaysSection');
-    if (setRow) setRow.style.display = hasSettings ? '' : 'none';
+    renderImportBlocks(impBlocks);   // jednotlivé bloky jako zaškrtávací seznam (vše vybráno)
+    const wdRow = el('impWorkDaysRow'), inboxRow = el('impInboxRow'), daysSection = el('importDaysSection');
+    if (wdRow) wdRow.style.display = hasWorkDays ? '' : 'none';
+    if (hasWorkDays && el('impWorkDaysLbl')) el('impWorkDaysLbl').textContent = 'Pracovní dny (' + Object.keys(parsed.settings.workingDaysByWeek).length + ' týd.)';
     if (inboxRow) inboxRow.style.display = hasInbox ? '' : 'none';
     if (hasInbox && el('impInboxLbl')) el('impInboxLbl').textContent = 'Inbox (' + parsed.inbox.length + ')';
     if (daysSection) daysSection.style.display = (hasDays || hasPlans || hasSettings || hasInbox || hasLater) ? '' : 'none';
@@ -3747,6 +3757,30 @@ function parseImportJson(text) {
 function previewImportPaste() { const text = el('importPaste').value.trim(); if (!text) return; parseImportJson(text); }
 function previewImport() { const file = el('importFile').files[0]; if (!file) return; el('importPaste').value = ''; const r = new FileReader(); r.onload = ev => parseImportJson(ev.target.result); r.readAsText(file); }
 function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
+// jednotlivé bloky (typy) z importovaného nastavení → zaškrtávací seznam; výběr drží importBlockSel (množina key)
+function renderImportBlocks(blocks) {
+  importBlockSel = new Set((blocks || []).map(b => b && b.key).filter(k => k != null));
+  const lbl = el('impBlkLbl'), list = el('importBlockList');
+  if (!blocks || !blocks.length) {
+    if (lbl) lbl.style.display = 'none';
+    if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+    return;
+  }
+  if (lbl) lbl.style.display = '';
+  if (list) {
+    list.style.display = '';
+    list.innerHTML = blocks.map((b, i) => {
+      const name = ((b.emoji ? b.emoji + ' ' : '') + (b.label || b.key || '?')).trim();
+      return `<label class="modal-item sel" id="ibk-${i}"><input type="checkbox" checked onchange="toggleImportBlockSel(${i},this.checked)" />${esc(name)}</label>`;
+    }).join('');
+  }
+}
+function toggleImportBlockSel(i, on) {
+  const b = ((window._importSettings && window._importSettings.blockTypes) || [])[i];
+  if (!b || b.key == null) return;
+  on ? importBlockSel.add(b.key) : importBlockSel.delete(b.key);
+  el('ibk-'+i)?.classList.toggle('sel', on);
+}
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
   const daySel = selTreeSet('imDay'), planSel = selTreeSet('imPlan'), latSel = selTreeSet('imLat');
@@ -3755,10 +3789,13 @@ function doImport() {
   const laterSrc = (window._importLater || []).filter(b => latSel.has(b.ym));
   const addWdays = wdaysSrc.length;
   const addWplans = wplansSrc.length;
-  const addSettings = el('impSettings')?.checked && window._importSettings;
+  const s = window._importSettings;
+  const selBlocks = ((s && s.blockTypes) || []).filter(bt => bt && bt.key != null && importBlockSel.has(bt.key));
+  const addBlocks = selBlocks.length;
+  const addWorkDays = !!(el('impWorkDays')?.checked && s && s.workingDaysByWeek && Object.keys(s.workingDaysByWeek).length);
   const addInbox = el('impInbox')?.checked && window._importInbox?.length;
   const addLater = laterSrc.length;
-  if (!toAdd.length && !addWdays && !addWplans && !addSettings && !addInbox && !addLater) { customAlert('Nic není vybráno.'); return; }
+  if (!toAdd.length && !addWdays && !addWplans && !addBlocks && !addWorkDays && !addInbox && !addLater) { customAlert('Nic není vybráno.'); return; }
   let tplAdded = 0, tplUpdated = 0;
   if (toAdd.length) {
     // dedup podle id — existující šablonu aktualizuj na místě, nezdvojuj (stejné chování jako bloky/dny)
@@ -3786,38 +3823,19 @@ function doImport() {
     });
     saveWeekPlans(); renderWeekTab();
   }
-  if (addSettings) {
-    const s = window._importSettings;
-    if (s.blockTypes && s.blockTypes.length) {
-      s.blockTypes.forEach(bt => {
-        if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
-          defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
-          eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], mt: Date.now() };
-      });
-      if (s.blockTypeOrder) {
-        blockTypeOrder = s.blockTypeOrder.filter(k => BLOCK_TYPES[k] && k !== 'TASK');
-        Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK' && !blockTypeOrder.includes(k)).forEach(k => blockTypeOrder.push(k));
-      } else {
-        s.blockTypes.forEach(bt => { if (bt.key && !blockTypeOrder.includes(bt.key)) blockTypeOrder.push(bt.key); });
-      }
-      saveBlockTypes(); renderBlockTypeList();
-    }
-    if (s.workingDaysByWeek && Object.keys(s.workingDaysByWeek).length) {
-      Object.assign(workingDaysByWeek, s.workingDaysByWeek);
-      saveWorkingDays(); renderWorkDayPicker();
-    }
-    if (Array.isArray(s.blockTypesDeleted) && s.blockTypesDeleted.length) {
-      // smazané defaultní bloky — odeber je i lokálně a zapiš do seznamu smazaných (jinak by se vrátily)
-      let del = []; try { del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]') || []; } catch(e) {}
-      s.blockTypesDeleted.forEach(k => {
-        if (!DEFAULT_BLOCK_TYPES[k]) return;
-        if (!del.includes(k)) del.push(k);
-        delete BLOCK_TYPES[k];
-        blockTypeOrder = blockTypeOrder.filter(x => x !== k);
-      });
-      try { localStorage.setItem(WK(BLOCKTYPES_DELETED_KEY), JSON.stringify(del)); } catch(e) {}
-      saveBlockTypes(); renderBlockTypeList();
-    }
+  if (addBlocks) {
+    // přidání/aktualizace jen vybraných bloků (cherry-pick) — pořadí jen doplníme, smazané defaulty neřešíme (to dělá autosync)
+    selBlocks.forEach(bt => {
+      BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
+        defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
+        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], mt: Date.now() };
+      if (bt.key !== 'TASK' && !blockTypeOrder.includes(bt.key)) blockTypeOrder.push(bt.key);
+    });
+    saveBlockTypes(); renderBlockTypeList();
+  }
+  if (addWorkDays) {
+    Object.assign(workingDaysByWeek, s.workingDaysByWeek);
+    saveWorkingDays(); renderWorkDayPicker();
   }
   let inboxAdded = 0;
   if (addInbox) {
@@ -3852,7 +3870,8 @@ function doImport() {
   if (toAdd.length) msgs.push(toAdd.length + ' šablon' + (tplUpdated ? ' (' + tplUpdated + ' aktualiz.)' : ''));
   if (addWdays) msgs.push(wdaysSrc.length + ' dní');
   if (addWplans) msgs.push(wplansSrc.length + ' plánů');
-  if (addSettings) msgs.push('nastavení');
+  if (addBlocks) msgs.push(addBlocks + ' bloků');
+  if (addWorkDays) msgs.push('pracovní dny');
   if (addInbox) msgs.push(inboxAdded + ' do inboxu');
   if (addLater) msgs.push(laterAdded + ' měsíců do Později');
   closeModal('importModal'); showSave('↓ importováno: ' + msgs.join(', '));
@@ -5465,7 +5484,7 @@ window.addEventListener('resize', updateAppGrid);
       const res = await gistGet(gistId, token);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
-      gistRevs = ((json && json.history) || []).slice(0, 20);
+      gistRevs = ((json && json.history) || []).slice(0, 100);
       renderGistHistory();
     } catch(e) {
       el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
@@ -5475,9 +5494,8 @@ window.addEventListener('resize', updateAppGrid);
     if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Žádná historie k dispozici</p>'; return; }
     el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
       const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
-      const cs = rev.change_status || {};
-      const chg = '+' + (cs.additions || 0) + ' / −' + (cs.deletions || 0);
-      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span><span class="gh-rev-chg">' + chg + '</span></div>'
+      const tag = i === 0 ? '<span class="gh-rev-chg">nejnovější</span>' : '';
+      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>' + tag + '</div>'
         + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">náhled</button>'
         + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">obnovit</button></div></div>';
     }).join('');
