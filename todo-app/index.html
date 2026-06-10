@@ -766,7 +766,7 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div class="modal-bg" id="blockEditModal">
-  <div class="modal" style="max-width:400px;gap:.65rem;max-height:90vh;overflow-y:auto">
+  <div class="modal" style="max-width:min(720px,94vw);gap:.65rem;max-height:90vh;overflow-y:auto">
     <h2 id="blockEditTitle">Upravit blok</h2>
     <div class="field" style="max-width:100px">
       <label>Emoji</label>
@@ -775,7 +775,7 @@ textarea::placeholder{color:var(--mid)}
     <input type="hidden" id="blockEditDuration" value="30">
     <div class="field">
       <label>Název</label>
-      <input type="text" id="blockEditLabel" placeholder="Název bloku" onkeydown="if(event.key==='Enter')saveBlockType();if(event.key==='Escape')closeModal('blockEditModal')">
+      <input type="text" id="blockEditLabel" placeholder="Název bloku" onkeydown="if(event.key==='Enter')saveBlockType();">
     </div>
     <label class="toggle-row" onclick="toggleBlockEditEvent()" style="margin-top:.1rem">
       <div id="blockEditEventToggle" class="toggle-sw"></div>
@@ -800,7 +800,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div class="field">
       <label>Přednastavený popis / poznámka</label>
-      <textarea id="blockEditNote" rows="3" placeholder="Volný text — předvyplní se do popisu bloku při vložení" style="resize:vertical"></textarea>
+      <textarea id="blockEditNote" rows="3" placeholder="Volný text — předvyplní se do popisu bloku při vložení" oninput="autoGrowTextarea(this)"></textarea>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" id="blockEditResetBtn" onclick="resetBlockType()">obnovit výchozí</button>
@@ -812,15 +812,15 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Item detail / rename modal -->
 <div class="modal-bg" id="itemEditModal">
-  <div class="modal" style="max-width:460px;gap:.6rem;max-height:90vh;overflow-y:auto">
+  <div class="modal" style="max-width:min(900px,94vw);gap:.6rem;max-height:90vh;overflow-y:auto">
     <h2 id="itemEditTitle">Upravit položku</h2>
     <div class="field">
       <label>Název</label>
-      <input type="text" id="itemEditName" placeholder="Název položky" onkeydown="if(event.key==='Enter'){event.preventDefault();saveItemEdit();}if(event.key==='Escape')closeModal('itemEditModal')">
+      <input type="text" id="itemEditName" placeholder="Název položky" onkeydown="if(event.key==='Enter'){event.preventDefault();saveItemEdit();}">
     </div>
     <div class="field">
       <label>Popis / podúkoly</label>
-      <textarea id="itemEditNote" rows="7" placeholder="Další text — popis, poznámky, podúkoly…" style="resize:vertical"></textarea>
+      <textarea id="itemEditNote" rows="7" placeholder="Další text — popis, poznámky, podúkoly…" oninput="autoGrowTextarea(this)"></textarea>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" onclick="deleteItemEdit()">smazat</button>
@@ -1993,7 +1993,14 @@ function openItemEdit(ctx, idx) {
   el('itemEditName').value = item.text || '';
   el('itemEditNote').value = item.note || '';
   el('itemEditModal').classList.add('open');
+  autoGrowTextarea(el('itemEditNote'));
   const nameEl = el('itemEditName'); nameEl.focus(); nameEl.select();
+}
+// Textové pole roste s obsahem (atribut rows = minimum), strop ~70 % výšky obrazovky, ať zůstanou vidět tlačítka
+function autoGrowTextarea(ta) {
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, Math.round(window.innerHeight * 0.7)) + 'px';
 }
 function saveItemEdit() {
   const ctx = _itemEditCtx, item = _itemEditItem;
@@ -2668,6 +2675,7 @@ function openBlockTypeEdit(key) {
   (bt.defaultTasks || []).forEach(t => addBlockEditTask(t.text, t.duration));
 
   el('blockEditModal').classList.add('open');
+  autoGrowTextarea(el('blockEditNote'));
   setTimeout(() => el('blockEditLabel').focus(), 50);
 }
 
@@ -3025,7 +3033,7 @@ function startPreviewTitleEdit() {
   inp.addEventListener('blur', () => finish(true));
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-    else if (e.key === 'Escape') { finish(false); }
+    else if (e.key === 'Escape') { finish(false); e.stopPropagation(); }
   });
 }
 
@@ -3097,7 +3105,7 @@ function startPreviewEdit(i, span) {
   inp.addEventListener('blur', finish);
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-    if (e.key === 'Escape') { saved = true; renderPreviewList(); }
+    if (e.key === 'Escape') { saved = true; renderPreviewList(); e.stopPropagation(); }
   });
 }
 
@@ -3119,7 +3127,7 @@ function startPreviewNoteEdit(i, span) {
   };
   ta.addEventListener('blur', finish);
   ta.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { saved = true; renderPreviewList(); }   // Enter = nový řádek; uloží se na blur
+    if (e.key === 'Escape') { saved = true; renderPreviewList(); e.stopPropagation(); }   // Enter = nový řádek; uloží se na blur
   });
 }
 
@@ -3151,7 +3159,7 @@ function startPreviewDurEdit(i, span) {
     });
     [s, e2].forEach(inp => inp.addEventListener('keydown', ev => {
       if (ev.key === 'Enter') inp.blur();
-      if (ev.key === 'Escape') renderPreviewList();
+      if (ev.key === 'Escape') { renderPreviewList(); ev.stopPropagation(); }
     }));
   } else {
     const inp = document.createElement('input');
@@ -3171,7 +3179,7 @@ function startPreviewDurEdit(i, span) {
     inp.addEventListener('blur', finish);
     inp.addEventListener('keydown', ev => {
       if (ev.key === 'Enter') inp.blur();
-      if (ev.key === 'Escape') { saved = true; renderPreviewList(); }
+      if (ev.key === 'Escape') { saved = true; renderPreviewList(); ev.stopPropagation(); }
     });
   }
 }
@@ -3387,7 +3395,7 @@ function customPrompt(msg, defaultVal) {
     el('confirmCancelBtn').onclick = () => cleanup(null);
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') cleanup(input.value.trim() || null);
-      if (e.key === 'Escape') cleanup(null);
+      if (e.key === 'Escape') { cleanup(null); e.stopPropagation(); }
     });
   });
 }
@@ -3599,9 +3607,8 @@ function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeBlockMenu();
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','blockEditModal','weekTplLoadModal','previewModal','itemEditModal','recurModal'].forEach(id => {
-    const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
-  });
+  // Klik na pozadí žádné okno nezavře — aby se nezahodily neuložené úpravy. Okna se zavírají jen tlačítky nebo Esc.
+  // Výjimka: potvrzovací dialog (confirmModal) → klik mimo = „zrušit“ (žádná data k uložení, bezpečné).
   const cm = el('confirmModal');
   if (cm && cm.classList.contains('open') && e.target === cm && _confirmResolve) _confirmResolve(false);
 });
@@ -4050,6 +4057,20 @@ el('quickInput').addEventListener('keydown', e => {
 });
 
 document.addEventListener('keydown', e => {
+  // Esc zavře vrchní otevřené okno (u potvrzovacího dialogu = „zrušit“). stopImmediatePropagation
+  // zabrání tomu, aby tentýž Esc navíc sbalil rozbalený panel (onExpandEsc).
+  if (e.key === 'Escape') {
+    const cm = el('confirmModal');
+    if (cm && cm.classList.contains('open')) {
+      if (_confirmResolve) _confirmResolve(false);
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+    const openModals = document.querySelectorAll('.modal-bg.open');
+    if (openModals.length) {
+      openModals[openModals.length - 1].classList.remove('open');
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+  }
   if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
     const a = document.activeElement;
     if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
