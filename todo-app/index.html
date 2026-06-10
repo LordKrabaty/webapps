@@ -695,6 +695,13 @@ textarea::placeholder{color:var(--mid)}
       <label class="modal-item"><input type="checkbox" id="clr-weekplans" checked><span>plán týdne (Plán)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>nastavení vzhledu</span></label>
     </div>
+    <p style="font-size:.78rem;color:var(--muted);margin:.1rem 0 0">Jednotlivé koše úkolů</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
+      <label class="modal-item"><input type="checkbox" id="clr-thisweek"><span>tento týden — dny + plán</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-nextweek"><span>příští týden — dny + plán</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-later"><span>Později (měsíční úkoly)</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-inbox"><span>Inbox</span></label>
+    </div>
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" onclick="closeModal('clearStorageModal')">zrušit</button>
       <button class="modal-btn" onclick="toggleAllClear()">vybrat vše</button>
@@ -3579,7 +3586,8 @@ function schedSave() {
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────────
 function clearStorage() { el('clearStorageModal').classList.add('open'); }
 function toggleAllClear() {
-  const boxes = ['clr-session','clr-library','clr-archive','clr-week','clr-weekplans','clr-appearance'].map(id => el(id));
+  const boxes = ['clr-session','clr-library','clr-archive','clr-week','clr-weekplans','clr-appearance',
+                 'clr-thisweek','clr-nextweek','clr-later','clr-inbox'].map(id => el(id));
   const anyUnchecked = boxes.some(b => !b.checked);
   boxes.forEach(b => b.checked = anyUnchecked);
 }
@@ -3591,9 +3599,25 @@ async function doSelectiveClear() {
   if (el('clr-week').checked)       toDelete.push(WK(WEEK_KEY));
   if (el('clr-weekplans').checked)  toDelete.push(WK(WEEKPLANS_KEY));
   if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs',WK(WORKDAYS_KEY));
-  if (!toDelete.length) { closeModal('clearStorageModal'); return; }
+  // granulární koše: mutace v paměti + uložení — obalené save-funkce zapíšou náhrobky a naplánují sync
+  const clrThis = el('clr-thisweek').checked, clrNext = el('clr-nextweek').checked;
+  const clrLater = el('clr-later').checked, clrInbox = el('clr-inbox').checked;
+  const bucketChange = clrThis || clrNext || clrLater || clrInbox;
+  if (!toDelete.length && !bucketChange) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
   if (!await customConfirm('Opravdu smazat vybraná data?', 'smazat')) return;
+  if (clrThis || clrNext) {
+    const isos = new Set();
+    if (clrThis) getCurrentWeekDates(0).forEach(d => isos.add(d.iso));
+    if (clrNext) getCurrentWeekDates(1).forEach(d => isos.add(d.iso));
+    weekDays  = weekDays.filter(d => !isos.has(d.date));   saveWeek();
+    weekPlans = weekPlans.filter(p => !isos.has(p.date));  saveWeekPlans();
+    // živá session patřící smazanému týdnu by se po reloadu obnovila → smaž ji taky
+    let sp = null; try { sp = JSON.parse(localStorage.getItem(WK(SESSION_KEY)) || 'null')?.planDate; } catch(e) {}
+    if (sp && isos.has(sp) && !toDelete.includes(WK(SESSION_KEY))) toDelete.push(WK(SESSION_KEY));
+  }
+  if (clrLater) { later = [];  saveLater(); }
+  if (clrInbox) { inbox = []; inboxMt = Date.now(); saveInbox(); }
   try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
   location.reload();
 }
