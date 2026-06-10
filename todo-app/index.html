@@ -343,6 +343,10 @@ textarea::placeholder{color:var(--mid)}
 .preview-item-text.done{text-decoration:line-through;color:var(--muted)}
 .preview-item-note{font-size:.76rem;color:var(--muted);white-space:pre-wrap;word-break:break-word;line-height:1.5;padding:.1rem .1rem .28rem 1.5rem;cursor:pointer;border-bottom:1px solid var(--light)}
 @media(hover:hover){.preview-item-note:hover{color:var(--dark)}}
+.preview-item-sched{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--mid);flex-shrink:0;white-space:nowrap;min-width:5.4rem;text-align:right}
+.preview-win{display:flex;align-items:center;gap:.35rem;font-size:.74rem;color:var(--muted);flex-shrink:0}
+.preview-win input{width:3.4rem;font-family:'DM Mono',monospace;font-size:.74rem;border:var(--b);border-radius:var(--r);padding:.15rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:center}
+.preview-win input:focus{outline:1.5px solid var(--black);outline-offset:1px}
 .preview-item-dur{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap;cursor:pointer;border-bottom:1px dashed transparent}
 @media(hover:hover){.preview-item-dur:hover{border-bottom-color:var(--mid)}}
 .preview-item-move{display:flex;flex-direction:column;gap:0;flex-shrink:0;opacity:0}
@@ -355,7 +359,7 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:none){.preview-item-del{opacity:.45}}
 .preview-item-del svg{width:8px;height:8px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
 .preview-item-input{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;padding:.05rem 0;min-width:0}
-.preview-add-row{display:flex;gap:.3rem;margin-top:.4rem;padding-top:.35rem;border-top:1px solid var(--light);align-items:center}
+.preview-add-row{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem;padding-top:.35rem;border-top:1px solid var(--light);align-items:center}
 .preview-add-text{flex:3;font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.25rem .45rem;background:var(--w);color:var(--black);outline:none;min-width:0}
 .preview-add-text:focus{outline:1.5px solid var(--black);outline-offset:1px}
 .preview-add-dur{width:3.5rem;font-family:'DM Mono',monospace;font-size:.78rem;border:var(--b);border-radius:var(--r);padding:.25rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:right}
@@ -734,10 +738,16 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div class="modal-bg" id="previewModal">
-  <div class="modal" style="max-width:400px;max-height:85vh;display:flex;flex-direction:column;gap:.5rem;overflow:hidden">
+  <div class="modal" style="max-width:min(560px,94vw);max-height:85vh;display:flex;flex-direction:column;gap:.5rem;overflow:hidden">
     <div style="display:flex;align-items:baseline;gap:.5rem">
       <h2 id="previewTitle" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Náhled</h2>
       <span id="previewMeta" style="font-size:.73rem;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap;flex-shrink:0"></span>
+    </div>
+    <div class="preview-win">
+      <span>okno dne</span>
+      <input type="text" id="previewWinStart" placeholder="6:00" oninput="setPreviewWindow()" title="začátek okna — od kdy se plánuje">
+      <span>–</span>
+      <input type="text" id="previewWinEnd" placeholder="14:00" oninput="setPreviewWindow()" title="konec okna dne">
     </div>
     <div id="previewItemList" style="overflow-y:auto;flex:1;min-height:60px;border-top:1.5px solid var(--black);padding-top:.3rem"></div>
     <div class="modal-row">
@@ -1263,6 +1273,31 @@ function computeTimeline() {
   return { blocks: all, wStart, wEnd, nowMin };
 }
 
+// Naplánované časy top-level bloků pro LIBOVOLNÉ pole položek (stejná logika jako computeTimeline,
+// jen bez vykreslení a bez globálů) → mapa index→{startMin,endMin}. Používá náhled, aby ukázal,
+// kdy daný blok vychází při zadaném okně od–do.
+function computeScheduleTimes(arr, wStartStr) {
+  const wStart = timeToMin(wStartStr || '8:00');
+  const times = {};
+  if (!arr || !arr.length) return times;
+  const top = arr.reduce((a, it, i) => { if (!it.isSubtask) a.push(i); return a; }, []);
+  const fixed = top.filter(i => arr[i].isEvent && arr[i].eventStart).map(i => {
+    const s = timeToMin(arr[i].eventStart);
+    const e = arr[i].eventEnd ? timeToMin(arr[i].eventEnd) : s + getEffectiveDuration(i, arr);
+    return { i, s, e };
+  }).sort((a, b) => a.s - b.s);
+  fixed.forEach(f => { times[f.i] = { startMin: f.s, endMin: f.e }; });
+  let cursor = wStart;
+  top.filter(i => !(arr[i].isEvent && arr[i].eventStart)).forEach(i => {
+    const dur = getEffectiveDuration(i, arr);
+    let moved = true;
+    while (moved) { moved = false; for (const f of fixed) { if (cursor < f.e && cursor + dur > f.s) { cursor = f.e; moved = true; break; } } }
+    times[i] = { startMin: cursor, endMin: cursor + dur };
+    cursor += dur;
+  });
+  return times;
+}
+
 // ── RENDER TIMELINE ───────────────────────────────────────────────────────────
 const MINS_PER_ROW = 120;
 
@@ -1614,6 +1649,7 @@ function renderAll() {
   renderTimeline();
   renderItemList();
   updateStats();
+  renderDayButtons();      // čas v názvu aktivního dne ber z živého stavu → aktualizuj hned při editaci
   updateDirtyState();
   updateAbbrevHint();
 }
@@ -1799,8 +1835,13 @@ function op_addBlockItem(ctx, blockType) {
 }
 
 // add-funkce míří na aktuální cíl (addCtx) — den nebo zvolený měsíc v Později
-function addQuickItems(forceType) { op_addQuickItems(addCtx, forceType); }
-function addBlockItem(blockType) { op_addBlockItem(addCtx, blockType); }
+// Cíl pro menu/preset přidání. Menu (blockMenu) může nést vlastní kontext (m._ctx) — používá náhled
+// (PREVIEWCTX), aby +Úkol/+Blok/+Událost přidávaly do prohlížené šablony/dne, ne do aktivní karty.
+// Když menu žádný kontext nemá (běžné karty, Enter v quickInput), padá na addCtx.
+let _previewMenuCtx = null;                       // jednorázový kontext pro NEJBLIŽŠÍ otevření menu
+function menuCtx() { const m = el('blockMenu'); return (m && m._ctx) || addCtx; }
+function addQuickItems(forceType) { op_addQuickItems(menuCtx(), forceType); }
+function addBlockItem(blockType) { op_addBlockItem(menuCtx(), blockType); }
 
 // klik na zkratku bloku pod polem → vloží napsaný text jako podúkol(y) pod KONKRÉTNÍ blok (dle id)
 // (prázdné pole → jen zaměří pole pro psaní)
@@ -2036,9 +2077,20 @@ function findParentBlock(idx, arr = items) {
   return -1;
 }
 
+// Minuty položky pro součty/plánování: událost s časem od–do = rozdíl časů (autoritativní,
+// i když je item.duration zastaralá — viz editace času v náhledu), jinak vlastní duration.
+function effItemMinutes(item) {
+  if (item.isEvent && item.eventStart && item.eventEnd) {
+    const d = timeToMin(item.eventEnd) - timeToMin(item.eventStart);
+    if (d > 0) return d;
+  }
+  return item.duration || 0;
+}
+
 function getEffectiveDuration(idx, arr = items) {
   const item = arr[idx];
-  if (item.isSubtask || item.isEvent) return item.duration;
+  if (item.isEvent) return effItemMinutes(item);
+  if (item.isSubtask) return item.duration;
   let sum = 0;
   for (let j = idx + 1; j < arr.length && arr[j].isSubtask; j++) {
     sum += arr[j].duration || 0;
@@ -2056,7 +2108,7 @@ function dayTimeSplit(arr) {
     const it = arr[i];
     if (it.isSubtask) continue;
     if (it.isEvent) {
-      const d = it.duration || 0;
+      const d = effItemMinutes(it);
       total += d; if (it.done) done += d;
       continue;
     }
@@ -2808,6 +2860,7 @@ function updateLibraryEntry() {
   entry.mt = Date.now();
   saveLibrary();
   markSaved();
+  renderLibrary();                 // přepočítej čas v názvu šablony hned, ne až po refresh
   showSave('✓ šablona aktualizována');
   updateDirtyState();
 }
@@ -2872,6 +2925,18 @@ async function applyLibEntry(id) {
 let _weekTplLoadId = null;
 let _previewSource = null;
 
+// Kontext pro přidávání v náhledu — sdílí op_add*/preset menu s kartami (Týden/Příští). Mění jen
+// položky v paměti náhledu (_previewSource.items); na disk se promítne až „uložit změny"/„aplikovat".
+const PREVIEWCTX = {
+  kind: 'preview',
+  get list() { return _previewSource ? _previewSource.items : []; },
+  input: 'previewAddText',
+  winStart() { return (_previewSource && _previewSource.windowStart) || '8:00'; },
+  undo() {},
+  save() {},
+  render() { renderPreviewList(); },
+};
+
 let _weekTplNextWeek = true;
 
 function openWeekTplLoadModal(entry) {
@@ -2891,9 +2956,9 @@ function openWeekTplLoadModal(entry) {
   el('weekTplDayList').innerHTML = DAY_ORDER.map((dayKey) => {
     const data = entry.weekData[dayKey];
     if (!data) return '';
-    const total = data.items.length;
+    const totalMin = dayTotalMinutes(data.items);
     return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.83rem">
-      <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${total}×</span></span>
+      <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${totalMin ? formatDur(totalMin) : '—'}</span></span>
       <span style="color:var(--muted);font-size:.75rem">→</span>
       <select id="wtl-${dayKey}" style="${selectStyle}">${targetOptions}</select>
       <button onclick="openPreview('weekTplDay',${entry.id},'${dayKey}')" style="border:none;background:none;cursor:pointer;padding:.15rem .2rem;flex-shrink:0;display:flex;align-items:center;opacity:.6" title="náhled">
@@ -2997,8 +3062,9 @@ function openPreview(type, id, dayKey) {
   if (applyBtn) applyBtn.style.display = isLib ? 'block' : 'none';
   // primární akce náhledu: u šablony „aplikovat", jinak „uložit změny"
   if (saveBtn) saveBtn.classList.toggle('primary', !isLib);
-  el('previewMeta').textContent = src.windowStart + '–' + src.windowEnd + ' · ' + src.items.length + 'p';
-  renderPreviewList();
+  if (el('previewWinStart')) el('previewWinStart').value = src.windowStart || '';
+  if (el('previewWinEnd'))   el('previewWinEnd').value   = src.windowEnd   || '';
+  renderPreviewList();   // sám nastaví previewMeta (celkový čas)
   el('previewModal').classList.add('open');
 }
 
@@ -3046,21 +3112,27 @@ function applyPreviewTemplate() {
 function renderPreviewList() {
   const container = el('previewItemList');
   if (!container || !_previewSource) return;
-  const n = _previewSource.items.length;
-  const itemsHtml = n ? _previewSource.items.map((item, i) => {
+  const arr = _previewSource.items;
+  const n = arr.length;
+  const times = computeScheduleTimes(arr, _previewSource.windowStart);   // kdy daný blok vychází
+  const itemsHtml = n ? arr.map((item, i) => {
+    const isTop = !item.isSubtask;
     let durTxt;
     if (item.isEvent && item.eventStart) durTxt = item.eventStart + '–' + (item.eventEnd || '?');
+    else if (isTop) durTxt = formatDur(getEffectiveDuration(i, arr));   // blok = součet podúkolů
     else durTxt = formatDur(item.duration);
+    // čas bloku na ose dne (jen plovoucí top-level; událost už má fixní čas v durTxt)
+    const sched = (isTop && !item.isEvent && times[i])
+      ? `<span class="preview-item-sched">${minToTime(times[i].startMin)}–${minToTime(times[i].endMin)}</span>` : '';
     const pbt = BLOCK_TYPES[item.blockType] || BLOCK_TYPES.TASK;
     const pic = itemIcon(item);
-    const ptext = !item.isSubtask && pic
-      ? pic + ' ' + stripBlockEmoji(item.text, pbt)
-      : item.text;
+    const ptext = isTop && pic ? pic + ' ' + stripBlockEmoji(item.text, pbt) : item.text;
     return `<div class="preview-item${item.isSubtask ? ' subtask' : ' block'}" draggable="true" data-idx="${i}">
       <input type="checkbox" class="preview-item-chk" ${item.done ? 'checked' : ''}
         onchange="togglePreviewDone(${i},this.checked)">
       <span class="preview-item-text${item.done ? ' done' : ''}"
         onclick="startPreviewEdit(${i},this)">${esc(ptext)}</span>
+      ${sched}
       <span class="preview-item-dur" onclick="startPreviewDurEdit(${i},this)" title="upravit čas">${durTxt}</span>
       <div class="preview-item-move">
         <button onclick="movePreviewItem(${i},-1)" ${i===0?'disabled':''}>▲</button>
@@ -3072,13 +3144,34 @@ function renderPreviewList() {
     </div>` + (item.note ? `<div class="preview-item-note" onclick="startPreviewNoteEdit(${i},this)" title="upravit popis / poznámku">${esc(item.note)}</div>` : '');
   }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné položky.</div>';
   container.innerHTML = itemsHtml + `<div class="preview-add-row">
-    <input id="previewAddText" class="preview-add-text" placeholder="nová položka…"
+    <input id="previewAddText" class="preview-add-text" placeholder="nová položka… (např. úkol 20m)"
       onkeydown="if(event.key==='Enter')addPreviewItem(false)">
     <input id="previewAddDur" class="preview-add-dur" type="number" min="1" max="720"
       placeholder="min" title="délka v minutách" onkeydown="if(event.key==='Enter')addPreviewItem(false)">
-    <button class="modal-btn" style="padding:.25rem .45rem;flex:none" onclick="addPreviewItem(false)" title="přidat úkol">+ úkol</button>
-    <button class="modal-btn" style="padding:.25rem .45rem;flex:none" onclick="addPreviewItem(true)" title="přidat blok">+ blok</button>
+    <button class="btn-add" style="padding:.25rem .45rem;flex:none" onclick="previewMenu(event,'task')" title="přidat úkol — presety i vlastní">+ Úkol ▾</button>
+    <button class="btn-add" style="padding:.25rem .45rem;flex:none" onclick="previewMenu(event,'block')" title="přidat blok — presety i vlastní">+ Blok ▾</button>
+    <button class="btn-add" style="padding:.25rem .45rem;flex:none" onclick="previewMenu(event,'event')" title="přidat událost — presety i vlastní">+ Událost ▾</button>
   </div>`;
+  updatePreviewMeta();
+}
+
+// Meta náhledu = celkový čas položek (místo počtu); u rozpracovaných i hotovo/celkem.
+function updatePreviewMeta() {
+  const m = el('previewMeta');
+  if (!m || !_previewSource) return;
+  const { total, done } = dayTimeSplit(_previewSource.items);
+  m.textContent = (done > 0 && done < total)
+    ? formatDur(done) + ' / ' + formatDur(total)
+    : 'Σ ' + (total ? formatDur(total) : '0');
+}
+
+// Editace okna od–do přímo v náhledu → přepočítá časy bloků (uloží se přes „uložit změny"/„aplikovat").
+function setPreviewWindow() {
+  if (!_previewSource) return;
+  const s = el('previewWinStart')?.value.trim(), e = el('previewWinEnd')?.value.trim();
+  if (s) _previewSource.windowStart = s;
+  if (e) _previewSource.windowEnd = e;
+  renderPreviewList();
 }
 
 function togglePreviewDone(i, checked) {
@@ -3153,6 +3246,7 @@ function startPreviewDurEdit(i, span) {
         if (!wrap.contains(document.activeElement)) {
           if (s.value) item.eventStart = s.value;
           if (e2.value) item.eventEnd = e2.value;
+          if (item.eventStart && item.eventEnd) item.duration = effItemMinutes(item);   // drž duration v souladu s časem
           renderPreviewList();
         }
       }, 80);
@@ -3201,44 +3295,46 @@ function addPreviewItem(asBlock) {
   if (!text) { textInp?.focus(); return; }
   const dur = parseInt(durInp?.value) || 30;
   _previewSource.items.push({ id: Date.now(), text, blockType: 'TASK', duration: dur, done: false, isSubtask: !asBlock, isEvent: false });
-  el('previewMeta').textContent = _previewSource.windowStart + '–' + _previewSource.windowEnd + ' · ' + _previewSource.items.length + 'p';
-  renderPreviewList();
+  renderPreviewList();   // přepočítá i meta (celkový čas)
   el('previewAddText')?.focus();
 }
 
 function deletePreviewItem(i) {
   if (!_previewSource) return;
   _previewSource.items.splice(i, 1);
-  el('previewMeta').textContent = _previewSource.windowStart + '–' + _previewSource.windowEnd + ' · ' + _previewSource.items.length + 'p';
-  renderPreviewList();
+  renderPreviewList();   // přepočítá i meta (celkový čas)
 }
 
 function doPreviewSave() {
   if (!_previewSource) return;
-  const { type, id, dayKey, items: preItems } = _previewSource;
+  const { type, id, dayKey, items: preItems, windowStart: wS, windowEnd: wE } = _previewSource;
   const snapshot = JSON.parse(JSON.stringify(preItems));
   if (type === 'lib') {
     const entry = library.find(e => e.id === id);
     if (!entry) return;
     entry.data.items = stripDone(snapshot);
+    entry.data.windowStart = wS; entry.data.windowEnd = wE;
     entry.mt = Date.now();
     saveLibrary(); renderLibrary();
   } else if (type === 'weekDay') {
     const d = weekDays.find(d => d.id === id);
     if (!d) return;
     d.items = snapshot;
+    d.windowStart = wS; d.windowEnd = wE;
     d.mt = Date.now();
     saveWeek(); renderWeekTab(); renderDayButtons();
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
     entry.weekData[dayKey].items = stripDone(snapshot);
+    entry.weekData[dayKey].windowStart = wS; entry.weekData[dayKey].windowEnd = wE;
     entry.mt = Date.now();
-    saveLibrary();
+    saveLibrary(); renderLibrary();   // přepočítej celkový čas vícedenní šablony v jejím názvu
   } else if (type === 'weekPlan') {
     const p = weekPlans.find(p => p.id === id);
     if (!p) return;
     p.items = snapshot;
+    p.windowStart = wS; p.windowEnd = wE;
     p.mt = Date.now();
     saveWeekPlans(); renderWeekTab();
   }
@@ -3289,19 +3385,22 @@ function _openMenu(menu, html, btn) {
   if (html != null) menu.innerHTML = html;
   menu.style.display = 'flex';
   const br = btn.getBoundingClientRect();
-  menu.style.top = (br.bottom + 4) + 'px';
   requestAnimationFrame(() => {
-    const mw = menu.offsetWidth, vw = window.innerWidth;
+    const mw = menu.offsetWidth, mh = menu.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
     let left = br.left;
     if (left + mw > vw - 8) left = vw - mw - 8;
     if (left < 8) left = 8;
     menu.style.left = left + 'px';
+    let top = br.bottom + 4;
+    if (top + mh > vh - 8) top = Math.max(8, br.top - mh - 4);   // nevejde se dolů → otevři nad tlačítko
+    menu.style.top = top + 'px';
   });
 }
 
 function toggleBlockMenu(e) {
   e.stopPropagation();
   const menu = el('blockMenu');
+  menu._ctx = _previewMenuCtx; _previewMenuCtx = null;   // null = běžná karta (addCtx), jinak náhled
   if (menu._src === 'block' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   const html = Object.entries(BLOCK_TYPES)
     .filter(([k, bt]) => k !== 'TASK' && !bt.isEvent)
@@ -3314,6 +3413,7 @@ function toggleBlockMenu(e) {
 function toggleEventMenu(e) {
   e.stopPropagation();
   const menu = el('blockMenu');
+  menu._ctx = _previewMenuCtx; _previewMenuCtx = null;
   if (menu._src === 'event' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   const eventTypes = Object.entries(BLOCK_TYPES).filter(([k, bt]) => k !== 'TASK' && bt.isEvent);
   let html = eventTypes.map(([k, bt]) =>
@@ -3328,6 +3428,7 @@ function toggleEventMenu(e) {
 function toggleTaskMenu(e) {
   e.stopPropagation();
   const menu = el('blockMenu');
+  menu._ctx = _previewMenuCtx; _previewMenuCtx = null;
   if (menu._src === 'task' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   menu.innerHTML = '';
   const seen = new Set();
@@ -3363,9 +3464,17 @@ function op_addPredefinedTask(ctx, text, duration) {
   ctx.save(); ctx.render();
   closeBlockMenu();
 }
-function addPredefinedTask(text, duration) { op_addPredefinedTask(addCtx, text, duration); }
+function addPredefinedTask(text, duration) { op_addPredefinedTask(menuCtx(), text, duration); }
 
-function closeBlockMenu() { const m = el('blockMenu'); if (m) { m.style.display = 'none'; m._src = null; } }
+function closeBlockMenu() { const m = el('blockMenu'); if (m) { m.style.display = 'none'; m._src = null; m._ctx = null; } }
+
+// Otevře preset menu (úkol/blok/událost) cílené na náhled — sdílí toggle* funkce přes jednorázový _previewMenuCtx.
+function previewMenu(e, which) {
+  _previewMenuCtx = PREVIEWCTX;
+  if (which === 'task') toggleTaskMenu(e);
+  else if (which === 'block') toggleBlockMenu(e);
+  else toggleEventMenu(e);
+}
 
 // ── CUSTOM PROMPT ─────────────────────────────────────────────────────────────
 function customPrompt(msg, defaultVal) {
@@ -3461,6 +3570,8 @@ function schedSave() {
     // promítni živé úpravy aktivního dne do weekDays, ať se nasynchronizují i bez přepnutí dne
     autoSavePlanDay();
     saveSession(); showSave();
+    // den-tlačítka aktualizuje renderAll živě; tady po flushi dorovnej kartu Hotovo, je-li vidět
+    if (el('pane-hotovo')?.classList.contains('active')) renderWeekTab();
     if (window.autoSyncOnSave) window.autoSyncOnSave();
   }, 300);
 }
@@ -4867,6 +4978,8 @@ function renderDayButtons() {
   if (!container) return;
   const minsByDate = {};
   weekDays.forEach(d => { minsByDate[d.date] = dayTotalMinutes(d.items); });
+  // aktivní den ber z živého stavu (items), ne z weekDays — ten se flushuje až debounced (schedSave)
+  if (activePlanDate) minsByDate[activePlanDate] = dayTotalMinutes(items);
   container.innerHTML = getCurrentWeekDates(planWeekOffset).map(({ iso, day }) => {
     const dayShort = PLAN_DAY_SHORT[day.getDay()];
     const dateStr = day.getDate() + '. ' + (day.getMonth() + 1) + '.';
