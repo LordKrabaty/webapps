@@ -241,6 +241,19 @@ textarea::placeholder{color:var(--mid)}
 .item-row.is-ghost .item-text{color:var(--muted);font-style:italic}
 .recur-ghost-badge{font-size:.72rem;color:var(--muted);flex:0 0 auto;cursor:default}
 .recur-ghost-badge.is-confirm{cursor:pointer;color:var(--dark)}
+/* popover „hodiny" pro čas události / délku úkolu (nad odznakem času) */
+.time-pop{position:fixed;z-index:400;background:var(--w);border:var(--bh);border-radius:var(--r);padding:.5rem .55rem;display:flex;flex-direction:column;gap:.4rem;min-width:215px;max-width:calc(100vw - 16px)}
+.time-pop-row{display:flex;align-items:center;gap:.35rem}
+.time-pop-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);width:1.6rem;flex:0 0 auto}
+.time-pop-val{font-family:'DM Mono',monospace;font-size:.95rem;color:var(--black);min-width:3.4rem;text-align:center;flex:1}
+.time-pop-btn{font-family:'DM Mono',monospace;font-size:.85rem;padding:.18rem .5rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--dark);cursor:pointer;line-height:1.2;flex:0 0 auto}
+@media(hover:hover){.time-pop-btn:hover{border-color:var(--black);color:var(--black)}}
+.time-pop-btn.primary{border:var(--bh);font-weight:600;color:var(--black)}
+.time-pop-presets{display:flex;gap:.3rem;flex-wrap:wrap}
+.time-pop-presets .time-pop-btn{flex:1;text-align:center;padding:.18rem .2rem}
+.time-pop-input{width:100%;font-family:'DM Mono',monospace;font-size:.82rem;padding:.28rem .45rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none;box-sizing:border-box}
+.time-pop-input:focus{border:var(--bh)}
+.time-pop-foot{display:flex;justify-content:space-between;gap:.4rem;margin-top:.05rem}
 .item-toggle{font-size:.85rem;cursor:pointer;flex-shrink:0;width:18px;text-align:center;color:var(--muted);line-height:1;user-select:none}
 @media(hover:hover){.item-toggle:hover{color:var(--black)}}
 .item-emoji{flex-shrink:0;margin-right:.1rem;line-height:1;cursor:pointer;border-radius:2px;user-select:none}
@@ -2226,77 +2239,146 @@ function applyTimeConversion(ctx, idx, txt) {
   return false;
 }
 
+// ── POPOVER „HODINY" — nastavení času události / délky úkolu klikáním ──────────
+// Jeden plovoucí panel nad odznakem času. Textové pole dole zachovává všechny
+// konverze (rozsah → událost · 0 → blok · -/✒ → úkol) — OK ho prožene stejnou
+// logikou jako dřívější inline editace.
+let _timePop = null;
+function closeTimePop() {
+  if (!_timePop) return;
+  document.removeEventListener('mousedown', _timePop._out, true);
+  document.removeEventListener('keydown', _timePop._esc, true);
+  _timePop.remove(); _timePop = null;
+}
+function _openTimePop(anchor) {
+  closeTimePop();
+  const pop = document.createElement('div');
+  pop.className = 'time-pop';
+  document.body.appendChild(pop);
+  _timePop = pop;
+  pop._out = e => { if (!pop.contains(e.target)) closeTimePop(); };
+  pop._esc = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeTimePop(); } };
+  document.addEventListener('mousedown', pop._out, true);
+  document.addEventListener('keydown', pop._esc, true);
+  pop._place = () => {
+    const br = anchor.getBoundingClientRect();
+    const mw = pop.offsetWidth, mh = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+    let left = br.left - (mw - br.width) / 2;
+    if (left + mw > vw - 8) left = vw - mw - 8;
+    if (left < 8) left = 8;
+    let top = br.top - mh - 6;                                   // primárně NAD odznak
+    if (top < 8) top = Math.min(vh - mh - 8, br.bottom + 6);     // nevejde se → pod něj
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  };
+  return pop;
+}
+function _tpBtn(label, title, fn, cls) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'time-pop-btn' + (cls ? ' ' + cls : ''); b.textContent = label;
+  if (title) b.title = title;
+  b.addEventListener('click', fn);
+  return b;
+}
+function _tpRow(lbl) {
+  const r = document.createElement('div'); r.className = 'time-pop-row';
+  if (lbl) { const l = document.createElement('span'); l.className = 'time-pop-lbl'; l.textContent = lbl; r.appendChild(l); }
+  return r;
+}
+const _tpClamp = v => Math.max(0, Math.min(23 * 60 + 55, v));
+
+// rozmezí od–do (události; bloky přes něj dostanou čas a stanou se událostí)
+function openRangePicker(ctx, idx, anchor, start, end) {
+  const pop = _openTimePop(anchor);
+  let s = timeToMin(start), e = timeToMin(end);
+  if (!(e > s)) e = _tpClamp(s + 60);
+
+  const input = document.createElement('input');
+  input.className = 'time-pop-input';
+  input.title = 'ručně: 9:00-10:00 · 0 → bez času (blok) · - → úkol';
+  const valS = document.createElement('span'); valS.className = 'time-pop-val';
+  const valE = document.createElement('span'); valE.className = 'time-pop-val';
+  const sync = () => { valS.textContent = minToTime(s); valE.textContent = minToTime(e); input.value = minToTime(s) + '-' + minToTime(e); };
+  // ruční zápis v poli → převezmi do stepperů (best effort)
+  const readInput = () => { const m = input.value.match(/(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i); if (m) { s = timeToMin(m[1]); e = timeToMin(m[2]); } };
+
+  const rowS = _tpRow('od');
+  rowS.appendChild(_tpBtn('−', 'o 15 min dřív (drží délku)', () => { readInput(); const d = e - s; s = _tpClamp(s - 15); e = _tpClamp(s + d); sync(); }));
+  rowS.appendChild(valS);
+  rowS.appendChild(_tpBtn('+', 'o 15 min později (drží délku)', () => { readInput(); const d = e - s; s = _tpClamp(s + 15); e = _tpClamp(s + d); sync(); }));
+  const rowE = _tpRow('do');
+  rowE.appendChild(_tpBtn('−', 'konec o 15 min dřív (zkrátí)', () => { readInput(); e = Math.max(s + 5, e - 15); sync(); }));
+  rowE.appendChild(valE);
+  rowE.appendChild(_tpBtn('+', 'konec o 15 min později (prodlouží)', () => { readInput(); e = _tpClamp(e + 15); sync(); }));
+
+  const foot = document.createElement('div'); foot.className = 'time-pop-foot';
+  foot.appendChild(_tpBtn('zrušit', '', () => closeTimePop()));
+  const ok = () => { const t = input.value.trim(); closeTimePop(); if (applyTimeConversion(ctx, idx, t)) ctx.render(); };
+  foot.appendChild(_tpBtn('OK', '', ok, 'primary'));
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
+
+  pop.appendChild(rowS); pop.appendChild(rowE); pop.appendChild(input); pop.appendChild(foot);
+  sync();
+  requestAnimationFrame(pop._place);
+}
+
+// délka úkolu (minuty) — steppery + presety; pole umí i konverze (rozsah/0/-)
+function openDurPicker(ctx, idx, anchor) {
+  const pop = _openTimePop(anchor);
+  let d = +(ctx.list[idx] && ctx.list[idx].duration) || 30;
+
+  const input = document.createElement('input');
+  input.className = 'time-pop-input';
+  input.title = 'ručně: 45m / 2h · 9:00-10:00 → událost · 0 → blok · - → úkol';
+  const val = document.createElement('span'); val.className = 'time-pop-val';
+  const sync = () => { val.textContent = formatDur(d); input.value = d + 'm'; };
+  const readInput = () => { const p = parseDuration(input.value); if (p && p > 0) d = p; };
+
+  const row = _tpRow(null);
+  row.appendChild(_tpBtn('−15', '', () => { readInput(); d = Math.max(5, d - 15); sync(); }));
+  row.appendChild(_tpBtn('−5', '', () => { readInput(); d = Math.max(5, d - 5); sync(); }));
+  row.appendChild(val);
+  row.appendChild(_tpBtn('+5', '', () => { readInput(); d += 5; sync(); }));
+  row.appendChild(_tpBtn('+15', '', () => { readInput(); d += 15; sync(); }));
+
+  const presets = document.createElement('div'); presets.className = 'time-pop-presets';
+  [15, 30, 45, 60, 90, 120].forEach(p => presets.appendChild(_tpBtn(formatDur(p), '', () => { d = p; sync(); })));
+
+  const foot = document.createElement('div'); foot.className = 'time-pop-foot';
+  foot.appendChild(_tpBtn('zrušit', '', () => closeTimePop()));
+  const ok = () => {
+    const t = input.value.trim(); closeTimePop();
+    if (applyTimeConversion(ctx, idx, t)) { ctx.render(); return; }   // rozsah → událost · 0 → blok · -/✒ → úkol
+    const parsed = parseDuration(t);
+    const item = ctx.list[idx];
+    if (item && parsed && parsed > 0 && parsed !== item.duration) { ctx.undo(); item.duration = parsed; ctx.save(); }
+    ctx.render();
+  };
+  foot.appendChild(_tpBtn('OK', '', ok, 'primary'));
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
+
+  pop.appendChild(row); pop.appendChild(presets); pop.appendChild(input); pop.appendChild(foot);
+  sync();
+  requestAnimationFrame(pop._place);
+}
+
 function op_startDurEdit(ctx, idx) {
-  const list = ctx.list;
-  const item = list[idx];
+  const item = ctx.list[idx];
   if (!item || !item.isSubtask) return;
   const rows = ctx.rowsEl();
   if (!rows || !rows[idx]) return;
   const durEl = rows[idx].querySelector('.dur-badge');
   if (!durEl) return;
-
-  durEl.contentEditable = 'true';
-  durEl.textContent = item.duration + 'm';
-  durEl.focus();
-  const range = document.createRange();
-  range.selectNodeContents(durEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges(); sel.addRange(range);
-
-  let committed = false;
-  const commit = () => {
-    if (committed) return;
-    committed = true;
-    durEl.contentEditable = 'false';
-    const txt = durEl.textContent.trim();
-    // rozsah → událost · 0 → blok · -/✒ → úkol
-    if (applyTimeConversion(ctx, idx, txt)) { ctx.render(); return; }
-    const parsed = parseDuration(txt);
-    if (parsed && parsed > 0 && parsed !== item.duration) {
-      ctx.undo();
-      list[idx].duration = parsed;
-      ctx.save();
-    }
-    ctx.render();
-  };
-  durEl.addEventListener('blur', commit, { once: true });
-  durEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
-    if (e.key === 'Escape') { durEl.textContent = formatDur(item.duration); durEl.blur(); }
-  });
+  openDurPicker(ctx, idx, durEl);
 }
 
 function op_startEventEdit(ctx, idx) {
-  const list = ctx.list;
-  const item = list[idx];
+  const item = ctx.list[idx];
   if (!item || !item.isEvent) return;
   const rows = ctx.rowsEl();
   if (!rows || !rows[idx]) return;
   const durEl = rows[idx].querySelector('.dur-badge');
   if (!durEl) return;
-
-  const original = durEl.textContent;
-  durEl.contentEditable = 'true';
-  durEl.focus();
-  const range = document.createRange();
-  range.selectNodeContents(durEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges(); sel.addRange(range);
-
-  let committed = false;
-  const commit = () => {
-    if (committed) return;
-    committed = true;
-    durEl.contentEditable = 'false';
-    // rozsah → uprav/ponech událost · 0 → blok · -/✒ → úkol
-    applyTimeConversion(ctx, idx, durEl.textContent.trim());
-    ctx.render();
-  };
-  durEl.addEventListener('blur', commit, { once: true });
-  durEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
-    if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
-  });
+  openRangePicker(ctx, idx, durEl, item.eventStart || ctx.winStart() || '8:00', item.eventEnd || null);
 }
 function startDurEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startDurEdit(DAYCTX, idx); }
 function startEventEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startEventEdit(DAYCTX, idx); }
@@ -2353,7 +2435,7 @@ function op_startIconEdit(ctx, idx) {
   });
 }
 
-// ── ČAS BLOKU (inline): zadaný rozsah 9:00-10:00 → blok se stane událostí ──────────
+// ── ČAS BLOKU: picker rozmezí — potvrzený rozsah 9:00-10:00 → blok se stane událostí ──
 function op_startBlockTimeEdit(ctx, idx) {
   const list = ctx.list;
   const item = list[idx];
@@ -2362,29 +2444,9 @@ function op_startBlockTimeEdit(ctx, idx) {
   if (!rows || !rows[idx]) return;
   const durEl = rows[idx].querySelector('.dur-badge');
   if (!durEl) return;
-
-  const original = durEl.textContent;
-  durEl.contentEditable = 'true';
-  durEl.focus();
-  const range = document.createRange();                  // označ obsah — uživatel rovnou přepíše rozsahem
-  range.selectNodeContents(durEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges(); sel.addRange(range);
-
-  let committed = false;
-  const commit = () => {
-    if (committed) return;
-    committed = true;
-    durEl.contentEditable = 'false';
-    // rozsah → událost · -/✒ → úkol  (0 = už je blok, nic)
-    applyTimeConversion(ctx, idx, durEl.textContent.trim());
-    ctx.render();
-  };
-  durEl.addEventListener('blur', commit, { once: true });
-  durEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
-    if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
-  });
+  const start = ctx.winStart() || '8:00';
+  const end = minToTime(_tpClamp(timeToMin(start) + (getEffectiveDuration(idx, list) || item.duration || 30)));
+  openRangePicker(ctx, idx, durEl, start, end);
 }
 function startIconEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startIconEdit(DAYCTX, idx); }
 function startBlockTimeEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startBlockTimeEdit(DAYCTX, idx); }
