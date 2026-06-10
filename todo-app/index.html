@@ -1178,14 +1178,18 @@ function renderTimeline() {
   container.innerHTML = '';
 
   const { blocks, wStart, wEnd, nowMin } = computeTimeline();
+  const minStart = blocks.reduce((mn, b) => Math.min(mn, b.startMin), wStart);
   const maxEnd = blocks.reduce((mx, b) => Math.max(mx, b.endMin), wEnd);
+  // Rozšiř mřížku dozadu o celé řádky, ať jsou vidět i události před začátkem okna
+  let gridStart = wStart - Math.ceil(Math.max(0, wStart - minStart) / MINS_PER_ROW) * MINS_PER_ROW;
+  if (gridStart < 0) gridStart = 0;
   const totalEnd = Math.max(wEnd, maxEnd);
-  const numRows = Math.ceil((totalEnd - wStart) / MINS_PER_ROW);
+  const numRows = Math.ceil((totalEnd - gridStart) / MINS_PER_ROW);
 
   for (let row = 0; row < numRows; row++) {
-    const rowStart = wStart + row * MINS_PER_ROW;
+    const rowStart = gridStart + row * MINS_PER_ROW;
     const rowEnd = rowStart + MINS_PER_ROW;
-    const isOverflowRow = rowStart >= wEnd;
+    const isOverflowRow = rowStart >= wEnd || rowEnd <= wStart;
 
     const rowDiv = document.createElement('div');
     rowDiv.className = 'tl-row' + (isOverflowRow ? ' tl-overflow-row' : '');
