@@ -883,7 +883,7 @@ const DEFAULT_BLOCK_TYPES = {
   MEETING:        { emoji: '🗣️', label: 'Meeting',        defaultDuration: 60  },
   WRAP_UP:        { emoji: '🏚️', label: 'Wrap Up',        defaultDuration: 30  },
   BUFFER:         { emoji: '🧹', label: 'Buffer',         defaultDuration: 480 },
-  TASK:           { emoji: '',   label: 'Úkol',           defaultDuration: 15  },
+  TASK:           { emoji: '',   label: 'Úkol',           defaultDuration: 30  },
 };
 let BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES };
 let blockTypeOrder = [];
@@ -1081,8 +1081,8 @@ function parseItemText(raw) {
     }
   }
 
-  if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15;
-  if (targetBlockKey) { blockType = targetBlockKey; if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15; }
+  if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 30;
+  if (targetBlockKey) { blockType = targetBlockKey; if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 30; }
 
   return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent, targetBlockKey };
 }
@@ -1839,7 +1839,7 @@ function op_addBlockItem(ctx, blockType) {
     ctx.list.push({
       id: Date.now() + Math.random() + (i + 1) * 0.001,
       text: task.text || '✒ úkol',
-      blockType, duration: task.duration || 15,
+      blockType, duration: task.duration || 30,
       isEvent: false, eventStart: null, eventEnd: null,
       isSubtask: true, done: false, urgent: false,
     });
@@ -2777,7 +2777,7 @@ function saveBlockType() {
   el('blockEditTasks').querySelectorAll('div').forEach(row => {
     const inputs = row.querySelectorAll('input');
     const text = inputs[0]?.value.trim();
-    const dur = parseInt(inputs[1]?.value) || 15;
+    const dur = parseInt(inputs[1]?.value) || 30;
     if (text) defaultTasks.push({ text, duration: dur });
   });
 
@@ -3459,7 +3459,7 @@ function toggleTaskMenu(e) {
       const btn = document.createElement('button');
       btn.className = 'block-menu-item';
       btn.innerHTML = `✒ ${esc(t.text)}<span style="margin-left:.5rem;font-family:'DM Mono',monospace;font-size:.78em;color:var(--muted)">${t.duration||15}m</span>`;
-      btn.addEventListener('click', () => addPredefinedTask(t.text, t.duration || 15));
+      btn.addEventListener('click', () => addPredefinedTask(t.text, t.duration || 30));
       menu.appendChild(btn);
     });
   });
@@ -4489,7 +4489,7 @@ function makeLaterGhost(rec, dayLabel) {
     id: 'g_' + rec.id, recurId: rec.id, isGhost: true,
     text: p.text || '(opakování)',
     blockType: p.blockType || 'TASK',
-    duration: p.dur || bt.defaultDuration || 15,
+    duration: p.dur || bt.defaultDuration || 30,
     isEvent: !!p.isEvent,
     eventStart: p.isEvent ? (p.eventStart || null) : null,
     eventEnd:   p.isEvent ? (p.eventEnd   || null) : null,
@@ -4713,7 +4713,7 @@ function normItem(it) {
     id: it.id != null ? it.id : (Date.now() + Math.random()),
     text: it.text || '',
     blockType,
-    duration: +it.duration || (BLOCK_TYPES[blockType]?.defaultDuration || 15),
+    duration: +it.duration || (BLOCK_TYPES[blockType]?.defaultDuration || 30),
     isEvent: !!it.isEvent,
     eventStart: it.eventStart || null,
     eventEnd: it.eventEnd || null,
@@ -4739,7 +4739,7 @@ function migrateFlatLater(arr) {
     if (!map.has(it.ym)) map.set(it.ym, { ym: it.ym, items: [], mt: 0 });
     const bucket = map.get(it.ym);
     const isEvent = !!it.start;
-    const dur = (it.start && it.end) ? Math.max(15, timeToMin(it.end) - timeToMin(it.start)) : 15;
+    const dur = (it.start && it.end) ? Math.max(15, timeToMin(it.end) - timeToMin(it.start)) : 30;
     bucket.items.push(normItem({
       text: it.text, blockType: 'TASK', duration: dur, isEvent,
       eventStart: it.start || null,
@@ -4848,7 +4848,8 @@ function sendItemToField(ctx, idx) {
     const prefix = x.isSubtask ? '✒ ' : '';
     let suffix = '';
     if (x.isEvent && x.eventStart) suffix = ' ' + x.eventStart + '-' + (x.eventEnd || x.eventStart);
-    else if (x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // u bloku délku nese až podúkol
+    // délku úkolu přenášej jen ze dne — Později/Inbox časy nenesou (na cílové kartě se nic nepředvyplní)
+    else if (ctx.kind === 'day' && x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // u bloku délku nese až podúkol
     if (x.note) _sendNotes[x.text || ''] = x.note;                                         // poznámku pones podle čistého textu
     lines.push(prefix + emoji + (x.text || '') + suffix);
   }
@@ -4987,13 +4988,14 @@ function renderLater() {
   }
   buckets.forEach(b => sortBucketItems(b.items, b.ym));
   c.innerHTML = todayHtml + buckets.map((b, gi) => {
-    const total = dayTotalMinutes(b.items);
+    const n = b.items.length;
+    const cnt = n + ' ' + (n === 1 ? 'položka' : n <= 4 ? 'položky' : 'položek');
     const headers = buildWeekHeaders(b.items, b.ym);
     const hols = monthHolidays(b.ym);
     const holHtml = hols.length
       ? `<div class="later-month-holidays">${hols.map(h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); }).join(' · ')}</div>`
       : '';
-    return `<div class="later-month-hdr${gi === 0 ? ' first' : ''}">${monthLabel(b.ym)}<span class="later-month-sum">${formatDur(total)}</span></div>
+    return `<div class="later-month-hdr${gi === 0 ? ' first' : ''}">${monthLabel(b.ym)}<span class="later-month-sum">${cnt}</span></div>
       ${holHtml}<div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
   }).join('');
   initLaterDnd();
