@@ -1061,13 +1061,13 @@ function parseItemText(raw) {
     else if ((m = text.match(/(\d+)\s*m(?:in)?\b/i))) { duration = parseInt(m[1]); text = text.replace(m[0], '').trim(); }
   }
 
-  // Block type detection (emoji or text name)
+  // Detekce typu bloku JEN podle názvu typu (např. „DEEP WORK"). Emoji už blok netvoří ani se
+  // nestripuje — bloky se přidávají z menu/presetů, takže smajlík v úkolu zůstane zachovaný.
   for (const [key, bt] of Object.entries(BLOCK_TYPES)) {
     if (key === 'TASK') continue;
     const labelUpper = (bt.label || '').toUpperCase();
-    if ((bt.emoji && text.includes(bt.emoji)) || (labelUpper && text.toUpperCase().includes(labelUpper))) {
+    if (labelUpper && text.toUpperCase().includes(labelUpper)) {
       blockType = key;
-      if (bt.emoji) text = text.split(bt.emoji).join('').trim();  // don't keep emoji in text (rendered separately)
       if (!duration && !isEvent) duration = bt.defaultDuration;
       break;
     }
