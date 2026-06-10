@@ -1565,9 +1565,9 @@ function rowsHtml(ctx, insertBefore = {}) {
       const tg = item.done ? '☑' : '☐';
       const _pd = item.dayLabel ? parseDayLabel(item.dayLabel, ctx.ym) : null;
       const _da = _pd ? ` data-day="${DAY_ABBREV_CZ[_pd.getDay()]}"` : '';
-      const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo konec června)">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`;
+      const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo konec června) · d → duplikovat · r1m → opakování">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`;
       const timeBadge = (item.isEvent && item.eventStart)
-        ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → bez času · -/✒ → úkol">${item.eventStart}–${item.eventEnd || '?'}</span>`
+        ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → bez času · -/✒ → úkol · d → duplikovat">${item.eventStart}–${item.eventEnd || '?'}</span>`
         : '';
       const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : '', item.isGhost ? 'is-ghost' : ''].filter(Boolean).join(' ');
       const gBadge = item.isGhost
@@ -1616,13 +1616,13 @@ function rowsHtml(ctx, insertBefore = {}) {
     let durLabel = '', durEditable = false, durClick = '';
     if (item.isEvent && item.eventStart) {
       durLabel = item.eventStart + '–' + (item.eventEnd || '?');
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → blok · -/✒ → úkol"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → blok · -/✒ → úkol · d → duplikovat"`;
     } else if (item.isSubtask && !parentIsEvent) {
       durLabel = formatDur(item.duration);
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.dur, idx)}" title="klikni: uprav čas · 9:00-10:00 → událost · 0 → blok · -/✒ → úkol"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.dur, idx)}" title="klikni: uprav čas · 9:00-10:00 → událost · 0 → blok · -/✒ → úkol · d → duplikovat"`;
     } else if (!item.isSubtask) {
       durLabel = formatDur(getEffectiveDuration(idx, list));
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="klikni: 9:00-10:00 → událost · -/✒ → úkol"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="klikni: 9:00-10:00 → událost · -/✒ → úkol · d → duplikovat"`;
     }
 
     const draggable = (!item.isEvent && !item.isGhost) ? 'draggable="true"' : '';   // události drží čas; duchové se nepřetahují
@@ -2204,13 +2204,35 @@ function parseDuration(text) {
   return null;
 }
 
+// Duplikace položky: kopie hned za originál (blok jde i s podúkoly). Kopie dostane
+// nové id, je nehotová a bez vazby na opakování (jinak by mátla logiku duchů).
+function duplicateItem(ctx, idx) {
+  const list = ctx.list, item = list[idx];
+  if (!item) return false;
+  let count = 1;
+  if (!item.isSubtask) { while (idx + count < list.length && list[idx + count].isSubtask) count++; }
+  ctx.undo();
+  const copies = list.slice(idx, idx + count).map(x => {
+    const c = JSON.parse(JSON.stringify(x));
+    c.id = Date.now() + Math.random();
+    c.done = false;
+    delete c.recurId; delete c.isGhost;
+    return c;
+  });
+  list.splice(idx + count, 0, ...copies);
+  ctx.save(); ctx.render();
+  showStatusMsg('⧉ položka zduplikována', 2000);
+  return true;
+}
+
 // Přepnutí typu položky podle textu zadaného do pole ČASU (jednotné pro úkol/blok/událost):
-//   „9:00-10:00" → událost · „0" → blok · „-" nebo „✒" → úkol.
+//   „9:00-10:00" → událost · „0" → blok · „-" nebo „✒" → úkol · „d" → duplikovat.
 // Vrací true, pokud byl text rozpoznán jako konverze (a obsloužil ji — i no-op, když už je
 // položka cílového typu). false = text není konverzní příkaz, ať se zpracuje jako délka.
 function applyTimeConversion(ctx, idx, txt) {
   const item = ctx.list[idx];
   txt = (txt || '').trim();
+  if (txt.toLowerCase() === 'd') return duplicateItem(ctx, idx);            // „d" → duplikuj položku
   const rm = txt.match(/(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i);
   if (rm) {
     const dur = timeToMin(rm[2]) - timeToMin(rm[1]);
@@ -2294,7 +2316,7 @@ function openRangePicker(ctx, idx, anchor, start, end) {
 
   const input = document.createElement('input');
   input.className = 'time-pop-input';
-  input.title = 'ručně: 9:00-10:00 · 0 → bez času (blok) · - → úkol';
+  input.title = 'ručně: 9:00-10:00 · 0 → bez času (blok) · - → úkol · d → duplikovat';
   const valS = document.createElement('span'); valS.className = 'time-pop-val';
   const valE = document.createElement('span'); valE.className = 'time-pop-val';
   const sync = () => { valS.textContent = minToTime(s); valE.textContent = minToTime(e); input.value = minToTime(s) + '-' + minToTime(e); };
@@ -2328,7 +2350,7 @@ function openDurPicker(ctx, idx, anchor) {
 
   const input = document.createElement('input');
   input.className = 'time-pop-input';
-  input.title = 'ručně: 45m / 2h · 9:00-10:00 → událost · 0 → blok · - → úkol';
+  input.title = 'ručně: 45m / 2h · 9:00-10:00 → událost · 0 → blok · - → úkol · d → duplikovat';
   const val = document.createElement('span'); val.className = 'time-pop-val';
   const sync = () => { val.textContent = formatDur(d); input.value = d + 'm'; };
   const readInput = () => { const p = parseDuration(input.value); if (p && p > 0) d = p; };
@@ -4875,6 +4897,8 @@ function mEditDay(ym, idx) {
     // r-pravidlo v poli data → převeď položku na opakování (kotva = tento měsíc)
     const rr = extractRecurRoute(v);
     if (rr && rr.rules.length) { convertItemToRecur(ym, idx, rr.rules); return; }
+    // „d" v poli data → duplikuj položku v měsíci
+    if (v.toLowerCase() === 'd') { materializeLaterGhost(ym, idx); duplicateItem(ctx, idx); return; }
     if (materializeLaterGhost(ym, idx)) { ctx.render(); }   // editace dne ducha → zhmotni (přepočti idx-stabilní)
     if (/^\d{1,2}\.?$/.test(v)) { const m = +String(ym).split('-')[1]; v = v.replace(/\.$/, '') + '.' + m + '.'; }
     if (v !== (item.dayLabel || '')) { item.dayLabel = v || null; ctx.save(); }
@@ -6407,8 +6431,8 @@ window.addEventListener('resize', updateAppGrid);
   checkCloudOnStartup();
 })();
 </script>
-<footer style="text-align:center; padding: 8px; font-size: 0.75rem; color: #999;">
-  This site is powered by <a href="https://www.netlify.com" style="color:#999;">Netlify</a>
+<footer style="text-align:center; padding: 8px;">
+  <a href="https://lordkrabaty.github.io/webapps/" title="úvodní stránka — všechny aplikace" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
 </footer>
 
 <!-- Gist history modal -->

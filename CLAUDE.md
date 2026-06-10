@@ -23,7 +23,7 @@ Před prací na konkrétní app si přečti její složku — může obsahovat v
 2. Globálně nahraď `APP_NAME` názvem app (např. `workout`)
 3. Implementuj 4 stub funkce (viz níže)
 4. Naplň 3 panely obsahem
-5. Netlify: nový site, Base directory = `nova-app`
+5. Nasazení: push na GitHub — vše jede přes GitHub Pages (`https://lordkrabaty.github.io/webapps/nova-app/`); úvodní rozcestník je kořenový `index.html` (přidej tam odkaz na novou app)
 
 ---
 
