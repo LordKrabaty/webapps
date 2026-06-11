@@ -790,6 +790,9 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" id="gistHistoryRow" style="display:none">
       <button class="btn-io" onclick="openGistHistory()">⏱ historie verzí</button>
     </div>
+    <div class="modal-row" id="syncLinkRow" style="display:none">
+      <button class="btn-io" onclick="copySyncLink()" title="vygeneruje odkaz s Gist ID — otevřením na novém zařízení se sync nastaví sám">🔗 odkaz pro nové zařízení</button>
+    </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
       <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
@@ -5895,6 +5898,7 @@ window.addEventListener('resize', updateAppGrid);
     try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(WK(GISTID))||''; } catch(e) {}
     try { const n = el('jbWinName'); if (n) n.textContent = (typeof windowName === 'function' ? windowName(activeWin) : '') || 'toto okno'; } catch(e) {}
     try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(WK(GISTID)) ? 'flex' : 'none'; } catch(e) {}
+    try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem('todo-app-gist-id') ? 'flex' : 'none'; } catch(e) {}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
@@ -5912,6 +5916,23 @@ window.addEventListener('resize', updateAppGrid);
       try { checkCloudOnStartup(); } catch(e) {}
     }
     closeModal('jsonbinModal');
+  }
+  // odkaz pro nové zařízení: Gist ID hlavního okna (volitelně token + autosync) v URL hashi —
+  // hash se na server neposílá a příjemce ho po načtení hned smaže z adresy i historie
+  async function copySyncLink() {
+    const mainGist = localStorage.getItem('todo-app-gist-id') || '';
+    if (!mainGist) { showStatusMsg('⚠ nejdřív ulož Gist ID hlavního okna', 3500); return; }
+    const token = localStorage.getItem(GHTOKEN) || '';
+    let withTok = false;
+    if (token) withTok = await customConfirm('Přibalit do odkazu i GitHub token? Odkaz pak zpřístupní všechna data — posílej jen mezi svá zařízení. Bez tokenu ho na novém zařízení zadáš ručně.', 'přibalit token');
+    const p = new URLSearchParams();
+    p.set('gid', mainGist);
+    if (withTok) p.set('tok', token);
+    if (autosyncEnabled()) p.set('as', '1');
+    const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/todo-app/';
+    const url = base + '#' + p.toString();
+    try { await navigator.clipboard.writeText(url); showStatusMsg('🔗 odkaz zkopírován — otevři ho na novém zařízení', 4000); }
+    catch(e) { await customPrompt('Zkopíruj odkaz pro nové zařízení:', url); }   // clipboard API chybí (http / starý prohlížeč)
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
   function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
@@ -6447,6 +6468,7 @@ window.addEventListener('resize', updateAppGrid);
   window.gistHistoryRestore   = gistHistoryRestore;
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
+  window.copySyncLink         = copySyncLink;
   window.doCloudUpload        = doCloudUpload;
   window.syncDownload         = syncDownload;
   window.checkCloudOnStartup  = checkCloudOnStartup;
@@ -6480,6 +6502,22 @@ window.addEventListener('resize', updateAppGrid);
   window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
   // PULL každých 5 minut (jen když je tab viditelný)
   setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
+  // ── SYNC ODKAZ: jednorázové nastavení zařízení z URL hashe (#gid=…&tok=…&as=1) ──
+  // Musí proběhnout PŘED checkCloudOnStartup, ať první cloud check už jede s novým ID.
+  (function importSyncLink() {
+    if ((location.hash || '').indexOf('gid=') === -1) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // smaž citlivý hash z adresy i historie
+    if (!gid) return;
+    try {
+      localStorage.setItem('todo-app-gist-id', gid);   // hlavní okno — jeho registr pak předpropojí Gist ID vedlejších oken
+      if (tok) localStorage.setItem(GHTOKEN, tok);
+      if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
+    } catch(e) {}
+    try { sessionStorage.removeItem('todo-app-cloud-checked::main'); } catch(e) {}
+    showStatusMsg(tok ? '🔗 sync nastaven z odkazu' : '🔗 Gist ID nastaveno — zadej token přes ⚙', 4500);
+  })();
   updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
