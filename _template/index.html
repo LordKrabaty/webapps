@@ -87,7 +87,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 
 .app{
   padding:1.25rem 1.25rem 1.5rem;
-  display:grid;grid-template-columns:210px minmax(0,1fr) 330px;
+  display:grid;grid-template-columns:210px minmax(0,1fr) 440px;
   gap:1.25rem;
   overflow-x:clip;
   max-width:1480px;
@@ -737,7 +737,7 @@ function updateAppGrid() {
   const w = window.innerWidth;
   if (w <= 820) { app.style.gridTemplateColumns = ''; }
   else if (w <= 1020) { app.style.gridTemplateColumns = hidden ? '0 1fr' : '185px 1fr'; }
-  else { app.style.gridTemplateColumns = hidden ? '0 1fr 330px' : '210px 1fr 330px'; }
+  else { app.style.gridTemplateColumns = hidden ? '0 1fr 440px' : '210px 1fr 440px'; }
 }
 
 // ── NEW MENU ──────────────────────────────────────────────────────────────
@@ -1016,11 +1016,17 @@ document.addEventListener('keydown', e => {
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
+    let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      idChanged = id !== (localStorage.getItem(GISTID) || '');
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
     } catch(e) {}
+    if (idChanged) {   // nově zadané ID → rovnou stáhni cloud (jinak až po reloadu)
+      try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
+      try { checkCloudOnStartup(); } catch(e) {}
+    }
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
@@ -1148,7 +1154,13 @@ document.addEventListener('keydown', e => {
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
     if (on && !hasToken()) { showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)', 4500); return; }
-    if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
+    if (on) {
+      reconcileTombstones();   // baseline náhrobků
+      // PULL → merge → push (přes checkCloudOnStartup): přímý push by na novém zařízení
+      // přepsal gist prázdným lokálním stavem dřív, než se stihla stáhnout cloud data
+      try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
+      checkCloudOnStartup();
+    }
   }
 
   // autosync nahrává celý stav + náhrobky (ne výběr jako doCloudUpload)
