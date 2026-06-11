@@ -1535,7 +1535,7 @@ const INBOXCTX = {
   input: 'quickInput',
   winStart() { return '8:00'; },
   undo() {},                                       // inbox zatím bez undo
-  save() { inboxMt = Date.now(); saveInbox(); },
+  save() { stampInboxChanges(); saveInbox(); },
   render() { renderInbox(); },
   call(name, idx, extra) { return name + '(' + idx + (extra != null ? ',' + extra : '') + ')'; },
 };
@@ -1707,6 +1707,7 @@ function op_addQuickItems(ctx, forceType) {
   ctx.undo();
   const w = ctx.winStart();
   let addedHere = false, routedLater = false, lastYm = null, addedRecur = 0;
+  const routedYms = new Set();   // cílové měsíce routovaných řádků — k orazítkování mt
 
   lines.forEach(rawLine => {
     let line = rawLine;
@@ -1789,7 +1790,7 @@ function op_addQuickItems(ctx, forceType) {
     // ikona: bloky/události nesou item.icon, podúkoly si emoji nechají v textu (jen Den)
     if (icon) { if (parsed.isSubtask) parsed.text = icon + ' ' + parsed.text; else parsed.icon = icon; }
 
-    if (toLater) { routedLater = true; lastYm = route.ym; } else { addedHere = true; }
+    if (toLater) { routedLater = true; lastYm = route.ym; routedYms.add(route.ym); } else { addedHere = true; }
   });
 
   ta.value = '';
@@ -1802,6 +1803,10 @@ function op_addQuickItems(ctx, forceType) {
   }
   if (addedHere) { ctx.save(); ctx.render(); }
   if (routedLater) {
+    // razítkni mt cílových bucketů — bez něj by LWW na druhém zařízení změnu nepřijalo
+    // a pozdější editace měsíce odjinud by routovanou položku přepsala
+    const rNow = Date.now();
+    routedYms.forEach(ym => { const b = later.find(x => x.ym === ym); if (b) b.mt = rNow; });
     saveLater();
     if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
     populateLaterAddMonth();
@@ -2565,7 +2570,12 @@ function newWinId() { return 'w' + Date.now().toString(36) + Math.random().toStr
 // Datový LWW engine se NEMĚNÍ — data každého okna zůstávají ve vlastním gistu.
 function winBinId(id) { try { return localStorage.getItem(id === 'main' ? 'todo-app-gist-id' : 'todo-app-gist-id::' + id) || ''; } catch(e) { return ''; } }
 function registryForPush() {
-  return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; const b = winBinId(w.id); if (b) o.binId = b; return o; });
+  return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; const b = winBinId(w.id); if (b) o.binId = b; if (+w.binIdMt) o.binIdMt = +w.binIdMt; return o; });
+}
+// razítko změny Gist ID okna — registr ho šíří LWW, takže se přepis (i smazání) ID propíše na ostatní zařízení
+function stampWinBinIdMt(id) {
+  const w = dayWindows.find(x => x.id === id);
+  if (w) { w.binIdMt = Date.now(); saveWindows(); }
 }
 // sloučí cloud registr (LWW podle mt + náhrobky), předpropojí Gist ID nových oken
 function mergeWindowRegistry(cloudWins, cloudTomb) {
@@ -2576,13 +2586,21 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
   const byId = new Map(dayWindows.map(w => [w.id, w]));
   (Array.isArray(cloudWins) ? cloudWins : []).forEach(cw => {
     if (!cw || !cw.id) return;
-    if (cw.binId && cw.id !== 'main') {               // předpropoj Gist ID (jen doplň, nepřepisuj lokální)
+    if (cw.id !== 'main') {                           // Gist ID okna: LWW podle binIdMt (přepis i smazání); bez razítka jen doplň chybějící
       const k = 'todo-app-gist-id::' + cw.id;
-      try { if (!localStorage.getItem(k)) localStorage.setItem(k, cw.binId); } catch(e) {}
+      const ex0 = byId.get(cw.id);
+      const lbmt = ex0 ? (+ex0.binIdMt || 0) : 0;
+      const cbmt = +cw.binIdMt || 0;
+      const cb = cw.binId || '';
+      let cur = ''; try { cur = localStorage.getItem(k) || ''; } catch(e) {}
+      if (cb !== cur && (cbmt > lbmt || (cb && !cur && cbmt >= lbmt))) {
+        try { if (cb) localStorage.setItem(k, cb); else localStorage.removeItem(k); } catch(e) {}
+        if (ex0) { ex0.binIdMt = cbmt; changed = true; }
+      }
     }
     const cmt = +cw.mt || 0, ex = byId.get(cw.id), tomb = winTombstones[cw.id] || 0;
     if (ex) { if (cmt > (+ex.mt || 0)) { ex.name = cw.name || ex.name; ex.mt = cmt; changed = true; } }
-    else if (cmt >= tomb) { const w = { id: cw.id, name: cw.name || cw.id, mt: cmt }; dayWindows.push(w); byId.set(cw.id, w); changed = true; }
+    else if (cmt >= tomb) { const w = { id: cw.id, name: cw.name || cw.id, mt: cmt, binIdMt: +cw.binIdMt || 0 }; dayWindows.push(w); byId.set(cw.id, w); changed = true; }
   });
   // aplikuj náhrobky lokálně (okno smazané jinde) — nikdy ne hlavní/aktivní
   Object.keys(winTombstones).forEach(id => {
@@ -4751,10 +4769,20 @@ async function deleteRecur(id) {
 
 // ── INBOX ───────────────────────────────────────────────────────────────────
 // Volné úkoly / bloky / události na příště. STEJNÝ model položek jako den/měsíc
-// (sdílený editor přes INBOXCTX). Synchronizace: LWW celého seznamu podle inboxMt.
+// (sdílený editor přes INBOXCTX). Synchronizace: LWW po položkách (id + mt, náhrobky
+// ns „inb"); pořadí seznamu nese inboxMt (novější razítko vyhrává — viz autoImportSilent).
 const INBOX_KEY = 'todo-app-v1-inbox';
 let inbox = [];
 let inboxMt = 0;
+let _inboxSnap = null;   // Map id → podpis obsahu při posledním load/save — mt se razítkuje JEN při skutečné změně
+function inboxItemSig(it) { const o = { ...it }; delete o.mt; return JSON.stringify(o); }
+function snapInbox() { _inboxSnap = new Map(inbox.map(it => [String(it.id), inboxItemSig(it)])); }
+// porovná položky s posledním snapshotem a razítkne mt jen změněným/novým (sdílené op_* nevědí, co se změnilo)
+function stampInboxChanges() {
+  const now = Date.now();
+  inbox.forEach(it => { if (!_inboxSnap || _inboxSnap.get(String(it.id)) !== inboxItemSig(it)) it.mt = now; });
+  inboxMt = now;   // razítko seznamu (pořadí); mazání položek řeší náhrobky
+}
 function loadInbox() {
   let raw = null;
   try { raw = JSON.parse(localStorage.getItem(WK(INBOX_KEY)) || 'null'); } catch(e) { raw = null; }
@@ -4765,8 +4793,12 @@ function loadInbox() {
     inbox = raw.items.map(normItem).filter(Boolean);
     inboxMt = +raw.mt || 0;
   } else { inbox = []; inboxMt = 0; }
+  snapInbox();
 }
-function saveInbox() { try { localStorage.setItem(WK(INBOX_KEY), JSON.stringify({ items: inbox, mt: inboxMt })); } catch(e) {} }
+function saveInbox() {
+  try { localStorage.setItem(WK(INBOX_KEY), JSON.stringify({ items: inbox, mt: inboxMt })); } catch(e) {}
+  snapInbox();
+}
 
 function renderInbox() {
   const c = el('inbox-list'); if (!c) return;
@@ -4807,6 +4839,7 @@ function normItem(it) {
     urgent: !!it.urgent,
     note: it.note || '',              // volný text: popis / podúkoly
     icon: it.icon || null,            // per-řádková ikona (jinak by se ztratila při load/sync)
+    mt: +it.mt || 0,                  // čas poslední editace položky — nosné pro inbox (LWW po položkách)
     recurId: it.recurId != null ? it.recurId : null,   // vazba na pravidlo opakování — BEZ NÍ se potvrzený
                                       // výskyt po reloadu/syncu „odpojí“ a duch se vrátí do měsíce
   };
@@ -5681,9 +5714,10 @@ function applyDndReorder(ctx, srcIdx, rawIdx) {
   let L = 1;
   if (!item.isSubtask) { let e = srcIdx + 1; while (e < list.length && list[e].isSubtask) e++; L = e - srcIdx; }
   if (rawIdx > srcIdx && rawIdx <= srcIdx + L) return; // upuštěno uvnitř vlastní skupiny → nic
+  const insertAt = Math.max(0, Math.min(list.length - L, rawIdx > srcIdx ? rawIdx - L : rawIdx));
+  if (insertAt === srcIdx) return;                     // upuštěno na původním místě → beze změny (nerazítkovat mt)
   ctx.undo();
   const group = list.splice(srcIdx, L);
-  const insertAt = Math.max(0, Math.min(list.length, rawIdx > srcIdx ? rawIdx - L : rawIdx));
   list.splice(insertAt, 0, ...group);
   ctx.save(); ctx.render();
 }
@@ -5864,12 +5898,19 @@ window.addEventListener('resize', updateAppGrid);
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
+    let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      idChanged = id !== (localStorage.getItem(WK(GISTID)) || '');
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(WK(GISTID), id);  else localStorage.removeItem(WK(GISTID));
     } catch(e) {}
+    if (idChanged) { try { stampWinBinIdMt(activeWin); } catch(e) {} }   // razítko PŘED pushem registru — LWW propagace přepisu/smazání ID
     try { pushWindowRegistry(); } catch(e) {}   // nové/změněné Gist ID propaguj do registru
+    if (idChanged) {   // nově zadané ID → rovnou stáhni cloud (jinak až po reloadu)
+      try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+      try { checkCloudOnStartup(); } catch(e) {}
+    }
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
@@ -5920,7 +5961,7 @@ window.addEventListener('resize', updateAppGrid);
       if (creating) {
         const json = await res.json().catch(() => null);
         const newId = json && json.id;
-        if (newId) { localStorage.setItem(WK(GISTID), newId); if (activeWin !== 'main') { try { pushWindowRegistry(); } catch(e) {} } }
+        if (newId) { localStorage.setItem(WK(GISTID), newId); if (activeWin !== 'main') { try { stampWinBinIdMt(activeWin); pushWindowRegistry(); } catch(e) {} } }
       }
       showSyncTooltip('↑ nahráno ' + new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}));
     } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
@@ -6012,6 +6053,7 @@ window.addEventListener('resize', updateAppGrid);
     const s = new Set();
     library.forEach(e   => { if (e && e.id   != null) s.add('lib:' + e.id); });
     archive.forEach(e   => { if (e && e.id   != null) s.add('arc:' + e.id); });
+    inbox.forEach(e     => { if (e && e.id   != null) s.add('inb:' + e.id); });
     cleanLater().forEach(b => { if (b && b.ym)        s.add('lat:' + b.ym); });   // duchové se do sync klíčů nepočítají
     weekDays.forEach(d  => { if (d && d.date)         s.add('wd:'  + d.date); });
     weekPlans.forEach(p => { if (p && p.date)         s.add('wp:'  + p.date); });
@@ -6052,7 +6094,7 @@ window.addEventListener('resize', updateAppGrid);
     const tS  = o => Object.keys(o || {}).sort().join(',');
     const btS = arr => (arr || []).map(b => String((b && b.key) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
     const ymS = arr => (arr || []).map(b => String((b && b.ym) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
-    const ibS = o => (((o && o.items) || []).length) + '@' + ((o && o.mt) || 0);   // inbox = celý seznam podle mt
+    const ibS = o => inS((o && o.items) || []) + '@' + ((o && o.mt) || 0);   // inbox = položky (id@mt) + razítko pořadí
     return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || []), idS(rec || [])].join('||');
   }
   function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, cleanLater(), recurrences); }
@@ -6081,7 +6123,13 @@ window.addEventListener('resize', updateAppGrid);
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
     if (on && !hasApiKey()) { showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)', 4500); return; }
-    if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
+    if (on) {
+      reconcileTombstones();   // baseline náhrobků
+      // PULL → merge → push přes checkCloudOnStartup — přímý push by na novém zařízení
+      // přepsal gist prázdným lokálním stavem dřív, než se stihla stáhnout cloud data
+      try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+      checkCloudOnStartup();
+    }
   }
 
   // payload jako doCloudUpload s "vybrat vše": celá library + archive + weekDays + weekPlans + inbox + settings
@@ -6124,7 +6172,7 @@ window.addEventListener('resize', updateAppGrid);
         const newId = json && json.id;
         if (newId) {
           try { localStorage.setItem(idKey, newId); } catch(e) {}
-          if (winAtStart !== 'main') { try { pushWindowRegistry(); } catch(e) {} }   // propaguj nový gist do registru
+          if (winAtStart !== 'main') { try { stampWinBinIdMt(winAtStart); pushWindowRegistry(); } catch(e) {} }   // propaguj nový gist do registru
         }
       }
       lastPushTs = Date.now(); setSyncState('ok');
@@ -6209,7 +6257,7 @@ window.addEventListener('resize', updateAppGrid);
   }
 
   // tichý obousměrný merge cloud → local:
-  //  1) sjednotí náhrobky  2) LWW pro šablony/dny/plány (vč. mazání a editací)  3) doplní archiv/inbox/bloky
+  //  1) sjednotí náhrobky  2) LWW pro šablony/dny/plány/inbox/bloky (vč. mazání a editací)  3) doplní archiv
   function autoImportSilent(record) {
     if (!record || typeof record !== 'object') return;
     applyingRemote = true;
@@ -6236,11 +6284,16 @@ window.addEventListener('resize', updateAppGrid);
     (record.archive || []).forEach(it => {
       if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
     });
-    // inbox — LWW celého seznamu podle inboxMt (editace položek razítkuje inboxMt přes INBOXCTX.save)
+    // inbox — LWW po položkách (id + mt, náhrobky ns „inb"); pořadí společných položek
+    // určuje strana s novějším inboxMt (lokální navíc-položky zůstávají na konci)
+    const ibR = lwwMerge(inbox, (record.inbox || []), 'inb', x => x.id, c => normItem(c));
+    inbox = ibR.arr; added += ibR.added; updated += ibR.updated; removed += ibR.removed;
     const rInboxMt = +record.inboxMt || 0;
-    if (rInboxMt > inboxMt || (rInboxMt === inboxMt && (record.inbox || []).length > inbox.length)) {
-      inbox = (record.inbox || []).map(normItem).filter(Boolean);
-      inboxMt = rInboxMt || inboxMt;
+    if (rInboxMt > inboxMt) {
+      const pos = new Map((record.inbox || []).map((x, i) => [String(x && x.id), i]));
+      const P = x => { const p = pos.get(String(x.id)); return p == null ? 1e9 : p; };
+      inbox.sort((a, b) => P(a) - P(b));   // stabilní sort — lokální navíc-položky drží pořadí na konci
+      inboxMt = rInboxMt;
       updated++;
     }
     // později — LWW po celém měsíci podle ym (editace položek razítkuje bucket.mt přes MCTX.save)
