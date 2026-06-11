@@ -144,6 +144,7 @@ Data jedou v jednom **privátním GitHub gistu** (soubor `APP_NAME-sync.json`, o
 - Upravit `payload` v `doCloudUpload()` (ruční výběr) i `buildAutoPayload()` (autosync) pokud app ukládá víc než `items + archive`
 - GitHub token (scope `gist`) a Gist ID zadá uživatel přes ⚙ modal — **nikam hardcoded**. Gist ID může nechat prázdné → sync ho při prvním pushi sám založí (`POST`); neplatné/smazané Gist ID se samo zotaví (404 → nový gist)
 - Auto-sync (`☁`) běží na stejné infrastruktuře — rozšíření kolekcí viz „Auto-sync" níže
+- 🔗 „odkaz pro nové zařízení" (tlačítko v ⚙ modalu, hotové v šabloně): `copySyncLink()` vygeneruje URL s Gist ID v hashi (`#gid=…&tok=…&as=1`; token jen po potvrzení, `as` = stav autosyncu), `importSyncLink()` ho při startu uloží do slotů a hash hned smaže z adresy i historie (hash se na server neposílá). Běží PŘED `checkCloudOnStartup`. Při kopírování šablony zkontroluj fallback URL v `copySyncLink` (jméno složky app)
 - Šablona nese jednorázovou migraci starých `APP_NAME-jsonbin-*` klíčů → `gist-*` sloty (u nově založené app ji můžeš smazat). **Pozor:** JSONBin klíč ≠ GitHub token a Bin ID ≠ Gist ID — migrace jen přesune hodnotu do nového slotu, uživatel ji musí v ⚙ ručně přepsat.
 
 API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH = přepis souboru; POST = nový gist) je hotový v `gistGet` / `gistRecord` / `gistWriteInit`.
