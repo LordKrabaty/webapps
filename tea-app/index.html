@@ -532,8 +532,8 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <div class="card-title"><span class="card-title-text" title="knihovna"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span></div>
     <div class="lib-controls-row">
       <button id="libSortBtn" class="lib-sort-btn" onclick="toggleLibGroupCat()" title="řadit dle kategorie">dle kat.</button>
-      <select id="libSellerFilter" class="lib-seller-filter" onchange="renderLibrary()" title="filtrovat dle prodejce"></select>
-      <select id="libLocationFilter" class="lib-seller-filter" onchange="renderLibrary()" title="filtrovat dle místa"></select>
+      <select id="libSellerFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filtrovat dle prodejce"></select>
+      <select id="libLocationFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filtrovat dle místa"></select>
     </div>
     <div id="libList"></div>
     <!-- Templates section -->
@@ -1482,6 +1482,24 @@ function updateSellerFilter(){
   fillDatalist('sellerOptions','seller');
   fillDatalist('locationOptions','location');
 }
+// per-zařízení paměť filtrů knihovny (lokální klíče — nesyncují se)
+const FILTER_SELLER_KEY='cajovy-filter-seller',FILTER_LOCATION_KEY='cajovy-filter-location';
+function onLibFilterChange(){
+  try{
+    localStorage.setItem(FILTER_SELLER_KEY,el('libSellerFilter')?.value||'');
+    localStorage.setItem(FILTER_LOCATION_KEY,el('libLocationFilter')?.value||'');
+  }catch(e){}
+  renderLibrary();
+}
+function restoreLibFilters(){
+  updateSellerFilter();   // nejdřív naplň optiony z knihovny — hodnotu selectu jde nastavit až pak
+  try{
+    const s=localStorage.getItem(FILTER_SELLER_KEY)||'',l=localStorage.getItem(FILTER_LOCATION_KEY)||'';
+    const ss=el('libSellerFilter'),ls=el('libLocationFilter');
+    if(s&&ss)ss.value=s;   // smazaná hodnota (čaj už neexistuje) → select zůstane na „vše"
+    if(l&&ls)ls.value=l;
+  }catch(e){}
+}
 function renderLibrary(){
   const list=el('libList');
   const btn=el('libSortBtn');
@@ -1772,7 +1790,7 @@ async function doSelectiveClear(){
   if(el('clr-library').checked) toDelete.push('cajovy-v3-library');
   if(el('clr-templates').checked) toDelete.push('cajovy-v3-templates');
   if(el('clr-archive').checked) toDelete.push('cajovy-v3-archive');
-  if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs');
+  if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs','cajovy-filter-seller','cajovy-filter-location','cajovy-lib-group-cat');
   if(!toDelete.length){closeModal('clearStorageModal');return;}
   // Maže-li se synchronizovaná kolekce, vynuluj i autosync baseline + náhrobky — jinak by lokální
   // reset vygeneroval náhrobky a tiše smazal data i na ostatních zařízeních. Po reloadu se obsah
@@ -3127,12 +3145,16 @@ function init(){
   initDark();
   loadPanelFs();
   loadTemplates();renderTemplates();
-  loadLibrary();renderLibrary();
+  loadLibrary();restoreLibFilters();renderLibrary();
   loadArchive();renderArchive();
   initLibLongPress();
   const restored=loadSession();
   if(!restored)defaultSteeps.forEach(s=>addSteep(s,'',true));
-  if(activeLibId)markSaved();
+  if(activeLibId){
+    markSaved();
+    renderLibrary();   // session se obnovuje až po prvním renderu — podsvícení aktivního čaje
+    requestAnimationFrame(()=>{document.querySelector('.lib-item.active')?.scrollIntoView({block:'nearest'});});
+  }
   renderSteeps();updateHeaderTeaName();updatePer100();updateCoolGuide();
   if(restored)showSave('↓ obnoveno');
   let _undoPushT={};
