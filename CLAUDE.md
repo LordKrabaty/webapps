@@ -163,7 +163,7 @@ API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH 
 | Entita | Klíč | Slučování |
 |---|---|---|
 | dny / plány / šablony | datum / `id` | **LWW** (novější `mt`) |
-| bloky (typy) | `key` | **LWW** (novější `mt`); defaultní nejdou smazat |
+| bloky (typy) | `key` | **LWW** (novější `mt`); vestavěný `TASK` nejde smazat, jiné defaulty nejsou |
 | inbox | `id` | **LWW** (novější `mt`) |
 | archiv | `id` | union (jen doplnit chybějící) |
 | pracovní dny | week key | union (zatím) |

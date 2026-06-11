@@ -202,14 +202,6 @@ textarea::placeholder{color:var(--mid)}
 .tl-tick-label{position:absolute;top:3px;font-family:'DM Mono',monospace;font-size:.55rem;color:var(--mid);white-space:nowrap;pointer-events:none}
 .tl-block-h{position:absolute;top:2px;bottom:2px;box-sizing:border-box;overflow:hidden;cursor:pointer;padding:1px 4px;font-size:.62rem;line-height:1.35;background:var(--off);border:1px solid var(--mid)}
 .tl-block-h.tl-highlight{outline:2px solid var(--black);z-index:2}
-.tl-MORNING_START{background:var(--off);border:1.5px solid var(--mid)}
-.tl-DEEP_WORK{background:var(--w);border:2px solid var(--black)}
-.tl-LUNCH_BREAK{background:var(--light);border:1px dashed var(--mid)}
-.tl-CREATIVE_ADMIN{background:var(--off);border:1.5px solid var(--mid)}
-.tl-EXPERIMENTS{background:var(--w);border:2px solid var(--black)}
-.tl-MEETING{background:var(--light);border:1.5px solid var(--black);background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.05) 3px,rgba(0,0,0,.05) 4px)}
-.tl-WRAP_UP{background:var(--light);border:1px solid var(--mid)}
-.tl-BUFFER{background:var(--off);border:1px dashed var(--mid)}
 .tl-TASK{background:var(--w);border:1px solid var(--mid)}
 .tl-is-event{border-left:4px solid var(--black)!important;border-left-style:solid!important}
 .tl-urgent{border-width:3px!important;font-weight:bold}
@@ -890,95 +882,13 @@ let activeWin = 'main';
 function WK(base) { return activeWin === 'main' ? base : base + '::' + activeWin; }
 
 // ── BLOCK TYPES ───────────────────────────────────────────────────────────────
+// Žádné přednastavené bloky — uživatel si tvoří vlastní (syncují se přes settings.blockTypes).
+// TASK je jediný vestavěný typ: fallback pro prosté úkoly, nejde smazat.
 const DEFAULT_BLOCK_TYPES = {
-  MORNING_START:  { emoji: '🥣', label: 'Morning Start',  defaultDuration: 120 },
-  DEEP_WORK:      { emoji: '🆓', label: 'Deep Work',      defaultDuration: 120 },
-  LUNCH_BREAK:    { emoji: '🍽️', label: 'Lunch Break',    defaultDuration: 30  },
-  CREATIVE_ADMIN: { emoji: '🖇️', label: 'Creative Admin', defaultDuration: 120 },
-  EXPERIMENTS:    { emoji: '🧵', label: 'Experiments',    defaultDuration: 120 },
-  MEETING:        { emoji: '🗣️', label: 'Meeting',        defaultDuration: 60  },
-  WRAP_UP:        { emoji: '🏚️', label: 'Wrap Up',        defaultDuration: 30  },
-  BUFFER:         { emoji: '🧹', label: 'Buffer',         defaultDuration: 480 },
-  TASK:           { emoji: '',   label: 'Úkol',           defaultDuration: 30  },
+  TASK: { emoji: '', label: 'Úkol', defaultDuration: 30 },
 };
 let BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES };
 let blockTypeOrder = [];
-
-// ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
-function mkItem(text, blockType, duration, isSubtask, isEvent, eventStart, eventEnd, done) {
-  return { text, blockType: blockType||'TASK', duration: duration||15, isSubtask: !!isSubtask,
-           isEvent: !!isEvent, eventStart: eventStart||null, eventEnd: eventEnd||null,
-           done: !!done, urgent: false };
-}
-const DAY_TEMPLATES = {
-  'Po': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('Walk','MORNING_START',30,true),
-    mkItem('Planning','MORNING_START',15,true),
-    mkItem('Breakfast','MORNING_START',15,true),
-    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
-    mkItem('Meeting prep','DEEP_WORK',30,true),
-    mkItem('Focused tasks','DEEP_WORK',60,true),
-    mkItem('Snack','DEEP_WORK',15,true),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('Lunch','LUNCH_BREAK',30,true),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
-    mkItem('Walk','CREATIVE_ADMIN',30,true),
-    mkItem('AI exploration','CREATIVE_ADMIN',60,true),
-    mkItem('Snack','CREATIVE_ADMIN',15,true),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'Út': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',60,false),
-    mkItem('🗣️ Meeting','MEETING',60,false,true,'12:30','13:30'),
-    mkItem('Standup','MEETING',60,true),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'St': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('Walk','MORNING_START',30,true),
-    mkItem('Planning','MORNING_START',15,true),
-    mkItem('Breakfast','MORNING_START',15,true),
-    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
-    mkItem('Meeting prep','DEEP_WORK',30,true),
-    mkItem('Focused tasks','DEEP_WORK',60,true),
-    mkItem('Snack','DEEP_WORK',15,true),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('Lunch','LUNCH_BREAK',30,true),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
-    mkItem('Walk','CREATIVE_ADMIN',30,true),
-    mkItem('AI exploration','CREATIVE_ADMIN',60,true),
-    mkItem('Snack','CREATIVE_ADMIN',15,true),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'Čt': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('🧵 Experiments','EXPERIMENTS',120,false),
-    mkItem('Trials','EXPERIMENTS',45,true),
-    mkItem('Snack','EXPERIMENTS',15,true),
-    mkItem('Trials','EXPERIMENTS',45,true),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('Lunch','LUNCH_BREAK',30,true),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'Pá': [
-    mkItem('🧹 Buffer','BUFFER',480,false,true,'6:00','14:00'),
-    mkItem('Walk','BUFFER',30,true),
-    mkItem('Planning','BUFFER',30,true),
-    mkItem('Breakfast','BUFFER',20,true),
-    mkItem('Weekly planning','BUFFER',60,true),
-    mkItem('Buffer tasks','BUFFER',180,true),
-    mkItem('End of day','BUFFER',30,true),
-  ],
-};
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let items = [];
@@ -2485,17 +2395,6 @@ function mStartBlockTimeEdit(ym, idx) { materializeLaterGhost(ym, idx); op_start
 function iStartIconEdit(idx) { op_startIconEdit(INBOXCTX, idx); }
 function iStartBlockTimeEdit(idx) { op_startBlockTimeEdit(INBOXCTX, idx); }
 
-// ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
-async function loadDayTemplate(day) {
-  const tpl = DAY_TEMPLATES[day];
-  if (!tpl) return;
-  if (!await customConfirm('Nahradit aktuální plán šablonou ' + day + '?', 'nahradit')) return;
-  pushUndo();
-  items = tpl.map((t, i) => ({ ...t, id: Date.now() + i }));
-  activeLibId = null; savedSnapshot = null;
-  schedSave(); renderLibrary(); renderAll();
-}
-
 // ── WINDOW CHANGE ─────────────────────────────────────────────────────────────
 function onWindowChange() {
   windowStart = el('winStart')?.value || '6:00';
@@ -2730,10 +2629,6 @@ function loadBlockTypes() {
         eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], note: bt.note || '', mt: +bt.mt || 0 };
     });
   } catch(e) {}
-  try {
-    const del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]');
-    del.forEach(k => { if (DEFAULT_BLOCK_TYPES[k]) delete BLOCK_TYPES[k]; });
-  } catch(e) {}
   const allKeys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
   try {
     const savedOrder = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_ORDER_KEY)) || 'null');
@@ -2761,8 +2656,7 @@ function updateQuickInputPlaceholder() {
   if (!ta) return;
   const { abbrevs } = getBlockAbbrevMap();
   let ex = 'D', exLabel = 'blok';
-  if (abbrevs['DEEP_WORK']) { ex = abbrevs['DEEP_WORK']; exLabel = BLOCK_TYPES['DEEP_WORK']?.label || 'Deep Work'; }
-  else { const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; } }
+  const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; }
   ta.placeholder = `úkol 20m  ·  9:30-10:00 standup  ·  -${ex} text (pod ${exLabel})  ·  text -${ex.toLowerCase()}`;
   updateAbbrevHint();
 }
@@ -2815,7 +2709,6 @@ function renderBlockTypeList() {
   if (!list) return;
   list.innerHTML = blockTypeOrder.map((key, idx) => {
     const bt = BLOCK_TYPES[key]; if (!bt) return '';
-    const isDefault = !!DEFAULT_BLOCK_TYPES[key];
     const tasks = bt.defaultTasks || [];
     const taskTotal = tasks.reduce((s, t) => s + (t.duration || 0), 0);
     const durStr = formatDur(tasks.length ? taskTotal : bt.defaultDuration);
@@ -2918,13 +2811,6 @@ function resetBlockType() {
 async function deleteBlockType(key) {
   if (key === 'TASK') return;
   if (!await customConfirm('Smazat typ bloku "' + (BLOCK_TYPES[key]?.label || key) + '"?', 'smazat')) return;
-  if (DEFAULT_BLOCK_TYPES[key]) {
-    try {
-      const del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]');
-      if (!del.includes(key)) del.push(key);
-      localStorage.setItem(WK(BLOCKTYPES_DELETED_KEY), JSON.stringify(del));
-    } catch(e) {}
-  }
   delete BLOCK_TYPES[key];
   blockTypeOrder = blockTypeOrder.filter(k => k !== key);
   saveBlockTypes();
@@ -4102,9 +3988,7 @@ function buildSettingsExport() {
     return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration
       || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent || bt.note;
   }).map(([key, bt]) => ({ key, ...bt }));
-  let blockTypesDeleted = [];   // smazané defaultní bloky — bez nich by se po importu na jiném zařízení vrátily
-  try { blockTypesDeleted = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]') || []; } catch(e) {}
-  return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek, blockTypesDeleted };
+  return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek };
 }
 function doExport() {
   const its = library.filter(e => exportSelected.has(e.id));
