@@ -4181,15 +4181,18 @@ function doImport() {
   }
   let inboxAdded = 0;
   if (addInbox) {
-    const existingIds = new Set(inbox.map(x => String(x.id)));
+    // import = vědomá akce → převezmi obsah i POŘADÍ z importu (jako u Později/dnů), ne jen append.
+    // existující položku aktualizuj na místě, nové přidej, lokální navíc-položky nech na konci.
+    const byId = new Map(inbox.map(x => [String(x.id), x]));
+    const ordered = [], seen = new Set();
     (window._importInbox || []).forEach(it => {
       const ni = normItem(it); if (!ni || !ni.text) return;
-      if (!existingIds.has(String(ni.id))) {
-        inbox.push(ni);
-        existingIds.add(String(ni.id));
-        inboxAdded++;
-      }
+      const ex = byId.get(String(ni.id));
+      if (ex) { Object.assign(ex, ni); ordered.push(ex); } else { ordered.push(ni); inboxAdded++; }
+      seen.add(String(ni.id));
     });
+    const localOnly = inbox.filter(x => !seen.has(String(x.id)));
+    inbox = [...ordered, ...localOnly];
     inboxMt = Date.now();
     saveInbox(); renderInbox();
   }
@@ -4471,20 +4474,58 @@ function recurMonthOccurrence(rec, ym) {
   }
   return fires ? { dayLabel: labels.length ? labels.join(' ') : null } : null;
 }
-function makeLaterGhost(rec, dayLabel) {
+// SAMOSTATNÉ výskyty pravidla v měsíci → [{ dayLabel, dayKey, skipKey }]
+//  • dom / yearly = JEDEN výskyt na KAŽDÝ konkrétní den (kombinace „r1.m r2.m r3.m" = 3 výskyty)
+//  • celý měsíc / interval / rozsah (dny v týdnu) = jeden výskyt (popisek z ruleMonthDayLabel)
+// skipKey: konkrétní den → ISO datum (sjednoceno s denním pohledem); jinak ym (celý měsíc)
+function recurMonthOccurrences(rec, ym) {
+  if (!rec) return [];
+  if (rec.anchor && ym < String(rec.anchor).slice(0, 7)) return [];
+  if (rec.until  && ym > String(rec.until).slice(0, 7))  return [];
+  const [Y, M] = ym.split('-').map(Number);
+  const out = [], seen = new Set();
+  const add = (dayLabel, dayKey, skipKey) => {
+    const k = dayKey + '|' + (dayLabel || '');
+    if (seen.has(k)) return; seen.add(k);
+    out.push({ dayLabel: dayLabel || null, dayKey, skipKey });
+  };
+  (rec.rules || []).forEach((r, idx) => {
+    if (!r) return;
+    if (r.t === 'dom') {
+      add(r.day + '.' + M + '.', 'd' + r.day, ym + '-' + String(r.day).padStart(2, '0'));
+    } else if (r.t === 'yearly') {
+      if (M !== r.mo) return;
+      add(r.day + '.' + r.mo + '.', 'd' + r.day, ym + '-' + String(r.day).padStart(2, '0'));
+    } else {                                   // celý měsíc / interval / rozsah → jeden výskyt na měsíc
+      const dl = ruleMonthDayLabel(r, Y, M, rec.anchor);
+      if (dl === false) return;
+      add(dl, 'r' + idx, ym);
+    }
+  });
+  out.sort((a, b) => (parseInt(a.dayLabel, 10) || 999) - (parseInt(b.dayLabel, 10) || 999));
+  return out;
+}
+// skip klíč výskytu Později: konkrétní den („1.6.") → ISO datum, jinak celý měsíc (ym)
+function laterSkipKey(it, ym) {
+  if (it && it._skipKey) return it._skipKey;
+  const m = it && it.dayLabel && String(it.dayLabel).match(/^(\d{1,2})\./);
+  return m ? ym + '-' + String(m[1]).padStart(2, '0') : ym;
+}
+function makeLaterGhost(rec, occ) {
   const p = rec.payload || {};
   const bt = BLOCK_TYPES[p.blockType] || BLOCK_TYPES.TASK;
+  const dayKey = occ && occ.dayKey ? occ.dayKey : '';
   return {
-    id: 'g_' + rec.id, recurId: rec.id, isGhost: true,
+    id: 'g_' + rec.id + (dayKey ? '_' + dayKey : ''), recurId: rec.id, isGhost: true,
     text: p.text || '(opakování)',
     blockType: p.blockType || 'TASK',
     duration: p.dur || bt.defaultDuration || 30,
     isEvent: !!p.isEvent,
     eventStart: p.isEvent ? (p.eventStart || null) : null,
     eventEnd:   p.isEvent ? (p.eventEnd   || null) : null,
-    isSubtask: false, dayLabel: dayLabel || null,
+    isSubtask: false, dayLabel: (occ && occ.dayLabel) || null,
     done: false, urgent: false, note: p.note || '',
-    icon: p.icon || '🔃',
+    icon: p.icon || '🔃', _skipKey: (occ && occ.skipKey) || null,
   };
 }
 // live `later` bez duchů a bez prázdných měsíců → JEDINÝ tvar pro perzistenci a sync (duchové se nikdy neukládají)
@@ -4501,13 +4542,15 @@ function syncLaterGhosts() {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     recurrences.forEach(rec => {
-      const occ = recurMonthOccurrence(rec, ym);
-      if (!occ) return;
-      if (rec.exceptions && rec.exceptions[ym]) return;     // smazaný výskyt (skip)
-      let b = later.find(x => x.ym === ym);
-      if (b && b.items.some(it => it.recurId === rec.id)) return;   // už tam je (reálný i duch)
-      if (!b) { b = { ym, items: [], mt: 0 }; later.push(b); }      // ghost bucket: mt:0 → neviditelný pro sync
-      b.items.push(makeLaterGhost(rec, occ.dayLabel));
+      recurMonthOccurrences(rec, ym).forEach(occ => {
+        // skip: konkrétní den (occ.skipKey) NEBO celý měsíc (legacy ym náhrobek)
+        if (rec.exceptions && (rec.exceptions[occ.skipKey] || rec.exceptions[ym])) return;
+        let b = later.find(x => x.ym === ym);
+        // už tam je (reálný i duch) — porovnávej PER DEN podle dayLabel, ne jen podle pravidla
+        if (b && b.items.some(it => it.recurId === rec.id && (it.dayLabel || null) === (occ.dayLabel || null))) return;
+        if (!b) { b = { ym, items: [], mt: 0 }; later.push(b); }    // ghost bucket: mt:0 → neviditelný pro sync
+        b.items.push(makeLaterGhost(rec, occ));
+      });
     });
   }
 }
@@ -4533,7 +4576,7 @@ function skipLaterOccurrence(ym, idx) {
   const it = b.items[idx];
   if (!it || it.recurId == null) return false;
   const rec = recurrences.find(r => r.id === it.recurId);
-  if (rec) { rec.exceptions = rec.exceptions || {}; rec.exceptions[ym] = 'skip'; rec.mt = Date.now(); saveRecur(); }
+  if (rec) { rec.exceptions = rec.exceptions || {}; rec.exceptions[laterSkipKey(it, ym)] = 'skip'; rec.mt = Date.now(); saveRecur(); }
   b.items.splice(idx, 1); b.mt = Date.now(); saveLater();
   return true;
 }
@@ -4543,9 +4586,9 @@ function convertItemToRecur(ym, idx, rules) {
   const item = b.items[idx]; if (!item) return false;
   const rec = buildRecurEntry(rules, item, ym + '-01');
   recurrences.push(rec); saveRecur();
-  item.recurId = rec.id; delete item.isGhost;            // ponech položku jako reálnou kotvu
-  const occ = recurMonthOccurrence(rec, ym);
-  item.dayLabel = (occ && occ.dayLabel) || null;
+  item.recurId = rec.id; delete item.isGhost;            // ponech položku jako reálnou kotvu (první výskyt)
+  const occs = recurMonthOccurrences(rec, ym);           // další dny doplní syncLaterGhosts jako duchy
+  item.dayLabel = (occs[0] && occs[0].dayLabel) || null;
   b.mt = Date.now(); saveLater();
   renderLater();
   showStatusMsg('↻ změněno na opakování — viz další měsíce', 2800);
@@ -4897,7 +4940,7 @@ function deleteSentSources() {
       }
     } else if (src.kind === 'month') {
       const bk = later.find(x => x.ym === src.ym);
-      if (bk) { const b = bk.items.length; bk.items = bk.items.filter(x => { const del = idset.has(String(x.id)); if (del) skipRec(x, src.ym); return !del; }); if (bk.items.length !== b) { bk.mt = Date.now(); laterT = true; } }
+      if (bk) { const b = bk.items.length; bk.items = bk.items.filter(x => { const del = idset.has(String(x.id)); if (del) skipRec(x, laterSkipKey(x, src.ym)); return !del; }); if (bk.items.length !== b) { bk.mt = Date.now(); laterT = true; } }
     } else if (src.kind === 'inbox') {
       const b = inbox.length;
       for (let i = inbox.length - 1; i >= 0; i--) if (idset.has(String(inbox[i].id))) inbox.splice(i, 1);
