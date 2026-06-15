@@ -273,8 +273,12 @@ textarea::placeholder{color:var(--mid)}
 
 
 /* ── LATER (Později) ── */
-.later-add-row{display:flex;gap:.4rem;flex-wrap:wrap;flex-shrink:0;align-items:center;margin-bottom:.35rem}
+.later-add-row{display:flex;gap:.35rem;flex-wrap:nowrap;flex-shrink:0;align-items:center;margin-bottom:.35rem}
 .later-sel{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.25rem .35rem;outline:none;min-width:0;flex:1}
+.later-add-plus{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:1.05rem;line-height:1;color:var(--muted)}
+.later-sel-month{flex:1 1 auto;font-weight:600;font-size:.82rem}
+.later-sel-horizon{flex:0 0 auto;color:var(--muted);font-size:.72rem;padding:.25rem .2rem}
+.later-icon-btn{flex:0 0 auto;padding:.34rem .5rem;font-size:.98rem;line-height:1}
 .later-month-hdr{display:flex;align-items:center;gap:.35rem;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem;cursor:pointer;user-select:none;-webkit-user-select:none}
 .later-month-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .later-month-toggle{display:inline-block;width:.85rem;text-align:center;font-size:.78rem;line-height:1}
@@ -593,17 +597,17 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div id="pane-pozdeji" class="notes-pane">
       <div class="later-add-row" style="align-items:center">
-        <span style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">přidat do měsíce</span>
-        <select id="laterAddMonth" class="later-sel" title="do kterého měsíce přidávat" onchange="setAddCtxLater()"></select>
-        <select id="laterHorizonSel" class="later-sel" title="jak daleko dopředu zobrazit měsíce" onchange="setLaterHorizon(this.value)" style="flex:0 0 auto">
+        <span class="later-add-plus" title="přidat do měsíce">+</span>
+        <select id="laterAddMonth" class="later-sel later-sel-month" title="přidat do kterého měsíce" onchange="setAddCtxLater()"></select>
+        <select id="laterHorizonSel" class="later-sel later-sel-horizon" title="jak daleko dopředu zobrazit měsíce" onchange="setLaterHorizon(this.value)">
           <option value="6">6 měs.</option>
           <option value="12">12 měs.</option>
           <option value="18">18 měs.</option>
           <option value="24">24 měs.</option>
           <option value="36">36 měs.</option>
         </select>
-        <button class="btn-sm" onclick="toggleAllLaterMonths()" title="rozbalit / sbalit všechny měsíce" style="flex:0 0 auto">⊟ vše</button>
-        <button class="btn-sm" onclick="openRecurManage()" title="správa opakování + legenda zkratek" style="flex:0 0 auto">↻ opakování</button>
+        <button class="btn-sm later-icon-btn" onclick="toggleAllLaterMonths()" title="rozbalit / sbalit všechny měsíce">⊟</button>
+        <button class="btn-sm later-icon-btn" onclick="openRecurManage()" title="opakování — správa pravidel + legenda zkratek">↻</button>
       </div>
       <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.1rem"></div>
     </div>
@@ -4849,8 +4853,9 @@ function populateLaterAddMonth() {
   const sel = el('laterAddMonth'); if (!sel) return;
   const have = new Set();
   const opts = [];
-  laterMonthRange().forEach(ym => { const [y, m] = ym.split('-').map(Number); have.add(ym); opts.push([ym, MONTHS_CZ[m - 1] + ' ' + y]); });
-  later.forEach(b => { if (b.ym && !have.has(b.ym)) { have.add(b.ym); const [y, m] = b.ym.split('-').map(Number); opts.push([b.ym, (MONTHS_CZ[m - 1] || '?') + ' ' + y]); } });
+  const shortYm = ym => { const [y, m] = ym.split('-'); return m + ' ' + y.slice(2); };   // „2026-02" → „02 26"
+  laterMonthRange().forEach(ym => { have.add(ym); opts.push([ym, shortYm(ym)]); });
+  later.forEach(b => { if (b.ym && !have.has(b.ym)) { have.add(b.ym); opts.push([b.ym, shortYm(b.ym)]); } });
   opts.sort((a, b) => a[0].localeCompare(b[0]));
   const prev = sel.value;
   sel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
