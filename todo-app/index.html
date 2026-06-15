@@ -281,6 +281,10 @@ textarea::placeholder{color:var(--mid)}
 .later-month-hdr.empty{opacity:.55}
 .later-month-hdr.empty .later-month-toggle{opacity:.4}
 .later-month-hdr.later-drop-into{background:var(--light);outline:1.5px dashed var(--mid);outline-offset:-1px;opacity:1}
+.later-month-hdr.overdue{border-left:2px solid var(--black);padding-left:.3rem}
+.later-month-od{font-family:'DM Sans',sans-serif;font-weight:600;text-transform:none;letter-spacing:0;font-size:.62rem;color:var(--black)}
+.later-month-add{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--muted);background:var(--w);border:var(--bh);border-radius:var(--r);padding:0 .3rem;cursor:pointer}
+.later-month-add:hover{color:var(--black);border-color:var(--black)}
 .later-month-sum{margin-left:auto;font-family:'DM Mono',monospace;font-weight:400;text-transform:none;letter-spacing:0}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
@@ -598,6 +602,7 @@ textarea::placeholder{color:var(--mid)}
           <option value="24">24 měs.</option>
           <option value="36">36 měs.</option>
         </select>
+        <button class="btn-sm" onclick="toggleAllLaterMonths()" title="rozbalit / sbalit všechny měsíce" style="flex:0 0 auto">⊟ vše</button>
         <button class="btn-sm" onclick="openRecurManage()" title="správa opakování + legenda zkratek" style="flex:0 0 auto">↻ opakování</button>
       </div>
       <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.1rem"></div>
@@ -1725,7 +1730,10 @@ function op_addQuickItems(ctx, forceType) {
     if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
     showStatusMsg('↻ opakování přidáno (' + addedRecur + '×) — viz Později', 2800);
   }
-  if (addedHere) { ctx.save(); ctx.render(); }
+  if (addedHere) {
+    if (ctx.kind === 'month' && ctx.ym) { ensureLaterCollapsed(); laterCollapsed[ctx.ym] = false; saveLaterCollapsed(); }   // rozbal cílový měsíc, ať je nová položka vidět
+    ctx.save(); ctx.render();
+  }
   if (routedLater) {
     // razítkni mt cílových bucketů — bez něj by LWW na druhém zařízení změnu nepřijalo
     // a pozdější editace měsíce odjinud by routovanou položku přepsala
@@ -2539,7 +2547,7 @@ function windowHasData() {
 // per-okno klíče (pro mazání okna) — vč. sync klíčů z IIFE (hodnoty jsou stabilní)
 function winKeyBases() {
   return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
-    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY,
+    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_HORIZON_KEY,
     'todo-app-gist-id', 'todo-app-tombstones', 'todo-app-syncknown'];
 }
 
@@ -2568,6 +2576,7 @@ function activateWindow(id) {
   activeLibId = null; savedSnapshot = null;
   undoStack = []; redoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
+  laterCollapsed = null;   // přenačti sbalení měsíců pod WK() nového okna
   loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
   activePlanDate = todayIso();
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
@@ -5039,14 +5048,23 @@ function buildWeekHeaders(items, ym) {
   return ins;
 }
 
-// ── POZDĚJI: sbalování měsíců (per zařízení, nesynchronizuje se) ───────────────
-let laterCollapsed = null;
-function ensureLaterCollapsed() { if (laterCollapsed) return; try { laterCollapsed = JSON.parse(localStorage.getItem('todo-app-later-collapsed') || '{}') || {}; } catch(e) { laterCollapsed = {}; } }
-function saveLaterCollapsed() { try { localStorage.setItem('todo-app-later-collapsed', JSON.stringify(laterCollapsed || {})); } catch(e) {} }
+// ── POZDĚJI: sbalování měsíců (per zařízení i per okno dne, nesynchronizuje se) ──
+const LATER_COLLAPSE_KEY = 'todo-app-later-collapsed', LATER_HORIZON_KEY = 'todo-app-later-horizon';
+let laterCollapsed = null;   // cache; resetuje se na null při přepnutí okna (activateWindow) → reload pod WK()
+function ensureLaterCollapsed() { if (laterCollapsed) return; try { laterCollapsed = JSON.parse(localStorage.getItem(WK(LATER_COLLAPSE_KEY)) || '{}') || {}; } catch(e) { laterCollapsed = {}; } }
+function saveLaterCollapsed() { try { localStorage.setItem(WK(LATER_COLLAPSE_KEY), JSON.stringify(laterCollapsed || {})); } catch(e) {} }
 function curMonthYm() { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
-// horizont = kolik měsíců dopředu zobrazovat (i prázdné); per zařízení, nesynchronizuje se
-function laterHorizon() { let h = 12; try { const v = parseInt(localStorage.getItem('todo-app-later-horizon'), 10); if (v >= 1 && v <= 60) h = v; } catch(e) {} return h; }
-function setLaterHorizon(v) { v = parseInt(v, 10); if (!(v >= 1 && v <= 60)) return; try { localStorage.setItem('todo-app-later-horizon', String(v)); } catch(e) {} populateLaterAddMonth(); renderLater(); }
+// horizont = kolik měsíců dopředu zobrazovat (i prázdné); per zařízení i per okno dne, nesynchronizuje se
+function laterHorizon() { let h = 12; try { const v = parseInt(localStorage.getItem(WK(LATER_HORIZON_KEY)), 10); if (v >= 1 && v <= 60) h = v; } catch(e) {} return h; }
+function setLaterHorizon(v) { v = parseInt(v, 10); if (!(v >= 1 && v <= 60)) return; try { localStorage.setItem(WK(LATER_HORIZON_KEY), String(v)); } catch(e) {} populateLaterAddMonth(); renderLater(); }
+// rozbalit/sbalit všechny (neprázdné) zobrazené měsíce najednou
+function toggleAllLaterMonths() {
+  ensureLaterCollapsed();
+  const yms = later.filter(b => b && b.items && b.items.length).map(b => b.ym);
+  const anyExpanded = yms.some(ym => !isLaterCollapsed(ym));
+  yms.forEach(ym => { laterCollapsed[ym] = anyExpanded; });   // něco rozbaleno → sbal vše; jinak rozbal vše
+  saveLaterCollapsed(); renderLater();
+}
 // souvislý rozsah měsíců „YYYY-MM" od aktuálního po aktuální+horizont (včetně)
 function laterMonthRange() {
   const out = [], n = new Date(), H = laterHorizon();
@@ -5145,15 +5163,19 @@ function renderLater() {
   const months = [...monthsSet].sort();
   const byYm = new Map(later.map(b => [b.ym, b]));
   months.forEach(ym => { const b = byYm.get(ym); if (b && b.items.length) sortBucketItems(b.items, ym); });
+  const curYm = curMonthYm();
+  const addBtn = ym => `<button class="later-month-add" onclick="event.stopPropagation();pickLaterMonth('${ym}')" title="přidat do tohoto měsíce">+</button>`;
+  const odTag = ym => ym < curYm ? `<span class="later-month-od">po termínu</span>` : '';
   c.innerHTML = todayHtml + months.map((ym, gi) => {
     const b = byYm.get(ym);
     const n = (b && b.items) ? b.items.length : 0;
     const cnt = n + ' ' + (n === 1 ? 'položka' : n <= 4 ? 'položky' : 'položek');
+    const od = ym < curYm ? ' overdue' : '';
     if (!n) {   // prázdný měsíc → jen hlavička (drop cíl + klik nasměruje přidávání)
-      return `<div class="later-month-hdr empty${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="přidávat sem · nebo sem přetáhni položku"><span class="later-month-toggle">·</span>${monthLabel(ym)}<span class="later-month-sum">${cnt}</span></div>`;
+      return `<div class="later-month-hdr empty${od}${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="přidávat sem · nebo sem přetáhni položku"><span class="later-month-toggle">·</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
     }
     const collapsed = isLaterCollapsed(ym);
-    const hdr = `<div class="later-month-hdr${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}<span class="later-month-sum">${cnt}</span></div>`;
+    const hdr = `<div class="later-month-hdr${od}${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
     if (collapsed) return hdr;
     const headers = buildWeekHeaders(b.items, ym);
     const hols = monthHolidays(ym);
@@ -5331,6 +5353,7 @@ function switchNotesTab(name) {
   // cíl přidávání (addCtx) podle aktivní karty
   if (isPlan) setAddCtx('day');
   else if (name === 'inbox') setAddCtx('inbox');
+  else if (name === 'pozdeji') setAddCtxLater();   // prostý text bez data → do vybraného měsíce (ne do dne)
   // tlačítka +Úkol/+Blok/+Událost a zkratky bloků jen na Dni; Inbox/Později = ploché jednořádkové položky
   const btns = el('inputBtns'); if (btns) btns.style.display = isPlan ? '' : 'none';
   const qta = el('quickInput');
