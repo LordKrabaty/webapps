@@ -916,6 +916,7 @@ let library = [], activeLibId = null, archive = [];
 let weekPlans = [];
 let workingDaysByWeek = {}; // { 'YYYY-MM-DD': [dayNums] } keyed by Monday ISO date
 let undoStack = [], redoStack = [], savedSnapshot = null;
+let laterUndoStack = [], laterRedoStack = [];   // samostatný undo zásobník karty Później (deklarace brzy kvůli undo()/updateUndoBtn())
 let autoSave = false;
 const UNDO_MAX = 40;
 
@@ -1450,7 +1451,7 @@ function MCTX(ym) {
     rowsEl() { return el('later-list')?.querySelector('.later-rows[data-ym="' + ym + '"]')?.querySelectorAll('.item-row'); },
     input: 'quickInput',
     winStart() { return '8:00'; },
-    undo() {},                                  // měsíce zatím bez undo
+    undo() { pushLaterUndo(); },                // snapshot PŘED změnou → ↩ vrátí (mazání, přesun, editace…)
     save() { const b = laterBucket(ym); b.mt = Date.now(); saveLater(); },
     render() { renderLater(); },
     call(name, idx, extra) { return name + "('" + ym + "'," + idx + (extra != null ? ',' + extra : '') + ')'; },
@@ -2574,7 +2575,7 @@ function activateWindow(id) {
   activeWin = id;
   try { localStorage.setItem(ACTIVE_WIN_KEY, id); } catch(e) {}
   activeLibId = null; savedSnapshot = null;
-  undoStack = []; redoStack = []; highlightedId = null; planWeekOffset = 0;
+  undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
   laterCollapsed = null;   // přenačti sbalení měsíců pod WK() nového okna
   loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
@@ -3591,6 +3592,7 @@ function pushUndo() {
   updateUndoBtn();
 }
 function undo() {
+  if (typeof isLaterTabActive === 'function' && isLaterTabActive()) { laterUndo(); return; }   // karta Później má vlastní undo
   if (!undoStack.length) return;
   redoStack.push(sessionSnap());
   const d = JSON.parse(undoStack.pop());
@@ -3599,6 +3601,7 @@ function undo() {
   schedSave(); updateUndoBtn(); renderLibrary(); renderAll(); renderDayButtons();
 }
 function redo() {
+  if (typeof isLaterTabActive === 'function' && isLaterTabActive()) { laterRedo(); return; }
   if (!redoStack.length) return;
   undoStack.push(sessionSnap());
   if (undoStack.length > UNDO_MAX) undoStack.shift();
@@ -3608,10 +3611,12 @@ function redo() {
   schedSave(); updateUndoBtn(); renderLibrary(); renderAll(); renderDayButtons();
 }
 function updateUndoBtn() {
+  const onLater = (typeof isLaterTabActive === 'function') && isLaterTabActive();
+  const us = onLater ? laterUndoStack : undoStack, rs = onLater ? laterRedoStack : redoStack;
   const u = el('undoBtn');
-  if (u) { u.disabled = !undoStack.length; u.title = undoStack.length ? 'zpět ' + undoStack.length + ' (Ctrl+Z)' : 'nic k vrácení'; }
+  if (u) { u.disabled = !us.length; u.title = us.length ? 'zpět ' + us.length + ' (Ctrl+Z)' : 'nic k vrácení'; }
   const r = el('redoBtn');
-  if (r) { r.disabled = !redoStack.length; r.title = redoStack.length ? 'vpřed ' + redoStack.length + ' (Ctrl+Y)' : 'nic vpřed'; }
+  if (r) { r.disabled = !rs.length; r.title = rs.length ? 'vpřed ' + rs.length + ' (Ctrl+Y)' : 'nic vpřed'; }
 }
 
 // ── STATUS / SAVE ─────────────────────────────────────────────────────────────
@@ -4595,6 +4600,7 @@ function skipLaterOccurrence(ym, idx) {
   const b = later.find(x => x.ym === ym); if (!b) return false;
   const it = b.items[idx];
   if (!it || it.recurId == null) return false;
+  pushLaterUndo();                          // ↩ vrátí výskyt (obnoví položku i zruší „skip")
   const rec = recurrences.find(r => r.id === it.recurId);
   if (rec) { rec.exceptions = rec.exceptions || {}; rec.exceptions[laterSkipKey(it, ym)] = 'skip'; rec.mt = Date.now(); saveRecur(); }
   b.items.splice(idx, 1); b.mt = Date.now(); saveLater();
@@ -4880,6 +4886,7 @@ function mEditDay(ym, idx) {
     materializeLaterGhost(ym, idx);   // editace dne ducha → zhmotni (bez renderu, ať `item`/`idx` drží)
     const parsed = parseLaterDayInput(v, ym);
     if (parsed && parsed.ym !== ym) {   // datum s jiným měsícem → přesuň položku do správného bucketu
+      pushLaterUndo();                  // ↩ vrátí přesun
       skipRecurInSource(item, ym);      // opakování → skip ve zdroji (PŘED změnou dayLabel)
       item.dayLabel = parsed.label;
       moveLaterGroup(ym, item, parsed.ym);
@@ -4888,7 +4895,7 @@ function mEditDay(ym, idx) {
       return;
     }
     if (parsed) v = parsed.label;       // normalizace ve stejném měsíci („12" → „12.<měsíc>.")
-    if (v !== (item.dayLabel || '')) { item.dayLabel = v || null; ctx.save(); }
+    if (v !== (item.dayLabel || '')) { pushLaterUndo(); item.dayLabel = v || null; ctx.save(); }
     ctx.render();
   };
   badge.addEventListener('blur', commit, { once: true });
@@ -5057,6 +5064,42 @@ function curMonthYm() { const n = new Date(); return n.getFullYear() + '-' + Str
 // horizont = kolik měsíců dopředu zobrazovat (i prázdné); per zařízení i per okno dne, nesynchronizuje se
 function laterHorizon() { let h = 12; try { const v = parseInt(localStorage.getItem(WK(LATER_HORIZON_KEY)), 10); if (v >= 1 && v <= 60) h = v; } catch(e) {} return h; }
 function setLaterHorizon(v) { v = parseInt(v, 10); if (!(v >= 1 && v <= 60)) return; try { localStorage.setItem(WK(LATER_HORIZON_KEY), String(v)); } catch(e) {} populateLaterAddMonth(); renderLater(); }
+// ── POZDĚJI: undo/redo (snapshot `later` + výjimky opakování) ──────────────────
+// Karta Później má vlastní undo zásobník (deklarace u undoStack); ↩/↪ v hlavičce na ni přepnou, když je aktivní.
+// Snapshot zachytí reálné položky (duchy se regenerují) i `exceptions` pravidel kvůli „skip" mazání opakování.
+const LATER_UNDO_MAX = 40;
+function isLaterTabActive() { try { return !!el('pane-pozdeji')?.classList.contains('active'); } catch(e) { return false; } }
+function laterSnap() {
+  return JSON.stringify({
+    L: later.map(b => ({ ym: b.ym, mt: b.mt, items: stripGhosts(b.items) })),
+    X: recurrences.map(r => [r.id, r.exceptions || {}]),
+  });
+}
+function applyLaterSnap(json) {
+  let s; try { s = JSON.parse(json); } catch(e) { return; }
+  // podpis obsahu (bez ghostů, normalizovaný) → razítkuj jen buckety, které se obnovou liší od aktuálního stavu
+  const sig = its => JSON.stringify((stripGhosts(its) || []).map(normItem));
+  const cur = new Map(later.map(b => [b.ym, sig(b.items)]));
+  const now = Date.now();
+  later = (s.L || []).map(normLaterBucket).filter(Boolean).map(nb => {
+    if (cur.get(nb.ym) !== JSON.stringify(nb.items)) nb.mt = now;   // obnova mění obsah → razítko, jinak by novější mazání z cloudu undo přebilo (LWW)
+    return nb;
+  });
+  if (Array.isArray(s.X)) {                       // obnov „skip" výjimky pravidel (mazání opakovaného výskytu)
+    const byId = new Map(s.X);
+    let recChanged = false;
+    recurrences.forEach(r => {
+      if (!byId.has(r.id)) return;
+      const restored = byId.get(r.id) || {};
+      if (JSON.stringify(r.exceptions || {}) !== JSON.stringify(restored)) { r.exceptions = JSON.parse(JSON.stringify(restored)); r.mt = Date.now(); recChanged = true; }
+    });
+    if (recChanged) saveRecur();
+  }
+  saveLater(); renderLater();
+}
+function pushLaterUndo() { laterUndoStack.push(laterSnap()); if (laterUndoStack.length > LATER_UNDO_MAX) laterUndoStack.shift(); laterRedoStack = []; updateUndoBtn(); }
+function laterUndo() { if (!laterUndoStack.length) return; laterRedoStack.push(laterSnap()); applyLaterSnap(laterUndoStack.pop()); updateUndoBtn(); showStatusMsg('↩ vráceno', 1500); }
+function laterRedo() { if (!laterRedoStack.length) return; laterUndoStack.push(laterSnap()); applyLaterSnap(laterRedoStack.pop()); updateUndoBtn(); }
 // rozbalit/sbalit všechny (neprázdné) zobrazené měsíce najednou
 function toggleAllLaterMonths() {
   ensureLaterCollapsed();
@@ -5139,6 +5182,7 @@ function applyLaterDnd(srcYm, srcIdx, dstYm, rawIdx) {
   if (srcYm === dstYm) { applyDndReorder(MCTX(srcYm), srcIdx, rawIdx); return; }
   const src = later.find(b => b.ym === srcYm); if (!src) return;
   const item = src.items[srcIdx]; if (!item) return;
+  pushLaterUndo();                                                                    // ↩ vrátí přesun mezi měsíci
   skipRecurInSource(item, srcYm);                                                     // opakování → neregeneruj ve zdroji (PŘED změnou dayLabel)
   if (item.isGhost) { delete item.isGhost; item.id = Date.now() + Math.random(); }   // duch → reálná položka
   if (item.dayLabel && /^(\d{1,2})\.\s*\d{1,2}\.?$/.test(item.dayLabel)) {            // má datum → přepiš měsíc na cílový
@@ -5391,6 +5435,7 @@ function switchNotesTab(name) {
     renderLater();
   }
   updateAbbrevHint();
+  updateUndoBtn();   // ↩/↪ odráží zásobník aktivní karty (Później má vlastní)
 }
 
 async function deleteWeekDay(id) {
