@@ -278,7 +278,9 @@ textarea::placeholder{color:var(--mid)}
 .later-month-hdr{display:flex;align-items:center;gap:.35rem;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem;cursor:pointer;user-select:none;-webkit-user-select:none}
 .later-month-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .later-month-toggle{display:inline-block;width:.85rem;text-align:center;font-size:.78rem;line-height:1}
-.later-month-hdr.later-drop-into{background:var(--light);outline:1.5px dashed var(--mid);outline-offset:-1px}
+.later-month-hdr.empty{opacity:.55}
+.later-month-hdr.empty .later-month-toggle{opacity:.4}
+.later-month-hdr.later-drop-into{background:var(--light);outline:1.5px dashed var(--mid);outline-offset:-1px;opacity:1}
 .later-month-sum{margin-left:auto;font-family:'DM Mono',monospace;font-weight:400;text-transform:none;letter-spacing:0}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
@@ -589,6 +591,13 @@ textarea::placeholder{color:var(--mid)}
       <div class="later-add-row" style="align-items:center">
         <span style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">přidat do měsíce</span>
         <select id="laterAddMonth" class="later-sel" title="do kterého měsíce přidávat" onchange="setAddCtxLater()"></select>
+        <select id="laterHorizonSel" class="later-sel" title="jak daleko dopředu zobrazit měsíce" onchange="setLaterHorizon(this.value)" style="flex:0 0 auto">
+          <option value="6">6 měs.</option>
+          <option value="12">12 měs.</option>
+          <option value="18">18 měs.</option>
+          <option value="24">24 měs.</option>
+          <option value="36">36 měs.</option>
+        </select>
         <button class="btn-sm" onclick="openRecurManage()" title="správa opakování + legenda zkratek" style="flex:0 0 auto">↻ opakování</button>
       </div>
       <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.1rem"></div>
@@ -4437,7 +4446,6 @@ function skipGhostOccurrence(idx) {
 }
 
 // ── OPAKOVÁNÍ → KARTA POZDĚJI (F2): duchové v měsíčních bucketech ───────────────
-const RECUR_HORIZON_M = 18;   // kolik měsíců dopředu zobrazovat duchy opakování
 // dayLabel pravidla pro měsíc | false = nefiruje | null = celý měsíc (bez konkrétního dne)
 function ruleMonthDayLabel(r, Y, M, anchorIso) {   // M = 1..12
   if (!r) return false;
@@ -4540,8 +4548,8 @@ function syncLaterGhosts() {
   later.forEach(b => { if (b && b.items.some(it => it.isGhost)) b.items = b.items.filter(it => !it.isGhost); });
   later = later.filter(b => b && b.items.length);          // zahoď měsíce prázdné po odebrání duchů
   if (!recurrences.length) return;
-  const now = new Date();
-  for (let i = 0; i < RECUR_HORIZON_M; i++) {
+  const now = new Date(), H = laterHorizon();   // duchy generuj do stejného horizontu, jako se zobrazují měsíce
+  for (let i = 0; i <= H; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     recurrences.forEach(rec => {
@@ -4821,17 +4829,12 @@ function laterBucket(ym) {
 }
 function monthLabel(ym) { const [y, m] = String(ym).split('-').map(Number); return (MONTHS_CZ[m - 1] || '?').toUpperCase() + ' ' + y; }
 
-// naplní select „přidat do měsíce" (aktuální + 17 dopředu + případné existující mimo okno)
+// naplní select „přidat do měsíce" (aktuální + horizont dopředu + případné existující mimo rozsah)
 function populateLaterAddMonth() {
   const sel = el('laterAddMonth'); if (!sel) return;
-  const now = new Date();
   const have = new Set();
   const opts = [];
-  for (let i = 0; i < 18; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    have.add(ym); opts.push([ym, MONTHS_CZ[d.getMonth()] + ' ' + d.getFullYear()]);
-  }
+  laterMonthRange().forEach(ym => { const [y, m] = ym.split('-').map(Number); have.add(ym); opts.push([ym, MONTHS_CZ[m - 1] + ' ' + y]); });
   later.forEach(b => { if (b.ym && !have.has(b.ym)) { have.add(b.ym); const [y, m] = b.ym.split('-').map(Number); opts.push([b.ym, (MONTHS_CZ[m - 1] || '?') + ' ' + y]); } });
   opts.sort((a, b) => a[0].localeCompare(b[0]));
   const prev = sel.value;
@@ -5041,6 +5044,22 @@ let laterCollapsed = null;
 function ensureLaterCollapsed() { if (laterCollapsed) return; try { laterCollapsed = JSON.parse(localStorage.getItem('todo-app-later-collapsed') || '{}') || {}; } catch(e) { laterCollapsed = {}; } }
 function saveLaterCollapsed() { try { localStorage.setItem('todo-app-later-collapsed', JSON.stringify(laterCollapsed || {})); } catch(e) {} }
 function curMonthYm() { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
+// horizont = kolik měsíců dopředu zobrazovat (i prázdné); per zařízení, nesynchronizuje se
+function laterHorizon() { let h = 12; try { const v = parseInt(localStorage.getItem('todo-app-later-horizon'), 10); if (v >= 1 && v <= 60) h = v; } catch(e) {} return h; }
+function setLaterHorizon(v) { v = parseInt(v, 10); if (!(v >= 1 && v <= 60)) return; try { localStorage.setItem('todo-app-later-horizon', String(v)); } catch(e) {} populateLaterAddMonth(); renderLater(); }
+// souvislý rozsah měsíců „YYYY-MM" od aktuálního po aktuální+horizont (včetně)
+function laterMonthRange() {
+  const out = [], n = new Date(), H = laterHorizon();
+  for (let i = 0; i <= H; i++) { const d = new Date(n.getFullYear(), n.getMonth() + i, 1); out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); }
+  return out;
+}
+// klik na hlavičku prázdného měsíce → nasměruj přidávání do něj
+function pickLaterMonth(ym) {
+  const sel = el('laterAddMonth');
+  if (sel && [...sel.options].some(o => o.value === ym)) { sel.value = ym; setAddCtxLater(); }
+  const ta = el('quickInput'); if (ta) ta.focus();
+  showStatusMsg('+ přidávám do ' + monthLabel(ym), 1500);
+}
 // default: rozbalen jen aktuální měsíc, ostatní sbalené; explicitní přepnutí má přednost
 function isLaterCollapsed(ym) { ensureLaterCollapsed(); return (ym in laterCollapsed) ? !!laterCollapsed[ym] : (ym !== curMonthYm()); }
 function toggleLaterMonth(ym) { ensureLaterCollapsed(); laterCollapsed[ym] = !isLaterCollapsed(ym); saveLaterCollapsed(); renderLater(); }
@@ -5117,26 +5136,31 @@ function renderLater() {
   const c = el('later-list'); if (!c) return;
   updateAbbrevHint();
   syncLaterGhosts();        // F2: doplň/obnov duchy opakování do měsíčních bucketů (idempotentní)
-  const buckets = later.filter(b => b && b.items && b.items.length).slice().sort((a, b) => a.ym.localeCompare(b.ym));
   const now = new Date();
+  const hsel = el('laterHorizonSel'); if (hsel) hsel.value = String(laterHorizon());
   const todayHtml = `<div class="later-today-bar">Dnes: <b>${DAY_NAMES_CZ_LONG[now.getDay()]}</b> ${now.getDate()}. ${now.getMonth()+1}. ${now.getFullYear()}</div>`;
-  if (!buckets.length) {
-    c.innerHTML = todayHtml + '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Prázdné — vyber měsíc nahoře a přidej úkol, blok nebo událost (stejně jako v Týdnu).</div>';
-    return;
-  }
-  buckets.forEach(b => sortBucketItems(b.items, b.ym));
-  c.innerHTML = todayHtml + buckets.map((b, gi) => {
-    const collapsed = isLaterCollapsed(b.ym);
-    const n = b.items.length;
+  // měsíce k zobrazení: souvislý rozsah (aktuální + horizont) ∪ jakékoli buckety s položkami mimo rozsah
+  const monthsSet = new Set(laterMonthRange());
+  later.forEach(b => { if (b && b.items && b.items.length) monthsSet.add(b.ym); });
+  const months = [...monthsSet].sort();
+  const byYm = new Map(later.map(b => [b.ym, b]));
+  months.forEach(ym => { const b = byYm.get(ym); if (b && b.items.length) sortBucketItems(b.items, ym); });
+  c.innerHTML = todayHtml + months.map((ym, gi) => {
+    const b = byYm.get(ym);
+    const n = (b && b.items) ? b.items.length : 0;
     const cnt = n + ' ' + (n === 1 ? 'položka' : n <= 4 ? 'položky' : 'položek');
-    const hdr = `<div class="later-month-hdr${gi === 0 ? ' first' : ''}" data-ym="${b.ym}" onclick="toggleLaterMonth('${b.ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(b.ym)}<span class="later-month-sum">${cnt}</span></div>`;
+    if (!n) {   // prázdný měsíc → jen hlavička (drop cíl + klik nasměruje přidávání)
+      return `<div class="later-month-hdr empty${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="přidávat sem · nebo sem přetáhni položku"><span class="later-month-toggle">·</span>${monthLabel(ym)}<span class="later-month-sum">${cnt}</span></div>`;
+    }
+    const collapsed = isLaterCollapsed(ym);
+    const hdr = `<div class="later-month-hdr${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}<span class="later-month-sum">${cnt}</span></div>`;
     if (collapsed) return hdr;
-    const headers = buildWeekHeaders(b.items, b.ym);
-    const hols = monthHolidays(b.ym);
+    const headers = buildWeekHeaders(b.items, ym);
+    const hols = monthHolidays(ym);
     const holHtml = hols.length
       ? `<div class="later-month-holidays">${hols.map(h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); }).join(' · ')}</div>`
       : '';
-    return hdr + holHtml + `<div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
+    return hdr + holHtml + `<div class="later-rows" data-ym="${ym}">${rowsHtml(MCTX(ym), headers)}</div>`;
   }).join('');
   initLaterDnd();
 }
