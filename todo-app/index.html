@@ -275,8 +275,10 @@ textarea::placeholder{color:var(--mid)}
 /* ── LATER (Později) ── */
 .later-add-row{display:flex;gap:.4rem;flex-wrap:wrap;flex-shrink:0;align-items:center;margin-bottom:.35rem}
 .later-sel{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.25rem .35rem;outline:none;min-width:0;flex:1}
-.later-month-hdr{display:flex;align-items:center;gap:.5rem;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem}
+.later-month-hdr{display:flex;align-items:center;gap:.35rem;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem;cursor:pointer;user-select:none;-webkit-user-select:none}
 .later-month-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
+.later-month-toggle{display:inline-block;width:.85rem;text-align:center;font-size:.78rem;line-height:1}
+.later-month-hdr.later-drop-into{background:var(--light);outline:1.5px dashed var(--mid);outline-offset:-1px}
 .later-month-sum{margin-left:auto;font-family:'DM Mono',monospace;font-weight:400;text-transform:none;letter-spacing:0}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
@@ -1720,6 +1722,7 @@ function op_addQuickItems(ctx, forceType) {
     // a pozdější editace měsíce odjinud by routovanou položku přepsala
     const rNow = Date.now();
     routedYms.forEach(ym => { const b = later.find(x => x.ym === ym); if (b) b.mt = rNow; });
+    ensureLaterCollapsed(); routedYms.forEach(ym => { laterCollapsed[ym] = false; }); saveLaterCollapsed();   // rozbal cílové měsíce, ať je nová položka vidět
     saveLater();
     if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
     populateLaterAddMonth();
@@ -4862,8 +4865,17 @@ function mEditDay(ym, idx) {
     if (rr && rr.rules.length) { convertItemToRecur(ym, idx, rr.rules); return; }
     // „d" v poli data → duplikuj položku v měsíci
     if (v.toLowerCase() === 'd') { materializeLaterGhost(ym, idx); duplicateItem(ctx, idx); return; }
-    if (materializeLaterGhost(ym, idx)) { ctx.render(); }   // editace dne ducha → zhmotni (přepočti idx-stabilní)
-    if (/^\d{1,2}\.?$/.test(v)) { const m = +String(ym).split('-')[1]; v = v.replace(/\.$/, '') + '.' + m + '.'; }
+    materializeLaterGhost(ym, idx);   // editace dne ducha → zhmotni (bez renderu, ať `item`/`idx` drží)
+    const parsed = parseLaterDayInput(v, ym);
+    if (parsed && parsed.ym !== ym) {   // datum s jiným měsícem → přesuň položku do správného bucketu
+      skipRecurInSource(item, ym);      // opakování → skip ve zdroji (PŘED změnou dayLabel)
+      item.dayLabel = parsed.label;
+      moveLaterGroup(ym, item, parsed.ym);
+      renderLater();
+      showStatusMsg('→ přesunuto do ' + monthLabel(parsed.ym), 2000);
+      return;
+    }
+    if (parsed) v = parsed.label;       // normalizace ve stejném měsíci („12" → „12.<měsíc>.")
     if (v !== (item.dayLabel || '')) { item.dayLabel = v || null; ctx.save(); }
     ctx.render();
   };
@@ -5024,6 +5036,83 @@ function buildWeekHeaders(items, ym) {
   return ins;
 }
 
+// ── POZDĚJI: sbalování měsíců (per zařízení, nesynchronizuje se) ───────────────
+let laterCollapsed = null;
+function ensureLaterCollapsed() { if (laterCollapsed) return; try { laterCollapsed = JSON.parse(localStorage.getItem('todo-app-later-collapsed') || '{}') || {}; } catch(e) { laterCollapsed = {}; } }
+function saveLaterCollapsed() { try { localStorage.setItem('todo-app-later-collapsed', JSON.stringify(laterCollapsed || {})); } catch(e) {} }
+function curMonthYm() { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
+// default: rozbalen jen aktuální měsíc, ostatní sbalené; explicitní přepnutí má přednost
+function isLaterCollapsed(ym) { ensureLaterCollapsed(); return (ym in laterCollapsed) ? !!laterCollapsed[ym] : (ym !== curMonthYm()); }
+function toggleLaterMonth(ym) { ensureLaterCollapsed(); laterCollapsed[ym] = !isLaterCollapsed(ym); saveLaterCollapsed(); renderLater(); }
+
+// Vstup pole „datum" v Później → { ym, label } | null (volný text).
+// „12" → den v aktuálním měsíci; „12.8." → 12. srpna (rok bucketu, posun na příští rok když měsíc už letos byl);
+// „12.8.2027" → explicitní rok.
+function parseLaterDayInput(v, curYm) {
+  v = String(v || '').trim();
+  const [cy, cm] = curYm.split('-').map(Number);
+  let m;
+  if ((m = v.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})\.?$/))) {
+    const day = +m[1], mo = +m[2]; let y = +m[3]; if (y < 100) y += 2000;
+    if (mo < 1 || mo > 12 || day < 1 || day > 31) return null;
+    return { ym: y + '-' + String(mo).padStart(2, '0'), label: day + '.' + mo + '.' };
+  }
+  if ((m = v.match(/^(\d{1,2})\.\s*(\d{1,2})\.?$/))) {
+    const day = +m[1], mo = +m[2];
+    if (mo < 1 || mo > 12 || day < 1 || day > 31) return null;
+    let y = cy, ym = y + '-' + String(mo).padStart(2, '0');
+    if (ym < curYm) { y++; ym = y + '-' + String(mo).padStart(2, '0'); }   // měsíc už letos byl → příští rok
+    return { ym, label: day + '.' + mo + '.' };
+  }
+  if ((m = v.match(/^(\d{1,2})\.?$/))) {
+    const day = +m[1]; if (day < 1 || day > 31) return null;
+    return { ym: curYm, label: day + '.' + cm + '.' };
+  }
+  return null;
+}
+// přesun opakovaného výskytu do jiného měsíce → zapiš „skip" ve ZDROJI (z původního dayLabel),
+// jinak by syncLaterGhosts ducha ve zdrojovém měsíci znovu vygeneroval (duplikát). Volat PŘED změnou dayLabel.
+function skipRecurInSource(item, srcYm) {
+  if (!item || item.recurId == null) return;
+  const rec = recurrences.find(r => r.id === item.recurId);
+  if (!rec) return;
+  rec.exceptions = rec.exceptions || {};
+  rec.exceptions[laterSkipKey(item, srcYm)] = 'skip';
+  rec.mt = Date.now(); saveRecur();
+}
+// přesun položky (blok + souvislé podúkoly) mezi měsíci; atIndex null = na konec cílového měsíce
+function moveLaterGroup(srcYm, item, dstYm, atIndex) {
+  const src = later.find(b => b.ym === srcYm); if (!src) return false;
+  const idx = src.items.indexOf(item); if (idx < 0) return false;
+  let L = 1; if (!item.isSubtask) { let e = idx + 1; while (e < src.items.length && src.items[e].isSubtask) e++; L = e - idx; }
+  const group = src.items.splice(idx, L);
+  let dst = later.find(b => b.ym === dstYm);
+  if (!dst) { dst = { ym: dstYm, items: [], mt: 0 }; later.push(dst); }
+  const at = (atIndex == null) ? dst.items.length : Math.max(0, Math.min(dst.items.length, atIndex));
+  dst.items.splice(at, 0, ...group);
+  src.mt = Date.now(); dst.mt = Date.now();
+  if (!src.items.length) later = later.filter(b => b !== src);
+  ensureLaterCollapsed(); laterCollapsed[dstYm] = false; saveLaterCollapsed();   // ať je cíl vidět
+  saveLater();
+  return true;
+}
+// přetažení v Później: stejný měsíc = přeřazení; jiný měsíc = přesun (+ má-li datum, přepiš měsíc)
+function applyLaterDnd(srcYm, srcIdx, dstYm, rawIdx) {
+  if (!dstYm) return;
+  if (srcYm === dstYm) { applyDndReorder(MCTX(srcYm), srcIdx, rawIdx); return; }
+  const src = later.find(b => b.ym === srcYm); if (!src) return;
+  const item = src.items[srcIdx]; if (!item) return;
+  skipRecurInSource(item, srcYm);                                                     // opakování → neregeneruj ve zdroji (PŘED změnou dayLabel)
+  if (item.isGhost) { delete item.isGhost; item.id = Date.now() + Math.random(); }   // duch → reálná položka
+  if (item.dayLabel && /^(\d{1,2})\.\s*\d{1,2}\.?$/.test(item.dayLabel)) {            // má datum → přepiš měsíc na cílový
+    item.dayLabel = item.dayLabel.match(/^(\d{1,2})\./)[1] + '.' + (+dstYm.split('-')[1]) + '.';
+  }
+  if (moveLaterGroup(srcYm, item, dstYm, rawIdx === 1e9 ? null : rawIdx)) {
+    showStatusMsg('→ přesunuto do ' + monthLabel(dstYm), 1800);
+    renderLater();
+  }
+}
+
 function renderLater() {
   const c = el('later-list'); if (!c) return;
   updateAbbrevHint();
@@ -5037,15 +5126,17 @@ function renderLater() {
   }
   buckets.forEach(b => sortBucketItems(b.items, b.ym));
   c.innerHTML = todayHtml + buckets.map((b, gi) => {
+    const collapsed = isLaterCollapsed(b.ym);
     const n = b.items.length;
     const cnt = n + ' ' + (n === 1 ? 'položka' : n <= 4 ? 'položky' : 'položek');
+    const hdr = `<div class="later-month-hdr${gi === 0 ? ' first' : ''}" data-ym="${b.ym}" onclick="toggleLaterMonth('${b.ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(b.ym)}<span class="later-month-sum">${cnt}</span></div>`;
+    if (collapsed) return hdr;
     const headers = buildWeekHeaders(b.items, b.ym);
     const hols = monthHolidays(b.ym);
     const holHtml = hols.length
       ? `<div class="later-month-holidays">${hols.map(h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); }).join(' · ')}</div>`
       : '';
-    return `<div class="later-month-hdr${gi === 0 ? ' first' : ''}">${monthLabel(b.ym)}<span class="later-month-sum">${cnt}</span></div>
-      ${holHtml}<div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
+    return hdr + holHtml + `<div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
   }).join('');
   initLaterDnd();
 }
@@ -5665,12 +5756,74 @@ function initInboxDnd() {
   initDnd(container, (s, f, raw) => applyDndReorder(INBOXCTX, s, raw));
 }
 
-// Později: každý měsíc má vlastní .later-rows, který se po renderu vytváří znovu →
-// připojuj po každém renderLater (čerstvé elementy, žádná akumulace listenerů).
+// Později: tažení V RÁMCI měsíce i MEZI měsíci. Kontejner #later-list je trvalý →
+// připoj delegovaně jen JEDNOU; řádky/hlavičky se hledají při každém pohybu (přežijí re-render).
 function initLaterDnd() {
-  el('later-list')?.querySelectorAll('.later-rows').forEach(c => {
-    const ym = c.dataset.ym;
-    initDnd(c, (s, f, raw) => applyDndReorder(MCTX(ym), s, raw));
+  const list = el('later-list'); if (!list || list._laterDnd) return;
+  list._laterDnd = true;
+  let srcRow = null, srcYm = null, srcIdx = null, pointerId = null, dragging = false;
+  let startX = 0, startY = 0, holdTimer = null;
+  const MOUSE_THRESHOLD = 6, SCROLL_THRESHOLD = 12, TOUCH_HOLD = 180;
+  const clearInd = () => list.querySelectorAll('.drag-over-top,.drag-over-bottom,.later-drop-into')
+    .forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom', 'later-drop-into'));
+  const rowAt = (x, y) => { const t = document.elementFromPoint(x, y); const r = t && t.closest('.later-rows [draggable="true"]'); return (r && list.contains(r)) ? r : null; };
+  const hdrAt = (x, y) => { const t = document.elementFromPoint(x, y); const h = t && t.closest('.later-month-hdr'); return (h && list.contains(h)) ? h : null; };
+  const beginDrag = () => { if (dragging || !srcRow) return; dragging = true; _dndActive = true; srcRow.classList.add('dragging'); srcRow.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; };
+  const end = () => {
+    clearTimeout(holdTimer); holdTimer = null; clearInd();
+    if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents = ''; }
+    document.body.style.userSelect = '';
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onUp, true);
+    srcRow = srcYm = srcIdx = pointerId = null; dragging = false; _dndActive = false;
+  };
+  const onMove = e => {
+    if (e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!dragging) {
+      if (e.pointerType === 'mouse') { if (Math.abs(dx) + Math.abs(dy) > MOUSE_THRESHOLD) beginDrag(); else return; }
+      else { if (Math.abs(dx) + Math.abs(dy) > SCROLL_THRESHOLD) end(); return; }
+    }
+    if (!dragging) return;
+    if (e.cancelable) e.preventDefault();
+    clearInd();
+    const row = rowAt(e.clientX, e.clientY);
+    if (row) { const rect = row.getBoundingClientRect(); row.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom'); return; }
+    const hdr = hdrAt(e.clientX, e.clientY);
+    if (hdr && hdr.dataset.ym !== srcYm) hdr.classList.add('later-drop-into');   // drop na hlavičku jiného měsíce
+  };
+  const onUp = e => {
+    if (e.pointerId !== pointerId) return;
+    if (dragging) {
+      let dstRow = null, insertBefore = true, hdr = null;
+      list.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(r => { insertBefore = r.classList.contains('drag-over-top'); dstRow = r; });
+      list.querySelectorAll('.later-drop-into').forEach(h => hdr = h);
+      const sYm = srcYm, sIdx = srcIdx;
+      if (dstRow && sYm != null) {
+        const dYm = dstRow.closest('.later-rows')?.dataset.ym;
+        const dstIdx = parseInt(dstRow.dataset.idx);
+        const rawIdx = insertBefore ? dstIdx : dstIdx + 1;
+        end();
+        applyLaterDnd(sYm, sIdx, dYm, rawIdx);
+        return;
+      }
+      if (hdr && sYm != null) { const dYm = hdr.dataset.ym; end(); if (dYm && dYm !== sYm) applyLaterDnd(sYm, sIdx, dYm, 1e9); return; }
+    }
+    end();
+  };
+  list.addEventListener('dragstart', e => e.preventDefault());
+  list.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    const row = e.target.closest('.later-rows [draggable="true"]');
+    if (!row || !list.contains(row)) return;
+    if (e.target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return;
+    srcRow = row; srcYm = row.closest('.later-rows')?.dataset.ym; srcIdx = parseInt(row.dataset.idx);
+    startX = e.clientX; startY = e.clientY; pointerId = e.pointerId; dragging = false;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    if (e.pointerType !== 'mouse') holdTimer = setTimeout(beginDrag, TOUCH_HOLD);
   });
 }
 
