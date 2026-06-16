@@ -4061,7 +4061,7 @@ let importData = [], importSelected = new Set(), importBlockSel = new Set();
 window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
   importData = []; importSelected = new Set();
-  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importLater = [];
+  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importInboxMt = 0; window._importLater = [];
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
   el('importFile').value = ''; el('importPaste').value = '';
@@ -4100,6 +4100,7 @@ function parseImportJson(text) {
     window._importWeekPlans = parsed.weekPlans || [];
     window._importSettings = parsed.settings || null;
     window._importInbox = parsed.inbox || [];
+    window._importInboxMt = +parsed.inboxMt || 0;   // razítko pořadí inboxu (LWW při importu)
     // později: starý plochý tvar převeď na měsíční buckety hned, ať se strom správně seskupí podle let
     let impLater = parsed.later || [];
     if (impLater.length && impLater[0] && impLater[0].ym && !Array.isArray(impLater[0].items)) impLater = migrateFlatLater(impLater);
@@ -4153,6 +4154,15 @@ function toggleImportBlockSel(i, on) {
   on ? importBlockSel.add(b.key) : importBlockSel.delete(b.key);
   el('ibk-'+i)?.classList.toggle('sel', on);
 }
+// LWW pro import: strukturovaná data (mt > 0) přepíšou lokální záznam JEN když jsou novější —
+// jinak by import staršího/prázdného cloudu (popup „cloud má jiná data") smazal novější lokální den/inbox
+// a razítkem mt = now to ještě rozšířil na ostatní zařízení. Legacy/ruční soubor bez mt = vědomá akce → vyhrává.
+function importRecordWins(impMt, locMt) {
+  const i = +impMt || 0;
+  if (!i) return true;              // bez razítka (legacy export / ruční soubor) → import je vědomá akce
+  return i > (+locMt || 0);         // strukturovaná data → LWW (novější vyhrává)
+}
+function importStamp(impMt) { return (+impMt || 0) || Date.now(); }   // zachovej razítko importu; legacy → teď
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
   const daySel = selTreeSet('imDay'), planSel = selTreeSet('imPlan'), latSel = selTreeSet('imLat');
@@ -4172,26 +4182,33 @@ function doImport() {
   if (toAdd.length) {
     // dedup podle id — existující šablonu aktualizuj na místě, nezdvojuj (stejné chování jako bloky/dny)
     toAdd.forEach(t => {
-      t.mt = Date.now();   // import = vědomá akce → razítkem zajisti, že verze vyhraje při synchronizaci
       const i = library.findIndex(e => String(e.id) === String(t.id));
-      if (i >= 0) { library[i] = t; tplUpdated++; }
-      else { library.push(t); tplAdded++; }
+      if (i >= 0) {
+        if (!importRecordWins(t.mt, library[i].mt)) return;   // lokální šablona je novější → zachovej
+        t.mt = importStamp(t.mt); library[i] = t; tplUpdated++;
+      } else { t.mt = importStamp(t.mt); library.push(t); tplAdded++; }
     });
     saveLibrary(); renderLibrary();
   }
+  // stav aktivního dne PŘED mergem — živý buffer obnovíme jen když ho import opravdu změnil (LWW), ne naslepo
+  const prevCurDay = activePlanDate ? JSON.stringify(weekDays.find(d => d.date === activePlanDate) || null) : null;
   if (addWdays) {
     wdaysSrc.forEach(d => {
       const ex = weekDays.find(w => w.date === d.date);
-      if (ex) { ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = Date.now(); }
-      else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: Date.now() });
+      if (ex) {
+        if (!importRecordWins(d.mt, ex.mt)) return;   // lokální den je novější → zachovej (nepřepiš starším/prázdným)
+        ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = importStamp(d.mt);
+      } else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: importStamp(d.mt) });
     });
     saveWeek(); renderWeekTab(); renderDayButtons();
   }
   if (addWplans) {
     wplansSrc.forEach(p => {
       const ex = weekPlans.find(w => w.date === p.date);
-      if (ex) { ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = Date.now(); }
-      else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: Date.now() });
+      if (ex) {
+        if (!importRecordWins(p.mt, ex.mt)) return;   // lokální plán je novější → zachovej
+        ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = importStamp(p.mt);
+      } else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: importStamp(p.mt) });
     });
     saveWeekPlans(); renderWeekTab();
   }
@@ -4211,19 +4228,23 @@ function doImport() {
   }
   let inboxAdded = 0;
   if (addInbox) {
-    // import = vědomá akce → převezmi obsah i POŘADÍ z importu (jako u Později/dnů), ne jen append.
-    // existující položku aktualizuj na místě, nové přidej, lokální navíc-položky nech na konci.
+    // LWW po položkách: existující položku přepiš jen když je importovaná novější, nové přidej.
+    // Pořadí (inboxMt) převezmi z importu jen když je razítko seznamu novější — jinak by starší cloud
+    // přerovnal/smazal čerstvě upravený lokální inbox a razítkem now to rozšířil na ostatní zařízení.
+    const impMt = +window._importInboxMt || 0;
     const byId = new Map(inbox.map(x => [String(x.id), x]));
-    const ordered = [], seen = new Set();
     (window._importInbox || []).forEach(it => {
       const ni = normItem(it); if (!ni || !ni.text) return;
       const ex = byId.get(String(ni.id));
-      if (ex) { Object.assign(ex, ni); ordered.push(ex); } else { ordered.push(ni); inboxAdded++; }
-      seen.add(String(ni.id));
+      if (ex) { if (importRecordWins(ni.mt, ex.mt)) { ni.mt = importStamp(ni.mt); Object.assign(ex, ni); } }
+      else { ni.mt = importStamp(ni.mt); inbox.push(ni); byId.set(String(ni.id), ni); inboxAdded++; }
     });
-    const localOnly = inbox.filter(x => !seen.has(String(x.id)));
-    inbox = [...ordered, ...localOnly];
-    inboxMt = Date.now();
+    if (importRecordWins(impMt, inboxMt)) {   // pořadí přebíráme jen při novějším razítku seznamu
+      const pos = new Map((window._importInbox || []).map((x, i) => [String(x && x.id), i]));
+      const P = x => { const p = pos.get(String(x.id)); return p == null ? 1e9 : p; };
+      inbox.sort((a, b) => P(a) - P(b));   // stabilní — lokální navíc-položky drží pořadí na konci
+      inboxMt = importStamp(impMt);
+    }
     saveInbox(); renderInbox();
   }
   let laterAdded = 0;
@@ -4231,25 +4252,27 @@ function doImport() {
     laterSrc.forEach(b => {
       const nb = normLaterBucket(b); if (!nb || !nb.items.length) return;
       const ex = later.find(x => x.ym === nb.ym);
-      if (ex) { ex.items = nb.items; ex.mt = Date.now(); } else { later.push({ ...nb, mt: Date.now() }); }
+      if (ex) { if (!importRecordWins(nb.mt, ex.mt)) return; ex.items = nb.items; ex.mt = importStamp(nb.mt); }
+      else { later.push({ ...nb, mt: importStamp(nb.mt) }); }
       laterAdded++;
     });
     saveLater(); renderLater();
   }
-  // obnov živý buffer aktivního dne z naimportovaných dat, jinak ho příští autoSavePlanDay() přepíše starým stavem
-  if (addWdays && activePlanDate) {
+  // obnov živý buffer aktivního dne JEN když ho import opravdu změnil (LWW) — jinak by reset přepsal
+  // čerstvě upravený den prázdnem; zároveň bez změny ho příští autoSavePlanDay() nesmí přepsat starým stavem
+  if (activePlanDate) {
     const cur = weekDays.find(w => w.date === activePlanDate);
-    if (cur) { applySessionData(cur); renderAll(); }
+    if (cur && JSON.stringify(cur) !== prevCurDay) { applySessionData(cur); renderAll(); }
   }
   const msgs = [];
-  if (toAdd.length) msgs.push(toAdd.length + ' šablon' + (tplUpdated ? ' (' + tplUpdated + ' aktualiz.)' : ''));
+  if (tplAdded + tplUpdated) msgs.push((tplAdded + tplUpdated) + ' šablon' + (tplUpdated ? ' (' + tplUpdated + ' aktualiz.)' : ''));
   if (addWdays) msgs.push(wdaysSrc.length + ' dní');
   if (addWplans) msgs.push(wplansSrc.length + ' plánů');
   if (addBlocks) msgs.push(addBlocks + ' bloků');
   if (addWorkDays) msgs.push('pracovní dny');
-  if (addInbox) msgs.push(inboxAdded + ' do inboxu');
-  if (addLater) msgs.push(laterAdded + ' měsíců do Později');
-  closeModal('importModal'); showSave('↓ importováno: ' + msgs.join(', '));
+  if (inboxAdded) msgs.push(inboxAdded + ' do inboxu');
+  if (laterAdded) msgs.push(laterAdded + ' měsíců do Později');
+  closeModal('importModal'); showSave('↓ importováno: ' + (msgs.length ? msgs.join(', ') : 'beze změny (lokální verze novější)'));
 }
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────────
