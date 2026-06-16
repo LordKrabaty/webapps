@@ -5011,9 +5011,10 @@ function parseDayLabel(label, ym) {
 }
 function getWeekMondayKey(date) {
   const d = new Date(date);
-  const day = d.getDay() || 7;
-  d.setDate(d.getDate() - day + 1);
-  return d.toISOString().slice(0, 10);
+  const day = d.getDay() || 7;           // Ne=0→7 → týden Po–Ne
+  d.setDate(d.getDate() - day + 1);      // pondělí daného týdne
+  // LOKÁLNÍ formát (ne toISOString → UTC, který v CZ čase posune půlnoc na předchozí den = neděli)
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 function buildWeekLabel(mondayIso) {
   const mon = new Date(mondayIso + 'T00:00:00');
