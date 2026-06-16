@@ -198,6 +198,7 @@ textarea::placeholder{color:var(--mid)}
 .tl-row-label{width:36px;flex-shrink:0;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);padding:4px 3px 0;text-align:right;line-height:1;border-right:1.5px solid var(--dark)}
 .tl-row.tl-overflow-row .tl-row-label{color:var(--mid);border-right-style:dashed}
 .tl-row-content{flex:1;position:relative;min-height:46px}
+.tl-gap{position:absolute;top:0;bottom:0;background:var(--off);pointer-events:none;background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,.04) 4px,rgba(0,0,0,.04) 5px)}
 .tl-tick{position:absolute;top:0;bottom:0;width:1px;background:var(--light);pointer-events:none}
 .tl-tick-label{position:absolute;top:3px;font-family:'DM Mono',monospace;font-size:.55rem;color:var(--mid);white-space:nowrap;pointer-events:none}
 .tl-block-h{position:absolute;top:2px;bottom:2px;box-sizing:border-box;overflow:hidden;cursor:pointer;padding:1px 4px;font-size:.62rem;line-height:1.35;background:var(--off);border:1px solid var(--mid)}
@@ -327,7 +328,7 @@ textarea::placeholder{color:var(--mid)}
 .notes-pane.active{display:flex}
 /* okna dne (profily) — řada nad záložkami úkolů */
 .win-tabs{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.45rem;flex-shrink:0;align-items:center}
-.win-tab{display:inline-flex;align-items:center;gap:.28rem;font-family:'DM Sans',sans-serif;font-size:.74rem;padding:.24rem .5rem;background:var(--w);color:var(--black);border:var(--b);border-radius:var(--r);cursor:pointer;line-height:1.2;max-width:170px}
+.win-tab{display:inline-flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;font-size:1.05rem;min-width:2rem;padding:.2rem .42rem;background:var(--w);color:var(--black);border:var(--b);border-radius:var(--r);cursor:pointer;line-height:1.2}
 .win-tab .win-tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 @media(hover:hover){.win-tab:not(.active):hover{background:var(--off);border-color:var(--dark)}}
 .win-tab:active{background:var(--off)}
@@ -337,6 +338,13 @@ textarea::placeholder{color:var(--mid)}
 .win-tab-add{font-family:'DM Sans',sans-serif;font-size:.72rem;padding:.24rem .5rem;background:none;color:var(--muted);border:1.5px dashed var(--mid);border-radius:var(--r);cursor:pointer;line-height:1.2;white-space:nowrap}
 .win-tab-add:active{color:var(--black);border-color:var(--dark)}
 @media(hover:hover){.win-tab-add:hover{color:var(--black);border-color:var(--dark)}}
+/* editor časových úseků (levá lišta) */
+.seg-row{display:flex;align-items:center;gap:.35rem}
+.seg-row input{flex:1;min-width:0;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .4rem;outline:none;text-align:center}
+.seg-dash{color:var(--muted);flex:0 0 auto}
+.seg-del{width:22px;height:22px;flex:0 0 auto;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.85rem;border-radius:3px}
+@media(hover:hover){.seg-del:hover{color:var(--black)}}
+.seg-del-spacer{width:22px;flex:0 0 auto}
 /* ── DAY BUTTONS ── */
 .day-buttons{display:flex;gap:.3rem;margin-bottom:.35rem;flex-shrink:0}
 .day-btn-wrap{flex:1;display:flex;flex-direction:column;border:var(--bh);border-radius:var(--r);background:var(--w);cursor:pointer;overflow:hidden;min-width:0;user-select:none}
@@ -496,16 +504,17 @@ textarea::placeholder{color:var(--mid)}
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Okno dne</span></div>
-    <div class="setup-grid">
-      <div class="field">
-        <label>Od</label>
-        <input type="text" id="winStart" value="6:00" oninput="onWindowChange()" placeholder="6:00">
-      </div>
-      <div class="field">
-        <label>Do</label>
-        <input type="text" id="winEnd" value="14:00" oninput="onWindowChange()" placeholder="14:00">
-      </div>
+    <div class="card-title"><span class="card-title-text">Okna dne</span></div>
+    <div id="winManager" style="display:flex;flex-direction:column;gap:.15rem;margin-top:.2rem"></div>
+    <div style="margin-top:.3rem">
+      <button class="btn-lib" onclick="addWindow()">+ nové okno dne</button>
+    </div>
+
+    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Časové úseky</span></div>
+    <div id="segList" style="display:flex;flex-direction:column;gap:.3rem;margin-top:.2rem"></div>
+    <div style="margin-top:.3rem;display:flex;gap:.3rem;flex-wrap:wrap">
+      <button class="btn-lib" style="flex:1" onclick="addSegment()">+ úsek</button>
+      <button class="btn-lib" style="flex:1" onclick="saveCurrentAsDefaultSegments()" title="použít tyto úseky jako výchozí okno pro nové dny v tomto okně dne">★ jako výchozí</button>
     </div>
     <div class="stats-row" id="statsRow">
       <span class="stat-lbl">Okno dne</span><span class="stat-val" id="stat-window">8h</span>
@@ -776,11 +785,9 @@ textarea::placeholder{color:var(--mid)}
       <h2 id="previewTitle" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Náhled</h2>
       <span id="previewMeta" style="font-size:.73rem;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap;flex-shrink:0"></span>
     </div>
-    <div class="preview-win">
-      <span>okno dne</span>
-      <input type="text" id="previewWinStart" placeholder="6:00" oninput="setPreviewWindow()" title="začátek okna — od kdy se plánuje">
-      <span>–</span>
-      <input type="text" id="previewWinEnd" placeholder="14:00" oninput="setPreviewWindow()" title="konec okna dne">
+    <div class="preview-win" style="flex-direction:column;align-items:stretch;gap:.3rem">
+      <span>okno dne — časové úseky</span>
+      <div id="previewSegList" style="display:flex;flex-direction:column;gap:.25rem"></div>
     </div>
     <div id="previewItemList" style="overflow-y:auto;flex:1;min-height:60px;border-top:1.5px solid var(--black);padding-top:.3rem"></div>
     <div class="modal-row">
@@ -856,6 +863,25 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 
+<!-- Okno dne (profil) — ikona + název -->
+<div class="modal-bg" id="winEditModal">
+  <div class="modal" style="max-width:340px;gap:.65rem">
+    <h2 id="winEditTitle">Okno dne</h2>
+    <div class="field" style="max-width:100px">
+      <label>Ikona</label>
+      <input type="text" id="winEditIcon" placeholder="🏠" style="font-size:1.1rem;text-align:center" spellcheck="false">
+    </div>
+    <div class="field">
+      <label>Název</label>
+      <input type="text" id="winEditName" placeholder="např. Práce / Doma" onkeydown="if(event.key==='Enter')saveWinEdit();">
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('winEditModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="saveWinEdit()">uložit</button>
+    </div>
+  </div>
+</div>
+
 <!-- Item detail / rename modal -->
 <div class="modal-bg" id="itemEditModal">
   <div class="modal" style="max-width:min(900px,94vw);gap:.6rem;max-height:90vh;overflow-y:auto">
@@ -914,7 +940,16 @@ let blockTypeOrder = [];
 let items = [];
 let activePlanDate = null;
 let planWeekOffset = 0;
-let windowStart = '6:00', windowEnd = '14:00';
+let windowStart = '6:00', windowEnd = '14:00';   // ODVOZENÉ z daySegments (první start / poslední konec) — kompat
+// výchozí okno nových/prázdných dnů — nastavitelné, per okno dne (lokální, nesynchronizuje se)
+const DEFAULT_SEGMENTS_KEY = 'todo-app-v1-default-segments';
+function getDefaultSegments() {
+  try { const raw = JSON.parse(localStorage.getItem(WK(DEFAULT_SEGMENTS_KEY)) || 'null'); if (Array.isArray(raw) && raw.length) return normSegments(raw); } catch(e) {}
+  return [{ s: '6:00', e: '14:00' }];
+}
+function saveDefaultSegments(segs) { try { localStorage.setItem(WK(DEFAULT_SEGMENTS_KEY), JSON.stringify(normSegments(segs))); } catch(e) {} }
+function DEFAULT_DAY_SEGMENTS() { return JSON.parse(JSON.stringify(getDefaultSegments())); }
+let daySegments = DEFAULT_DAY_SEGMENTS();         // časové úseky aktivního dne (per den); seřazené
 let highlightedId = null;
 let library = [], activeLibId = null, archive = [];
 let weekPlans = [];
@@ -1186,9 +1221,30 @@ function buildRecurEntry(rules, pItem, anchor) {
 
 // ── COMPUTE TIMELINE ──────────────────────────────────────────────────────────
 
+// úseky dne v minutách (seřazené); fallback jeden úsek z windowStart/windowEnd
+function segMins() {
+  const segs = normSegments(daySegments).map(g => ({ s: timeToMin(g.s), e: timeToMin(g.e) }));
+  return segs.length ? segs : [{ s: timeToMin(windowStart), e: timeToMin(windowEnd) }];
+}
+// posuň kurzor do pracovního úseku: před úsekem → na začátek; v mezeře → na další úsek;
+// nevejde-li se blok do zbytku úseku a existuje další → přesuň celý blok na další úsek;
+// poslední úsek → povol přetečení (jako dnes)
+function snapCursorToSegment(cursor, dur, segs) {
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i];
+    if (cursor < seg.s) return seg.s;
+    if (cursor < seg.e) {
+      if (cursor + dur <= seg.e) return cursor;
+      if (i + 1 < segs.length) return segs[i + 1].s;
+      return cursor;
+    }
+  }
+  return cursor;
+}
 function computeTimeline() {
-  const wStart = timeToMin(windowStart);
-  const wEnd = timeToMin(windowEnd);
+  const segs = segMins();
+  const wStart = segs[0].s;
+  const wEnd = segs[segs.length - 1].e;
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const floatStart = wStart;
@@ -1211,10 +1267,12 @@ function computeTimeline() {
 
   floatBlocksIdx.forEach(i => {
     const item = items[i], dur = getEffectiveDuration(i);
-    // Push cursor past any fixed event the block [cursor, cursor+dur) would overlap
+    // Snap do pracovního úseku (přeskoč mezery) A push přes fixní událost — opakuj, dokud se stav neustálí
     let moved = true;
     while (moved) {
       moved = false;
+      const snapped = snapCursorToSegment(cursor, dur, segs);
+      if (snapped !== cursor) { cursor = snapped; moved = true; }
       for (const fb of fixedBlocks) {
         if (cursor < fb.endMin && cursor + dur > fb.startMin) {
           cursor = fb.endMin; moved = true; break;
@@ -1227,14 +1285,17 @@ function computeTimeline() {
 
   // Merge fixed and floating
   const all = [...result, ...fixedBlocks].sort((a, b) => a.startMin - b.startMin);
-  return { blocks: all, wStart, wEnd, nowMin };
+  return { blocks: all, wStart, wEnd, nowMin, segs };
 }
 
 // Naplánované časy top-level bloků pro LIBOVOLNÉ pole položek (stejná logika jako computeTimeline,
 // jen bez vykreslení a bez globálů) → mapa index→{startMin,endMin}. Používá náhled, aby ukázal,
 // kdy daný blok vychází při zadaném okně od–do.
-function computeScheduleTimes(arr, wStartStr) {
-  const wStart = timeToMin(wStartStr || '8:00');
+function computeScheduleTimes(arr, wStartStr, segsArg) {
+  // segsArg = volitelné úseky (z náhledu); jinak jediný úsek od wStartStr (kompat)
+  const segs = (segsArg && segsArg.length)
+    ? normSegments(segsArg).map(g => ({ s: timeToMin(g.s), e: timeToMin(g.e) }))
+    : [{ s: timeToMin(wStartStr || '8:00'), e: Infinity }];
   const times = {};
   if (!arr || !arr.length) return times;
   const top = arr.reduce((a, it, i) => { if (!it.isSubtask) a.push(i); return a; }, []);
@@ -1244,11 +1305,16 @@ function computeScheduleTimes(arr, wStartStr) {
     return { i, s, e };
   }).sort((a, b) => a.s - b.s);
   fixed.forEach(f => { times[f.i] = { startMin: f.s, endMin: f.e }; });
-  let cursor = wStart;
+  let cursor = segs[0].s;
   top.filter(i => !(arr[i].isEvent && arr[i].eventStart)).forEach(i => {
     const dur = getEffectiveDuration(i, arr);
     let moved = true;
-    while (moved) { moved = false; for (const f of fixed) { if (cursor < f.e && cursor + dur > f.s) { cursor = f.e; moved = true; break; } } }
+    while (moved) {
+      moved = false;
+      const snapped = snapCursorToSegment(cursor, dur, segs);
+      if (snapped !== cursor) { cursor = snapped; moved = true; }
+      for (const f of fixed) { if (cursor < f.e && cursor + dur > f.s) { cursor = f.e; moved = true; break; } }
+    }
     times[i] = { startMin: cursor, endMin: cursor + dur };
     cursor += dur;
   });
@@ -1263,7 +1329,10 @@ function renderTimeline() {
   if (!container) return;
   container.innerHTML = '';
 
-  const { blocks, wStart, wEnd, nowMin } = computeTimeline();
+  const { blocks, wStart, wEnd, nowMin, segs } = computeTimeline();
+  // mezery mezi úseky (nepracovní čas) → vizuální stínování na ose
+  const gaps = [];
+  for (let i = 0; i + 1 < (segs || []).length; i++) { if (segs[i + 1].s > segs[i].e) gaps.push({ s: segs[i].e, e: segs[i + 1].s }); }
   const minStart = blocks.reduce((mn, b) => Math.min(mn, b.startMin), wStart);
   const maxEnd = blocks.reduce((mx, b) => Math.max(mx, b.endMin), wEnd);
   // Rozšiř mřížku dozadu o celé řádky, ať jsou vidět i události před začátkem okna
@@ -1288,6 +1357,17 @@ function renderTimeline() {
 
     const content = document.createElement('div');
     content.className = 'tl-row-content';
+
+    // mezery mezi úseky (volno) — stínovaný překryv přes tu část řádku, co padá do mezery
+    gaps.forEach(g => {
+      const gs = Math.max(g.s, rowStart), ge = Math.min(g.e, rowEnd);
+      if (ge <= gs) return;
+      const gap = document.createElement('div');
+      gap.className = 'tl-gap';
+      gap.style.left  = (gs - rowStart) / MINS_PER_ROW * 100 + '%';
+      gap.style.width = (ge - gs) / MINS_PER_ROW * 100 + '%';
+      content.appendChild(gap);
+    });
 
     // 30-min tick marks with labels
     for (let t = 30; t < MINS_PER_ROW; t += 30) {
@@ -1417,7 +1497,7 @@ function renderTimeline() {
     });
 
     // Current-time vertical line
-    if (nowMin >= rowStart && nowMin < rowEnd) {
+    if (nowMin >= rSwStart && nowMin < rowEnd) {
       const leftPct = (nowMin - rowStart) / MINS_PER_ROW * 100;
       const nowLine = document.createElement('div');
       nowLine.className = 'tl-now-v';
@@ -1586,8 +1666,7 @@ function renderItemList() {
 
 // ── STATS ─────────────────────────────────────────────────────────────────────
 function updateStats() {
-  const wS = timeToMin(windowStart), wE = timeToMin(windowEnd);
-  const wLen = Math.max(0, wE - wS);
+  const wLen = segmentsTotalMin();   // pracovní čas = součet úseků (bez mezer)
   const planned = items.reduce((s, item, i) => !item.isSubtask ? s + getEffectiveDuration(i) : s, 0);
   const overflow = Math.max(0, planned - wLen);
   const remain = wLen - planned;
@@ -2420,26 +2499,86 @@ function mStartBlockTimeEdit(ym, idx) { materializeLaterGhost(ym, idx); op_start
 function iStartIconEdit(idx) { op_startIconEdit(INBOXCTX, idx); }
 function iStartBlockTimeEdit(idx) { op_startBlockTimeEdit(INBOXCTX, idx); }
 
-// ── WINDOW CHANGE ─────────────────────────────────────────────────────────────
-function onWindowChange() {
-  windowStart = el('winStart')?.value || '6:00';
-  windowEnd   = el('winEnd')?.value   || '14:00';
+// ── ČASOVÉ ÚSEKY DNE (víc oken od–do) ─────────────────────────────────────────
+// Normalizace: jen platné {s,e} (s<e), seřazené podle začátku; vždy aspoň 1 úsek.
+function normSegments(arr) {
+  const out = (Array.isArray(arr) ? arr : [])
+    .map(x => ({ s: (x && x.s) || '', e: (x && x.e) || '' }))
+    .filter(x => x.s && x.e && timeToMin(x.s) < timeToMin(x.e))
+    .sort((a, b) => timeToMin(a.s) - timeToMin(b.s));
+  return out.length ? out : [{ s: '6:00', e: '14:00' }];
+}
+// úseky ze záznamu (zpětná kompat: starý windowStart/windowEnd = jeden úsek)
+function segmentsFrom(rec) {
+  if (rec && Array.isArray(rec.segments) && rec.segments.length) {
+    const valid = rec.segments.filter(x => x && x.s && x.e && timeToMin(x.s) < timeToMin(x.e));
+    if (valid.length) return normSegments(valid);   // jen když má aspoň 1 platný úsek; jinak fallback níž
+  }
+  return [{ s: (rec && rec.windowStart) || '6:00', e: (rec && rec.windowEnd) || '14:00' }];
+}
+// odvoď windowStart/windowEnd z úseků (normalizace → odolné vůči rozepsanému/neplatnému vstupu)
+function syncWindowFromSegments() {
+  const n = normSegments(daySegments);
+  windowStart = n[0].s;
+  windowEnd   = n[n.length - 1].e;
+}
+function segmentsTotalMin() { return normSegments(daySegments).reduce((s, g) => s + Math.max(0, timeToMin(g.e) - timeToMin(g.s)), 0); }
+function setDaySegments(arr) { daySegments = normSegments(arr); syncWindowFromSegments(); }
+
+function renderSegments() {
+  const c = el('segList'); if (!c) return;
+  c.innerHTML = daySegments.map((g, i) => `
+    <div class="seg-row" data-i="${i}">
+      <input type="text" class="seg-from" value="${esc(g.s)}" placeholder="9:00" oninput="onSegmentsChange()" title="od">
+      <span class="seg-dash">–</span>
+      <input type="text" class="seg-to" value="${esc(g.e)}" placeholder="12:00" oninput="onSegmentsChange()" title="do">
+      ${daySegments.length > 1 ? `<button class="seg-del" onclick="removeSegment(${i})" title="odebrat úsek">✕</button>` : '<span class="seg-del-spacer"></span>'}
+    </div>`).join('');
+}
+// načti úseky z UI (BEZ seřazení/normalizace — ať se needituje pod rukama), ulož, překresli osu
+function onSegmentsChange() {
+  const rows = [...document.querySelectorAll('#segList .seg-row')];
+  const raw = rows.map(r => ({ s: r.querySelector('.seg-from').value.trim(), e: r.querySelector('.seg-to').value.trim() }));
+  // ponech i rozepsané (neplatné) řádky v UI; do modelu jdou jen platné, ale UI nepřekresluj (kurzor)
+  daySegments = raw.length ? raw : [{ s: '6:00', e: '14:00' }];
+  syncWindowFromSegments();
   schedSave(); renderAll();
 }
+function addSegment() {
+  // nový úsek navázaný za poslední (nebo výchozí), ať uživatel jen upraví časy
+  const last = daySegments[daySegments.length - 1];
+  const startMin = last ? timeToMin(last.e) + 60 : 480;
+  daySegments = [...daySegments, { s: minToTime(startMin), e: minToTime(startMin + 120) }];
+  syncWindowFromSegments();
+  renderSegments(); schedSave(); renderAll();
+}
+function removeSegment(i) {
+  if (daySegments.length <= 1) return;
+  daySegments = daySegments.filter((_, idx) => idx !== i);
+  syncWindowFromSegments();
+  renderSegments(); schedSave(); renderAll();
+}
+// ulož aktuální úseky jako výchozí okno nových dnů (tohoto okna dne)
+function saveCurrentAsDefaultSegments() {
+  saveDefaultSegments(daySegments);
+  showStatusMsg('★ nastaveno jako výchozí okno nových dnů', 2800);
+}
+// zpětná kompatibilita: stará volání onWindowChange (pokud někde zůstala)
+function onWindowChange() { onSegmentsChange(); }
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
 function getSessionData() {
-  return { items: stripGhosts(items), windowStart, windowEnd, planDate: activePlanDate };   // duchy se neukládají
+  // segments = zdroj pravdy; windowStart/windowEnd odvozené (kompat se starší verzí / jiným zařízením)
+  return { items: stripGhosts(items), segments: daySegments, windowStart, windowEnd, planDate: activePlanDate };
 }
 function applySessionData(d) {
   if (!d) return;
   // hluboká kopie — živý buffer nesmí sdílet referenci s uloženým dnem/šablonou,
   // jinak by editace mutovala i zdroj a rozbila detekci změny (mt) v autoSavePlanDay()
   items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
-  windowStart = d.windowStart || '6:00';
-  windowEnd   = d.windowEnd   || '14:00';
-  if (el('winStart')) el('winStart').value = windowStart;
-  if (el('winEnd'))   el('winEnd').value   = windowEnd;
+  daySegments = normSegments(segmentsFrom(d));
+  syncWindowFromSegments();
+  renderSegments();
 }
 function sessionSnap() { return JSON.stringify(getSessionData()); }
 function saveSession() {
@@ -2497,8 +2636,10 @@ function newWinId() { return 'w' + Date.now().toString(36) + Math.random().toStr
 // Datový LWW engine se NEMĚNÍ — data každého okna zůstávají ve vlastním gistu.
 function winBinId(id) { try { return localStorage.getItem(id === 'main' ? 'todo-app-gist-id' : 'todo-app-gist-id::' + id) || ''; } catch(e) { return ''; } }
 function registryForPush() {
-  return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; const b = winBinId(w.id); if (b) o.binId = b; if (+w.binIdMt) o.binIdMt = +w.binIdMt; return o; });
+  return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; if (w.icon) o.icon = w.icon; const b = winBinId(w.id); if (b) o.binId = b; if (+w.binIdMt) o.binIdMt = +w.binIdMt; return o; });
 }
+// ikona okna pro taby/manager — fallback 1. znak názvu (zvládne i emoji název)
+function windowIcon(w) { return (w && w.icon) || (w && w.name ? [...String(w.name)][0] : '?'); }
 // razítko změny Gist ID okna — registr ho šíří LWW, takže se přepis (i smazání) ID propíše na ostatní zařízení
 function stampWinBinIdMt(id) {
   const w = dayWindows.find(x => x.id === id);
@@ -2526,8 +2667,8 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
       }
     }
     const cmt = +cw.mt || 0, ex = byId.get(cw.id), tomb = winTombstones[cw.id] || 0;
-    if (ex) { if (cmt > (+ex.mt || 0)) { ex.name = cw.name || ex.name; ex.mt = cmt; changed = true; } }
-    else if (cmt >= tomb) { const w = { id: cw.id, name: cw.name || cw.id, mt: cmt, binIdMt: +cw.binIdMt || 0 }; dayWindows.push(w); byId.set(cw.id, w); changed = true; }
+    if (ex) { if (cmt > (+ex.mt || 0)) { ex.name = cw.name || ex.name; ex.icon = cw.icon || ex.icon || ''; ex.mt = cmt; changed = true; } }
+    else if (cmt >= tomb) { const w = { id: cw.id, name: cw.name || cw.id, icon: cw.icon || '', mt: cmt, binIdMt: +cw.binIdMt || 0 }; dayWindows.push(w); byId.set(cw.id, w); changed = true; }
   });
   // aplikuj náhrobky lokálně (okno smazané jinde) — nikdy ne hlavní/aktivní
   Object.keys(winTombstones).forEach(id => {
@@ -2540,7 +2681,7 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
       changed = true;
     }
   });
-  if (changed) { saveWindows(); saveWinTomb(); renderWindowTabs(); }
+  if (changed) { saveWindows(); saveWinTomb(); renderWindowTabs(); if (typeof renderWindowManager === 'function') renderWindowManager(); }
 }
 function pushRegistry() { try { if (typeof window.pushWindowRegistry === 'function') window.pushWindowRegistry(); } catch(e) {} }
 // má aktivní okno vůbec nějaká data? (rozhoduje, jestli autosync založí gist pro okno bez Gist ID)
@@ -2552,26 +2693,64 @@ function windowHasData() {
 // per-okno klíče (pro mazání okna) — vč. sync klíčů z IIFE (hodnoty jsou stabilní)
 function winKeyBases() {
   return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
-    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_HORIZON_KEY,
+    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_HORIZON_KEY, DEFAULT_SEGMENTS_KEY,
     'todo-app-gist-id', 'todo-app-tombstones', 'todo-app-syncknown'];
 }
 
+// pravá lišta: jen klikací přepínače oken (ikony bez názvu); správa profilů je v levé liště
 function renderWindowTabs() {
   const c = el('winTabs'); if (!c) return;
-  if (dayWindows.length <= 1) {
-    // jediné okno → nenápadný „+ okno" = opt-in přepínač na víc oken dne
-    c.innerHTML = `<button class="win-tab-add" onclick="addWindow()" title="přidat okno dne (např. Práce / Doma)">+ okno dne</button>`;
+  if (dayWindows.length <= 1) { c.innerHTML = ''; c.style.display = 'none'; return; }   // jen 1 okno → pruh skrýt
+  c.style.display = '';
+  c.innerHTML = dayWindows.map(w =>
+    `<button class="win-tab${w.id === activeWin ? ' active' : ''}" onclick="switchWindow('${w.id}')" title="${esc(w.name)}">${esc(windowIcon(w))}</button>`
+  ).join('');
+}
+// levá lišta: správa profilů oken dne (přepnutí klikem, ✎ úprava ikony+názvu, ✕ smazání)
+function renderWindowManager() {
+  const c = el('winManager'); if (!c) return;
+  c.innerHTML = dayWindows.map(w => {
+    const act = w.id === activeWin;
+    const del = w.id !== 'main'
+      ? `<button class="lib-item-del" onclick="event.stopPropagation();deleteWindow('${w.id}')" title="smazat okno"><svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></button>`
+      : '';
+    return `<div class="lib-item${act ? ' active' : ''}" data-id="${w.id}" onclick="switchWindow('${w.id}')" title="přepnout na okno">
+      <span class="lib-item-name">${esc(windowIcon(w))} ${esc(w.name)}</span>
+      <button class="lib-item-del" onclick="event.stopPropagation();openWinEdit('${w.id}')" title="upravit ikonu a název">✎</button>${del}
+    </div>`;
+  }).join('');
+}
+// modal úpravy okna (ikona + název); _winEditId = upravované, nebo null = nové
+let _winEditId = null;
+function openWinEdit(id) {
+  const w = dayWindows.find(x => x.id === id); if (!w) return;
+  _winEditId = id;
+  el('winEditTitle').textContent = 'Upravit okno dne';
+  el('winEditIcon').value = w.icon || '';
+  el('winEditName').value = w.name || '';
+  el('winEditModal').classList.add('open');
+  setTimeout(() => el('winEditName').focus(), 50);
+}
+function saveWinEdit() {
+  const icon = el('winEditIcon').value.trim();
+  const name = el('winEditName').value.trim();
+  if (_winEditId == null) {                       // nové okno
+    if (!name && !icon) { closeModal('winEditModal'); return; }
+    const id = newWinId();
+    dayWindows.push({ id, name: name || 'Okno', icon, mt: Date.now() });
+    saveWindows(); pushRegistry();
+    closeModal('winEditModal');
+    switchWindow(id);
     return;
   }
-  const tabs = dayWindows.map(w => {
-    const act = w.id === activeWin;
-    const tools = act
-      ? `<span class="win-tab-tool" title="přejmenovat" onclick="event.stopPropagation();renameWindow('${w.id}')">✎</span>`
-        + (w.id !== 'main' ? `<span class="win-tab-tool" title="smazat okno" onclick="event.stopPropagation();deleteWindow('${w.id}')">✕</span>` : '')
-      : '';
-    return `<button class="win-tab${act ? ' active' : ''}" onclick="switchWindow('${w.id}')"><span class="win-tab-name">${esc(w.name)}</span>${tools}</button>`;
-  }).join('');
-  c.innerHTML = tabs + `<button class="win-tab-add" onclick="addWindow()" title="přidat okno dne">+</button>`;
+  const w = dayWindows.find(x => x.id === _winEditId);
+  if (w && (w.name !== (name || w.name) || (w.icon || '') !== icon)) {
+    if (name) w.name = name;
+    w.icon = icon; w.mt = Date.now();
+    saveWindows(); pushRegistry();
+  }
+  closeModal('winEditModal');
+  renderWindowManager(); renderWindowTabs(); updateHeaderDay();
 }
 
 // načte cílové okno do globálních proměnných a překreslí (BEZ ukládání odchozího)
@@ -2587,11 +2766,9 @@ function activateWindow(id) {
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
   if (todayEntry) applySessionData(todayEntry);
   else {
-    items = []; windowStart = '6:00'; windowEnd = '14:00';
-    if (el('winStart')) el('winStart').value = windowStart;
-    if (el('winEnd'))   el('winEnd').value   = windowEnd;
+    items = []; setDaySegments(DEFAULT_DAY_SEGMENTS()); renderSegments();
   }
-  renderWindowTabs(); renderLibrary(); renderBlockTypeList(); renderWorkDayPicker();
+  renderWindowTabs(); renderWindowManager(); renderLibrary(); renderBlockTypeList(); renderWorkDayPicker();
   renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
   populateLaterAddMonth(); renderLater(); updateUndoBtn(); updateQuickInputPlaceholder();
   // zachovej aktuálně otevřenou kartu při přepnutí okna (např. zůstaň na „Později", nehoď zpět na „Týden")
@@ -2612,22 +2789,14 @@ function switchWindow(id) {
   showStatusMsg('okno: ' + (windowName(id) || id), 1800);
 }
 
-async function addWindow() {
-  const name = await customPrompt('Název okna (např. Práce, Doma):', 'Doma');
-  if (name == null) return;
-  const id = newWinId();
-  dayWindows.push({ id, name: name, mt: Date.now() });
-  saveWindows(); pushRegistry();
-  switchWindow(id);
+function addWindow() {
+  _winEditId = null;
+  el('winEditTitle').textContent = 'Nové okno dne';
+  el('winEditIcon').value = ''; el('winEditName').value = '';
+  el('winEditModal').classList.add('open');
+  setTimeout(() => el('winEditName').focus(), 50);
 }
-
-async function renameWindow(id) {
-  const w = dayWindows.find(x => x.id === id); if (!w) return;
-  const name = await customPrompt('Přejmenovat okno:', w.name);
-  if (name == null) return;
-  w.name = name; w.mt = Date.now();
-  saveWindows(); pushRegistry(); renderWindowTabs(); updateHeaderDay();
-}
+function renameWindow(id) { openWinEdit(id); }   // úprava ikony i názvu přes modal
 
 async function deleteWindow(id) {
   if (id === 'main') return;
@@ -2639,8 +2808,8 @@ async function deleteWindow(id) {
   dayWindows = dayWindows.filter(x => x.id !== id);
   winTombstones[id] = Date.now();           // propagace smazání na ostatní zařízení
   saveWindows(); saveWinTomb(); pushRegistry();
-  if (wasActive) activateWindow('main');   // bez persistu mazaného okna
-  else { renderWindowTabs(); updateHeaderDay(); }
+  if (wasActive) activateWindow('main');   // bez persistu mazaného okna (activateWindow překreslí i manager)
+  else { renderWindowTabs(); renderWindowManager(); updateHeaderDay(); }
   showStatusMsg('okno smazáno', 1800);
 }
 
@@ -2873,7 +3042,7 @@ async function saveWeekAsTemplate() {
     const dayKey = PLAN_DAY_SHORT[day.getDay()];
     const wd = weekDays.find(d => d.date === iso);
     if (wd && wd.items.length) {
-      weekData[dayKey] = { items: stripDone(wd.items), windowStart: wd.windowStart, windowEnd: wd.windowEnd };
+      weekData[dayKey] = { items: stripDone(wd.items), segments: segmentsFrom(wd), windowStart: wd.windowStart, windowEnd: wd.windowEnd };
     }
   });
   if (!Object.keys(weekData).length) {
@@ -3041,13 +3210,12 @@ function doLoadWeekTemplate() {
     if (!tpl) return;
     const newItems = JSON.parse(JSON.stringify(tpl.items));
     const existing = weekDays.find(d => d.date === iso);
-    if (existing) { existing.items = newItems; existing.windowStart = tpl.windowStart; existing.windowEnd = tpl.windowEnd; existing.mt = Date.now(); }
-    else weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd, mt: Date.now() });
+    const tplSegs = segmentsFrom(tpl);
+    if (existing) { existing.items = newItems; existing.segments = tplSegs; existing.windowStart = tplSegs[0].s; existing.windowEnd = tplSegs[tplSegs.length-1].e; existing.mt = Date.now(); }
+    else weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, segments: tplSegs, windowStart: tplSegs[0].s, windowEnd: tplSegs[tplSegs.length-1].e, mt: Date.now() });
     if (iso === activePlanDate) {
       items = JSON.parse(JSON.stringify(newItems));   // vlastní kopie — nesdílet referenci s uloženým dnem
-      windowStart = tpl.windowStart; windowEnd = tpl.windowEnd;
-      if (el('winStart')) el('winStart').value = windowStart;
-      if (el('winEnd'))   el('winEnd').value   = windowEnd;
+      setDaySegments(tplSegs); renderSegments();
     }
     loaded++;
   });
@@ -3065,13 +3233,13 @@ function openPreview(type, id, dayKey) {
     if (!entry || entry.type === 'week') return;
     src = { type, id, name: entry.name,
       items: JSON.parse(JSON.stringify(entry.data.items)),
-      windowStart: entry.data.windowStart, windowEnd: entry.data.windowEnd };
+      segments: segmentsFrom(entry.data), windowStart: entry.data.windowStart, windowEnd: entry.data.windowEnd };
   } else if (type === 'weekDay') {
     const d = weekDays.find(d => d.id === id);
     if (!d) return;
     src = { type, id, name: formatDateCz(d.date),
       items: JSON.parse(JSON.stringify(d.items)),
-      windowStart: d.windowStart, windowEnd: d.windowEnd };
+      segments: segmentsFrom(d), windowStart: d.windowStart, windowEnd: d.windowEnd };
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
@@ -3079,13 +3247,13 @@ function openPreview(type, id, dayKey) {
     if (!data) return;
     src = { type, id, dayKey, name: entry.name + ' · ' + dayKey,
       items: JSON.parse(JSON.stringify(data.items)),
-      windowStart: data.windowStart, windowEnd: data.windowEnd };
+      segments: segmentsFrom(data), windowStart: data.windowStart, windowEnd: data.windowEnd };
   } else if (type === 'weekPlan') {
     const p = weekPlans.find(p => p.id === id);
     if (!p) return;
     src = { type, id, name: formatDateCz(p.date) + ' · plán',
       items: JSON.parse(JSON.stringify(p.items)),
-      windowStart: p.windowStart, windowEnd: p.windowEnd };
+      segments: segmentsFrom(p), windowStart: p.windowStart, windowEnd: p.windowEnd };
   }
   if (!src) return;
   _previewSource = src;
@@ -3099,8 +3267,8 @@ function openPreview(type, id, dayKey) {
   if (applyBtn) applyBtn.style.display = isLib ? 'block' : 'none';
   // primární akce náhledu: u šablony „aplikovat", jinak „uložit změny"
   if (saveBtn) saveBtn.classList.toggle('primary', !isLib);
-  if (el('previewWinStart')) el('previewWinStart').value = src.windowStart || '';
-  if (el('previewWinEnd'))   el('previewWinEnd').value   = src.windowEnd   || '';
+  _previewSource.segments = segmentsFrom(src);   // víceúsekový editor okna v náhledu
+  renderPreviewSegments();
   renderPreviewList();   // sám nastaví previewMeta (celkový čas)
   el('previewModal').classList.add('open');
 }
@@ -3151,7 +3319,7 @@ function renderPreviewList() {
   if (!container || !_previewSource) return;
   const arr = _previewSource.items;
   const n = arr.length;
-  const times = computeScheduleTimes(arr, _previewSource.windowStart);   // kdy daný blok vychází
+  const times = computeScheduleTimes(arr, _previewSource.windowStart, _previewSource.segments);   // kdy daný blok vychází (vč. úseků)
   const itemsHtml = n ? arr.map((item, i) => {
     const isTop = !item.isSubtask;
     let durTxt;
@@ -3203,12 +3371,44 @@ function updatePreviewMeta() {
 }
 
 // Editace okna od–do přímo v náhledu → přepočítá časy bloků (uloží se přes „uložit změny"/„aplikovat").
-function setPreviewWindow() {
+// víceúsekový editor okna v náhledu šablony — pracuje na _previewSource.segments
+function renderPreviewSegments() {
+  const c = el('previewSegList'); if (!c || !_previewSource) return;
+  if (!Array.isArray(_previewSource.segments)) _previewSource.segments = segmentsFrom(_previewSource);
+  const segs = _previewSource.segments;
+  c.innerHTML = segs.map((g, i) => `
+    <div class="seg-row" data-i="${i}">
+      <input type="text" class="seg-from" value="${esc(g.s)}" placeholder="9:00" oninput="onPreviewSegmentsChange()" title="od">
+      <span class="seg-dash">–</span>
+      <input type="text" class="seg-to" value="${esc(g.e)}" placeholder="12:00" oninput="onPreviewSegmentsChange()" title="do">
+      ${segs.length > 1 ? `<button class="seg-del" onclick="removePreviewSegment(${i})" title="odebrat úsek">✕</button>` : '<span class="seg-del-spacer"></span>'}
+    </div>`).join('') + `<button class="btn-lib" style="margin-top:.15rem" onclick="addPreviewSegment()">+ úsek</button>`;
+}
+function previewSyncWindow() {   // odvoď windowStart/windowEnd z úseků náhledu
+  const n = normSegments(_previewSource.segments);
+  _previewSource.windowStart = n[0].s; _previewSource.windowEnd = n[n.length - 1].e;
+}
+function onPreviewSegmentsChange() {
   if (!_previewSource) return;
-  const s = el('previewWinStart')?.value.trim(), e = el('previewWinEnd')?.value.trim();
-  if (s) _previewSource.windowStart = s;
-  if (e) _previewSource.windowEnd = e;
-  renderPreviewList();
+  const rows = [...document.querySelectorAll('#previewSegList .seg-row')];
+  _previewSource.segments = rows.map(r => ({ s: r.querySelector('.seg-from').value.trim(), e: r.querySelector('.seg-to').value.trim() }));
+  if (!_previewSource.segments.length) _previewSource.segments = [{ s: '6:00', e: '14:00' }];
+  previewSyncWindow();
+  renderPreviewList();   // přepočti časy (editor řádků nepřekresluj — kurzor)
+}
+function addPreviewSegment() {
+  const segs = Array.isArray(_previewSource.segments) ? _previewSource.segments : segmentsFrom(_previewSource);
+  const last = segs[segs.length - 1]; const st = last ? timeToMin(last.e) + 60 : 480;
+  _previewSource.segments = [...segs, { s: minToTime(st), e: minToTime(st + 120) }];
+  previewSyncWindow();
+  renderPreviewSegments(); renderPreviewList();
+}
+function removePreviewSegment(i) {
+  const segs = _previewSource.segments || [];
+  if (segs.length <= 1) return;
+  _previewSource.segments = segs.filter((_, idx) => idx !== i);
+  previewSyncWindow();
+  renderPreviewSegments(); renderPreviewList();
 }
 
 function togglePreviewDone(i, checked) {
@@ -3344,34 +3544,36 @@ function deletePreviewItem(i) {
 
 function doPreviewSave() {
   if (!_previewSource) return;
-  const { type, id, dayKey, items: preItems, windowStart: wS, windowEnd: wE } = _previewSource;
+  const { type, id, dayKey, items: preItems } = _previewSource;
+  const segs = segmentsFrom(_previewSource);   // úseky náhledu (kompat fallback)
+  const wS = segs[0].s, wE = segs[segs.length - 1].e;   // odvozené okno z úseků
   const snapshot = JSON.parse(JSON.stringify(preItems));
   if (type === 'lib') {
     const entry = library.find(e => e.id === id);
     if (!entry) return;
     entry.data.items = stripDone(snapshot);
-    entry.data.windowStart = wS; entry.data.windowEnd = wE;
+    entry.data.segments = segs; entry.data.windowStart = wS; entry.data.windowEnd = wE;
     entry.mt = Date.now();
     saveLibrary(); renderLibrary();
   } else if (type === 'weekDay') {
     const d = weekDays.find(d => d.id === id);
     if (!d) return;
     d.items = snapshot;
-    d.windowStart = wS; d.windowEnd = wE;
+    d.segments = segs; d.windowStart = wS; d.windowEnd = wE;
     d.mt = Date.now();
     saveWeek(); renderWeekTab(); renderDayButtons();
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
     entry.weekData[dayKey].items = stripDone(snapshot);
-    entry.weekData[dayKey].windowStart = wS; entry.weekData[dayKey].windowEnd = wE;
+    entry.weekData[dayKey].segments = segs; entry.weekData[dayKey].windowStart = wS; entry.weekData[dayKey].windowEnd = wE;
     entry.mt = Date.now();
     saveLibrary(); renderLibrary();   // přepočítej celkový čas vícedenní šablony v jejím názvu
   } else if (type === 'weekPlan') {
     const p = weekPlans.find(p => p.id === id);
     if (!p) return;
     p.items = snapshot;
-    p.windowStart = wS; p.windowEnd = wE;
+    p.segments = segs; p.windowStart = wS; p.windowEnd = wE;
     p.mt = Date.now();
     saveWeekPlans(); renderWeekTab();
   }
@@ -3384,14 +3586,15 @@ function doPreviewSave() {
 // vykreslil pod náhledem (stejný z-index, dřív v DOM).
 async function previewToTemplate() {
   if (!_previewSource) return;
-  const src = { items: _previewSource.items, windowStart: _previewSource.windowStart,
-    windowEnd: _previewSource.windowEnd, name: _previewSource.name };
+  const segs = segmentsFrom(_previewSource);
+  const src = { items: _previewSource.items, windowStart: segs[0].s,
+    windowEnd: segs[segs.length - 1].e, segments: segs, name: _previewSource.name };
   closeModal('previewModal');
   const baseName = (src.name || 'Moje šablona').replace(/ · (plán|plan)$/i, '');
   const name = await customPrompt('Název šablony:', baseName);
   if (!name) return;
   const entry = { id: Date.now(), name, type: 'day', mt: Date.now(),
-    data: { items: stripDone(src.items), windowStart: src.windowStart, windowEnd: src.windowEnd } };
+    data: { items: stripDone(src.items), segments: src.segments, windowStart: src.windowStart, windowEnd: src.windowEnd } };
   library.push(entry);
   saveLibrary(); renderLibrary();
   showSave('✓ uloženo do šablon');
@@ -4182,7 +4385,7 @@ function doImport() {
   if (addWdays) {
     wdaysSrc.forEach(d => {
       const ex = weekDays.find(w => w.date === d.date);
-      if (ex) { ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = Date.now(); }
+      if (ex) { ex.items = d.items; ex.segments = segmentsFrom(d); ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = Date.now(); }
       else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: Date.now() });
     });
     saveWeek(); renderWeekTab(); renderDayButtons();
@@ -4190,7 +4393,7 @@ function doImport() {
   if (addWplans) {
     wplansSrc.forEach(p => {
       const ex = weekPlans.find(w => w.date === p.date);
-      if (ex) { ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = Date.now(); }
+      if (ex) { ex.items = p.items; ex.segments = segmentsFrom(p); ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = Date.now(); }
       else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: Date.now() });
     });
     saveWeekPlans(); renderWeekTab();
@@ -5240,17 +5443,20 @@ function renderLater() {
 function autoSavePlanDay() {
   if (!activePlanDate) return;
   const snap = JSON.parse(JSON.stringify(stripGhosts(items)));   // duchy se neukládají do weekDays
+  const segs = normSegments(daySegments);
+  const segJson = JSON.stringify(segs);
   const existing = weekDays.find(d => d.date === activePlanDate);
   if (existing) {
     // mt (čas editace) razítkuj jen při SKUTEČNÉ změně obsahu — jinak by prázdné přeuložení
     // přebilo novější verzi dne z jiného zařízení při synchronizaci (LWW)
-    const changed = existing.windowStart !== windowStart || existing.windowEnd !== windowEnd
+    const changed = JSON.stringify(segmentsFrom(existing)) !== segJson
       || JSON.stringify(existing.items) !== JSON.stringify(snap);
-    existing.items = snap; existing.windowStart = windowStart; existing.windowEnd = windowEnd;
+    existing.items = snap; existing.segments = segs; existing.windowStart = windowStart; existing.windowEnd = windowEnd;
     if (changed) existing.mt = Date.now();
   } else {
-    if (!snap.length) return;        // jen duchy (nezhmotněné) → nezakládej prázdný den
-    weekDays.push({ id: Date.now(), date: activePlanDate, items: snap, windowStart, windowEnd, mt: Date.now() });
+    // úplně prázdný den S VÝCHOZÍM oknem → nezakládej; den s vlastními úseky (i bez položek) ulož
+    if (!snap.length && segJson === JSON.stringify(getDefaultSegments())) return;
+    weekDays.push({ id: Date.now(), date: activePlanDate, items: snap, segments: segs, windowStart, windowEnd, mt: Date.now() });
   }
   saveWeek();
 }
@@ -5263,15 +5469,15 @@ function savePlanSnapshot() {
     const wd = weekDays.find(d => d.date === iso);
     if (!wd || !wd.items.length) return;
     const planItems = wd.items.map(item => ({ ...item, done: false }));
+    const segs = segmentsFrom(wd);
     const existing = weekPlans.find(p => p.date === iso);
     if (existing) {
       existing.items = planItems;
-      existing.windowStart = wd.windowStart;
-      existing.windowEnd = wd.windowEnd;
+      existing.segments = segs; existing.windowStart = wd.windowStart; existing.windowEnd = wd.windowEnd;
       existing.mt = Date.now();
     } else {
       weekPlans.push({ id: Date.now() + Math.random(), date: iso,
-        items: planItems, windowStart: wd.windowStart, windowEnd: wd.windowEnd, mt: Date.now() });
+        items: planItems, segments: segs, windowStart: wd.windowStart, windowEnd: wd.windowEnd, mt: Date.now() });
     }
     saved++;
   });
@@ -5321,7 +5527,7 @@ function switchPlanDay(iso) {
   pushUndo();
   const target = weekDays.find(d => d.date === iso);
   if (target) { applySessionData(target); }
-  else { items = []; }
+  else { items = []; setDaySegments(DEFAULT_DAY_SEGMENTS()); renderSegments(); }   // den bez záznamu → výchozí okno (úseky jsou per den nezávislé)
   activePlanDate = iso;
   // a different day is no longer tied to the previously loaded template
   activeLibId = null; savedSnapshot = null;
@@ -5569,7 +5775,7 @@ async function weekGroupToTemplate(key) {
   rg.days.forEach(d => {
     if (!d.items.length) return;
     const dayKey = PLAN_DAY_SHORT[new Date(d.date + 'T12:00:00').getDay()];
-    weekData[dayKey] = { items: stripDone(d.items), windowStart: d.windowStart, windowEnd: d.windowEnd };
+    weekData[dayKey] = { items: stripDone(d.items), segments: segmentsFrom(d), windowStart: d.windowStart, windowEnd: d.windowEnd };
   });
   if (!Object.keys(weekData).length) { customAlert('Žádné dny s položkami.'); return; }
   const entry = { id: Date.now(), name, type: 'week', weekData };
@@ -6006,16 +6212,15 @@ function init() {
   if (rawSession?.planDate && rawSession.planDate !== today && rawSession.items?.length) {
     const date = rawSession.planDate;
     const existing = weekDays.find(d => d.date === date);
+    const segs = segmentsFrom(rawSession);
     if (existing) {
       const changed = JSON.stringify(existing.items) !== JSON.stringify(rawSession.items);
       existing.items = rawSession.items;
-      if (rawSession.windowStart) existing.windowStart = rawSession.windowStart;
-      if (rawSession.windowEnd)   existing.windowEnd   = rawSession.windowEnd;
+      existing.segments = segs; existing.windowStart = segs[0].s; existing.windowEnd = segs[segs.length-1].e;
       if (changed) existing.mt = Date.now();
     } else {
       weekDays.push({ id: Date.now(), date, items: rawSession.items,
-        windowStart: rawSession.windowStart || '6:00',
-        windowEnd:   rawSession.windowEnd   || '14:00', mt: Date.now() });
+        segments: segs, windowStart: segs[0].s, windowEnd: segs[segs.length-1].e, mt: Date.now() });
     }
     saveWeek();
     staleArchived = date;
@@ -6033,7 +6238,7 @@ function init() {
     if (todayEntry) applySessionData(todayEntry);
   }
 
-  renderWindowTabs();
+  renderWindowTabs(); renderWindowManager(); renderSegments();
   renderLibrary(); renderBlockTypeList(); renderWorkDayPicker(); renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
   populateLaterAddMonth(); renderLater();
   if (activeLibId) markSaved();
