@@ -70,6 +70,12 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-bg.open{display:flex}
 .modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
 .modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.tagmgr-sec{display:flex;flex-direction:column;gap:.28rem}
+.tagmgr-sec+.tagmgr-sec{margin-top:.35rem}
+.tagmgr-hd{font-family:'DM Sans',sans-serif;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:var(--b);padding-bottom:.12rem}
+.tagmgr-row{display:flex;align-items:center;gap:.4rem}
+.tagmgr-input{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .45rem;outline:none}
+.tagmgr-count{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);white-space:nowrap}
 .modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
 .modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
 .gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
@@ -532,6 +538,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <div class="card-title"><span class="card-title-text" title="library"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span></div>
     <div class="lib-controls-row">
       <button id="libSortBtn" class="lib-sort-btn" onclick="toggleLibGroupCat()" title="sort by category">by cat.</button>
+      <button class="lib-sort-btn" onclick="openTagManager()" title="rename sellers &amp; locations">✎ tags</button>
       <select id="libSellerFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filter by seller"></select>
       <select id="libLocationFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filter by location"></select>
     </div>
@@ -564,6 +571,18 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <div class="modal-row">
       <button class="modal-btn" onclick="closeModal('tplNameModal')">cancel</button>
       <button class="modal-btn primary" onclick="saveTplFromModal()">save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename sellers / locations modal -->
+<div class="modal-bg" id="tagManagerModal">
+  <div class="modal" style="max-width:420px">
+    <h2>Rename sellers &amp; locations</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Edit a name and press ✓ (or Enter). The change is applied to every tea that uses it.</p>
+    <div id="tagMgrBody" style="display:flex;flex-direction:column;gap:.55rem;max-height:55vh;overflow:auto"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('tagManagerModal')">close</button>
     </div>
   </div>
 </div>
@@ -1475,13 +1494,76 @@ function updateDynamicFilter(selId,dataKey,placeholder,multi=false){
 }
 function fillDatalist(id,dataKey){
   const dl=el(id);if(!dl)return;
-  dl.innerHTML=uniqueTagVals(dataKey,true).map(v=>`<option value="${esc(v)}"></option>`).join('');
+  const html=uniqueTagVals(dataKey,true).map(v=>`<option value="${esc(v)}"></option>`).join('');
+  if(dl.innerHTML===html)return;   // skip a no-op rewrite so the native popup isn't disturbed while typing
+  dl.innerHTML=html;
 }
 function updateSellerFilter(){
   updateDynamicFilter('libSellerFilter','seller','seller',true);
   updateDynamicFilter('libLocationFilter','location','location',true);
   fillDatalist('sellerOptions','seller');
   fillDatalist('locationOptions','location');
+}
+
+// ── Rename a seller/location tag across the whole library (sync-aware: stamps mt only on real changes) ──
+function tagUsageCount(kind,val){const n=normTag(val);return library.filter(e=>tagsOf(e.data?.[kind],true).some(p=>normTag(p)===n)).length;}
+function renameTagValue(kind,oldVal,newVal){
+  const no=normTag(oldVal);newVal=(newVal||'').trim();
+  if(!no||!newVal)return 0;
+  let changed=0;
+  library.forEach(e=>{
+    if(!e.data)return;
+    const parts=tagsOf(e.data[kind],true);
+    if(!parts.some(p=>normTag(p)===no))return;
+    const out=[],seen=new Set();
+    parts.forEach(p=>{
+      const v=(normTag(p)===no?newVal:p).trim();if(!v)return;
+      const k=normTag(v);if(seen.has(k))return;     // dedupe if the rename collides with an existing tag
+      seen.add(k);out.push(v);
+    });
+    const joined=out.join(', ');
+    if(joined!==(e.data[kind]||'')){e.data[kind]=joined;e.mt=Date.now();changed++;}
+  });
+  if(!changed)return 0;
+  // keep the open form in sync if the active tea was affected
+  if(activeLibId){
+    const cur=library.find(e=>e.id===activeLibId);
+    if(cur){el(kind==='seller'?'teaSeller':'teaLocation').value=cur.data[kind]||'';saveSession();}
+  }
+  // carry an active filter / its remembered value over to the new name
+  const fsel=el(kind==='seller'?'libSellerFilter':'libLocationFilter');
+  if(fsel&&normTag(fsel.value)===no)fsel.value=newVal;
+  const fkey=kind==='seller'?FILTER_SELLER_KEY:FILTER_LOCATION_KEY;
+  try{if(normTag(localStorage.getItem(fkey)||'')===no)localStorage.setItem(fkey,newVal);}catch(e){}
+  saveLibrary();          // wrapped → triggers autosync push
+  renderLibrary();
+  return changed;
+}
+function tagMgrSectionHtml(kind,label){
+  const vals=uniqueTagVals(kind,true);
+  let body;
+  if(!vals.length)body='<div class="lib-empty">none yet</div>';
+  else body=vals.map(v=>
+    `<div class="tagmgr-row">`+
+      `<input class="tagmgr-input" type="text" value="${esc(v)}" data-kind="${kind}" data-old="${esc(v)}" onkeydown="if(event.key==='Enter')saveTagRename(this)" />`+
+      `<span class="tagmgr-count">${tagUsageCount(kind,v)}×</span>`+
+      `<button class="btn-sm" onclick="saveTagRename(this)" title="rename">✓</button>`+
+    `</div>`).join('');
+  return `<div class="tagmgr-sec"><div class="tagmgr-hd">${esc(label)}</div>${body}</div>`;
+}
+function renderTagManager(){
+  el('tagMgrBody').innerHTML=tagMgrSectionHtml('seller','sellers')+tagMgrSectionHtml('location','locations');
+}
+function openTagManager(){renderTagManager();el('tagManagerModal').classList.add('open');}
+function saveTagRename(elm){
+  const inp=elm.classList&&elm.classList.contains('tagmgr-input')?elm:elm.closest('.tagmgr-row').querySelector('.tagmgr-input');
+  if(!inp)return;
+  const kind=inp.dataset.kind,oldVal=inp.dataset.old,newVal=inp.value.trim();
+  if(!newVal){showStatusMsg('name cannot be empty',1800);inp.value=oldVal;return;}
+  if(oldVal===newVal){showStatusMsg('no change',1500);return;}
+  const n=renameTagValue(kind,oldVal,newVal);
+  if(n){showSave('✓ renamed '+n+'×');renderTagManager();}
+  else showStatusMsg('no change',1500);
 }
 // per-device memory of library filters (local keys — not synced)
 const FILTER_SELLER_KEY='cajovy-filter-seller',FILTER_LOCATION_KEY='cajovy-filter-location';
@@ -2531,6 +2613,8 @@ function switchTab(tab){
   document.querySelectorAll('.notes-tab').forEach((t,i)=>t.classList.toggle('active',['general','log'][i]===tab));
   document.querySelectorAll('.notes-pane').forEach(p=>p.classList.remove('active'));
   el('pane-'+tab).classList.add('active');
+  // textareas that were auto-sized while this pane was hidden have a wrong height — recompute now that it's visible
+  el('pane-'+tab).querySelectorAll('textarea').forEach(autoResizeTA);
 }
 
 
@@ -2836,7 +2920,7 @@ async function deleteLogEntry(id){
   saveLog();renderLog();
 }
 
-function autoResizeTA(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';}
+function autoResizeTA(ta){if(!ta||ta.offsetParent===null)return;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';} // hidden (inactive tab) → scrollHeight is wrong; resize when the pane is shown
 
 function updateLogText(id,val){
   const logs=getActiveLogs();if(!logs)return;
@@ -3157,6 +3241,8 @@ function init(){
     requestAnimationFrame(()=>{document.querySelector('.lib-item.active')?.scrollIntoView({block:'nearest'});});
   }
   renderSteeps();updateHeaderTeaName();updatePer100();updateCoolGuide();
+  // web fonts load after first paint and are taller than the fallback → re-measure visible textareas so they aren't clipped
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>document.querySelectorAll('textarea').forEach(autoResizeTA));
   if(restored)showSave('↓ restored');
   let _undoPushT={};
   ['teaName','notes'].forEach(id=>el(id).addEventListener('input',()=>{clearTimeout(_undoPushT[id]);_undoPushT[id]=setTimeout(()=>{pushUndo();},1500);schedSave();updateHeaderTeaName();renderLibrary();}));
