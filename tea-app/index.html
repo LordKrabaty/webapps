@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -467,7 +467,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 .warm-label{font-size:.85rem;color:var(--dark)}
 .warm-done .warm-label{text-decoration:line-through;color:var(--muted)}
 
-/* STEEP TAGS (sítko / přikrýt) */
+/* STEEP TAGS (sieve / cover) */
 .steep-tags{display:flex;gap:.28rem;font-family:'DM Mono',monospace;font-size:.62rem;align-items:center}
 .steep-tag-on{color:var(--dark)}
 .steep-tag-off{color:var(--mid);text-decoration:line-through}
@@ -495,32 +495,32 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
   <div class="header-right">
     <span id="statusMsg"></span>
     <div class="sync-group">
-      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (Gist)">↑</button>
-      <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
-      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (Gist)">↓</button>
-      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (Gist)">☁</button>
-      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení Gist synchronizace">⚙</button>
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / upload to cloud (Gist)">↑</button>
+      <button class="btn-sync" onclick="openImportModal()" title="import from JSON file">⇩</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="download data from cloud (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="enable automatic sync (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="Gist sync settings">⚙</button>
     </div>
-    <div class="fs-ctrl" title="velikost písma">
-      <button class="fs-btn" onclick="changeFs(-1)" title="zmenšit písmo">−</button>
+    <div class="fs-ctrl" title="font size">
+      <button class="fs-btn" onclick="changeFs(-1)" title="decrease font">−</button>
       <span class="fs-val" id="fsVal">100%</span>
-      <button class="fs-btn" onclick="changeFs(1)" title="zvětšit písmo">+</button>
+      <button class="fs-btn" onclick="changeFs(1)" title="increase font">+</button>
     </div>
-    <button id="darkToggle" onclick="toggleDark()" title="přepnout tmavý/světlý režim">☀</button>
-    <button id="libToggleBtn" onclick="toggleLibPanel()" title="knihovna">☰</button>
-    <button id="undoBtn" onclick="undo()" disabled title="zpět (Ctrl+Z)">↩</button>
-    <button id="redoBtn" onclick="redo()" disabled title="vpřed (Ctrl+Y)">↪</button>
-    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="uložit změny do knihovny">✓</button>
+    <button id="darkToggle" onclick="toggleDark()" title="toggle dark/light mode">☀</button>
+    <button id="libToggleBtn" onclick="toggleLibPanel()" title="library">☰</button>
+    <button id="undoBtn" onclick="undo()" disabled title="undo (Ctrl+Z)">↩</button>
+    <button id="redoBtn" onclick="redo()" disabled title="redo (Ctrl+Y)">↪</button>
+    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="save changes to library">✓</button>
     <div style="position:relative;display:inline-flex">
-      <button class="btn-sm" onclick="toggleNewMenu(event)" title="nové/ uložit jako">+</button>
+      <button class="btn-sm" onclick="toggleNewMenu(event)" title="new / save as">+</button>
       <div id="newMenu" class="new-menu" style="display:none">
-        <button class="new-menu-item" onclick="newSession();closeNewMenu()">nové sezení</button>
-        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">uložit jako nový</button>
+        <button class="new-menu-item" onclick="newSession();closeNewMenu()">new session</button>
+        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">save as new</button>
         <div class="new-menu-sep"></div>
-        <button class="new-menu-item" onclick="openTplNameModal();closeNewMenu()">uložit jako šablonu</button>
+        <button class="new-menu-item" onclick="openTplNameModal();closeNewMenu()">save as template</button>
       </div>
     </div>
-    <button class="btn-sm danger" onclick="clearStorage()" title="smazat">✕</button>
+    <button class="btn-sm danger" onclick="clearStorage()" title="delete">✕</button>
 
   </div>
 </header>
@@ -528,25 +528,25 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 
 <div class="library-panel">
   <div class="lib-card" id="panel-library">
-    <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-library">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-library')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
-    <div class="card-title"><span class="card-title-text" title="knihovna"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span></div>
+    <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="decrease section font">−</button><span class="pfs-val" id="pfs-panel-library">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="increase section font">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-library')" title="fullscreen"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
+    <div class="card-title"><span class="card-title-text" title="library"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span></div>
     <div class="lib-controls-row">
-      <button id="libSortBtn" class="lib-sort-btn" onclick="toggleLibGroupCat()" title="řadit dle kategorie">dle kat.</button>
-      <select id="libSellerFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filtrovat dle prodejce"></select>
-      <select id="libLocationFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filtrovat dle místa"></select>
+      <button id="libSortBtn" class="lib-sort-btn" onclick="toggleLibGroupCat()" title="sort by category">by cat.</button>
+      <select id="libSellerFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filter by seller"></select>
+      <select id="libLocationFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filter by location"></select>
     </div>
     <div id="libList"></div>
     <!-- Templates section -->
     <div class="lib-section">
       <div class="lib-section-hd">
-        <span>šablony přípravy</span>
+        <span>brewing templates</span>
       </div>
       <div id="tplList"></div>
     </div>
     <!-- Archive section -->
     <div class="lib-section">
       <div class="lib-section-hd arch-section-hd" onclick="toggleArchiveSection()">
-        <span>archiv <span id="archiveCount" style="font-weight:400"></span></span>
+        <span>archive <span id="archiveCount" style="font-weight:400"></span></span>
         <span id="archiveToggleIcon" style="font-size:.65rem">▼</span>
       </div>
       <div id="archiveList" style="display:none"></div>
@@ -557,13 +557,13 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <!-- Template name modal -->
 <div class="modal-bg" id="tplNameModal">
   <div class="modal">
-    <h2>Nová šablona</h2>
-    <p>Šablona uloží teplotu, nádobu, množství čaje, checkboxy a nálevy — bez názvu (kategorii ukládá). Lze ji pak použít pro jakýkoli čaj.</p>
-    <input id="tplNameInput" type="text" placeholder="Název šablony (např. Gongfu 4×)" maxlength="60"
+    <h2>New template</h2>
+    <p>A template saves the temperature, vessel, tea amount, checkboxes and steeps — without the name (the category is saved). It can then be applied to any tea.</p>
+    <input id="tplNameInput" type="text" placeholder="Template name (e.g. Gongfu 4×)" maxlength="60"
       onkeydown="if(event.key==='Enter')saveTplFromModal()" />
     <div class="modal-row">
-      <button class="modal-btn" onclick="closeModal('tplNameModal')">zrušit</button>
-      <button class="modal-btn primary" onclick="saveTplFromModal()">uložit</button>
+      <button class="modal-btn" onclick="closeModal('tplNameModal')">cancel</button>
+      <button class="modal-btn primary" onclick="saveTplFromModal()">save</button>
     </div>
   </div>
 </div>
@@ -571,13 +571,13 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <!-- Template apply modal -->
 <div class="modal-bg" id="tplApplyModal">
   <div class="modal" style="max-width:400px">
-    <h2 id="tplApplyTitle">Šablona</h2>
-    <p style="font-size:.8rem;color:var(--muted)">Zaškrtni části které chceš aplikovat na aktuální nastavení.</p>
+    <h2 id="tplApplyTitle">Template</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Check the parts you want to apply to the current setup.</p>
     <div id="tplApplyFields" style="display:flex;flex-direction:column;gap:.1rem;margin:.3rem 0"></div>
     <div class="modal-row" style="margin-top:.55rem;flex-wrap:wrap;gap:.4rem">
-      <button class="modal-btn primary" onclick="applySelectedFromTemplate()">použít vybrané</button>
-      <button class="modal-btn" onclick="overwriteTemplate()">přepsat šablonu</button>
-      <button class="modal-btn" onclick="closeModal('tplApplyModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="applySelectedFromTemplate()">apply selected</button>
+      <button class="modal-btn" onclick="overwriteTemplate()">overwrite template</button>
+      <button class="modal-btn" onclick="closeModal('tplApplyModal')">cancel</button>
     </div>
   </div>
 </div>
@@ -585,12 +585,12 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <!-- Template rename modal -->
 <div class="modal-bg" id="tplRenameModal">
   <div class="modal" style="max-width:340px">
-    <h2>Přejmenovat šablonu</h2>
-    <input id="tplRenameInput" type="text" placeholder="Nový název" maxlength="60"
+    <h2>Rename template</h2>
+    <input id="tplRenameInput" type="text" placeholder="New name" maxlength="60"
       onkeydown="if(event.key==='Enter')saveTplRename()" />
     <div class="modal-row">
-      <button class="modal-btn" onclick="closeModal('tplRenameModal')">zrušit</button>
-      <button class="modal-btn primary" onclick="saveTplRename()">uložit</button>
+      <button class="modal-btn" onclick="closeModal('tplRenameModal')">cancel</button>
+      <button class="modal-btn primary" onclick="saveTplRename()">save</button>
     </div>
   </div>
 </div>
@@ -599,21 +599,21 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <div class="modal-bg" id="exportModal">
   <div class="modal" style="max-width:460px">
     <h2>Export</h2>
-    <p style="font-size:.8rem;color:var(--muted)">Čaje z knihovny</p>
+    <p style="font-size:.8rem;color:var(--muted)">Teas from the library</p>
     <div class="modal-list" id="exportList"></div>
-    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Šablony přípravy</p>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Brewing templates</p>
     <div class="modal-list" id="exportTplList"></div>
-    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archivované čaje</p>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archived teas</p>
     <div class="modal-list" id="exportArchList"></div>
     <div style="margin-top:.8rem">
-      <label style="font-size:.78rem;color:var(--muted)">Název souboru</label>
+      <label style="font-size:.78rem;color:var(--muted)">File name</label>
       <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
     </div>
     <div class="modal-row" style="margin-top:.5rem">
-      <button class="modal-btn" onclick="selectAllExport()">vybrat vše</button>
-      <button class="modal-btn" onclick="closeModal('exportModal')">zrušit</button>
-      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do Gistu</button>
-      <button class="modal-btn primary" onclick="doExport()">stáhnout JSON</button>
+      <button class="modal-btn" onclick="selectAllExport()">select all</button>
+      <button class="modal-btn" onclick="closeModal('exportModal')">cancel</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ upload to Gist</button>
+      <button class="modal-btn primary" onclick="doExport()">download JSON</button>
     </div>
   </div>
 </div>
@@ -621,12 +621,12 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <!-- Export copy fallback modal -->
 <div class="modal-bg" id="exportCopyModal">
   <div class="modal" style="max-width:520px">
-    <h2>Zkopírovat JSON</h2>
-    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Stažení se nezdařilo. Zkopíruj obsah níže a ulož jako soubor .json.</p>
+    <h2>Copy JSON</h2>
+    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Download failed. Copy the content below and save it as a .json file.</p>
     <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
     <div class="modal-row">
-      <button class="modal-btn primary" onclick="copyExportText()">📋 kopírovat</button>
-      <button class="modal-btn" onclick="closeModal('exportCopyModal')">zavřít</button>
+      <button class="modal-btn primary" onclick="copyExportText()">📋 copy</button>
+      <button class="modal-btn" onclick="closeModal('exportCopyModal')">close</button>
     </div>
   </div>
 </div>
@@ -641,18 +641,18 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <div id="apm-archived" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></div>
     <div id="apm-setup" style="background:var(--off);border:var(--b);border-radius:var(--r);padding:.65rem .85rem;font-size:.8rem;line-height:1.75;white-space:pre-wrap;font-family:'DM Mono',monospace;color:var(--dark)"></div>
     <div id="apm-notes-wrap">
-      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem">Poznámky</div>
+      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem">Notes</div>
       <div id="apm-notes" style="font-size:.83rem;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:var(--black)"></div>
     </div>
     <div id="apm-logs-wrap">
-      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.4rem">Zápisky <span id="apm-log-count"></span></div>
+      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.4rem">Log <span id="apm-log-count"></span></div>
       <div id="apm-log-list" style="display:flex;flex-direction:column;gap:.4rem;max-height:260px;overflow-y:auto"></div>
     </div>
     <div class="modal-row" style="flex-wrap:wrap">
       <button class="modal-btn primary" id="apm-dup-btn">+ duplikovat do knihovny</button>
       <button class="modal-btn" id="apm-restore-btn">↑ obnovit do knihovny</button>
-      <button class="modal-btn" id="apm-asnew-btn">← načíst jako nový</button>
-      <button class="modal-btn" onclick="closeModal('archPreviewModal')">zavřít</button>
+      <button class="modal-btn" id="apm-asnew-btn">← load as new</button>
+      <button class="modal-btn" onclick="closeModal('archPreviewModal')">close</button>
     </div>
   </div>
 </div>
@@ -660,22 +660,22 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <!-- Merge preview modal -->
 <div class="modal-bg" id="mergePreviewModal" style="z-index:110">
   <div class="modal" style="max-width:480px">
-    <h2 id="mergePreviewTitle">Sloučit</h2>
+    <h2 id="mergePreviewTitle">Merge</h2>
     <div id="mergePreviewBody"></div>
     <div class="modal-row" style="margin-top:.6rem">
-      <button class="modal-btn" onclick="closeModal('mergePreviewModal')">zrušit</button>
-      <button class="modal-btn primary" onclick="confirmMergeConfig()">potvrdit výběr</button>
+      <button class="modal-btn" onclick="closeModal('mergePreviewModal')">cancel</button>
+      <button class="modal-btn primary" onclick="confirmMergeConfig()">confirm selection</button>
     </div>
   </div>
 </div>
 
-<!-- Library picker modal (for "sloučit s čajem...") -->
+<!-- Library picker modal (for "merge with a tea...") -->
 <div class="modal-bg" id="libPickModal" style="z-index:120">
   <div class="modal" style="max-width:380px">
-    <h2>Sloučit s čajem z knihovny</h2>
+    <h2>Merge with a tea from the library</h2>
     <div class="modal-list" id="libPickList" style="max-height:320px;overflow-y:auto"></div>
     <div class="modal-row" style="margin-top:.5rem">
-      <button class="modal-btn" onclick="closeModal('libPickModal')">zrušit</button>
+      <button class="modal-btn" onclick="closeModal('libPickModal')">cancel</button>
     </div>
   </div>
 </div>
@@ -684,53 +684,53 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <div class="modal-bg" id="importModal">
   <div class="modal" style="max-width:460px">
     <h2>Import</h2>
-    <p class="jb-import-hide">Vyber JSON soubor exportovaný z Tea-app. Čaje se stejným názvem lze přejmenovat nebo sloučit.</p>
+    <p class="jb-import-hide">Select a JSON file exported from Tea-app. Teas with the same name can be renamed or merged.</p>
     <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
-    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">nebo vlož obsah JSON:</p>
+    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">or paste JSON content:</p>
     <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"teas":[...],"templates":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
     <div id="importTeaSection" style="display:none">
-      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Čaje</p>
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Teas</p>
       <div id="importFilterRow" style="display:none;margin:.2rem 0 .35rem;gap:.5rem;align-items:center">
         <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.78rem;color:var(--muted)">
           <input type="checkbox" id="importFilterChanged" checked style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="applyImportFilter()" />
-          skrýt beze změn
+          hide unchanged
         </label>
         <span id="importFilterHint" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></span>
       </div>
       <div id="importBulkControls" style="display:none;margin-bottom:.5rem;padding:.5rem .65rem;background:var(--off);border-radius:var(--r)">
-        <div style="font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.4rem">hromadně pro duplicity</div>
+        <div style="font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.4rem">bulk for duplicates</div>
         <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.25rem">
-          <button class="dup-act-btn" id="bulk-btn-rename" onclick="bulkImportAction('rename')">přejmenovat vše</button>
-          <button class="dup-act-btn" id="bulk-btn-merge" onclick="bulkImportAction('merge')">sloučit zápisky vše</button>
+          <button class="dup-act-btn" id="bulk-btn-rename" onclick="bulkImportAction('rename')">rename all</button>
+          <button class="dup-act-btn" id="bulk-btn-merge" onclick="bulkImportAction('merge')">merge logs (all)</button>
         </div>
         <div id="importBulkMergeOpts" style="display:none;flex-direction:column;gap:.3rem;margin-top:.3rem;padding-top:.3rem;border-top:1px solid var(--light)">
           <div style="display:flex;gap:.3rem;flex-wrap:wrap">
-            <button class="dup-act-btn active" id="bulk-mn-keep" onclick="bulkSetNotesAction('keep-existing')">zachovat obecné</button>
-            <button class="dup-act-btn" id="bulk-mn-use" onclick="bulkSetNotesAction('use-import')">z importu</button>
-            <button class="dup-act-btn" id="bulk-mn-both" onclick="bulkSetNotesAction('merge-both')">spojit obě</button>
+            <button class="dup-act-btn active" id="bulk-mn-keep" onclick="bulkSetNotesAction('keep-existing')">keep general</button>
+            <button class="dup-act-btn" id="bulk-mn-use" onclick="bulkSetNotesAction('use-import')">from import</button>
+            <button class="dup-act-btn" id="bulk-mn-both" onclick="bulkSetNotesAction('merge-both')">combine both</button>
           </div>
           <label style="font-size:.79rem;display:flex;align-items:center;gap:.4rem;cursor:pointer">
             <input type="checkbox" id="bulk-apply-settings" style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="bulkApplySettingsToggle()" />
-            přepsat nastavení čaje u všech
+            overwrite tea setup for all
           </label>
         </div>
       </div>
       <div class="modal-list" id="importList"></div>
     </div>
     <div id="importTplSection" style="display:none">
-      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Šablony</p>
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Templates</p>
       <div class="modal-list" id="importTplList"></div>
     </div>
     <div id="importArchSection" style="display:none">
-      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Archivované čaje</p>
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Archived teas</p>
       <div class="modal-list" id="importArchList"></div>
     </div>
     <div class="modal-row" id="importActions" style="display:none">
-      <button class="modal-btn" onclick="closeModal('importModal')">zrušit</button>
-      <button class="modal-btn primary" onclick="doImport()">importovat vybrané</button>
+      <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
+      <button class="modal-btn primary" onclick="doImport()">import selected</button>
     </div>
     <div class="modal-row" id="importCancel">
-      <button class="modal-btn" onclick="closeModal('importModal')">zavřít</button>
+      <button class="modal-btn" onclick="closeModal('importModal')">close</button>
     </div>
   </div>
 </div>
@@ -738,21 +738,21 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <!-- Log entry edit modal -->
 <div class="modal-bg" id="logEditModal">
   <div class="modal" style="max-width:440px">
-    <h2 id="leModalTitle">Parametry přípravy</h2>
+    <h2 id="leModalTitle">Brewing parameters</h2>
     <div style="display:flex;flex-direction:column;gap:.55rem">
       <div style="display:flex;gap:.75rem;flex-wrap:wrap">
         <div class="field" style="flex:1;min-width:140px">
-          <label>množství</label>
+          <label>amount</label>
           <div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap">
             <input class="le-inp" type="text" inputmode="decimal" id="le-amt" style="width:52px" placeholder=" " />
             <span class="le-unit">g</span>
             <span style="font-size:.75rem;color:var(--mid)">/</span>
             <input class="le-inp" type="text" inputmode="decimal" id="le-amttsp" style="width:52px" placeholder=" " />
-            <span class="le-unit">lžičky</span>
+            <span class="le-unit">tsp</span>
           </div>
         </div>
         <div class="field">
-          <label>teplota</label>
+          <label>temperature</label>
           <div style="display:flex;align-items:center;gap:.3rem">
             <input class="le-inp" type="number" id="le-temp" min="40" max="100" step="5" style="width:55px" />
             <span class="le-unit">°C</span>
@@ -760,7 +760,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
         </div>
       </div>
       <div class="field">
-        <label>nádoba</label>
+        <label>vessel</label>
         <div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap">
           <input class="le-inp" type="text" id="le-vtype" style="width:90px;font-family:'DM Sans',sans-serif;text-align:left" />
           <input class="le-inp" type="number" id="le-vml" min="10" max="2000" step="10" style="width:58px" />
@@ -768,76 +768,76 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
         </div>
       </div>
       <div class="field">
-        <label>příprava</label>
+        <label>preparation</label>
         <div style="display:flex;gap:.3rem;flex-wrap:wrap">
-          <label class="le-chk"><input type="checkbox" id="le-chkWarm" /> nahřát</label>
-          <label class="le-chk"><input type="checkbox" id="le-chkRinse" onchange="updateLeRinseRow()" /> oplach</label>
-          <label class="le-chk"><input type="checkbox" id="le-chkSieve" /> sítko</label>
-          <label class="le-chk"><input type="checkbox" id="le-chkCover" /> přikrýt</label>
-          <label class="le-chk"><input type="checkbox" id="le-chkThermometer" onchange="updateLeCoolRow()" /> teploměr</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkWarm" /> warm</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkRinse" onchange="updateLeRinseRow()" /> rinse</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkSieve" /> sieve</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkCover" /> cover</label>
+          <label class="le-chk"><input type="checkbox" id="le-chkThermometer" onchange="updateLeCoolRow()" /> thermometer</label>
         </div>
       </div>
       <div id="le-rinse-row" style="display:none;gap:.35rem;align-items:center;flex-wrap:wrap">
-        <span style="font-size:.78rem;color:var(--muted);min-width:48px">oplach</span>
+        <span style="font-size:.78rem;color:var(--muted);min-width:48px">rinse</span>
         <input class="le-inp" type="number" id="le-rsec" min="3" max="120" step="1" style="width:52px" />
         <span class="le-unit">s</span>
         <input class="le-inp" type="number" id="le-rtemp" min="40" max="100" step="5" placeholder=" " style="width:52px" />
         <span class="le-unit">°C</span>
       </div>
       <div id="le-cool-row" style="display:none;gap:.28rem;align-items:center;flex-wrap:wrap">
-        <span style="font-size:.78rem;color:var(--muted);min-width:48px">chlazení</span>
-        <button class="pour-chip" onclick="setLeCoolPours(0)">konvice</button>
-        <button class="pour-chip" onclick="setLeCoolPours(1)">1× džbánek</button>
-        <button class="pour-chip" onclick="setLeCoolPours(2)">2× nádoba</button>
+        <span style="font-size:.78rem;color:var(--muted);min-width:48px">cooling</span>
+        <button class="pour-chip" onclick="setLeCoolPours(0)">kettle</button>
+        <button class="pour-chip" onclick="setLeCoolPours(1)">1× pitcher</button>
+        <button class="pour-chip" onclick="setLeCoolPours(2)">2× vessel</button>
       </div>
       <div class="field">
-        <label>nálevy</label>
+        <label>steeps</label>
         <div id="le-steeps-body" style="display:flex;flex-direction:column;gap:.28rem;margin-bottom:.3rem"></div>
-        <button class="btn-add" onclick="leAddSteep()">+ nálev</button>
+        <button class="btn-add" onclick="leAddSteep()">+ steep</button>
       </div>
     </div>
     <div class="modal-row" style="margin-top:.6rem">
-      <button class="modal-btn" onclick="closeModal('logEditModal')">zrušit</button>
-      <button class="modal-btn primary" onclick="saveCurrentEdit()">uložit</button>
+      <button class="modal-btn" onclick="closeModal('logEditModal')">cancel</button>
+      <button class="modal-btn primary" onclick="saveCurrentEdit()">save</button>
     </div>
   </div>
 </div>
 
 <div class="main-panel">
   <div class="card" id="panel-settings">
-    <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-settings',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-settings">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-settings',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-settings')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
-    <div class="card-title"><span class="card-title-text" title="nastavení"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="18" r="2.5" fill="currentColor" stroke="none"/></svg></span></div>
+    <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-settings',-1)" title="decrease section font">−</button><span class="pfs-val" id="pfs-panel-settings">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-settings',1)" title="increase section font">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-settings')" title="fullscreen"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
+    <div class="card-title"><span class="card-title-text" title="settings"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="18" r="2.5" fill="currentColor" stroke="none"/></svg></span></div>
     <div class="setup-grid">
       <div class="field">
-        <label>název čaje</label>
+        <label>tea name</label>
         <input type="text" id="teaName" placeholder="Tie Guan Yin, Pu-erh…" />
       </div>
       <div class="field">
-        <label>kategorie</label>
+        <label>category</label>
         <select id="teaCategory">
           <option value="">—</option>
-          <option value="zelený">zelený</option>
-          <option value="bílý">bílý</option>
+          <option value="green">green</option>
+          <option value="white">white</option>
           <option value="DJ FF">DJ FF</option>
           <option value="oolong">oolong</option>
-          <option value="červený / černý">červený / černý</option>
-          <option value="tmavý / pu-erh">tmavý / pu-erh</option>
-          <option value="bylinkový">bylinkový</option>
-          <option value="ostatní">ostatní</option>
+          <option value="red / black">red / black</option>
+          <option value="dark / pu-erh">dark / pu-erh</option>
+          <option value="herbal">herbal</option>
+          <option value="other">other</option>
         </select>
       </div>
       <div class="field">
-        <label>prodejce</label>
-        <input type="text" id="teaSeller" placeholder="Pu-erh shop, čajovna…" list="sellerOptions" autocomplete="off" />
+        <label>seller</label>
+        <input type="text" id="teaSeller" placeholder="Pu-erh shop, teahouse…" list="sellerOptions" autocomplete="off" />
         <datalist id="sellerOptions"></datalist>
       </div>
       <div class="field">
-        <label>místo</label>
-        <input type="text" id="teaLocation" placeholder="doma, práce…" list="locationOptions" autocomplete="off" />
+        <label>location</label>
+        <input type="text" id="teaLocation" placeholder="home, work…" list="locationOptions" autocomplete="off" />
         <datalist id="locationOptions"></datalist>
       </div>
       <div class="field">
-        <label>množství</label>
+        <label>amount</label>
         <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:.22rem">
             <input type="text" inputmode="decimal" id="teaAmount" placeholder=" " style="max-width:60px" />
@@ -846,12 +846,12 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
           <span style="font-size:.75rem;color:var(--mid)">/</span>
           <div style="display:flex;align-items:center;gap:.22rem">
             <input type="text" inputmode="decimal" id="teaAmountTsp" placeholder=" " style="max-width:70px" />
-            <span style="font-size:.8rem;color:var(--muted);font-weight:500">lžičky</span>
+            <span style="font-size:.8rem;color:var(--muted);font-weight:500">tsp</span>
           </div>
         </div>
       </div>
       <div class="field" style="grid-column:1/-1">
-        <label>nádoba</label>
+        <label>vessel</label>
         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
           <input type="text" id="vesselType" value="gaiwan" placeholder="gaiwan" style="max-width:110px" />
           <input type="number" id="vesselMl" value="50" min="10" max="2000" step="10" style="max-width:65px" oninput="updatePer100()" />
@@ -860,7 +860,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
         </div>
       </div>
       <div class="field">
-        <label>teplota</label>
+        <label>temperature</label>
         <div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:.22rem">
             <input type="number" id="tempRange" min="40" max="100" value="80" step="5" style="max-width:70px" />
@@ -869,39 +869,39 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
           <span id="coolGuide" style="font-size:.75rem;color:var(--muted);font-family:'DM Mono',monospace;display:none"></span>
         </div>
         <div class="pour-chips" id="pourControl">
-          <span style="font-size:.73rem;color:var(--muted)">přelití:</span>
-          <button class="pour-chip" onclick="setCoolPours(0)">konvice</button>
-          <button class="pour-chip" onclick="setCoolPours(1)">1× džbánek</button>
-          <button class="pour-chip" onclick="setCoolPours(2)">2× nádoba</button>
+          <span style="font-size:.73rem;color:var(--muted)">pours:</span>
+          <button class="pour-chip" onclick="setCoolPours(0)">kettle</button>
+          <button class="pour-chip" onclick="setCoolPours(1)">1× pitcher</button>
+          <button class="pour-chip" onclick="setCoolPours(2)">2× vessel</button>
         </div>
       </div>
     </div>
     <div class="checks-row" style="margin-top:.75rem">
       <div class="check-item" id="chkWarm" onclick="toggleCheck('chkWarm')">
-        <div class="check-box"><div class="check-mark"></div></div>nahřát
+        <div class="check-box"><div class="check-mark"></div></div>warm
       </div>
       <div class="check-item" id="chkRinse" onclick="toggleCheck('chkRinse')">
-        <div class="check-box"><div class="check-mark"></div></div>oplach
+        <div class="check-box"><div class="check-mark"></div></div>rinse
       </div>
       <div class="check-item" id="chkSieve" onclick="toggleCheck('chkSieve')">
-        <div class="check-box"><div class="check-mark"></div></div>sítko
+        <div class="check-box"><div class="check-mark"></div></div>sieve
       </div>
       <div class="check-item" id="chkCover" onclick="toggleCheck('chkCover')">
-        <div class="check-box"><div class="check-mark"></div></div>přikrýt
+        <div class="check-box"><div class="check-mark"></div></div>cover
       </div>
       <div class="check-item" id="chkThermometer" onclick="toggleCheck('chkThermometer')">
-        <div class="check-box"><div class="check-mark"></div></div>teploměr
+        <div class="check-box"><div class="check-mark"></div></div>thermometer
       </div>
     </div>
     <div class="rinse-settings" id="rinseSettings">
-      <span class="rinse-label">0. 🍵 — oplach</span>
+      <span class="rinse-label">0. 🍵 — rinse</span>
       <div class="rinse-field">
-        <span>čas</span>
+        <span>time</span>
         <input type="number" id="rinseSec" value="15" min="3" max="120" step="1" />
         <span>s</span>
       </div>
       <div class="rinse-field">
-        <span>teplota</span>
+        <span>temperature</span>
         <input type="number" id="rinseTemp" placeholder=" " min="40" max="100" step="5" style="width:68px" />
         <span>°C</span>
       </div>
@@ -910,8 +910,8 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 
   <div class="card" id="panel-steeps">
     <div class="steeps-header">
-      <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-steeps',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-steeps">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-steeps',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-steeps')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
-      <div class="card-title" style="margin-bottom:0"><span class="card-title-text" title="nálevy"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span><button class="btn-add" onclick="resetAllSteeps()" title="restartovat vše">↺</button><button class="btn-add" onclick="addSteep()">+</button></div>
+      <div class="card-controls"><div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-steeps',-1)" title="decrease section font">−</button><span class="pfs-val" id="pfs-panel-steeps">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-steeps',1)" title="increase section font">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-steeps')" title="fullscreen"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button></div>
+      <div class="card-title" style="margin-bottom:0"><span class="card-title-text" title="steeps"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span><button class="btn-add" onclick="resetAllSteeps()" title="restart all">↺</button><button class="btn-add" onclick="addSteep()">+</button></div>
     </div>
     <div class="steep-list" id="steepList"></div>
   </div>
@@ -920,24 +920,24 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <div class="notes-panel">
   <div class="notes-card" id="panel-notes">
     <div class="card-controls">
-      <div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="zmenšit písmo sekce">−</button><span class="pfs-val" id="pfs-panel-notes">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="zvětšit písmo sekce">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-notes')" title="celá obrazovka"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+      <div class="pfs-ctrl"><button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="decrease section font">−</button><span class="pfs-val" id="pfs-panel-notes">100%</span><button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="increase section font">+</button></div><button class="expand-btn" onclick="toggleExpand('panel-notes')" title="fullscreen"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
     </div>
     <div class="notes-tabs">
-      <button class="notes-tab active" onclick="switchTab('general')">Obecné</button>
-      <button class="notes-tab" onclick="switchTab('log')">Zápisky</button>
+      <button class="notes-tab active" onclick="switchTab('general')">General</button>
+      <button class="notes-tab" onclick="switchTab('log')">Log</button>
     </div>
 
-    <!-- Obecné poznámky -->
+    <!-- General notes -->
     <div class="notes-pane active" id="pane-general">
-      <textarea id="notes" placeholder="Obecné poznámky k čaji — barva, aroma, chuť, příští úpravy…" style="flex:1;min-height:160px"></textarea>
+      <textarea id="notes" placeholder="General notes about the tea — color, aroma, taste, next adjustments…" style="flex:1;min-height:160px"></textarea>
     </div>
 
-    <!-- Zápisky ze sezení -->
+    <!-- Session log -->
     <div class="notes-pane" id="pane-log">
       <div class="log-toolbar">
-        <button class="btn-log" onclick="logSession()" title="zapsat sezení">✎</button>
-        <button class="btn-log" onclick="exportLogText()" style="background:var(--w);color:var(--black);border:var(--bh)" title="exportovat zápisky tohoto čaje">↑</button>
-        <button class="btn-log" onclick="openMultiLogExport()" style="background:var(--w);color:var(--black);border:var(--bh)" title="exportovat zápisky více čajů">↑+</button>
+        <button class="btn-log" onclick="logSession()" title="log this session">✎</button>
+        <button class="btn-log" onclick="exportLogText()" style="background:var(--w);color:var(--black);border:var(--bh)" title="export this tea log">↑</button>
+        <button class="btn-log" onclick="openMultiLogExport()" style="background:var(--w);color:var(--black);border:var(--bh)" title="export logs of multiple teas">↑+</button>
         <span class="log-count" id="logCount"></span>
       </div>
       <div class="log-list" id="logList"></div>
@@ -980,7 +980,7 @@ function updateCoolGuide(){
   const temp=el('tempRange').value;
   const fmtG=s=>{if(s<0)return'>30 min';if(s===0)return'ihned';return s<60?s+'s':Math.round(s/60)+' min';};
   const s0=coolWaitSec(temp);
-  if(s0===null){guide.style.display='';guide.textContent='⚠ neplatná teplota';guide.style.color='#c0392b';if(pc)pc.classList.remove('visible');return;}
+  if(s0===null){guide.style.display='';guide.textContent='⚠ invalid temperature';guide.style.color='#c0392b';if(pc)pc.classList.remove('visible');return;}
   guide.style.color='';guide.style.display='';
   const s1=coolWaitSecCurve(temp,COOL_CURVE_1);
   const s2=coolWaitSecCurve(temp,COOL_CURVE_2);
@@ -1015,15 +1015,16 @@ function el(id){return document.getElementById(id)}
 function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function parseNum(v){return parseFloat(String(v).replace(',','.'))}
 function normDec(v){return(v||'').toString().replace(',','.')}
-// Tag helpers (prodejce / místo) — diakritika & velikost písmen se ignorují
+// Tag helpers (seller / location) — diacritics & letter case are ignored
 function normTag(s){return(s==null?'':String(s)).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
-const EMPTY_TAG='empty'; // sentinel pro filtr „bez údaje" (PUA znak, nekoliduje s daty)
+const EMPTY_TAG='empty'; // sentinel for the "no value" filter (PUA char, does not collide with data)
 function tagsOf(raw,multi=true){return(multi?String(raw||'').split(','):[String(raw||'')]).map(s=>s.trim()).filter(Boolean)}
-function uniqueTagVals(dataKey,multi=true){const m=new Map();library.forEach(e=>tagsOf(e.data?.[dataKey],multi).forEach(p=>{const k=normTag(p);if(!m.has(k))m.set(k,p)}));return[...m.values()].sort((a,b)=>a.localeCompare(b,'cs'))}
+function uniqueTagVals(dataKey,multi=true){const m=new Map();library.forEach(e=>tagsOf(e.data?.[dataKey],multi).forEach(p=>{const k=normTag(p);if(!m.has(k))m.set(k,p)}));return[...m.values()].sort((a,b)=>a.localeCompare(b,'en'))}
 function tagMatch(raw,filter){if(!filter)return true;const parts=tagsOf(raw,true);if(filter===EMPTY_TAG)return parts.length===0;const nf=normTag(filter);return parts.some(p=>normTag(p)===nf)}
-function tagsEq(a,b){const k=r=>tagsOf(r,true).map(normTag).sort().join('');return k(a)===k(b)} // shoda množin tagů bez ohledu na diakritiku/velikost/pořadí
-const CATEGORIES=['zelený','bílý','DJ FF','oolong','červený / černý','tmavý / pu-erh','bylinkový','ostatní'];
-const CAT_LEGACY={'zelený / dj ff':'zelený','červený / černý':'červený / černý','žlutý':'ostatní'};
+function tagsEq(a,b){const k=r=>tagsOf(r,true).map(normTag).sort().join('');return k(a)===k(b)} // equality of tag sets regardless of diacritics/case/order
+const CATEGORIES=['green','white','DJ FF','oolong','red / black','dark / pu-erh','herbal','other'];
+// migration map: old Czech category values stored in existing data → new English categories
+const CAT_LEGACY={'zelený':'green','zelený / dj ff':'green','bílý':'white','červený / černý':'red / black','tmavý / pu-erh':'dark / pu-erh','bylinkový':'herbal','ostatní':'other','žlutý':'other'};
 function normCat(v){
   if(!v)return '';
   const n=s=>s.toLowerCase().trim().replace(/\s+/g,' ').replace(/\s*\/\s*/g,' / ');
@@ -1045,7 +1046,7 @@ function showStatusMsg(msg,duration=2200){
   requestAnimationFrame(()=>{e.style.opacity='1';});
   e._to=setTimeout(()=>{e.style.opacity='0';e._hide=setTimeout(()=>{e.style.display='none';},400);},duration);
 }
-function showSave(msg='✓ uloženo'){showStatusMsg(msg,2200);}
+function showSave(msg='✓ saved'){showStatusMsg(msg,2200);}
 function schedSave(){clearTimeout(saveT);saveT=setTimeout(()=>{saveSession();renderLog();if(activeLibId)updateLibraryEntry();else showSave();},300)}
 
 function updateHeaderTeaName(){
@@ -1104,7 +1105,7 @@ function updatePfsVal(pid){
   const ei=(panelFs[pid]||{}).e??PFS_DEFAULT;
   const marker=isPanelExpanded(pid)&&ni!==ei?'*':'';
   valEl.textContent=Math.round(zoom*100)+'%'+marker;
-  valEl.title=isPanelExpanded(pid)?'velikost v rozšířeném pohledu (normální: '+Math.round(PFS_STEPS[ni]*100)+'%)':'velikost v normálním pohledu (rozšířený: '+Math.round(PFS_STEPS[ei]*100)+'%)';
+  valEl.title=isPanelExpanded(pid)?'size in expanded view (normal: '+Math.round(PFS_STEPS[ni]*100)+'%)':'size in normal view (expanded: '+Math.round(PFS_STEPS[ei]*100)+'%)';
 }
 function changePanelFs(pid,dir){
   if(!panelFs[pid]||typeof panelFs[pid]!=='object')panelFs[pid]={n:PFS_DEFAULT,e:PFS_DEFAULT};
@@ -1172,8 +1173,8 @@ function redo(){
   schedSave();updateUndoBtn();renderLibrary();
 }
 function updateUndoBtn(){
-  const u=el('undoBtn');if(u){u.disabled=undoStack.length===0;u.title=undoStack.length?'zpět '+undoStack.length+' (Ctrl+Z)':'nic k vrácení';}
-  const r=el('redoBtn');if(r){r.disabled=redoStack.length===0;r.title=redoStack.length?'vpřed '+redoStack.length+' (Ctrl+Y)':'nic vpřed';}
+  const u=el('undoBtn');if(u){u.disabled=undoStack.length===0;u.title=undoStack.length?'undo '+undoStack.length+' (Ctrl+Z)':'nothing to undo';}
+  const r=el('redoBtn');if(r){r.disabled=redoStack.length===0;r.title=redoStack.length?'redo '+redoStack.length+' (Ctrl+Y)':'nothing to redo';}
 }
 
 /* ── DIRTY TRACKING ─── */
@@ -1238,10 +1239,10 @@ function entryData(){
 }
 
 function saveToLibrary(){
-  const name=el('teaName').value.trim()||'Bez názvu';
+  const name=el('teaName').value.trim()||'Untitled';
   const entry={id:Date.now(),name,data:entryData(),logs:[],mt:Date.now()};
   library.push(entry);saveLibrary();
-  activeLibId=entry.id;markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();showSave('✓ uloženo do knihovny');
+  activeLibId=entry.id;markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();showSave('✓ saved to library');
 }
 
 function updateLibraryEntry(){
@@ -1249,12 +1250,12 @@ function updateLibraryEntry(){
   const entry=library.find(e=>e.id===activeLibId);if(!entry)return;
   const newName=el('teaName').value.trim()||entry.name;
   const newData=entryData();
-  // razítkuj mt JEN při skutečné změně obsahu (jinak prázdné přeuložení přebije novější verzi z jiného zařízení)
+  // stamp mt ONLY on a real content change (otherwise an empty re-save would override a newer version from another device)
   const changed=entry.name!==newName||JSON.stringify(entry.data)!==JSON.stringify(newData);
   entry.name=newName;
   entry.data=newData;
   if(changed)entry.mt=Date.now();
-  saveLibrary();markSaved();showSave('✓ změny uloženy');
+  saveLibrary();markSaved();showSave('✓ changes saved');
 }
 
 function loadFromLibrary(id){
@@ -1264,10 +1265,10 @@ function loadFromLibrary(id){
   const sw=d.steeps.map((s,i)=>({...s,id:i+1,remaining:s.sec,state:'idle'}));
   nextId=sw.length+1;
   applySessionData({...d,steeps:sw,nextId});
-  saveSession();markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();renderLog();showSave('↓ načteno');
+  saveSession();markSaved();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();renderLog();showSave('↓ loaded');
 }
 
-// znovu načti aktivní záznam do formuláře po tichém autosync mergi (živý buffer nesmí zůstat na staré verzi)
+// reload the active record into the form after a silent autosync merge (the live buffer must not stay on the old version)
 function refreshActiveFromLibrary(){
   if(!activeLibId)return;
   const entry=library.find(e=>e.id===activeLibId);if(!entry)return;
@@ -1281,13 +1282,13 @@ function refreshActiveFromLibrary(){
 
 async function deleteFromLibrary(id){
   const entry=library.find(e=>e.id===id);
-  const name=entry?entry.name:'tento čaj';
+  const name=entry?entry.name:'this tea';
   const action=await customDeleteOrArchive(name);
   if(!action)return;
   if(action==='archive'){
     archive.push({...entry,archivedAt:new Date().toISOString().slice(0,10)});
     saveArchive();renderArchive();
-    showSave('archivováno');
+    showSave('archived');
   }
   library=library.filter(e=>e.id!==id);
   const wasActive=activeLibId===id;
@@ -1301,7 +1302,7 @@ function restoreFromArchive(id){
   library.push(restored);
   archive=archive.filter(e=>e.id!==id);
   saveLibrary();saveArchive();renderLibrary();renderArchive();
-  showSave('↑ obnoveno do knihovny');
+  showSave('↑ restored to library');
 }
 function useArchiveAsNew(id){
   const entry=archive.find(e=>e.id===id);if(!entry)return;
@@ -1311,11 +1312,11 @@ function useArchiveAsNew(id){
   nextId=sw.length+1;
   applySessionData({...d,steeps:sw,nextId});
   saveSession();undoStack=[];redoStack=[];updateUndoBtn();renderLibrary();renderLog();
-  showSave('← načteno z archivu jako nový');
+  showSave('← loaded from archive as new');
 }
 async function deleteFromArchive(id){
   const entry=archive.find(e=>e.id===id);
-  if(!await customConfirm('Trvale smazat "'+(entry?entry.name:'')+'"?','smazat'))return;
+  if(!await customConfirm('Permanently delete "'+(entry?entry.name:'')+'"?','delete'))return;
   archive=archive.filter(e=>e.id!==id);
   saveArchive();renderArchive();
 }
@@ -1328,12 +1329,12 @@ function renderArchive(){
   const count=archive.length;
   el('archiveCount').textContent=count?'('+count+')':'';
   const list=el('archiveList');
-  if(!count){list.innerHTML='<div class="tpl-empty">Archiv je prázdný.</div>';return;}
+  if(!count){list.innerHTML='<div class="tpl-empty">Archive is empty.</div>';return;}
   list.innerHTML=archive.map(e=>`
     <div class="lib-item arch-item">
-      <span class="lib-item-name" title="${esc(e.name)} — nahlédnout" onclick="openArchPreview(${e.id})">${esc(e.name)}</span>
-      <span class="arch-date" id="arch-date-${e.id}" onclick="startArchDateEdit(${e.id})" title="kliknout pro změnu data archivace">${e.archivedAt||'—'}</span>
-      <button class="lib-item-del" style="opacity:.2" onclick="deleteFromArchive(${e.id})" title="trvale smazat"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <span class="lib-item-name" title="${esc(e.name)} — preview" onclick="openArchPreview(${e.id})">${esc(e.name)}</span>
+      <span class="arch-date" id="arch-date-${e.id}" onclick="startArchDateEdit(${e.id})" title="click to change archive date">${e.archivedAt||'—'}</span>
+      <button class="lib-item-del" style="opacity:.2" onclick="deleteFromArchive(${e.id})" title="permanently delete"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>`).join('');
 }
 
@@ -1341,9 +1342,9 @@ let archPreviewId=null;
 function openArchPreview(id){
   const entry=archive.find(e=>e.id===id);if(!entry)return;
   archPreviewId=id;
-  el('apm-name').textContent=entry.name||'Bez názvu';
+  el('apm-name').textContent=entry.name||'Untitled';
   el('apm-cat').textContent=entry.data?.teaCategory||'';
-  el('apm-archived').textContent=entry.archivedAt?'archivováno '+entry.archivedAt:'';
+  el('apm-archived').textContent=entry.archivedAt?'archived '+entry.archivedAt:'';
   el('apm-setup').textContent=buildArchSetupText(entry.data);
   const notes=(entry.data?.notes||'').trim();
   el('apm-notes-wrap').style.display=notes?'':'none';
@@ -1372,17 +1373,17 @@ function buildArchSetupText(d){
   const vesselStr=d.vesselMl?((d.vesselType||'')+' '+d.vesselMl+' ml').trim():'';
   const row1=[amtParts.join(' / '),vesselStr].filter(Boolean).join(' · ');
   if(row1)lines.push(row1);
-  if(d.temp)lines.push('teplota: '+d.temp+' °C');
-  const checkLabels={chkWarm:'ohřát nádobu',chkRinse:'opláchnout',chkSieve:'cedník',chkCover:'přikrýt'};
+  if(d.temp)lines.push('temperature: '+d.temp+' °C');
+  const checkLabels={chkWarm:'warm the vessel',chkRinse:'rinse',chkSieve:'strainer',chkCover:'cover'};
   if(d.checks){
     const cStr=Object.entries(checkLabels).map(([k,l])=>(d.checks[k]?'✓ ':'✗ ')+l).join('  ');
     lines.push(cStr);
   }
   if(d.checks?.chkRinse&&d.rinseSec){
-    lines.push('  oplach: '+d.rinseSec+'s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':''));
+    lines.push('  rinse: '+d.rinseSec+'s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':''));
   }
   if(d.steeps?.length){
-    d.steeps.forEach((s,i)=>lines.push((i+1)+'. nálev: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'')));
+    d.steeps.forEach((s,i)=>lines.push((i+1)+'. steep: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'')));
   }
   return lines.join('\n');
 }
@@ -1391,7 +1392,7 @@ function dupArchiveToLibrary(id){
   library.push({id:Date.now(),name:entry.name,data:{...entry.data},logs:(entry.logs||[]).map(l=>({...l})),mt:Date.now()});
   saveLibrary();renderLibrary();
   closeModal('archPreviewModal');
-  showSave('← duplikováno do knihovny');
+  showSave('← duplicated to library');
 }
 function startArchDateEdit(id){
   const span=el('arch-date-'+id);if(!span)return;
@@ -1423,7 +1424,7 @@ function toggleLibGroupCat(){
 function libItemHtml(e){
   return`<div class="lib-item ${activeLibId===e.id?'active':''}" data-id="${e.id}" onclick="loadFromLibrary(${e.id})"><span class="lib-item-name" title="${esc(e.name)}">${esc(e.name)}</span><button class="lib-item-del" onclick="event.stopPropagation();deleteFromLibrary(${e.id})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
 }
-/* ── LONG-PRESS na lib-item (touch) → smazat/archivovat ─── */
+/* ── LONG-PRESS on a lib-item (touch) → delete/archive ─── */
 let _lpTimer=null,_lpFired=false,_lpStartY=0;
 function initLibLongPress(){
   const list=el('libList');
@@ -1464,7 +1465,7 @@ function updateDynamicFilter(selId,dataKey,placeholder,multi=false){
   const hasEmpty=library.some(e=>!tagsOf(e.data?.[dataKey],multi).length);
   const cur=sel.value;
   let html=`<option value="">— ${placeholder}</option>`;
-  if(hasEmpty&&vals.length)html+=`<option value="${EMPTY_TAG}">— (bez údaje)</option>`;
+  if(hasEmpty&&vals.length)html+=`<option value="${EMPTY_TAG}">— (no value)</option>`;
   html+=vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
   sel.innerHTML=html;
   sel.value=cur;
@@ -1477,12 +1478,12 @@ function fillDatalist(id,dataKey){
   dl.innerHTML=uniqueTagVals(dataKey,true).map(v=>`<option value="${esc(v)}"></option>`).join('');
 }
 function updateSellerFilter(){
-  updateDynamicFilter('libSellerFilter','seller','prodejce',true);
-  updateDynamicFilter('libLocationFilter','location','místo',true);
+  updateDynamicFilter('libSellerFilter','seller','seller',true);
+  updateDynamicFilter('libLocationFilter','location','location',true);
   fillDatalist('sellerOptions','seller');
   fillDatalist('locationOptions','location');
 }
-// per-zařízení paměť filtrů knihovny (lokální klíče — nesyncují se)
+// per-device memory of library filters (local keys — not synced)
 const FILTER_SELLER_KEY='cajovy-filter-seller',FILTER_LOCATION_KEY='cajovy-filter-location';
 function onLibFilterChange(){
   try{
@@ -1492,11 +1493,11 @@ function onLibFilterChange(){
   renderLibrary();
 }
 function restoreLibFilters(){
-  updateSellerFilter();   // nejdřív naplň optiony z knihovny — hodnotu selectu jde nastavit až pak
+  updateSellerFilter();   // fill options from the library first — the select value can only be set afterwards
   try{
     const s=localStorage.getItem(FILTER_SELLER_KEY)||'',l=localStorage.getItem(FILTER_LOCATION_KEY)||'';
     const ss=el('libSellerFilter'),ls=el('libLocationFilter');
-    if(s&&ss)ss.value=s;   // smazaná hodnota (čaj už neexistuje) → select zůstane na „vše"
+    if(s&&ss)ss.value=s;   // deleted value (the tea no longer exists) → the select stays on "all"
     if(l&&ls)ls.value=l;
   }catch(e){}
 }
@@ -1510,7 +1511,7 @@ function renderLibrary(){
   const items=library.filter(e=>
     tagMatch(e.data?.seller,sellerFilter)&&tagMatch(e.data?.location,locationFilter)
   );
-  if(!items.length){list.innerHTML='<div class="lib-empty">'+(sellerFilter||locationFilter?'Žádné čaje odpovídají filtru.':'Zatím žádné čaje.')+'</div>';}
+  if(!items.length){list.innerHTML='<div class="lib-empty">'+(sellerFilter||locationFilter?'No teas match the filter.':'No teas yet.')+'</div>';}
   else if(!libGroupByCat){
     list.innerHTML=items.map(libItemHtml).join('');
   }else{
@@ -1522,13 +1523,13 @@ function renderLibrary(){
     });
     const sortedKeys=[...CAT_ORDER.filter(c=>groups.has(c)),...[...groups.keys()].filter(c=>!CAT_ORDER.includes(c)&&c!==''),...(groups.has('')?['']:[])] ;
     list.innerHTML=sortedKeys.map(cat=>{
-      const label=cat||'bez kategorie';
+      const label=cat||'no category';
       return`<div class="lib-cat-header">${esc(label)}</div>`+groups.get(cat).map(libItemHtml).join('');
     }).join('');
   }
   const hSave=el('headerSaveBtn'),hNew=el('headerSaveNewBtn');
-  hSave.style.display='none';   // změny se ukládají automaticky → ruční tlačítko netřeba
-  hNew.textContent=activeLibId?'uložit jako nový':'+ uložit jako nový čaj';
+  hSave.style.display='none';   // changes are saved automatically → manual button not needed
+  hNew.textContent=activeLibId?'save as new':'+ save as new tea';
 }
 
 function updateMeasureRow(){
@@ -1536,12 +1537,12 @@ function updateMeasureRow(){
   if(!lbl)return;
   const amt=el('teaAmount').value;
   const tsp=el('teaAmountTsp').value;
-  const amtStr=[amt?amt+' g':'',tsp?tsp+' lžičky':''].filter(Boolean).join(' / ');
-  lbl.textContent='odměřit '+(amtStr||'množství');
+  const amtStr=[amt?amt+' g':'',tsp?tsp+' tsp':''].filter(Boolean).join(' / ');
+  lbl.textContent='measure '+(amtStr||'amount');
 }
 function updateDirtyState(){
   const hSave=el('headerSaveBtn');
-  if(hSave)hSave.style.display='none';   // autosave je vždy zapnutý
+  if(hSave)hSave.style.display='none';   // autosave is always on
 }
 
 function addSteep(sec=60,temp='',silent=false){
@@ -1558,23 +1559,23 @@ function renderSteeps(){
   const sieveOn=el('chkSieve').classList.contains('checked');
   const coverOn=el('chkCover').classList.contains('checked');
   const noTherm=!el('chkThermometer').classList.contains('checked');
-  const tagsHtml=`<div class="steep-tags"><span class="${sieveOn?'steep-tag-on':'steep-tag-off'}">sítko</span><span class="steep-tag-sep"> · </span><span class="${coverOn?'steep-tag-on':'steep-tag-off'}">přikrýt</span></div>`;
+  const tagsHtml=`<div class="steep-tags"><span class="${sieveOn?'steep-tag-on':'steep-tag-off'}">sieve</span><span class="steep-tag-sep"> · </span><span class="${coverOn?'steep-tag-on':'steep-tag-off'}">cover</span></div>`;
   if(warmOn){
     const warmRow=document.createElement('div');
     warmRow.className='steep-row warm-row'+(warmDone?' warm-done':'');
     warmRow.addEventListener('click',toggleWarmDone);
-    warmRow.innerHTML=`<div style="grid-column:1/-1;display:flex;align-items:center;gap:.55rem"><div class="warm-check-box"><div class="warm-check-mark"></div></div><span class="warm-label">nahřát nádobu</span></div>`;
+    warmRow.innerHTML=`<div style="grid-column:1/-1;display:flex;align-items:center;gap:.55rem"><div class="warm-check-box"><div class="warm-check-mark"></div></div><span class="warm-label">warm the vessel</span></div>`;
     list.appendChild(warmRow);
   }
   {
     const amt=el('teaAmount').value;
     const tsp=el('teaAmountTsp').value;
-    const amtStr=[amt?amt+' g':'',tsp?tsp+' lžičky':''].filter(Boolean).join(' / ');
+    const amtStr=[amt?amt+' g':'',tsp?tsp+' tsp':''].filter(Boolean).join(' / ');
     const mRow=document.createElement('div');
     mRow.id='measureRow';
     mRow.className='steep-row warm-row'+(measureDone?' warm-done':'');
     mRow.addEventListener('click',toggleMeasureDone);
-    mRow.innerHTML=`<div style="grid-column:1/-1;display:flex;align-items:center;gap:.55rem"><div class="warm-check-box"><div class="warm-check-mark"></div></div><span class="warm-label">odměřit ${amtStr||'množství'}</span></div>`;
+    mRow.innerHTML=`<div style="grid-column:1/-1;display:flex;align-items:center;gap:.55rem"><div class="warm-check-box"><div class="warm-check-mark"></div></div><span class="warm-label">measure ${amtStr||'amount'}</span></div>`;
     list.appendChild(mRow);
   }
   if(noTherm){
@@ -1585,8 +1586,8 @@ function renderSteeps(){
     const pct=(!isDisabled&&coolState.state!=='idle')?Math.round((1-coolState.remaining/csec)*100):0;
     const fmtSec=s=>{if(s===null)return'—';if(s<0)return'>30 min';if(s===0)return'ihned';return s<60?s+'s':Math.round(s/60)+' min';};
     const timeLabel=fmtSec(csecRaw);
-    const pourNames=['konvice','džbánek','2. nádoba'];
-    const rowLabel=csecRaw===null?'⚠ nedosažitelné':'ochlazení · '+pourNames[coolPours];
+    const pourNames=['kettle','pitcher','2nd vessel'];
+    const rowLabel=csecRaw===null?'⚠ unreachable':'cooling · '+pourNames[coolPours];
     const rowColor=csecRaw===null?'color:#c0392b':'';
     const icon=coolState.state==='running'
       ?`<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
@@ -1621,7 +1622,7 @@ function renderSteeps(){
     row.className='steep-row rinse-row'+(rs.state==='running'?' active':'')+(rs.state==='done'?' done-row':'');
     row.innerHTML=`
       <div class="steep-num">0</div>
-      <div class="steep-label-wrap"><span class="steep-label">oplach</span></div>
+      <div class="steep-label-wrap"><span class="steep-label">rinse</span></div>
       <input class="steep-time-input" type="number" min="3" max="120" value="${rsec}" onchange="updateRinseTime(this.value)" />
       <div class="steep-temp-input" style="text-align:center;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--muted);border-color:transparent;background:transparent">${rT}</div>
       <div class="timer-display ${rs.state==='running'?'running':rs.state==='done'?'done-time':''}" id="timer-rinse">${fmtTime(rs.remaining)}</div>
@@ -1743,7 +1744,7 @@ function resetAllSteeps(){
 }
 function clearAllTimers(){Object.values(timers).forEach(t=>clearInterval(t));timers={};if(rinseTimer){clearInterval(rinseTimer);rinseTimer=null;}if(coolTimer){clearInterval(coolTimer);coolTimer=null;}}
 async function newSession(){
-  if(!await customConfirm('Otevřít prázdnou kartu? Neuložené změny budou ztraceny.','otevřít'))return;
+  if(!await customConfirm('Open a blank card? Unsaved changes will be lost.','open'))return;
   clearAllTimers();
   steeps=[];nextId=1;activeLibId=null;coolPours=0;
   el('teaName').value='';el('teaCategory').value='';el('teaSeller').value='';el('teaLocation').value='';el('teaAmount').value='';el('teaAmountTsp').value='';
@@ -1759,7 +1760,7 @@ async function newSession(){
   defaultSteeps.forEach(s=>addSteep(s,'',true));
   renderSteeps();updateHeaderTeaName();updatePer100();
   savedSnapshot=null;undoStack=[];redoStack=[];updateUndoBtn();
-  renderLibrary();renderLog();schedSave();showSave('nová karta');
+  renderLibrary();renderLog();schedSave();showSave('new card');
 }
 
 function playBeep(){
@@ -1792,14 +1793,14 @@ async function doSelectiveClear(){
   if(el('clr-archive').checked) toDelete.push('cajovy-v3-archive');
   if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs','cajovy-filter-seller','cajovy-filter-location','cajovy-lib-group-cat');
   if(!toDelete.length){closeModal('clearStorageModal');return;}
-  // Maže-li se synchronizovaná kolekce, vynuluj i autosync baseline + náhrobky — jinak by lokální
-  // reset vygeneroval náhrobky a tiše smazal data i na ostatních zařízeních. Po reloadu se obsah
-  // znovu stáhne z cloudu (pokud je autosync zapnutý), místo nechtěného rozšíření mazání.
+  // If a synced collection is cleared, also reset the autosync baseline + tombstones — otherwise a local
+  // reset would generate tombstones and silently delete data on other devices too. After reload the content
+  // is downloaded again from the cloud (if autosync is on), instead of unwanted propagation of deletions.
   if(el('clr-library').checked||el('clr-templates').checked||el('clr-archive').checked){
     toDelete.push('cajovy-syncknown','cajovy-tombstones');
   }
   closeModal('clearStorageModal');
-  if(!await customConfirm('Opravdu smazat vybraná data?','smazat'))return;
+  if(!await customConfirm('Really delete the selected data?','delete'))return;
   try{toDelete.forEach(k=>localStorage.removeItem(k));}catch(e){}
   location.reload();
 }
@@ -1825,7 +1826,7 @@ function initFs(){
 
 /* ── CUSTOM CONFIRM (replaces native confirm() blocked by some WebViews) ─── */
 let _confirmResolve=null;
-function customConfirm(msg, okLabel='potvrdit'){
+function customConfirm(msg, okLabel='confirm'){
   return new Promise(resolve=>{
     if(_confirmResolve){const old=_confirmResolve;_confirmResolve=null;old(false);}
     el('confirmMsg').textContent=msg;
@@ -1859,7 +1860,7 @@ let _libDelResolve=null;
 function customDeleteOrArchive(name){
   return new Promise(resolve=>{
     if(_libDelResolve){const old=_libDelResolve;_libDelResolve=null;old(null);}
-    el('libDelMsg').textContent='Co chceš udělat s "'+name+'"?';
+    el('libDelMsg').textContent='What do you want to do with "'+name+'"?';
     el('libDelModal').classList.add('open');
     _libDelResolve=(val)=>{
       el('libDelModal').classList.remove('open');
@@ -1952,19 +1953,19 @@ function openExportModal(){
     <label class="modal-item sel" id="ei-${e.id}">
       <input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />
       ${esc(e.name)}
-    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Knihovna je prázdná.</p>';
+    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
   const tlist=el('exportTplList');
   tlist.innerHTML=templates.length?templates.map(t=>`
     <label class="modal-item sel" id="eti-${t.id}">
       <input type="checkbox" checked onchange="toggleExportTplSel(${t.id},this.checked)" />
       ${esc(t.name)}
-    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Žádné šablony.</p>';
+    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">No templates.</p>';
   const alist=el('exportArchList');
   alist.innerHTML=archive.length?archive.map(e=>`
     <label class="modal-item sel" id="eai-${e.id}">
       <input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />
       ${esc(e.name)}${e.archivedAt?' <span style="font-size:.72rem;color:var(--muted)">('+e.archivedAt+')</span>':''}
-    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archiv je prázdný.</p>';
+    </label>`).join(''):'<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
   updateExportFilename();
   el('exportModal').classList.add('open');
 }
@@ -1998,7 +1999,7 @@ function doExport(){
   const items=library.filter(e=>exportSelected.has(e.id));
   const tpls=templates.filter(t=>exportTplSelected.has(t.id));
   const archItems=archive.filter(e=>exportArchSelected.has(e.id));
-  if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nic není vybráno.');return;}
+  if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
   const json=JSON.stringify({v:1,teas:items,templates:tpls,archive:archItems},null,2);
   const rawName=(el('exportFilename').value.trim()||'export');
   const fname=rawName.endsWith('.json')?rawName:rawName+'.json';
@@ -2021,19 +2022,19 @@ function doExport(){
   // Always show copy fallback so user can verify / use on restricted browsers
   el('exportCopyText').value=json;
   el('exportCopyNote').textContent=downloaded
-    ?'Soubor by měl být stažen jako "'+fname+'". Pokud ne, zkopíruj obsah níže.'
-    :'Stažení se nezdařilo — zkopíruj obsah níže a ulož jako soubor .json.';
+    ?'The file should be downloaded as "'+fname+'". If not, copy the content below.'
+    :'Download failed — copy the content below and save it as a .json file.';
   el('exportCopyModal').classList.add('open');
-  showSave('↑ exportováno');
+  showSave('↑ exported');
 }
 
 function copyExportText(){
   const ta=el('exportCopyText');
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(ta.value).then(()=>showSave('✓ zkopírováno'));
+      navigator.clipboard.writeText(ta.value).then(()=>showSave('✓ copied'));
     }else{
-      ta.select();document.execCommand('copy');showSave('✓ zkopírováno');
+      ta.select();document.execCommand('copy');showSave('✓ copied');
     }
   }catch(e){ta.select();}
 }
@@ -2061,7 +2062,7 @@ function openImportModal(){
 function parseImportJson(text){
   try{
     const parsed=JSON.parse(text);
-    if(!parsed.teas&&!parsed.templates&&!parsed.archive)throw new Error('Neplatný formát — chybí teas, templates ani archive');
+    if(!parsed.teas&&!parsed.templates&&!parsed.archive)throw new Error('Invalid format — missing teas, templates or archive');
     // Teas
     const existingTeaNames=new Map(library.map(x=>[x.name.trim().toLowerCase(),x.id]));
     const existingTeaById=new Map(library.map(x=>[x.id,x]));
@@ -2091,7 +2092,7 @@ function parseImportJson(text){
       if(filterRow){
         filterRow.style.display=identicalCount>0?'flex':'none';
         const hint=el('importFilterHint');
-        if(hint)hint.textContent=identicalCount+' shodné';
+        if(hint)hint.textContent=identicalCount+' identical';
       }
       el('importList').innerHTML=importData.map(t=>{
         const act=importNameActions[t.id]||'add';
@@ -2100,25 +2101,25 @@ function parseImportJson(text){
           const _diffs=_ex?buildSettingsDiff(_ex.data,t.data):[];
           const _newLogs=_ex?getNewLogsForMerge(_ex,t):[];
           const _notesMatch=!_ex||((_ex.data?.notes||'')===(t.data?.notes||''));
-          const _nameTag=t._idMatchRenamed?'jiný název':'stejný název';
-          const _sum=(_diffs.length?_diffs.length+' rozdíl'+(_diffs.length>1?'ů':'')+'  v nastavení':'nastavení shodné')+
-                     ' · '+(_newLogs.length?_newLogs.length+' nových zápisků':'zápisky shodné')+
-                     (!_notesMatch?' · obecné zápisky se liší':'');
+          const _nameTag=t._idMatchRenamed?'different name':'same name';
+          const _sum=(_diffs.length?_diffs.length+' diff'+(_diffs.length>1?'s':'')+'  in setup':'setup identical')+
+                     ' · '+(_newLogs.length?_newLogs.length+' new entries':'entries identical')+
+                     (!_notesMatch?' · general notes differ':'');
           const _isSel=importSelected.has(t.id);
           return `<div style="border:var(--b);border-radius:var(--r)" data-tea-id="${t.id}" data-identical="${t._isIdentical}">
             <label class="modal-item${_isSel?' sel':''}" id="ii-${t.id}" style="border:none;border-radius:var(--r) var(--r) 0 0">
               <input type="checkbox" ${_isSel?'checked':''} onchange="toggleImportSel(${t.id},this.checked)" />
-              ${esc(t.name)}${t._idMatchRenamed?` <span style="font-size:.68rem;color:var(--muted)">(v knihovně: ${esc(_ex?.name||'')})</span>`:''}
+              ${esc(t.name)}${t._idMatchRenamed?` <span style="font-size:.68rem;color:var(--muted)">(in library: ${esc(_ex?.name||'')})</span>`:''}
               <span class="dup-name-tag">${_nameTag}</span>
             </label>
             <div style="padding:.08rem .5rem .12rem;font-size:.73rem;color:var(--muted)">${esc(_sum)}</div>
             <div class="dup-act-row">
-              ${t._idMatchRenamed?'':`<button class="dup-act-btn ${act==='rename'?'active':''}" id="iact-r-${t.id}" onclick="setImportAction(${t.id},'rename')">přejmenovat</button>`}
-              <button class="dup-act-btn ${act==='merge'?'active':''}" id="iact-m-${t.id}" onclick="setImportAction(${t.id},'merge')">sloučit zápisky</button>
-              <button class="dup-act-btn ${act==='merge-pick'?'active':''}" id="iact-mp-${t.id}" onclick="setImportAction(${t.id},'merge-pick')">sloučit s…</button>
+              ${t._idMatchRenamed?'':`<button class="dup-act-btn ${act==='rename'?'active':''}" id="iact-r-${t.id}" onclick="setImportAction(${t.id},'rename')">rename</button>`}
+              <button class="dup-act-btn ${act==='merge'?'active':''}" id="iact-m-${t.id}" onclick="setImportAction(${t.id},'merge')">merge log</button>
+              <button class="dup-act-btn ${act==='merge-pick'?'active':''}" id="iact-mp-${t.id}" onclick="setImportAction(${t.id},'merge-pick')">merge with…</button>
             </div>
             <div id="iact-rn-${t.id}" style="display:${act==='rename'?'flex':'none'};gap:.4rem;align-items:center;padding:.15rem .5rem .35rem">
-              <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">nový název:</span>
+              <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">new name:</span>
               <input type="text" id="iact-name-${t.id}" value="${esc(t.name)}" style="flex:1;font-size:.82rem;padding:.2rem .35rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)" />
             </div>
           </div>`;
@@ -2129,12 +2130,12 @@ function parseImportJson(text){
             ${esc(t.name)}
           </label>
           <div class="dup-act-row">
-            <button class="dup-act-btn ${act==='add'?'active':''}" id="iact-add-${t.id}" onclick="setImportAction(${t.id},'add')">přidat</button>
-            <button class="dup-act-btn ${act==='rename'?'active':''}" id="iact-r-${t.id}" onclick="setImportAction(${t.id},'rename')">přejmenovat</button>
-            <button class="dup-act-btn ${act==='merge-pick'?'active':''}" id="iact-mp-${t.id}" onclick="setImportAction(${t.id},'merge-pick')">sloučit s…</button>
+            <button class="dup-act-btn ${act==='add'?'active':''}" id="iact-add-${t.id}" onclick="setImportAction(${t.id},'add')">add</button>
+            <button class="dup-act-btn ${act==='rename'?'active':''}" id="iact-r-${t.id}" onclick="setImportAction(${t.id},'rename')">rename</button>
+            <button class="dup-act-btn ${act==='merge-pick'?'active':''}" id="iact-mp-${t.id}" onclick="setImportAction(${t.id},'merge-pick')">merge with…</button>
           </div>
           <div id="iact-rn-${t.id}" style="display:${act==='rename'?'flex':'none'};gap:.4rem;align-items:center;padding:.15rem .5rem .35rem">
-            <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">nový název:</span>
+            <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">new name:</span>
             <input type="text" id="iact-name-${t.id}" value="${esc(t.name)}" style="flex:1;font-size:.82rem;padding:.2rem .35rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)" />
           </div>
         </div>`;
@@ -2151,7 +2152,7 @@ function parseImportJson(text){
         <label class="modal-item ${importTplSelected.has(t.id)?'sel':''}" id="iti-${t.id}">
           <input type="checkbox" ${importTplSelected.has(t.id)?'checked':''}
             onchange="toggleImportTplSel(${t.id},this.checked)" />
-          ${esc(t.name)}${t._dup?' <span style="font-size:.7rem;opacity:.6">(duplicita)</span>':''}
+          ${esc(t.name)}${t._dup?' <span style="font-size:.7rem;opacity:.6">(duplicate)</span>':''}
         </label>`).join('');
     }
     // Archive
@@ -2164,7 +2165,7 @@ function parseImportJson(text){
         <label class="modal-item ${importArchSelected.has(e.id)?'sel':''}" id="iai-${e.id}">
           <input type="checkbox" ${importArchSelected.has(e.id)?'checked':''}
             onchange="toggleImportArchSel(${e.id},this.checked)" />
-          ${esc(e.name)}${e.archivedAt?' <span style="font-size:.7rem;color:var(--muted)">('+e.archivedAt+')</span>':''}${e._dup?' <span style="font-size:.7rem;opacity:.6">(duplicita)</span>':''}
+          ${esc(e.name)}${e.archivedAt?' <span style="font-size:.7rem;color:var(--muted)">('+e.archivedAt+')</span>':''}${e._dup?' <span style="font-size:.7rem;opacity:.6">(duplicate)</span>':''}
         </label>`).join('');
     }
     const _dupCount=importData.filter(t=>t._nameDup&&!t._idMatchRenamed).length;
@@ -2179,7 +2180,7 @@ function parseImportJson(text){
     el('importActions').style.display='flex';
     el('importCancel').style.display='none';
   }catch(err){
-    el('importList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Chyba: '+err.message+'</p>';
+    el('importList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Error: '+err.message+'</p>';
     el('importTeaSection').style.display='block';
   }
 }
@@ -2206,7 +2207,7 @@ function previewImport(){
     try{
       const parsed=JSON.parse(ev.target.result);
       parseImportJson(JSON.stringify(parsed));
-    }catch(err){el('importList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Chyba: '+err.message+'</p>';el('importTeaSection').style.display='block';}
+    }catch(err){el('importList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Error: '+err.message+'</p>';el('importTeaSection').style.display='block';}
   };
   r.readAsText(file);
 }
@@ -2239,8 +2240,8 @@ function openLibPicker(importTeaId){
   el('libPickList').innerHTML=library.map(lt=>`
     <div class="modal-item" style="cursor:pointer" onclick="pickLibTea(${importTeaId},${lt.id})">
       ${esc(lt.name)}
-      ${imp&&lt.name.trim().toLowerCase()===imp.name.trim().toLowerCase()?'<span class="dup-name-tag">stejný název</span>':''}
-    </div>`).join('') || '<p style="font-size:.82rem;color:var(--muted);padding:.3rem">Knihovna je prázdná.</p>';
+      ${imp&&lt.name.trim().toLowerCase()===imp.name.trim().toLowerCase()?'<span class="dup-name-tag">same name</span>':''}
+    </div>`).join('') || '<p style="font-size:.82rem;color:var(--muted);padding:.3rem">Library is empty.</p>';
   el('libPickModal').classList.add('open');
 }
 
@@ -2259,7 +2260,7 @@ function pickLibTea(importTeaId,libTeaId){
   importMergeConfig[importTeaId]={logIds:new Set(newLogs.map(l=>l.id)),applySettings:false,notesAction:'keep-existing',targetLibId:libTeaId};
   // update button label
   const btn=el('iact-mp-'+importTeaId);
-  if(btn)btn.textContent='sloučit s: '+existing.name;
+  if(btn)btn.textContent='merge with: '+existing.name;
   openMergePreview(importTeaId);
 }
 
@@ -2270,18 +2271,18 @@ function getNewLogsForMerge(existing,imp){
 
 function buildSettingsDiff(ed,id_data){
   const diffs=[];
-  [{key:'temp',label:'teplota',fmt:v=>v+'°C'},{key:'vesselType',label:'nádoba typ'},{key:'vesselMl',label:'nádoba ml',fmt:v=>v+' ml'},
-   {key:'teaAmount',label:'množství',fmt:v=>v+'g'},{key:'teaAmountTsp',label:'lžičky'},{key:'teaCategory',label:'kategorie'},
-   {key:'seller',label:'prodejce',eq:tagsEq},{key:'location',label:'místo',eq:tagsEq},
-   {key:'rinseSec',label:'oplach',fmt:v=>v+'s'},{key:'rinseTemp',label:'tepl. opláchu',fmt:v=>v+'°C'}
+  [{key:'temp',label:'temperature',fmt:v=>v+'°C'},{key:'vesselType',label:'vessel type'},{key:'vesselMl',label:'vessel ml',fmt:v=>v+' ml'},
+   {key:'teaAmount',label:'amount',fmt:v=>v+'g'},{key:'teaAmountTsp',label:'tsp'},{key:'teaCategory',label:'category'},
+   {key:'seller',label:'seller',eq:tagsEq},{key:'location',label:'location',eq:tagsEq},
+   {key:'rinseSec',label:'rinse',fmt:v=>v+'s'},{key:'rinseTemp',label:'rinse temp',fmt:v=>v+'°C'}
   ].forEach(f=>{
     const eV=String(ed?.[f.key]||'');const iV=String(id_data?.[f.key]||'');
     const same=f.eq?f.eq(ed?.[f.key],id_data?.[f.key]):eV===iV;
     if(!same){const fmt=f.fmt||(v=>v||'—');diffs.push({label:f.label,oldVal:fmt(ed?.[f.key]),newVal:fmt(id_data?.[f.key])});}
   });
   const eS=(ed?.steeps||[]).length;const iS=(id_data?.steeps||[]).length;
-  if(eS!==iS)diffs.push({label:'nálevy',oldVal:eS+'×',newVal:iS+'×'});
-  const ckLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrýt',chkThermometer:'teploměr'};
+  if(eS!==iS)diffs.push({label:'steeps',oldVal:eS+'×',newVal:iS+'×'});
+  const ckLabels={chkWarm:'warm',chkRinse:'rinse',chkSieve:'sieve',chkCover:'cover',chkThermometer:'thermometer'};
   Object.entries(ckLabels).forEach(([ck,cl])=>{
     const eV=!!(ed?.checks?.[ck]);const iV=!!(id_data?.checks?.[ck]);
     if(eV!==iV)diffs.push({label:cl,oldVal:eV?'✓':'✗',newVal:iV?'✓':'✗'});
@@ -2299,21 +2300,21 @@ function openMergePreview(id){
     importMergeConfig[id]={logIds:new Set(newLogs.map(l=>l.id)),applySettings:false,notesAction:'keep-existing',targetLibId:targetLibId,renameLib:!!imp._idMatchRenamed};
   }
   const _mergeLabel=(importNameActions[id]==='merge-pick')?imp.name+' → '+existing.name:imp.name;
-  el('mergePreviewTitle').textContent='Sloučit — '+_mergeLabel;
+  el('mergePreviewTitle').textContent='Merge — '+_mergeLabel;
   const cfg=importMergeConfig[id];
   const diffs=buildSettingsDiff(existing.data,imp.data);
   let html='';
   if(imp._idMatchRenamed){
     html+=`<div style="margin-bottom:.55rem">
       <div class="merge-diff-row">
-        <span class="merge-diff-key">název</span>
+        <span class="merge-diff-key">name</span>
         <span class="merge-diff-old">${esc(existing.name)}</span>
         <span style="color:var(--muted);flex-shrink:0">→</span>
         <span class="merge-diff-new">${esc(imp.name)}</span>
       </div>
       <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.83rem;margin-top:.35rem">
         <input type="checkbox" id="merge-rename-lib" ${cfg.renameLib?'checked':''} onchange="importMergeConfig[currentMergeTeaId].renameLib=this.checked" style="width:14px;height:14px;accent-color:var(--black);cursor:pointer;flex-shrink:0" />
-        přejmenovat čaj v knihovně
+        rename the tea in the library
       </label>
     </div>`;
   }
@@ -2321,7 +2322,7 @@ function openMergePreview(id){
     html+=`<div class="field" style="margin-bottom:.55rem">
       <label style="display:flex;align-items:center;gap:.45rem;cursor:pointer;font-size:.83rem">
         <input type="checkbox" id="merge-apply-settings" ${cfg.applySettings?'checked':''} onchange="importMergeConfig[currentMergeTeaId].applySettings=this.checked" style="width:14px;height:14px;accent-color:var(--black);cursor:pointer;flex-shrink:0" />
-        přepsat nastavení čaje (${diffs.length} rozdíl${diffs.length>1?'ů':''})
+        overwrite tea setup (${diffs.length} diff${diffs.length>1?'s':''})
       </label>
       <div style="margin-top:.32rem;padding:.3rem .5rem;background:var(--off);border-radius:var(--r)">
         ${diffs.map(d=>`<div class="merge-diff-row">
@@ -2333,28 +2334,28 @@ function openMergePreview(id){
       </div>
     </div>`;
   } else {
-    html+=`<p style="font-size:.8rem;color:var(--muted);margin-bottom:.4rem">Nastavení čaje jsou shodná.</p>`;
+    html+=`<p style="font-size:.8rem;color:var(--muted);margin-bottom:.4rem">Tea setup is identical.</p>`;
   }
   const _exN=existing.data?.notes||'';const _impN=imp.data?.notes||'';
   if(_exN&&_impN&&_exN!==_impN){
     const na=cfg.notesAction||'keep-existing';
     const trunc=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
     html+=`<div class="field" style="margin-bottom:.55rem">
-      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.3rem">obecné zápisky</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.3rem">general notes</div>
       <div style="font-size:.77rem;padding:.3rem .5rem;background:var(--off);border-radius:var(--r);margin-bottom:.3rem">
-        <div><span style="color:var(--muted)">stávající: </span>${esc(trunc(_exN,120))}</div>
+        <div><span style="color:var(--muted)">current: </span>${esc(trunc(_exN,120))}</div>
         <div style="margin-top:.18rem"><span style="color:var(--muted)">import: </span>${esc(trunc(_impN,120))}</div>
       </div>
       <div class="dup-act-row" style="gap:.3rem;flex-wrap:wrap">
-        <button class="dup-act-btn${na==='keep-existing'?' active':''}" id="mn-keep" onclick="mergeSetNotesAction('keep-existing')">zachovat stávající</button>
-        <button class="dup-act-btn${na==='use-import'?' active':''}" id="mn-use" onclick="mergeSetNotesAction('use-import')">použít importované</button>
-        <button class="dup-act-btn${na==='merge-both'?' active':''}" id="mn-both" onclick="mergeSetNotesAction('merge-both')">spojit obě</button>
+        <button class="dup-act-btn${na==='keep-existing'?' active':''}" id="mn-keep" onclick="mergeSetNotesAction('keep-existing')">keep current</button>
+        <button class="dup-act-btn${na==='use-import'?' active':''}" id="mn-use" onclick="mergeSetNotesAction('use-import')">use imported</button>
+        <button class="dup-act-btn${na==='merge-both'?' active':''}" id="mn-both" onclick="mergeSetNotesAction('merge-both')">combine both</button>
       </div>
     </div>`;
   }
   if(newLogs.length){
     html+=`<div class="field">
-      <label style="font-size:.78rem;color:var(--muted)">zápisky k přidání — ${newLogs.length} nových</label>
+      <label style="font-size:.78rem;color:var(--muted)">entries to add — ${newLogs.length} new</label>
       <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;max-height:210px;overflow-y:auto">
         ${newLogs.map(l=>{
           const sel=cfg.logIds.has(l.id);
@@ -2368,7 +2369,7 @@ function openMergePreview(id){
       </div>
     </div>`;
   } else {
-    html+=`<p style="font-size:.8rem;color:var(--muted)">Žádné nové zápisky — vše je již v knihovně.</p>`;
+    html+=`<p style="font-size:.8rem;color:var(--muted)">No new entries — everything is already in the library.</p>`;
   }
   el('mergePreviewBody').innerHTML=html;
   el('mergePreviewModal').classList.add('open');
@@ -2389,12 +2390,12 @@ function mergeSetNotesAction(action){
 function _updateMergeBtn(id){
   const cfg=importMergeConfig[id];if(!cfg)return;
   const action=importNameActions[id];
-  const suffix='('+cfg.logIds.size+' zápisků'+(cfg.applySettings?' + nastav.':'')+')';
-  if(action==='merge'){const btn=el('iact-m-'+id);if(btn)btn.textContent='sloučit '+suffix;}
+  const suffix='('+cfg.logIds.size+' entries'+(cfg.applySettings?' + setup':'')+')';
+  if(action==='merge'){const btn=el('iact-m-'+id);if(btn)btn.textContent='merge '+suffix;}
   else if(action==='merge-pick'){
     const existing=cfg.targetLibId?library.find(x=>x.id===cfg.targetLibId):null;
     const btn=el('iact-mp-'+id);
-    if(btn)btn.textContent='sloučit s: '+(existing?existing.name:'?')+' '+suffix;
+    if(btn)btn.textContent='merge with: '+(existing?existing.name:'?')+' '+suffix;
   }
 }
 function confirmMergeConfig(){
@@ -2507,11 +2508,11 @@ function doImport(){
   saveArchive();renderArchive();
   closeModal('importModal');
   const parts=[];
-  if(added)parts.push(added+' čajů');
-  if(tplsToAdd.length)parts.push(tplsToAdd.length+' šablon');
-  if(archToAdd.length)parts.push(archToAdd.length+' archiv');
-  if(merged)parts.push(merged+' sloučeno');
-  showSave('↓ importováno: '+(parts.join(', ')||'nic'));
+  if(added)parts.push(added+' teas');
+  if(tplsToAdd.length)parts.push(tplsToAdd.length+' templates');
+  if(archToAdd.length)parts.push(archToAdd.length+' archive');
+  if(merged)parts.push(merged+' merged');
+  showSave('↓ imported: '+(parts.join(', ')||'nothing'));
 }
 
 function updatePer100(){
@@ -2575,14 +2576,14 @@ function openTplNameModal(){
   setTimeout(()=>el('tplNameInput').select(),60);
 }
 function saveTplFromModal(){
-  const name=el('tplNameInput').value.trim()||'Šablona';
+  const name=el('tplNameInput').value.trim()||'Template';
   const data=pendingLogTplData||getTemplateData();
   pendingLogTplData=null;
   const tpl={id:Date.now(),name,data,mt:Date.now()};
   templates.push(tpl);
   saveTemplates();renderTemplates();
   closeModal('tplNameModal');
-  showSave('✓ šablona uložena');
+  showSave('✓ template saved');
 }
 
 function openTplApplyModal(id){
@@ -2591,24 +2592,24 @@ function openTplApplyModal(id){
   el('tplApplyTitle').textContent=tpl.name;
   const d=tpl.data;
   const fields=[];
-  fields.push({key:'temp',label:'Teplota',val:(d.temp||80)+' °C'});
-  fields.push({key:'vessel',label:'Nádoba',val:(d.vesselType||'gaiwan')+' '+(d.vesselMl||50)+' ml'});
-  const amtParts=[d.teaAmount?d.teaAmount+' g':'',d.teaAmountTsp?d.teaAmountTsp+' lžičky':''].filter(Boolean);
-  fields.push({key:'amount',label:'Množství',val:amtParts.length?amtParts.join(' / '):'—'});
-  fields.push({key:'category',label:'Kategorie',val:d.teaCategory||'—'});
-  const checkMap={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrýt'};
-  if(d.checks&&'chkThermometer' in d.checks)checkMap.chkThermometer='teploměr';
+  fields.push({key:'temp',label:'Temperature',val:(d.temp||80)+' °C'});
+  fields.push({key:'vessel',label:'Vessel',val:(d.vesselType||'gaiwan')+' '+(d.vesselMl||50)+' ml'});
+  const amtParts=[d.teaAmount?d.teaAmount+' g':'',d.teaAmountTsp?d.teaAmountTsp+' tsp':''].filter(Boolean);
+  fields.push({key:'amount',label:'Amount',val:amtParts.length?amtParts.join(' / '):'—'});
+  fields.push({key:'category',label:'Category',val:d.teaCategory||'—'});
+  const checkMap={chkWarm:'warm',chkRinse:'rinse',chkSieve:'sieve',chkCover:'cover'};
+  if(d.checks&&'chkThermometer' in d.checks)checkMap.chkThermometer='thermometer';
   if(d.checks){
     const cs=Object.entries(checkMap).map(([cid,l])=>(d.checks[cid]?'✓ ':'✗ ')+l).join('  ');
-    fields.push({key:'checks',label:'Příprava',val:cs});
+    fields.push({key:'checks',label:'Preparation',val:cs});
   }
   if(d.checks&&d.checks.chkRinse){
     const rv=(d.rinseSec||15)+'s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':'');
-    fields.push({key:'rinse',label:'Čas opláchu',val:rv});
+    fields.push({key:'rinse',label:'Rinse time',val:rv});
   }
   if(d.steeps&&d.steeps.length){
     const sv=d.steeps.map((s,i)=>(i+1)+'.'+s.sec+'s'+(s.temp?'/'+s.temp+'°C':'')).join('  ');
-    fields.push({key:'steeps',label:'Nálevy ('+d.steeps.length+'×)',val:sv});
+    fields.push({key:'steeps',label:'Steeps ('+d.steeps.length+'×)',val:sv});
   }
   el('tplApplyFields').innerHTML=fields.map(f=>`
     <label class="tpl-field-row">
@@ -2636,15 +2637,15 @@ function applySelectedFromTemplate(){
     rinseState={remaining:parseInt(el('rinseSec').value)||15,state:'idle'};
   }
   updateRinseVisibility();renderSteeps();schedSave();renderLibrary();
-  closeModal('tplApplyModal');showSave('← šablona použita');
+  closeModal('tplApplyModal');showSave('← template applied');
 }
 
 async function overwriteTemplate(){
   const tpl=templates.find(t=>t.id===activeTplId);if(!tpl)return;
   closeModal('tplApplyModal');
-  if(!await customConfirm('Přepsat šablonu "'+tpl.name+'" aktuálním nastavením?','přepsat'))return;
+  if(!await customConfirm('Overwrite template "'+tpl.name+'" with the current setup?','overwrite'))return;
   tpl.data=getTemplateData();tpl.mt=Date.now();
-  saveTemplates();renderTemplates();showSave('✓ šablona upravena');
+  saveTemplates();renderTemplates();showSave('✓ template updated');
 }
 
 function openTplRenameModal(id){
@@ -2660,12 +2661,12 @@ function saveTplRename(){
   const name=el('tplRenameInput').value.trim();if(!name)return;
   tpl.name=name;tpl.mt=Date.now();
   saveTemplates();renderTemplates();
-  closeModal('tplRenameModal');showSave('✓ přejmenováno');
+  closeModal('tplRenameModal');showSave('✓ renamed');
 }
 
 async function deleteTemplate(id){
   const tpl=templates.find(t=>t.id===id);
-  if(!await customConfirm('Smazat šablonu "'+(tpl?tpl.name:'')+'"?','smazat'))return;
+  if(!await customConfirm('Delete template "'+(tpl?tpl.name:'')+'"?','delete'))return;
   templates=templates.filter(t=>t.id!==id);
   saveTemplates();renderTemplates();
 }
@@ -2673,14 +2674,14 @@ async function deleteTemplate(id){
 function renderTemplates(){
   const list=el('tplList');
   if(!templates.length){
-    list.innerHTML='<div class="tpl-empty">Žádné šablony.</div>';return;
+    list.innerHTML='<div class="tpl-empty">No templates.</div>';return;
   }
   list.innerHTML=templates.map(t=>`
-    <div class="tpl-item" onclick="openTplApplyModal(${t.id})" title="Klikni pro aplikaci šablony">
+    <div class="tpl-item" onclick="openTplApplyModal(${t.id})" title="Click to apply template">
       <span class="tpl-name" title="${esc(t.name)}">${esc(t.name)}</span>
-      <button class="tpl-rename" onclick="event.stopPropagation();openTplEdit(${t.id})" title="upravit parametry">✎</button>
-      <button class="tpl-rename" onclick="event.stopPropagation();openTplRenameModal(${t.id})" title="přejmenovat">✏</button>
-      <button class="tpl-del" onclick="event.stopPropagation();deleteTemplate(${t.id})" title="smazat">
+      <button class="tpl-rename" onclick="event.stopPropagation();openTplEdit(${t.id})" title="edit parameters">✎</button>
+      <button class="tpl-rename" onclick="event.stopPropagation();openTplRenameModal(${t.id})" title="rename">✏</button>
+      <button class="tpl-del" onclick="event.stopPropagation();deleteTemplate(${t.id})" title="delete">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>`).join('');
@@ -2689,11 +2690,11 @@ function renderTemplates(){
 /* ── LOG TEXT EXPORT ─── */
 function exportLogText(){
   const logs=getActiveLogs();
-  if(logs===null){customAlert('Vyber čaj z knihovny pro export zápisků.');return;}
-  if(!logs.length){customAlert('Žádné zápisky k exportu.');return;}
-  const teaName=el('teaName').value.trim()||'čaj';
+  if(logs===null){customAlert('Select a tea from the library to export its log.');return;}
+  if(!logs.length){customAlert('No log entries to export.');return;}
+  const teaName=el('teaName').value.trim()||'tea';
   const lines=[];
-  lines.push('ZÁPISKY — '+teaName.toUpperCase());
+  lines.push('LOG — '+teaName.toUpperCase());
   lines.push('='.repeat(40));
   const generalNotes=(el('notes').value||'').trim();
   if(generalNotes){lines.push('');lines.push(generalNotes);lines.push('-'.repeat(40));}
@@ -2708,8 +2709,8 @@ function exportLogText(){
     if(i<logs.length-1)lines.push('-'.repeat(40));
   });
   const text=lines.join('\n');
-  el('logExportTitle').textContent='Zápisky — '+teaName;
-  el('logExportNote').textContent=logs.length+' zápisků';
+  el('logExportTitle').textContent='Log — '+teaName;
+  el('logExportNote').textContent=logs.length+' entries';
   el('logExportText').value=text;
   el('logExportModal').classList.add('open');
 }
@@ -2717,20 +2718,20 @@ function copyLogText(){
   const ta=el('logExportText');
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(ta.value).then(()=>showSave('✓ zkopírováno'));
-    }else{ta.select();document.execCommand('copy');showSave('✓ zkopírováno');}
+      navigator.clipboard.writeText(ta.value).then(()=>showSave('✓ copied'));
+    }else{ta.select();document.execCommand('copy');showSave('✓ copied');}
   }catch(e){ta.select();}
 }
 function downloadLogText(){
   const text=el('logExportText').value;
-  const teaName=(el('teaName').value.trim()||'zapisky').replace(/[^a-z0-9áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s._-]/gi,'_').slice(0,50);
-  const fname=teaName+'-zapisky-'+new Date().toISOString().slice(0,10)+'.txt';
+  const teaName=(el('teaName').value.trim()||'log').replace(/[^a-z0-9\s._-]/gi,'_').slice(0,50);
+  const fname=teaName+'-log-'+new Date().toISOString().slice(0,10)+'.txt';
   try{
     const uri='data:text/plain;charset=utf-8,'+encodeURIComponent(text);
     const a=document.createElement('a');a.href=uri;a.download=fname;
     document.body.appendChild(a);a.click();document.body.removeChild(a);
-    showSave('↑ staženo');
-  }catch(e){showSave('chyba stahování');}
+    showSave('↑ downloaded');
+  }catch(e){showSave('download error');}
 }
 
 /* ── MULTI-TEA LOG TEXT EXPORT ─── */
@@ -2740,15 +2741,15 @@ function openMultiLogExport(){
   // Only show teas that have at least one log entry
   const withLogs=library.filter(e=>e.logs&&e.logs.length>0);
   if(!withLogs.length){
-    customAlert('Žádný čaj nemá zápisky.');return;
+    customAlert('No tea has any log entries.');return;
   }
   multiLogSelected=new Set(withLogs.map(e=>e.id));
-  el('multiLogNote').textContent=withLogs.length+' čajů se zápisky';
+  el('multiLogNote').textContent=withLogs.length+' teas with entries';
   el('multiLogList').innerHTML=withLogs.map(e=>`
     <label class="modal-item sel" id="mli-${e.id}">
       <input type="checkbox" checked onchange="toggleMultiLog(${e.id},this.checked)" />
       ${esc(e.name)}
-      <span style="font-size:.7rem;opacity:.55;margin-left:.3rem">${e.logs.length} ${e.logs.length===1?'zápis':e.logs.length<5?'zápisky':'zápisků'}</span>
+      <span style="font-size:.7rem;opacity:.55;margin-left:.3rem">${e.logs.length} ${e.logs.length===1?'entry':e.logs.length<5?'entries':'entries'}</span>
     </label>`).join('');
   el('multiLogModal').classList.add('open');
 }
@@ -2768,11 +2769,11 @@ function selectAllMultiLog(){
 
 function generateMultiLog(){
   const entries=library.filter(e=>multiLogSelected.has(e.id)&&e.logs&&e.logs.length);
-  if(!entries.length){customAlert('Nic není vybráno.');return;}
+  if(!entries.length){customAlert('Nothing is selected.');return;}
   const sections=[];
   entries.forEach(tea=>{
     const lines=[];
-    lines.push('ZÁPISKY — '+tea.name.toUpperCase());
+    lines.push('LOG — '+tea.name.toUpperCase());
     lines.push('='.repeat(42));
     const gn=(tea.data?.notes||'').trim();
     if(gn){lines.push('');lines.push(gn);lines.push('-'.repeat(42));}
@@ -2791,13 +2792,13 @@ function generateMultiLog(){
   const text=sections.join('\n\n'+'#'.repeat(42)+'\n\n');
   // reuse the single log export modal for display
   closeModal('multiLogModal');
-  const title=entries.length===1?'Zápisky — '+entries[0].name:'Zápisky — '+entries.length+' čajů';
+  const title=entries.length===1?'Log — '+entries[0].name:'Log — '+entries.length+' teas';
   el('logExportTitle').textContent=title;
   el('logExportNote').textContent=entries.map(e=>e.name).join(', ');
   el('logExportText').value=text;
   el('logExportModal').classList.add('open');
 }
-/* ── SESSION LOG — vázané na záznam knihovny ─── */
+/* ── SESSION LOG — bound to a library record ─── */
 function getActiveLogs(){
   if(!activeLibId)return null;
   const entry=library.find(e=>e.id===activeLibId);
@@ -2819,7 +2820,7 @@ function fmtDate(d){
 
 function logSession(){
   const logs=getActiveLogs();
-  if(logs===null){customAlert('Nejdřív ulož čaj do knihovny — zápisky se váží ke konkrétnímu záznamu.');return;}
+  if(logs===null){customAlert('Save the tea to the library first — log entries are tied to a specific record.');return;}
   const entry={id:Date.now(),date:fmtDate(new Date()),setup:buildSetupSnapshot(),data:getTemplateData(),text:''};
   logs.unshift(entry);
   saveLog();renderLog();
@@ -2829,7 +2830,7 @@ function logSession(){
 
 async function deleteLogEntry(id){
   const logs=getActiveLogs();if(!logs)return;
-  if(!await customConfirm('Smazat tento zápis?','smazat'))return;
+  if(!await customConfirm('Delete this entry?','delete'))return;
   const idx=logs.findIndex(e=>e.id===id);
   if(idx>-1)logs.splice(idx,1);
   saveLog();renderLog();
@@ -2853,7 +2854,7 @@ function openLogEdit(logId){
   const logs=getActiveLogs();if(!logs)return;
   const e=logs.find(x=>x.id===logId);if(!e)return;
   editingLogId=logId;editingTplId=null;
-  el('leModalTitle').textContent='Parametry přípravy';
+  el('leModalTitle').textContent='Brewing parameters';
   const d=e.data||{};
   el('le-amt').value=normDec(d.teaAmount);
   el('le-amttsp').value=normDec(d.teaAmountTsp);
@@ -2940,7 +2941,7 @@ function openTplEdit(id){
   leEditSteeps=(d.steeps||[]).map(s=>({sec:s.sec,temp:s.temp||''}));
   renderLeEditSteeps();
   updateLeRinseRow();updateLeCoolRow();
-  el('leModalTitle').textContent='Parametry šablony — '+tpl.name;
+  el('leModalTitle').textContent='Template parameters — '+tpl.name;
   el('logEditModal').classList.add('open');
   requestAnimationFrame(()=>el('logEditModal').querySelectorAll('input[placeholder]').forEach(i=>{const v=i.value;i.value='';i.value=v;}));
 }
@@ -2968,7 +2969,7 @@ function saveTplEdit(){
   editingTplId=null;
   saveTemplates();renderTemplates();
   closeModal('logEditModal');
-  showSave('✓ šablona upravena');
+  showSave('✓ template updated');
 }
 
 function buildSetupHtml(logData,curData,fallback,curTeaName){
@@ -2982,7 +2983,7 @@ function buildSetupHtml(logData,curData,fallback,curTeaName){
   }
   const df=(a,b)=>String(a||'')!==String(b||'');
   const amt=logData.teaAmount||'';const amttsp=logData.teaAmountTsp||'';
-  const amtStr=[amt?amt+'g':'',amttsp?amttsp+' lžičky':''].filter(Boolean).join(' / ');
+  const amtStr=[amt?amt+'g':'',amttsp?amttsp+' tsp':''].filter(Boolean).join(' / ');
   const vessel=logData.vesselMl||'50';const vesselType=logData.vesselType||'gaiwan';
   const temp=logData.temp||'80';
   const teaName=curTeaName||(fallback||'').split('\n')[0].split(' · ')[0];
@@ -2992,8 +2993,8 @@ function buildSetupHtml(logData,curData,fallback,curTeaName){
   if(amtStr)line0+=' · '+(amtDiff?`<b>${esc(amtStr)}</b>`:esc(amtStr));
   if(vessel)line0+=' · '+(vesselDiff?`<b>${esc(vesselType+' '+vessel+' ml')}</b>`:esc(vesselType+' '+vessel+' ml'));
   const tempDiff=df(logData.temp,curData.temp);
-  const line1='teplota: '+(tempDiff?`<b>${esc(temp)} °C</b>`:esc(temp)+' °C');
-  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí',chkThermometer:'teploměr'};
+  const line1='temperature: '+(tempDiff?`<b>${esc(temp)} °C</b>`:esc(temp)+' °C');
+  const checkLabels={chkWarm:'warm',chkRinse:'rinse',chkSieve:'sieve',chkCover:'cover',chkThermometer:'thermometer'};
   const checks={chkThermometer:true,...(logData.checks||{})};const curChecks={chkThermometer:true,...(curData.checks||{})};
   const checkLine=Object.entries(checkLabels).map(([id,l])=>{
     const on=!!checks[id];const curOn=!!curChecks[id];
@@ -3004,13 +3005,13 @@ function buildSetupHtml(logData,curData,fallback,curTeaName){
   if(checks.chkRinse){
     const rs=logData.rinseSec||'15';const rt=logData.rinseTemp||'';
     const rDiff=df(rs,curData.rinseSec)||df(rt,curData.rinseTemp);
-    const rtxt='  oplach: '+rs+' s'+(rt?' / '+rt+' °C':'');
+    const rtxt='  rinse: '+rs+' s'+(rt?' / '+rt+' °C':'');
     lines.push(rDiff?`<b>${esc(rtxt)}</b>`:esc(rtxt));
   }
   const logSteeps=logData.steeps||[];const curSteeps=curData.steeps||[];
   logSteeps.forEach((s,i)=>{
     const cs=curSteeps[i];
-    const txt=(i+1)+'. nálev: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'');
+    const txt=(i+1)+'. steep: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'');
     const diff=!cs||df(s.sec,cs.sec)||df(s.temp||'',cs.temp||'');
     lines.push(diff?`<b>${esc(txt)}</b>`:esc(txt));
   });
@@ -3019,19 +3020,19 @@ function buildSetupHtml(logData,curData,fallback,curTeaName){
 
 function buildSetupFromData(d,name){
   const amt=d.teaAmount||'';const amttsp=d.teaAmountTsp||'';
-  const amtStr=[amt?amt+'g':'',amttsp?amttsp+' lžičky':''].filter(Boolean).join(' / ');
+  const amtStr=[amt?amt+'g':'',amttsp?amttsp+' tsp':''].filter(Boolean).join(' / ');
   const vessel=d.vesselMl||'50';const vesselType=d.vesselType||'gaiwan';
   const temp=d.temp||'80';
-  const checkLabels={chkWarm:'nahřát',chkRinse:'oplach',chkSieve:'sítko',chkCover:'přikrytí',chkThermometer:'teploměr'};
+  const checkLabels={chkWarm:'warm',chkRinse:'rinse',chkSieve:'sieve',chkCover:'cover',chkThermometer:'thermometer'};
   const checks={chkThermometer:true,...(d.checks||{})};
   const checkLine=Object.entries(checkLabels).map(([id,l])=>(checks[id]?'✓ ':'✗ ')+l).join('  ');
   const lines=[];
   lines.push((name||'—')+(amtStr?' · '+amtStr:'')+(vessel?' · '+vesselType+' '+vessel+' ml':''));
-  lines.push('teplota: '+temp+' °C');
+  lines.push('temperature: '+temp+' °C');
   lines.push(checkLine);
-  if(checks.chkRinse){lines.push('  oplach: '+(d.rinseSec||'15')+' s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':''));}
-  if(!checks.chkThermometer&&d.coolPours>0){const pourNames=['konvice','džbánek','2. nádoba'];lines.push('  chlazení: '+pourNames[d.coolPours]);}
-  (d.steeps||[]).forEach((s,i)=>lines.push((i+1)+'. nálev: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'')));
+  if(checks.chkRinse){lines.push('  rinse: '+(d.rinseSec||'15')+' s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':''));}
+  if(!checks.chkThermometer&&d.coolPours>0){const pourNames=['kettle','pitcher','2nd vessel'];lines.push('  cooling: '+pourNames[d.coolPours]);}
+  (d.steeps||[]).forEach((s,i)=>lines.push((i+1)+'. steep: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'')));
   return lines.join('\n');
 }
 
@@ -3055,7 +3056,7 @@ function saveLogEdit(){
   e.setup=buildSetupFromData(d,teaName);
   saveLog();renderLog();
   closeModal('logEditModal');
-  showSave('✓ zápis upraven');
+  showSave('✓ entry updated');
 }
 
 function applyLogEntryData(d){
@@ -3078,17 +3079,17 @@ function applyLogEntryData(d){
 async function activateLogEntry(logId){
   const logs=getActiveLogs();if(!logs)return;
   const e=logs.find(x=>x.id===logId);
-  if(!e||!e.data){await customAlert('Tento zápis nemá uložená data přípravy (starší formát).');return;}
-  if(!await customConfirm('Načíst přípravu z tohoto zápisu?\nPřepíše teplotu, nádobu, přípravu a nálevy.','načíst'))return;
+  if(!e||!e.data){await customAlert('This entry has no saved brewing data (older format).');return;}
+  if(!await customConfirm('Load the brewing from this entry?\nIt will overwrite temperature, vessel, preparation and steeps.','load'))return;
   applyLogEntryData(e.data);
-  showSave('← příprava načtena ze zápisu');
+  showSave('← brewing loaded from entry');
 }
 
 let pendingLogTplData=null;
 function logEntryToTemplate(logId){
   const logs=getActiveLogs();if(!logs)return;
   const e=logs.find(x=>x.id===logId);
-  if(!e||!e.data){customAlert('Tento zápis nemá uložená data (starší formát).');return;}
+  if(!e||!e.data){customAlert('This entry has no saved data (older format).');return;}
   pendingLogTplData=e.data;
   // pre-fill modal name from tea name + date
   const tea=el('teaName').value.trim();
@@ -3103,12 +3104,12 @@ function renderLog(){
 
   if(logs===null){
     count.textContent='';
-    list.innerHTML='<div class="log-empty">Vyber čaj z knihovny — zápisky jsou vázané ke konkrétnímu záznamu.</div>';
+    list.innerHTML='<div class="log-empty">Select a tea from the library — log entries are tied to a specific record.</div>';
     return;
   }
-  count.textContent=logs.length?logs.length+(logs.length===1?' zápis':logs.length<5?' zápisky':' zápisků'):'';
+  count.textContent=logs.length?logs.length+(logs.length===1?' entry':logs.length<5?' entries':' entries'):'';
   if(!logs.length){
-    list.innerHTML='<div class="log-empty">Žádné zápisky. Klikni na ✎ pro první zápis.</div>';
+    list.innerHTML='<div class="log-empty">No log entries yet. Click ✎ to add the first one.</div>';
     return;
   }
   const _curData=activeLibId?getTemplateData():null;
@@ -3122,18 +3123,18 @@ function renderLog(){
           <span class="log-entry-date">${esc(e.date)}</span>
           <span class="log-entry-setup">${buildSetupHtml(e.data,_curData,e.setup,_teaName)}</span>
         </div>
-        <button class="log-entry-del" onclick="deleteLogEntry(${e.id})" title="smazat zápis">
+        <button class="log-entry-del" onclick="deleteLogEntry(${e.id})" title="delete entry">
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="log-entry-actions">
         ${hasData
-          ?`<button class="log-act-btn" onclick="openLogEdit(${e.id})" title="Upravit parametry přípravy">✎ upravit přípravu</button>
-        <button class="log-act-btn" onclick="activateLogEntry(${e.id})" title="Načíst přípravu z tohoto zápisu">← použít jako přípravu</button>
-        <button class="log-act-btn" onclick="logEntryToTemplate(${e.id})" title="Uložit přípravu jako šablonu">→ šablona</button>`
-          :`<span class="log-no-data">starší zápis — data přípravy nejsou k dispozici</span>`}
+          ?`<button class="log-act-btn" onclick="openLogEdit(${e.id})" title="Edit brewing parameters">✎ edit brewing</button>
+        <button class="log-act-btn" onclick="activateLogEntry(${e.id})" title="Load brewing from this entry">← use as brewing</button>
+        <button class="log-act-btn" onclick="logEntryToTemplate(${e.id})" title="Save brewing as template">→ template</button>`
+          :`<span class="log-no-data">older entry — brewing data not available</span>`}
       </div>
-      <textarea id="log-text-${e.id}" placeholder="Chuť, barva, co změnit příště…"
+      <textarea id="log-text-${e.id}" placeholder="Taste, color, what to change next time…"
         oninput="autoResizeTA(this);updateLogText(${e.id},this.value)">${esc(e.text)}</textarea>
     </div>`}).join('');
   list.querySelectorAll('textarea').forEach(autoResizeTA);
@@ -3152,11 +3153,11 @@ function init(){
   if(!restored)defaultSteeps.forEach(s=>addSteep(s,'',true));
   if(activeLibId){
     markSaved();
-    renderLibrary();   // session se obnovuje až po prvním renderu — podsvícení aktivního čaje
+    renderLibrary();   // session is restored only after the first render — highlight the active tea
     requestAnimationFrame(()=>{document.querySelector('.lib-item.active')?.scrollIntoView({block:'nearest'});});
   }
   renderSteeps();updateHeaderTeaName();updatePer100();updateCoolGuide();
-  if(restored)showSave('↓ obnoveno');
+  if(restored)showSave('↓ restored');
   let _undoPushT={};
   ['teaName','notes'].forEach(id=>el(id).addEventListener('input',()=>{clearTimeout(_undoPushT[id]);_undoPushT[id]=setTimeout(()=>{pushUndo();},1500);schedSave();updateHeaderTeaName();renderLibrary();}));
   el('teaCategory').addEventListener('change',()=>{pushUndo();schedSave();renderLibrary();});
@@ -3189,34 +3190,34 @@ document.addEventListener('keydown',e=>{
 <!-- Clear storage modal -->
 <div class="modal-bg" id="clearStorageModal">
   <div class="modal" style="max-width:360px">
-    <h2>smazat data</h2>
-    <p style="font-size:.82rem;color:var(--muted)">Vyber co chceš smazat. Akce je nevratná.</p>
+    <h2>delete data</h2>
+    <p style="font-size:.82rem;color:var(--muted)">Select what you want to delete. This action cannot be undone.</p>
     <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
       <label class="modal-item">
         <input type="checkbox" id="clr-session" checked>
-        <span>aktuální session</span>
+        <span>current session</span>
       </label>
       <label class="modal-item">
         <input type="checkbox" id="clr-library" checked>
-        <span>knihovna čajů (včetně zápisků)</span>
+        <span>tea library (including log entries)</span>
       </label>
       <label class="modal-item">
         <input type="checkbox" id="clr-templates" checked>
-        <span>šablony</span>
+        <span>templates</span>
       </label>
       <label class="modal-item">
         <input type="checkbox" id="clr-archive" checked>
-        <span>archiv</span>
+        <span>archive</span>
       </label>
       <label class="modal-item">
         <input type="checkbox" id="clr-appearance">
-        <span>nastavení vzhledu (písmo, tmavý režim)</span>
+        <span>appearance settings (font, dark mode)</span>
       </label>
     </div>
     <div class="modal-row" style="margin-top:.25rem">
-      <button class="modal-btn" onclick="closeModal('clearStorageModal')">zrušit</button>
-      <button class="modal-btn" onclick="toggleAllClear()">vybrat/odznačit vše</button>
-      <button class="modal-btn primary" onclick="doSelectiveClear()">smazat</button>
+      <button class="modal-btn" onclick="closeModal('clearStorageModal')">cancel</button>
+      <button class="modal-btn" onclick="toggleAllClear()">select/deselect all</button>
+      <button class="modal-btn primary" onclick="doSelectiveClear()">delete</button>
     </div>
   </div>
 </div>
@@ -3226,7 +3227,7 @@ document.addEventListener('keydown',e=>{
   <div class="modal" style="max-width:340px">
     <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
     <div class="modal-row" style="margin-top:.25rem">
-      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">zrušit</button>
+      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
       <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
     </div>
   </div>
@@ -3237,9 +3238,9 @@ document.addEventListener('keydown',e=>{
   <div class="modal" style="max-width:340px">
     <p id="libDelMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
     <div class="modal-row" style="margin-top:.25rem;flex-wrap:wrap">
-      <button class="modal-btn" onclick="_libDelResolve(null)">zrušit</button>
-      <button class="modal-btn" onclick="_libDelResolve('archive')">archivovat</button>
-      <button class="modal-btn danger" onclick="_libDelResolve('delete')">smazat</button>
+      <button class="modal-btn" onclick="_libDelResolve(null)">cancel</button>
+      <button class="modal-btn" onclick="_libDelResolve('archive')">archive</button>
+      <button class="modal-btn danger" onclick="_libDelResolve('delete')">delete</button>
     </div>
   </div>
 </div>
@@ -3247,13 +3248,13 @@ document.addEventListener('keydown',e=>{
 <!-- Log text export modal -->
 <div class="modal-bg" id="logExportModal">
   <div class="modal" style="max-width:520px">
-    <h2 id="logExportTitle">Zápisky</h2>
-    <p style="font-size:.78rem;color:var(--muted)" id="logExportNote">Zkopíruj nebo stáhni zápisky jako prostý text.</p>
+    <h2 id="logExportTitle">Log</h2>
+    <p style="font-size:.78rem;color:var(--muted)" id="logExportNote">Copy or download the log as plain text.</p>
     <textarea id="logExportText" readonly style="font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.65;min-height:200px;background:var(--off);border:var(--b);resize:vertical"></textarea>
     <div class="modal-row">
-      <button class="modal-btn primary" onclick="copyLogText()">📋 kopírovat</button>
-      <button class="modal-btn" onclick="downloadLogText()">↓ stáhnout .txt</button>
-      <button class="modal-btn" onclick="closeModal('logExportModal')">zavřít</button>
+      <button class="modal-btn primary" onclick="copyLogText()">📋 copy</button>
+      <button class="modal-btn" onclick="downloadLogText()">↓ download .txt</button>
+      <button class="modal-btn" onclick="closeModal('logExportModal')">close</button>
     </div>
   </div>
 </div>
@@ -3261,13 +3262,13 @@ document.addEventListener('keydown',e=>{
 <!-- Multi-tea log export modal -->
 <div class="modal-bg" id="multiLogModal">
   <div class="modal" style="max-width:480px">
-    <h2>Export zápisků — více čajů</h2>
-    <p style="font-size:.78rem;color:var(--muted)" id="multiLogNote">Vyber čaje jejichž zápisky chceš exportovat.</p>
+    <h2>Log export — multiple teas</h2>
+    <p style="font-size:.78rem;color:var(--muted)" id="multiLogNote">Select the teas whose log you want to export.</p>
     <div class="modal-list" id="multiLogList"></div>
     <div class="modal-row" style="margin-top:.4rem">
-      <button class="modal-btn" onclick="selectAllMultiLog()">vybrat vše</button>
-      <button class="modal-btn" onclick="closeModal('multiLogModal')">zrušit</button>
-      <button class="modal-btn primary" onclick="generateMultiLog()">zobrazit text</button>
+      <button class="modal-btn" onclick="selectAllMultiLog()">select all</button>
+      <button class="modal-btn" onclick="closeModal('multiLogModal')">cancel</button>
+      <button class="modal-btn primary" onclick="generateMultiLog()">show text</button>
     </div>
   </div>
 </div>
@@ -3275,48 +3276,48 @@ document.addEventListener('keydown',e=>{
 <!-- Gist settings modal -->
 <div class="modal-bg" id="jsonbinModal">
   <div class="modal" style="max-width:400px;gap:.65rem">
-    <h2>Nastavení Gist synchronizace</h2>
-    <p>Zadej svůj GitHub token a Gist ID. Data se ukládají pouze v tomto prohlížeči.</p>
-    <p style="font-size:.78rem;color:var(--muted)">Token vytvoříš na <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). Gisty najdeš na <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
+    <h2>Gist sync settings</h2>
+    <p>Enter your GitHub token and Gist ID. Data is stored only in this browser.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Create a token at <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). You can find your gists at <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
     <div class="jb-field">
       <label>GitHub Token</label>
       <input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off">
     </div>
     <div class="jb-field">
       <label>Gist ID</label>
-      <input type="text" id="jbIdInput" placeholder="abc123def456… (prázdné = vytvoří se)" spellcheck="false" autocomplete="off">
+      <input type="text" id="jbIdInput" placeholder="abc123def456… (empty = will be created)" spellcheck="false" autocomplete="off">
     </div>
     <div class="modal-row" id="gistHistoryRow" style="display:none">
-      <button class="btn-io" onclick="openGistHistory()">⏱ historie verzí</button>
+      <button class="btn-io" onclick="openGistHistory()">⏱ version history</button>
     </div>
     <div class="modal-row" id="syncLinkRow" style="display:none">
-      <button class="btn-io" onclick="copySyncLink()" title="vygeneruje odkaz s Gist ID — otevřením na novém zařízení se sync nastaví sám">🔗 odkaz pro nové zařízení</button>
+      <button class="btn-io" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
-      <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
-      <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="saveJsonBinSettings()">save</button>
+      <button class="modal-btn" onclick="closeModal('jsonbinModal')">cancel</button>
     </div>
   </div>
 </div>
 
 <script>
-/* ── GITHUB GIST SYNC + AUTO-SYNC (tichý obousměrný LWW) ───
-   Pravidla a pasti viz CLAUDE.md → "Auto-sync (tichý obousměrný LWW)".
-   Data jedou v jednom privátním gistu (soubor cajovy-sync.json).
-   Kolekce: čaje (library) + šablony (templates) = LWW dle id; archiv = union (append-only). */
+/* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
+   Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
+   Data lives in a single private gist (file cajovy-sync.json).
+   Collections: teas (library) + templates = LWW by id; archive = union (append-only). */
 (function(){
   const GHTOKEN='cajovy-gist-token';        // GitHub token (scope gist)
-  const GISTID='cajovy-gist-id';            // Gist ID (prázdné = sync ho při prvním pushi vytvoří)
+  const GISTID='cajovy-gist-id';            // Gist ID (empty = sync will create it on the first push)
   const ASKEY='cajovy-autosync';
   const GIST_API='https://api.github.com/gists';
-  const GIST_FILE='cajovy-sync.json';       // jméno souboru uvnitř gistu (data = JSON string)
+  const GIST_FILE='cajovy-sync.json';       // file name inside the gist (data = JSON string)
   const PUSH_MIN_INTERVAL=4000;             // max 1 push / 4 s
   let pushTimer=null,lastPushTs=0,pushing=false,pushAgain=false,stateTimer=null;
-  let applyingRemote=false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
+  let applyingRemote=false;                 // true during a silent merge → suppresses the save-hook (no recursion)
 
-  // Jednorázová migrace ze starého JSONBin syncu → Gist sloty. JSONBin klíč ≠ GitHub token a
-  // Bin ID ≠ Gist ID — hodnoty se jen přesunou do správného slotu, uživatel je musí v ⚙ ručně
-  // přepsat; neplatné Gist ID se samo zotaví (404 → založí nový gist).
+  // One-time migration from the old JSONBin sync → Gist slots. A JSONBin key ≠ GitHub token and
+  // Bin ID ≠ Gist ID — the values are only moved to the correct slot; the user must overwrite them
+  // manually in ⚙; an invalid Gist ID self-heals (404 → creates a new gist).
   (function migrateJsonbinToGist(){
     try{
       const move=(o,n)=>{const v=localStorage.getItem(o);if(v==null)return;if(localStorage.getItem(n)==null)localStorage.setItem(n,v);localStorage.removeItem(o);};
@@ -3326,20 +3327,20 @@ document.addEventListener('keydown',e=>{
   })();
 
   function autosyncEnabled(){try{return !!localStorage.getItem(ASKEY);}catch(e){return false;}}
-  function hasToken(){try{return !!localStorage.getItem(GHTOKEN);}catch(e){return false;}}   // stačí token → gist si sync vytvoří sám
+  function hasToken(){try{return !!localStorage.getItem(GHTOKEN);}catch(e){return false;}}   // a token is enough → sync creates the gist itself
 
-  /* ── TOMBSTONES (propagace mazání mezi zařízeními) ── */
+  /* ── TOMBSTONES (propagation of deletions between devices) ── */
   const TOMB_KEY='cajovy-tombstones';       // { "<ns>:<id>": deletedAtTs }
-  const KNOWN_KEY='cajovy-syncknown';       // [ "<ns>:<id>", … ] stav z minulé reconcile
-  const TOMB_TTL=90*864e5;                   // náhrobky starší než 90 dní zahodit
+  const KNOWN_KEY='cajovy-syncknown';       // [ "<ns>:<id>", … ] state from the previous reconcile
+  const TOMB_TTL=90*864e5;                   // drop tombstones older than 90 days
   let tombstones={};
-  let knownIds=null;                         // null = ještě nesledováno
+  let knownIds=null;                         // null = not tracked yet
   function loadTombstones(){try{tombstones=JSON.parse(localStorage.getItem(TOMB_KEY)||'{}')||{};}catch(e){tombstones={};}}
   function saveTombstones(){try{localStorage.setItem(TOMB_KEY,JSON.stringify(tombstones));}catch(e){}}
   function loadKnownIds(){try{const s=localStorage.getItem(KNOWN_KEY);knownIds=s?new Set(JSON.parse(s)):null;}catch(e){knownIds=null;}}
   function saveKnownIds(){try{localStorage.setItem(KNOWN_KEY,JSON.stringify([...(knownIds||[])]));}catch(e){}}
   function isTombstoned(key){return !!tombstones[key];}
-  // množina "<ns>:<id>" všech aktuálně existujících položek
+  // set of "<ns>:<id>" of all currently existing items
   function currentKeySet(){
     const s=new Set();
     library.forEach(e=>{if(e&&e.id!=null)s.add('lib:'+e.id);});
@@ -3351,11 +3352,11 @@ document.addEventListener('keydown',e=>{
     const cutoff=Date.now()-TOMB_TTL;
     Object.keys(tombstones).forEach(k=>{if(!(tombstones[k]>cutoff))delete tombstones[k];});
   }
-  // diff aktuálního stavu proti poslednímu známému → mazání zapíše jako náhrobek
+  // diff the current state against the last known → deletions are recorded as tombstones
   function reconcileTombstones(){
     const cur=currentKeySet(),now=Date.now();
     if(knownIds)knownIds.forEach(k=>{if(!cur.has(k))tombstones[k]=now;});
-    cur.forEach(k=>{if(tombstones[k])delete tombstones[k];});   // existuje ⇒ žije
+    cur.forEach(k=>{if(tombstones[k])delete tombstones[k];});   // exists ⇒ alive
     knownIds=cur;
     pruneTombstones();
     saveKnownIds();saveTombstones();
@@ -3364,13 +3365,13 @@ document.addEventListener('keydown',e=>{
     if(!cloudTomb||typeof cloudTomb!=='object')return;
     Object.entries(cloudTomb).forEach(([k,ts])=>{const t=+ts||0;if(!tombstones[k]||t>tombstones[k])tombstones[k]=t;});
   }
-  // smaž lokálně append-only kolekce, které mají náhrobek (LWW kolekce řeší lwwMerge)
+  // locally delete append-only collections that have a tombstone (LWW collections are handled by lwwMerge)
   function applyTombstones(){
     let removed=0;
     archive=archive.filter(x=>{if(tombstones['arc:'+x.id]){removed++;return false;}return true;});
     return removed;
   }
-  // souhrnný podpis stavu (vč. mt a náhrobků) pro detekci rozdílu cloud↔local
+  // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
   function sigOf(teas,tpls,arch,tomb){
     const idS=arr=>arr.map(x=>String((x&&x.id)||'')+'@'+((x&&x.mt)||0)).sort().join(',')+':'+arr.length;
     const arcS=arr=>arr.map(x=>String((x&&x.id)||'')).sort().join(',')+':'+arr.length;
@@ -3380,13 +3381,13 @@ document.addEventListener('keydown',e=>{
   function localStateSig(){return sigOf(library,templates,archive,tombstones);}
   function cloudStateSig(r){return sigOf(r.teas||r.items||[],r.templates||[],r.archive||[],r.tombstones||{});}
 
-  // tlačítko v toolbaru = zároveň stavový indikátor
+  // the toolbar button is also a status indicator
   function updateAutoSyncBtn(){
     const b=el('autoSyncBtn');if(!b)return;
     const on=autosyncEnabled();
     b.classList.toggle('on',on);
     if(!b.classList.contains('syncing'))b.textContent='☁';
-    b.title=on?'automatická synchronizace zapnutá — klikni pro vypnutí':'zapnout automatickou synchronizaci (Gist)';
+    b.title=on?'automatic sync enabled — click to disable':'enable automatic sync (Gist)';
   }
   function setSyncState(state){
     const b=el('autoSyncBtn');if(!b)return;
@@ -3401,23 +3402,23 @@ document.addEventListener('keydown',e=>{
     const on=!autosyncEnabled();
     try{if(on)localStorage.setItem(ASKEY,'1');else localStorage.removeItem(ASKEY);}catch(e){}
     updateAutoSyncBtn();
-    if(on&&!hasToken()){showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)',4500);return;}
+    if(on&&!hasToken()){showStatusMsg('⚠ set a GitHub token via ⚙ first (the gist will be created automatically)',4500);return;}
     if(on){
-      reconcileTombstones();   // baseline náhrobků
-      // PULL → merge → push (přes checkCloudOnStartup): přímý push by na novém zařízení
-      // přepsal gist prázdným lokálním stavem dřív, než se stihla stáhnout cloud data
+      reconcileTombstones();   // tombstone baseline
+      // PULL → merge → push (via checkCloudOnStartup): a direct push on a new device would
+      // overwrite the gist with an empty local state before the cloud data is downloaded
       try{sessionStorage.removeItem('cajovy-cloud-checked');}catch(e){}
       checkCloudOnStartup();
     }
   }
 
-  // autosync nahrává celý stav + náhrobky (ne výběr jako doCloudUpload)
+  // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload(){
     return {v:1,teas:library,templates:templates,archive:archive,tombstones:tombstones};
   }
   function scheduleAutoPush(){
     if(!autosyncEnabled()||!hasToken())return;
-    if(pushTimer)return;        // už naplánováno → coalesce
+    if(pushTimer)return;        // already scheduled → coalesce
     const wait=Math.max(0,PUSH_MIN_INTERVAL-(Date.now()-lastPushTs));
     pushTimer=setTimeout(()=>{pushTimer=null;doAutoPush();},wait);
   }
@@ -3427,12 +3428,12 @@ document.addEventListener('keydown',e=>{
     const token=localStorage.getItem(GHTOKEN);
     if(!token)return;
     let gistId=localStorage.getItem(GISTID);
-    let creating=!gistId;        // gist ještě neexistuje → autosync ho vytvoří (POST)
+    let creating=!gistId;        // the gist does not exist yet → autosync creates it (POST)
     pushing=true;setSyncState('syncing');
     try{
       const payload=buildAutoPayload();
       let res=await fetch(gistUrl(gistId),gistWriteInit(token,creating,payload));
-      if(!creating&&res.status===404){   // migrovaný/smazaný gist → založ nový
+      if(!creating&&res.status===404){   // migrated/deleted gist → create a new one
         creating=true;gistId='';
         res=await fetch(gistUrl(''),gistWriteInit(token,true,payload));
       }
@@ -3440,7 +3441,7 @@ document.addEventListener('keydown',e=>{
       if(creating){const json=await res.json().catch(()=>null);const newId=json&&json.id;if(newId){try{localStorage.setItem(GISTID,newId);}catch(e){}}}
       lastPushTs=Date.now();setSyncState('ok');
     }catch(e){
-      console.warn('[autosync] push selhal:',(e&&e.message)?e.message:e);
+      console.warn('[autosync] push failed:',(e&&e.message)?e.message:e);
       setSyncState('err');
     }finally{
       pushing=false;
@@ -3448,8 +3449,8 @@ document.addEventListener('keydown',e=>{
     }
   }
 
-  // LWW slučování klíčovaného pole: novější mt vyhrává; mazání vyhraje jen pokud je novější
-  // než poslední editace (editace po smazání = vzkříšení). Vrací nové pole + počty.
+  // LWW merge of a keyed array: the newer mt wins; a deletion wins only if it is newer
+  // than the last edit (an edit after deletion = resurrection). Returns a new array + counts.
   function lwwMerge(localArr,cloudArr,ns,keyOf,normalize){
     const byKey=new Map();
     (localArr||[]).forEach(x=>{if(x&&keyOf(x)!=null)byKey.set(String(keyOf(x)),x);});
@@ -3467,27 +3468,27 @@ document.addEventListener('keydown',e=>{
     for(const [k,x] of byKey){
       const tomb=tombstones[ns+':'+k]||0;
       if(tomb&&tomb>=(+x.mt||0)){byKey.delete(k);removed++;}
-      else if(tomb)delete tombstones[ns+':'+k];   // lokální editace novější než smazání → ponech, zahoď náhrobek
+      else if(tomb)delete tombstones[ns+':'+k];   // local edit newer than the deletion → keep it, drop the tombstone
     }
     return {arr:[...byKey.values()],added,updated,removed};
   }
 
-  // tichý obousměrný merge cloud → local
+  // silent two-way merge cloud → local
   function autoImportSilent(record){
     if(!record||typeof record!=='object')return;
     applyingRemote=true;
     try{
       mergeCloudTombstones(record.tombstones);
-      let removed=applyTombstones();           // append-only kolekce (archiv)
+      let removed=applyTombstones();           // append-only collections (archive)
       let added=0,updated=0;
       const beforeActive=activeLibId?JSON.stringify((library.find(e=>e.id===activeLibId)||{}).data||null):null;
-      // čaje — LWW dle id
+      // teas — LWW by id
       const libR=lwwMerge(library,(record.teas||record.items||[]),'lib',x=>x.id,c=>c);
       library=libR.arr;added+=libR.added;updated+=libR.updated;removed+=libR.removed;
-      // šablony — LWW dle id
+      // templates — LWW by id
       const tplR=lwwMerge(templates,(record.templates||[]),'tpl',x=>x.id,c=>c);
       templates=tplR.arr;added+=tplR.added;updated+=tplR.updated;removed+=tplR.removed;
-      // archiv — jen doplnit chybějící (append-only)
+      // archive — only add missing (append-only)
       const arcIds=new Set(archive.map(x=>String(x.id)));
       (record.archive||[]).forEach(it=>{
         if(it&&it.id!=null&&!arcIds.has(String(it.id))&&!isTombstoned('arc:'+it.id)){archive.push(it);arcIds.add(String(it.id));added++;}
@@ -3498,7 +3499,7 @@ document.addEventListener('keydown',e=>{
         if(typeof renderLibrary==='function')renderLibrary();
         if(typeof renderTemplates==='function')renderTemplates();
         if(typeof renderArchive==='function')renderArchive();
-        // pokud merge změnil/smazal právě editovaný čaj, promítni to do formuláře (jinak ho příští flush přepíše starou verzí)
+        // if the merge changed/deleted the currently edited tea, reflect it in the form (otherwise the next flush overwrites it with the old version)
         if(activeLibId){
           const cur=library.find(e=>e.id===activeLibId);
           if(!cur){activeLibId=null;savedSnapshot=null;if(typeof renderLog==='function')renderLog();}
@@ -3510,40 +3511,40 @@ document.addEventListener('keydown',e=>{
         if(removed)parts.push('−'+removed);
         showStatusMsg('☁ sync '+parts.join(' '),3000);
       }
-      // srovnej baseline na nový stav a ulož náhrobky
+      // align the baseline to the new state and save tombstones
       knownIds=currentKeySet();
       pruneTombstones();
       saveKnownIds();saveTombstones();
     }finally{applyingRemote=false;}
   }
 
-  // hook po každé perzistenci synchronizované kolekce: zaznamenej mazání (náhrobky) a naplánuj push
+  // hook after each persistence of a synced collection: record deletions (tombstones) and schedule a push
   function autoSyncOnSave(){
-    if(applyingRemote)return;      // změny z mergeu nesmí spustit reconcile/push
-    if(!hasToken())return;         // bez tokenu není co sledovat (gist si sync vytvoří sám)
+    if(applyingRemote)return;      // changes from the merge must not trigger reconcile/push
+    if(!hasToken())return;         // without a token there is nothing to track (sync creates the gist itself)
     reconcileTombstones();
     if(autosyncEnabled())scheduleAutoPush();
   }
 
-  // tichý PULL (focus / visibilitychange / interval): stáhni cloud a sluč, pokud se liší — bez spinneru
+  // silent PULL (focus / visibilitychange / interval): download the cloud and merge if it differs — no spinner
   let lastPullTs=0;
-  const PULL_MIN_INTERVAL=30000;            // max 1 pull / 30 s (focus + visibility se spouští spolu)
+  const PULL_MIN_INTERVAL=30000;            // max 1 pull / 30 s (focus + visibility fire together)
   async function silentPull(){
     if(Date.now()-lastPullTs<PULL_MIN_INTERVAL)return;
     lastPullTs=Date.now();
     const token=localStorage.getItem(GHTOKEN),gistId=localStorage.getItem(GISTID);
-    if(!token||!gistId)return;               // bez tokenu i Gist ID není odkud stahovat
-    if(pushing)return;                       // probíhá push → nech ho dokončit
+    if(!token||!gistId)return;               // without a token and Gist ID there is nowhere to download from
+    if(pushing)return;                       // a push is in progress → let it finish
     try{
       const res=await gistGet(gistId,token);if(!res.ok)return;
       let record=await gistRecord(res);
       if(typeof record!=='object'||record===null)return;
-      if('cajovy-v3-library' in record){     // backward compat: starý formát raw localStorage stringů
+      if('cajovy-v3-library' in record){     // backward compat: old format of raw localStorage strings
         record={v:1,teas:JSON.parse(record['cajovy-v3-library']||'[]'),templates:JSON.parse(record['cajovy-v3-templates']||'[]'),archive:JSON.parse(record['cajovy-v3-archive']||'[]')};
       }
       if(localStateSig()!==cloudStateSig(record))autoImportSilent(record);
       if(autosyncEnabled())scheduleAutoPush();
-    }catch(e){console.warn('[silentPull] selhal:',(e&&e.message)?e.message:e);}
+    }catch(e){console.warn('[silentPull] failed:',(e&&e.message)?e.message:e);}
   }
 
   function openJsonBinSettings(){
@@ -3564,40 +3565,40 @@ document.addEventListener('keydown',e=>{
       if(token) localStorage.setItem(GHTOKEN,token); else localStorage.removeItem(GHTOKEN);
       if(id) localStorage.setItem(GISTID,id); else localStorage.removeItem(GISTID);
     }catch(e){}
-    if(idChanged){   // nově zadané ID → rovnou stáhni cloud (jinak až po reloadu)
+    if(idChanged){   // newly entered ID → download the cloud right away (otherwise only after reload)
       try{sessionStorage.removeItem('cajovy-cloud-checked');}catch(e){}
       try{checkCloudOnStartup();}catch(e){}
     }
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg){showStatusMsg(msg,3500);}
-  // odkaz pro nové zařízení: Gist ID (volitelně token + autosync) v URL hashi —
-  // hash se na server neposílá a příjemce ho po načtení hned smaže z adresy i historie
+  // link for a new device: Gist ID (optionally token + autosync) in the URL hash —
+  // the hash is not sent to the server and the recipient removes it from the address and history right after load
   async function copySyncLink(){
     const gistId=localStorage.getItem(GISTID)||'';
-    if(!gistId){showSyncTooltip('⚠ nejdřív ulož Gist ID');return;}
+    if(!gistId){showSyncTooltip('⚠ save a Gist ID first');return;}
     const token=localStorage.getItem(GHTOKEN)||'';
     let withTok=false;
-    if(token) withTok=await customConfirm('Přibalit do odkazu i GitHub token? Odkaz pak zpřístupní všechna data — posílej jen mezi svá zařízení. Bez tokenu ho na novém zařízení zadáš ručně.','přibalit token');
+    if(token) withTok=await customConfirm('Include the GitHub token in the link too? The link will then expose all data — only send it between your own devices. Without the token you will enter it manually on the new device.','include token');
     const p=new URLSearchParams();
     p.set('gid',gistId);
     if(withTok) p.set('tok',token);
     if(autosyncEnabled()) p.set('as','1');
     const base=/github\.io$/.test(location.hostname)?location.origin+location.pathname:'https://lordkrabaty.github.io/webapps/tea-app/';
     const url=base+'#'+p.toString();
-    try{await navigator.clipboard.writeText(url);showSyncTooltip('🔗 odkaz zkopírován — otevři ho na novém zařízení');}
-    catch(e){   // clipboard API chybí (http / starý prohlížeč) → skrytá textarea, jinak odkaz aspoň ukaž
+    try{await navigator.clipboard.writeText(url);showSyncTooltip('🔗 link copied — open it on the new device');}
+    catch(e){   // clipboard API missing (http / old browser) → hidden textarea, otherwise at least show the link
       const ta=document.createElement('textarea');
       ta.value=url;ta.style.position='fixed';ta.style.opacity='0';
       document.body.appendChild(ta);ta.select();
       let ok=false;try{ok=document.execCommand('copy');}catch(e2){}
       document.body.removeChild(ta);
-      if(ok) showSyncTooltip('🔗 odkaz zkopírován — otevři ho na novém zařízení');
-      else await customAlert('Zkopíruj odkaz pro nové zařízení: '+url);
+      if(ok) showSyncTooltip('🔗 link copied — open it on the new device');
+      else await customAlert('Copy the link for the new device: '+url);
     }
   }
   function isCorsErr(e){return(e instanceof TypeError)&&/fetch/i.test(e.message);}
-  // hlavičky: čtení (GET) nepotřebuje Content-Type, zápis (POST/PATCH) ano
+  // headers: reading (GET) does not need Content-Type, writing (POST/PATCH) does
   function ghHeaders(token,write){
     const h={'Accept':'application/vnd.github+json'};
     if(token)h['Authorization']='Bearer '+token;
@@ -3605,71 +3606,71 @@ document.addEventListener('keydown',e=>{
     return h;
   }
   function gistUrl(gistId){return gistId?GIST_API+'/'+gistId:GIST_API;}
-  // fetch-init pro zápis: PATCH (existující) přepíše obsah souboru; POST (nový) navíc nastaví popis + private
+  // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private
   function gistWriteInit(token,creating,payload){
     const files={};files[GIST_FILE]={content:JSON.stringify(payload)};
     const body=creating?{description:'cajovy-sync',public:false,files}:{files};
     return {method:creating?'POST':'PATCH',mode:'cors',credentials:'omit',headers:ghHeaders(token,true),body:JSON.stringify(body)};
   }
-  // GET gistu — vrací surovou Response (volající kontroluje res.ok)
+  // GET the gist — returns the raw Response (the caller checks res.ok)
   async function gistGet(gistId,token){
     return fetch(gistUrl(gistId),{mode:'cors',credentials:'omit',headers:ghHeaders(token,false)});
   }
-  // z odpovědi GET vytáhne uložená data (obsah GIST_FILE) jako objekt; null = nejde přečíst
+  // extracts the stored data (GIST_FILE content) from the GET response as an object; null = cannot read
   async function gistRecord(res){
     let json;try{json=await res.json();}catch(e){return null;}
     const file=json&&json.files&&json.files[GIST_FILE];
     if(!file)return null;
     let content=file.content;
-    if(file.truncated&&file.raw_url){   // GitHub ořízne obsah > ~1 MB → dotáhni přes raw_url
+    if(file.truncated&&file.raw_url){   // GitHub truncates content > ~1 MB → fetch it via raw_url
       try{content=await(await fetch(file.raw_url,{mode:'cors',credentials:'omit'})).text();}catch(e){}
     }
     if(!content)return null;
     try{return JSON.parse(content);}catch(e){return null;}
   }
 
-  /* ↑ spouštěno tlačítkem v export modalu — bere výběr ze stejných Sets jako doExport() */
+  /* ↑ triggered by the export modal button — takes the selection from the same Sets as doExport() */
   async function doCloudUpload(){
     const token=localStorage.getItem(GHTOKEN);
-    if(!token){showSyncTooltip('⚠ chybí GitHub token — otevři ⚙');return;}
+    if(!token){showSyncTooltip('⚠ missing GitHub token — open ⚙');return;}
     let gistId=localStorage.getItem(GISTID);
     const items=library.filter(e=>exportSelected.has(e.id));
     const tpls=templates.filter(t=>exportTplSelected.has(t.id));
     const archItems=archive.filter(e=>exportArchSelected.has(e.id));
-    if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nic není vybráno.');return;}
+    if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
     const payload={v:1,teas:items,templates:tpls,archive:archItems};
     closeModal('exportModal');
-    showSyncTooltip('↑ nahrávám…');
+    showSyncTooltip('↑ uploading…');
     try{
       let creating=!gistId;
       let res=await fetch(gistUrl(gistId),gistWriteInit(token,creating,payload));
-      if(!creating&&res.status===404){   // migrovaný/smazaný gist → založ nový
+      if(!creating&&res.status===404){   // migrated/deleted gist → create a new one
         creating=true;gistId='';
         res=await fetch(gistUrl(''),gistWriteInit(token,true,payload));
       }
       if(!res.ok){const e=await res.text();throw new Error('HTTP '+res.status+': '+e.slice(0,120));}
       if(creating){const json=await res.json().catch(()=>null);const newId=json&&json.id;if(newId) localStorage.setItem(GISTID,newId);}
-      const t=new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-      showSyncTooltip('↑ nahráno '+t+' ('+items.length+'č '+tpls.length+'š '+archItems.length+'a)');
+      const t=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      showSyncTooltip('↑ uploaded '+t+' ('+items.length+'t '+tpls.length+'tpl '+archItems.length+'a)');
     }catch(e){
-      showSyncTooltip(isCorsErr(e)?'⚠ CORS – otevři přes localhost':'⚠ '+e.message.slice(0,55));
+      showSyncTooltip(isCorsErr(e)?'⚠ CORS – open via localhost':'⚠ '+e.message.slice(0,55));
     }
   }
 
-  /* ↓ stáhne z gistu a otevře import modal s plným merge/duplicate flow */
+  /* ↓ downloads from the gist and opens the import modal with the full merge/duplicate flow */
   async function syncDownload(){
     const gistId=localStorage.getItem(GISTID);
-    if(!gistId){showSyncTooltip('⚠ chybí Gist ID — otevři ⚙');return;}
+    if(!gistId){showSyncTooltip('⚠ missing Gist ID — open ⚙');return;}
     const btn=el('syncDownBtn');
     btn.disabled=true;
-    showSyncTooltip('↓ stahuji…');
+    showSyncTooltip('↓ downloading…');
     try{
       const token=localStorage.getItem(GHTOKEN);
       const res=await gistGet(gistId,token);
       if(!res.ok){const e=await res.text();throw new Error('HTTP '+res.status+': '+e.slice(0,120));}
       let record=await gistRecord(res);
-      if(typeof record!=='object'||record===null) throw new Error('Neplatná data v gistu');
-      // Backward compat: starý formát ukládal raw localStorage stringy pod klíči cajovy-v3-*
+      if(typeof record!=='object'||record===null) throw new Error('Invalid data in the gist');
+      // Backward compat: the old format stored raw localStorage strings under cajovy-v3-* keys
       if('cajovy-v3-library' in record){
         record={
           v:1,
@@ -3679,23 +3680,23 @@ document.addEventListener('keydown',e=>{
         };
       }
       if(!record.teas&&!record.templates&&!record.archive){
-        throw new Error('Gist neobsahuje čaje ani šablony');
+        throw new Error('The gist contains no teas or templates');
       }
-      // Otevřu import modal a naplním ho stažená daty — reuse celý merge/duplicate flow
+      // Open the import modal and fill it with the downloaded data — reuse the whole merge/duplicate flow
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent='Import z Gistu';
+      el('importModal').querySelector('h2').textContent='Import from Gist';
       parseImportJson(JSON.stringify(record));
-      showSyncTooltip('↓ staženo — zkontroluj výběr a importuj');
+      showSyncTooltip('↓ downloaded — check the selection and import');
     }catch(e){
-      showSyncTooltip(isCorsErr(e)?'⚠ CORS – otevři přes localhost':'⚠ '+e.message.slice(0,55));
+      showSyncTooltip(isCorsErr(e)?'⚠ CORS – open via localhost':'⚠ '+e.message.slice(0,55));
     }finally{btn.disabled=false;}
   }
 
   async function checkCloudOnStartup(){
     const gistId=localStorage.getItem(GISTID);
     if(!gistId){
-      // gist ještě neexistuje → při zapnutém autosyncu a existujících datech ho rovnou založ
+      // the gist does not exist yet → with autosync on and existing data, create it right away
       if(autosyncEnabled()&&hasToken()&&(library.length||templates.length||archive.length)) scheduleAutoPush();
       return;
     }
@@ -3703,7 +3704,7 @@ document.addEventListener('keydown',e=>{
     sessionStorage.setItem('cajovy-cloud-checked','1');
     const btn=el('syncDownBtn');
     const origTitle=btn.title;
-    btn.disabled=true;btn.title='kontroluji cloud…';
+    btn.disabled=true;btn.title='checking cloud…';
     try{
       const token=localStorage.getItem(GHTOKEN);
       const res=await gistGet(gistId,token);
@@ -3718,12 +3719,12 @@ document.addEventListener('keydown',e=>{
           archive:JSON.parse(record['cajovy-v3-archive']||'[]')
         };
       }
-      // AUTOSYNC: tichý obousměrný merge (vč. mazání i editací)
+      // AUTOSYNC: silent two-way merge (incl. deletions and edits)
       if(autosyncEnabled()){
         if(localStateSig()!==cloudStateSig(record)){autoImportSilent(record);scheduleAutoPush();}
         return;
       }
-      // jinak (autosync vypnutý): nabídni ruční import, pokud se data liší
+      // otherwise (autosync off): offer a manual import if the data differs
       const cloudTeas=record.teas||[];
       const cloudTpls=record.templates||[];
       const cloudArch=record.archive||[];
@@ -3733,25 +3734,25 @@ document.addEventListener('keydown',e=>{
       if(localSig===cloudSig) return;
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent='Import z Gistu';
+      el('importModal').querySelector('h2').textContent='Import from Gist';
       parseImportJson(JSON.stringify(record));
-      showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
+      showSyncTooltip('☁ cloud has different data — check the selection');
     }catch(e){}finally{
       btn.disabled=false;btn.title=origTitle;
     }
   }
 
-  /* ── HISTORIE VERZÍ (Gist revize) ───
-     Načte history[] gistu, umožní náhled (přes import modal) i obnovu
-     (přes standardní LWW merge autoImportSilent + push). */
-  let gistRevs=[];   // posledních ≤20 revizí z openGistHistory (index = pořadí v seznamu)
+  /* ── VERSION HISTORY (Gist revisions) ───
+     Loads the gist history[], allows preview (via the import modal) and restore
+     (via the standard LWW merge autoImportSilent + push). */
+  let gistRevs=[];   // the last ≤20 revisions from openGistHistory (index = order in the list)
   function historyGistId(){try{return localStorage.getItem(GISTID);}catch(e){return null;}}
   async function openGistHistory(){
     const token=localStorage.getItem(GHTOKEN),gistId=historyGistId();
-    if(!token||!gistId){showStatusMsg('⚠ chybí Gist token nebo ID',3000);return;}
+    if(!token||!gistId){showStatusMsg('⚠ missing Gist token or ID',3000);return;}
     closeModal('jsonbinModal');
     gistRevs=[];
-    el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">načítám historii…</p>';
+    el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
     el('gistHistoryModal').classList.add('open');
     try{
       const res=await gistGet(gistId,token);
@@ -3760,20 +3761,20 @@ document.addEventListener('keydown',e=>{
       gistRevs=((json&&json.history)||[]).slice(0,100);
       renderGistHistory();
     }catch(e){
-      el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
+      el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
   function renderGistHistory(){
-    if(!gistRevs.length){el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Žádná historie k dispozici</p>';return;}
+    if(!gistRevs.length){el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">No history available</p>';return;}
     el('gistHistoryList').innerHTML=gistRevs.map((rev,i)=>{
-      const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('cs-CZ'):'?';
-      const tag=i===0?'<span class="gh-rev-chg">nejnovější</span>':'';
+      const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('en-GB'):'?';
+      const tag=i===0?'<span class="gh-rev-chg">newest</span>':'';
       return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">'+esc(d)+'</span>'+tag+'</div>'
-        +'<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview('+i+')">náhled</button>'
-        +'<button class="btn-io" onclick="gistHistoryRestore('+i+')">obnovit</button></div></div>';
+        +'<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview('+i+')">preview</button>'
+        +'<button class="btn-io" onclick="gistHistoryRestore('+i+')">restore</button></div></div>';
     }).join('');
   }
-  // stáhne obsah konkrétní revize → record (objekt) nebo null
+  // downloads the content of a specific revision → record (object) or null
   async function fetchGistRevision(version){
     const token=localStorage.getItem(GHTOKEN),gistId=historyGistId();
     const res=await fetch(gistUrl(gistId)+'/'+version,{mode:'cors',credentials:'omit',headers:ghHeaders(token,false)});
@@ -3782,7 +3783,7 @@ document.addEventListener('keydown',e=>{
     const file=json&&json.files&&json.files[GIST_FILE];
     if(!file||!file.content)return null;
     let record=JSON.parse(file.content);
-    // Backward compat: starý formát ukládal raw localStorage stringy pod klíči cajovy-v3-*
+    // Backward compat: the old format stored raw localStorage strings under cajovy-v3-* keys
     if(record&&'cajovy-v3-library' in record){
       record={v:1,teas:JSON.parse(record['cajovy-v3-library']||'[]'),templates:JSON.parse(record['cajovy-v3-templates']||'[]'),archive:JSON.parse(record['cajovy-v3-archive']||'[]')};
     }
@@ -3792,31 +3793,31 @@ document.addEventListener('keydown',e=>{
     const rev=gistRevs[i];if(!rev)return;
     try{
       const record=await fetchGistRevision(rev.version);
-      if(!record)throw new Error('prázdná revize');
+      if(!record)throw new Error('empty revision');
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent='Náhled revize';
+      el('importModal').querySelector('h2').textContent='Revision preview';
       parseImportJson(JSON.stringify(record));
       closeModal('gistHistoryModal');
     }catch(e){
-      el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
+      el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
   async function gistHistoryRestore(i){
     const rev=gistRevs[i];if(!rev)return;
-    const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('cs-CZ'):'?';
-    if(!await customConfirm('Obnovit verzi z '+d+'? Aktuální data zůstanou — starší verze se sloučí přes standardní merge.','obnovit'))return;
+    const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('en-GB'):'?';
+    if(!await customConfirm('Restore the version from '+d+'? Current data stays — the older version will be merged via the standard merge.','restore'))return;
     const winAtStart=(typeof activeWin!=='undefined')?activeWin:null;
     try{
       const record=await fetchGistRevision(rev.version);
-      if(!record)throw new Error('prázdná revize');
-      if(typeof activeWin!=='undefined'&&activeWin!==winAtStart)return;   // okno se přepnulo → data patří jinému oknu
+      if(!record)throw new Error('empty revision');
+      if(typeof activeWin!=='undefined'&&activeWin!==winAtStart)return;   // the window switched → the data belongs to another window
       autoImportSilent(record);
       scheduleAutoPush();
-      showStatusMsg('↩ verze obnovena',3000);
+      showStatusMsg('↩ version restored',3000);
       closeModal('gistHistoryModal');
     }catch(e){
-      showStatusMsg('⚠ obnovení selhalo',3000);
+      showStatusMsg('⚠ restore failed',3000);
     }
   }
   window.openGistHistory=openGistHistory;
@@ -3829,25 +3830,25 @@ document.addEventListener('keydown',e=>{
   window.checkCloudOnStartup=checkCloudOnStartup;
   window.toggleAutoSync=toggleAutoSync;
   window.copySyncLink=copySyncLink;
-  window.autoSyncOnSave=autoSyncOnSave;   // hook po změně synchronizované kolekce (obalené save-funkce ho volají samy)
+  window.autoSyncOnSave=autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones();loadKnownIds();
-  // obal perzistentní save-funkce, aby i mazání spustilo reconcile (náhrobek) + push
+  // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
   ['saveLibrary','saveTemplates','saveArchive'].forEach(fn=>{
     const orig=window[fn];
     if(typeof orig==='function')window[fn]=function(){const r=orig.apply(this,arguments);try{autoSyncOnSave();}catch(e){}return r;};
   });
-  // PULL ON FOCUS — návrat k tabu/oknu hned stáhne změny z jiného zařízení
+  // PULL ON FOCUS — returning to the tab/window immediately downloads changes from another device
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&autosyncEnabled())silentPull();});
   window.addEventListener('focus',()=>{if(autosyncEnabled())silentPull();});
-  // PULL každých 5 minut (jen když je tab viditelný)
+  // PULL every 5 minutes (only when the tab is visible)
   setInterval(()=>{if(autosyncEnabled()&&document.visibilityState==='visible')silentPull();},5*60*1000);
-  // ── SYNC ODKAZ: jednorázové nastavení zařízení z URL hashe (#gid=…&tok=…&as=1) ──
-  // Musí proběhnout PŘED checkCloudOnStartup, ať první cloud check už jede s novým ID.
+  // ── SYNC LINK: one-time device setup from the URL hash (#gid=…&tok=…&as=1) ──
+  // Must run BEFORE checkCloudOnStartup so the first cloud check already uses the new ID.
   (function importSyncLink(){
     if((location.hash||'').indexOf('gid=')===-1)return;
     const p=new URLSearchParams(location.hash.slice(1));
     const gid=(p.get('gid')||'').trim(),tok=(p.get('tok')||'').trim();
-    try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}   // smaž citlivý hash z adresy i historie
+    try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}   // delete the sensitive hash from the address and history
     if(!gid)return;
     try{
       localStorage.setItem(GISTID,gid);
@@ -3855,23 +3856,23 @@ document.addEventListener('keydown',e=>{
       if(p.get('as')==='1') localStorage.setItem(ASKEY,'1');
     }catch(e){}
     try{sessionStorage.removeItem('cajovy-cloud-checked');}catch(e){}
-    showSyncTooltip(tok?'🔗 sync nastaven z odkazu':'🔗 Gist ID nastaveno — zadej token přes ⚙');
+    showSyncTooltip(tok?'🔗 sync set up from link':'🔗 Gist ID set — enter the token via ⚙');
   })();
   updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
 </script>
 <footer style="text-align:center; padding: 8px;">
-  <a href="https://lordkrabaty.github.io/webapps/" title="úvodní stránka — všechny aplikace" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
+  <a href="https://lordkrabaty.github.io/webapps/" title="home page — all apps" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
 </footer>
 
 <!-- Gist history modal -->
 <div class="modal-bg" id="gistHistoryModal">
   <div class="modal" style="max-width:460px;gap:.65rem">
-    <h2>Historie verzí</h2>
+    <h2>Version history</h2>
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
-      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">zavřít</button>
+      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
     </div>
   </div>
 </div>
