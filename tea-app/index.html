@@ -3286,7 +3286,7 @@ document.addEventListener('keydown',e=>{
   const GIST_API='https://api.github.com/gists';
   const GIST_FILE='cajovy-sync.json';       // jméno souboru uvnitř gistu (data = JSON string)
   const PUSH_MIN_INTERVAL=4000;             // max 1 push / 4 s
-  let pushTimer=null,lastPushTs=0,pushing=false,pushAgain=false,stateTimer=null;
+  let pushTimer=null,lastPushTs=0,pushing=false,pushAgain=false,stateTimer=null,pulling=false;
   let applyingRemote=false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
 
   // Jednorázová migrace ze starého JSONBin syncu → Gist sloty. JSONBin klíč ≠ GitHub token a
@@ -3473,11 +3473,18 @@ document.addEventListener('keydown',e=>{
           if(!cur){activeLibId=null;savedSnapshot=null;if(typeof renderLog==='function')renderLog();}
           else if(JSON.stringify(cur.data||null)!==beforeActive&&typeof refreshActiveFromLibrary==='function')refreshActiveFromLibrary();
         }
-        const parts=[];
-        if(added)parts.push('+'+added);
-        if(updated)parts.push('~'+updated);
-        if(removed)parts.push('−'+removed);
-        showStatusMsg('☁ sync '+parts.join(' '),3000);
+        let msg;
+        if(added&&!updated&&!removed)      msg='☁ +'+added+' nových položek ze synchronizace';
+        else if(updated&&!added&&!removed) msg='☁ '+updated+' položek aktualizováno ze synchronizace';
+        else{
+          const parts=[];
+          if(added)parts.push('+'+added);
+          if(updated)parts.push('~'+updated);
+          if(removed)parts.push('−'+removed);
+          msg='☁ synchronizováno: '+parts.join(' ');
+        }
+        if(removed)msg+=' — něco se smazalo (zkontroluj / obnov z historie)';
+        showStatusMsg(msg,4000);
       }
       // srovnej baseline na nový stav a ulož náhrobky
       knownIds=currentKeySet();
@@ -3503,6 +3510,11 @@ document.addEventListener('keydown',e=>{
     const token=localStorage.getItem(GHTOKEN),gistId=localStorage.getItem(GISTID);
     if(!token||!gistId)return;               // bez tokenu i Gist ID není odkud stahovat
     if(pushing)return;                       // probíhá push → nech ho dokončit
+    if(pulling)return;                       // pull už běží → nespouštěj druhý
+    pulling=true;
+    const sBtn=el('syncDownBtn');
+    if(sBtn){sBtn.disabled=true;sBtn.classList.add('syncing');}
+    let changed=false;
     try{
       const res=await gistGet(gistId,token);if(!res.ok)return;
       let record=await gistRecord(res);
@@ -3510,9 +3522,22 @@ document.addEventListener('keydown',e=>{
       if('cajovy-v3-library' in record){     // backward compat: starý formát raw localStorage stringů
         record={v:1,teas:JSON.parse(record['cajovy-v3-library']||'[]'),templates:JSON.parse(record['cajovy-v3-templates']||'[]'),archive:JSON.parse(record['cajovy-v3-archive']||'[]')};
       }
-      if(localStateSig()!==cloudStateSig(record))autoImportSilent(record);
+      if(localStateSig()!==cloudStateSig(record)){
+        const before=localStateSig();
+        autoImportSilent(record);
+        changed=localStateSig()!==before;
+      }
       if(autosyncEnabled())scheduleAutoPush();
     }catch(e){console.warn('[silentPull] selhal:',(e&&e.message)?e.message:e);}
+    finally{
+      pulling=false;
+      if(sBtn){
+        sBtn.disabled=false;
+        sBtn.classList.remove('syncing');
+        if(changed){sBtn.textContent='✓';setTimeout(()=>{sBtn.textContent='↓';},1500);}
+        else sBtn.textContent='↓';
+      }
+    }
   }
 
   function openJsonBinSettings(){

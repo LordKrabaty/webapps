@@ -5646,7 +5646,7 @@ window.addEventListener('resize', updateAppGrid);
   /* ── AUTOSYNC (tichá obousměrná synchronizace) ─── */
   const ASKEY = 'todo-app-autosync';
   const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
-  let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null;
+  let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
   let applyingRemote = false;   // true během tichého mergeu → potlačí save-hook (žádná rekurze)
 
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
@@ -5928,11 +5928,18 @@ window.addEventListener('resize', updateAppGrid);
       if (typeof renderDayButtons === 'function') renderDayButtons();
       if (typeof renderInbox === 'function') renderInbox();
       if (typeof renderLater === 'function') renderLater();
-      const parts = [];
-      if (added)   parts.push('+' + added);
-      if (updated) parts.push('~' + updated);
-      if (removed) parts.push('−' + removed);
-      showStatusMsg('☁ sync ' + parts.join(' '), 3000);
+      let msg;
+      if (added && !updated && !removed)      msg = '☁ +' + added + ' nových položek ze synchronizace';
+      else if (updated && !added && !removed) msg = '☁ ' + updated + ' položek aktualizováno ze synchronizace';
+      else {
+        const parts = [];
+        if (added)   parts.push('+' + added);
+        if (updated) parts.push('~' + updated);
+        if (removed) parts.push('−' + removed);
+        msg = '☁ synchronizováno: ' + parts.join(' ');
+      }
+      if (removed) msg += ' — něco se smazalo (zkontroluj / obnov z historie)';
+      showStatusMsg(msg, 4000);
     }
     // srovnej baseline na nový stav a ulož náhrobky
     knownIds = currentKeySet();
@@ -5957,6 +5964,11 @@ window.addEventListener('resize', updateAppGrid);
     lastPullTs = Date.now();
     if (!hasKeys()) return;                    // bez tokenu i Gist ID není odkud stahovat
     if (pushing) return;                       // probíhá push → nech ho dokončit
+    if (pulling) return;                       // pull už běží → nespouštěj druhý
+    pulling = true;
+    const sBtn = el('syncDownBtn');
+    if (sBtn) { sBtn.disabled = true; sBtn.classList.add('syncing'); }
+    let changed = false;
     const winAtStart = activeWin;              // okno, pro které stahujeme (activeWin se může přepnout během fetch)
     try {
       const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(WK(GISTID));
@@ -5968,9 +5980,22 @@ window.addEventListener('resize', updateAppGrid);
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       // KRITICKÉ: mezitím se mohlo přepnout okno → tato per-okno data patří JINÉMU oknu, nesmí přepsat aktuální
       if (activeWin !== winAtStart) return;
-      if (localSig() !== cloudSig(record)) autoImportSilent(record);
+      if (localSig() !== cloudSig(record)) {
+        const before = localSig();
+        autoImportSilent(record);
+        changed = localSig() !== before;
+      }
       if (autosyncEnabled()) scheduleAutoPush();
     } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); }
+    finally {
+      pulling = false;
+      if (sBtn) {
+        sBtn.disabled = false;
+        sBtn.classList.remove('syncing');
+        if (changed) { sBtn.textContent = '✓'; setTimeout(() => { sBtn.textContent = '↓'; }, 1500); }
+        else sBtn.textContent = '↓';
+      }
+    }
   }
 
   /* ── HISTORIE VERZÍ (Gist revize) ─────────────────────────────
