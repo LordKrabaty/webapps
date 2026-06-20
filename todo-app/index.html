@@ -202,14 +202,6 @@ textarea::placeholder{color:var(--mid)}
 .tl-tick-label{position:absolute;top:3px;font-family:'DM Mono',monospace;font-size:.55rem;color:var(--mid);white-space:nowrap;pointer-events:none}
 .tl-block-h{position:absolute;top:2px;bottom:2px;box-sizing:border-box;overflow:hidden;cursor:pointer;padding:1px 4px;font-size:.62rem;line-height:1.35;background:var(--off);border:1px solid var(--mid)}
 .tl-block-h.tl-highlight{outline:2px solid var(--black);z-index:2}
-.tl-MORNING_START{background:var(--off);border:1.5px solid var(--mid)}
-.tl-DEEP_WORK{background:var(--w);border:2px solid var(--black)}
-.tl-LUNCH_BREAK{background:var(--light);border:1px dashed var(--mid)}
-.tl-CREATIVE_ADMIN{background:var(--off);border:1.5px solid var(--mid)}
-.tl-EXPERIMENTS{background:var(--w);border:2px solid var(--black)}
-.tl-MEETING{background:var(--light);border:1.5px solid var(--black);background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.05) 3px,rgba(0,0,0,.05) 4px)}
-.tl-WRAP_UP{background:var(--light);border:1px solid var(--mid)}
-.tl-BUFFER{background:var(--off);border:1px dashed var(--mid)}
 .tl-TASK{background:var(--w);border:1px solid var(--mid)}
 .tl-is-event{border-left:4px solid var(--black)!important;border-left-style:solid!important}
 .tl-urgent{border-width:3px!important;font-weight:bold}
@@ -240,6 +232,20 @@ textarea::placeholder{color:var(--mid)}
 .item-row.is-ghost{border-style:dashed;border-color:var(--mid);background:transparent}
 .item-row.is-ghost .item-text{color:var(--muted);font-style:italic}
 .recur-ghost-badge{font-size:.72rem;color:var(--muted);flex:0 0 auto;cursor:default}
+.recur-ghost-badge.is-confirm{cursor:pointer;color:var(--dark)}
+/* popover „hodiny" pro čas události / délku úkolu (nad odznakem času) */
+.time-pop{position:fixed;z-index:400;background:var(--w);border:var(--bh);border-radius:var(--r);padding:.5rem .55rem;display:flex;flex-direction:column;gap:.4rem;min-width:215px;max-width:calc(100vw - 16px)}
+.time-pop-row{display:flex;align-items:center;gap:.35rem}
+.time-pop-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);width:1.6rem;flex:0 0 auto}
+.time-pop-val{font-family:'DM Mono',monospace;font-size:.95rem;color:var(--black);min-width:3.4rem;text-align:center;flex:1}
+.time-pop-btn{font-family:'DM Mono',monospace;font-size:.85rem;padding:.18rem .5rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--dark);cursor:pointer;line-height:1.2;flex:0 0 auto}
+@media(hover:hover){.time-pop-btn:hover{border-color:var(--black);color:var(--black)}}
+.time-pop-btn.primary{border:var(--bh);font-weight:600;color:var(--black)}
+.time-pop-presets{display:flex;gap:.3rem;flex-wrap:wrap}
+.time-pop-presets .time-pop-btn{flex:1;text-align:center;padding:.18rem .2rem}
+.time-pop-input{width:100%;font-family:'DM Mono',monospace;font-size:.82rem;padding:.28rem .45rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none;box-sizing:border-box}
+.time-pop-input:focus{border:var(--bh)}
+.time-pop-foot{display:flex;justify-content:space-between;gap:.4rem;margin-top:.05rem}
 .item-toggle{font-size:.85rem;cursor:pointer;flex-shrink:0;width:18px;text-align:center;color:var(--muted);line-height:1;user-select:none}
 @media(hover:hover){.item-toggle:hover{color:var(--black)}}
 .item-emoji{flex-shrink:0;margin-right:.1rem;line-height:1;cursor:pointer;border-radius:2px;user-select:none}
@@ -267,10 +273,22 @@ textarea::placeholder{color:var(--mid)}
 
 
 /* ── LATER (Později) ── */
-.later-add-row{display:flex;gap:.4rem;flex-wrap:wrap;flex-shrink:0;align-items:center;margin-bottom:.35rem}
+.later-add-row{display:flex;gap:.35rem;flex-wrap:nowrap;flex-shrink:0;align-items:center;margin-bottom:.35rem}
 .later-sel{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.25rem .35rem;outline:none;min-width:0;flex:1}
-.later-month-hdr{display:flex;align-items:center;gap:.5rem;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem}
+.later-add-plus{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:1.05rem;line-height:1;color:var(--muted)}
+.later-sel-month{flex:1 1 auto;font-weight:600;font-size:.82rem}
+.later-sel-horizon{flex:0 0 auto;color:var(--muted);font-size:.72rem;padding:.25rem .2rem}
+.later-icon-btn{flex:0 0 auto;padding:.34rem .5rem;font-size:.98rem;line-height:1}
+.later-month-hdr{display:flex;align-items:center;gap:.35rem;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem;cursor:pointer;user-select:none;-webkit-user-select:none}
 .later-month-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
+.later-month-toggle{display:inline-block;width:.85rem;text-align:center;font-size:.78rem;line-height:1}
+.later-month-hdr.empty{opacity:.55}
+.later-month-hdr.empty .later-month-toggle{opacity:.4}
+.later-month-hdr.later-drop-into{background:var(--light);outline:1.5px dashed var(--mid);outline-offset:-1px;opacity:1}
+.later-month-hdr.overdue{border-left:2px solid var(--black);padding-left:.3rem}
+.later-month-od{font-family:'DM Sans',sans-serif;font-weight:600;text-transform:none;letter-spacing:0;font-size:.62rem;color:var(--black)}
+.later-month-add{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--muted);background:var(--w);border:var(--bh);border-radius:var(--r);padding:0 .3rem;cursor:pointer}
+.later-month-add:hover{color:var(--black);border-color:var(--black)}
 .later-month-sum{margin-left:auto;font-family:'DM Mono',monospace;font-weight:400;text-transform:none;letter-spacing:0}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
@@ -343,6 +361,10 @@ textarea::placeholder{color:var(--mid)}
 .preview-item-text.done{text-decoration:line-through;color:var(--muted)}
 .preview-item-note{font-size:.76rem;color:var(--muted);white-space:pre-wrap;word-break:break-word;line-height:1.5;padding:.1rem .1rem .28rem 1.5rem;cursor:pointer;border-bottom:1px solid var(--light)}
 @media(hover:hover){.preview-item-note:hover{color:var(--dark)}}
+.preview-item-sched{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--mid);flex-shrink:0;white-space:nowrap;min-width:5.4rem;text-align:right}
+.preview-win{display:flex;align-items:center;gap:.35rem;font-size:.74rem;color:var(--muted);flex-shrink:0}
+.preview-win input{width:3.4rem;font-family:'DM Mono',monospace;font-size:.74rem;border:var(--b);border-radius:var(--r);padding:.15rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:center}
+.preview-win input:focus{outline:1.5px solid var(--black);outline-offset:1px}
 .preview-item-dur{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap;cursor:pointer;border-bottom:1px dashed transparent}
 @media(hover:hover){.preview-item-dur:hover{border-bottom-color:var(--mid)}}
 .preview-item-move{display:flex;flex-direction:column;gap:0;flex-shrink:0;opacity:0}
@@ -355,7 +377,7 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:none){.preview-item-del{opacity:.45}}
 .preview-item-del svg{width:8px;height:8px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
 .preview-item-input{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;padding:.05rem 0;min-width:0}
-.preview-add-row{display:flex;gap:.3rem;margin-top:.4rem;padding-top:.35rem;border-top:1px solid var(--light);align-items:center}
+.preview-add-row{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem;padding-top:.35rem;border-top:1px solid var(--light);align-items:center}
 .preview-add-text{flex:3;font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.25rem .45rem;background:var(--w);color:var(--black);outline:none;min-width:0}
 .preview-add-text:focus{outline:1.5px solid var(--black);outline-offset:1px}
 .preview-add-dur{width:3.5rem;font-family:'DM Mono',monospace;font-size:.78rem;border:var(--b);border-radius:var(--r);padding:.25rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:right}
@@ -575,9 +597,17 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div id="pane-pozdeji" class="notes-pane">
       <div class="later-add-row" style="align-items:center">
-        <span style="font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">přidat do měsíce</span>
-        <select id="laterAddMonth" class="later-sel" title="do kterého měsíce přidávat" onchange="setAddCtxLater()"></select>
-        <button class="btn-sm" onclick="openRecurManage()" title="správa opakování + legenda zkratek" style="flex:0 0 auto">↻ opakování</button>
+        <span class="later-add-plus" title="přidat do měsíce">+</span>
+        <select id="laterAddMonth" class="later-sel later-sel-month" title="přidat do kterého měsíce" onchange="setAddCtxLater()"></select>
+        <select id="laterHorizonSel" class="later-sel later-sel-horizon" title="jak daleko dopředu zobrazit měsíce" onchange="setLaterHorizon(this.value)">
+          <option value="6">6 měs.</option>
+          <option value="12">12 měs.</option>
+          <option value="18">18 měs.</option>
+          <option value="24">24 měs.</option>
+          <option value="36">36 měs.</option>
+        </select>
+        <button class="btn-sm later-icon-btn" onclick="toggleAllLaterMonths()" title="rozbalit / sbalit všechny měsíce">⊟</button>
+        <button class="btn-sm later-icon-btn" onclick="openRecurManage()" title="opakování — správa pravidel + legenda zkratek">↻</button>
       </div>
       <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.1rem"></div>
     </div>
@@ -612,6 +642,10 @@ textarea::placeholder{color:var(--mid)}
       <label id="expInboxRow" class="modal-item" style="cursor:pointer;display:none">
         <input type="checkbox" id="expInbox" checked onchange="updateExportFilename()">
         <span id="expInboxLbl">Inbox</span>
+      </label>
+      <label id="expRecurRow" class="modal-item" style="cursor:pointer;display:none">
+        <input type="checkbox" id="expRecur" checked onchange="updateExportFilename()">
+        <span id="expRecurLbl">Opakování (pravidla)</span>
       </label>
       </div>
     </div>
@@ -668,6 +702,10 @@ textarea::placeholder{color:var(--mid)}
           <input type="checkbox" id="impInbox" checked>
           <span id="impInboxLbl">Inbox</span>
         </label>
+        <label id="impRecurRow" class="modal-item" style="cursor:pointer;display:none">
+          <input type="checkbox" id="impRecur" checked>
+          <span id="impRecurLbl">Opakování (pravidla)</span>
+        </label>
       </div>
     </div>
     <div class="modal-row" id="importActions" style="display:none">
@@ -690,6 +728,13 @@ textarea::placeholder{color:var(--mid)}
       <label class="modal-item"><input type="checkbox" id="clr-week" checked><span>uložené dny týdne (Realita)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-weekplans" checked><span>plán týdne (Plán)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>nastavení vzhledu</span></label>
+    </div>
+    <p style="font-size:.78rem;color:var(--muted);margin:.1rem 0 0">Jednotlivé koše úkolů</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
+      <label class="modal-item"><input type="checkbox" id="clr-thisweek"><span>tento týden — dny + plán</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-nextweek"><span>příští týden — dny + plán</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-later"><span>Později (měsíční úkoly)</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-inbox"><span>Inbox</span></label>
     </div>
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" onclick="closeModal('clearStorageModal')">zrušit</button>
@@ -734,10 +779,16 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div class="modal-bg" id="previewModal">
-  <div class="modal" style="max-width:400px;max-height:85vh;display:flex;flex-direction:column;gap:.5rem;overflow:hidden">
+  <div class="modal" style="max-width:min(560px,94vw);max-height:85vh;display:flex;flex-direction:column;gap:.5rem;overflow:hidden">
     <div style="display:flex;align-items:baseline;gap:.5rem">
       <h2 id="previewTitle" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Náhled</h2>
       <span id="previewMeta" style="font-size:.73rem;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap;flex-shrink:0"></span>
+    </div>
+    <div class="preview-win">
+      <span>okno dne</span>
+      <input type="text" id="previewWinStart" placeholder="6:00" oninput="setPreviewWindow()" title="začátek okna — od kdy se plánuje">
+      <span>–</span>
+      <input type="text" id="previewWinEnd" placeholder="14:00" oninput="setPreviewWindow()" title="konec okna dne">
     </div>
     <div id="previewItemList" style="overflow-y:auto;flex:1;min-height:60px;border-top:1.5px solid var(--black);padding-top:.3rem"></div>
     <div class="modal-row">
@@ -759,6 +810,9 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" id="gistHistoryRow" style="display:none">
       <button class="btn-io" onclick="openGistHistory()">⏱ historie verzí</button>
     </div>
+    <div class="modal-row" id="syncLinkRow" style="display:none">
+      <button class="btn-io" onclick="copySyncLink()" title="vygeneruje odkaz s Gist ID — otevřením na novém zařízení se sync nastaví sám">🔗 odkaz pro nové zařízení</button>
+    </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
       <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
@@ -766,7 +820,7 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div class="modal-bg" id="blockEditModal">
-  <div class="modal" style="max-width:400px;gap:.65rem;max-height:90vh;overflow-y:auto">
+  <div class="modal" style="max-width:min(720px,94vw);gap:.65rem;max-height:90vh;overflow-y:auto">
     <h2 id="blockEditTitle">Upravit blok</h2>
     <div class="field" style="max-width:100px">
       <label>Emoji</label>
@@ -775,7 +829,7 @@ textarea::placeholder{color:var(--mid)}
     <input type="hidden" id="blockEditDuration" value="30">
     <div class="field">
       <label>Název</label>
-      <input type="text" id="blockEditLabel" placeholder="Název bloku" onkeydown="if(event.key==='Enter')saveBlockType();if(event.key==='Escape')closeModal('blockEditModal')">
+      <input type="text" id="blockEditLabel" placeholder="Název bloku" onkeydown="if(event.key==='Enter')saveBlockType();">
     </div>
     <label class="toggle-row" onclick="toggleBlockEditEvent()" style="margin-top:.1rem">
       <div id="blockEditEventToggle" class="toggle-sw"></div>
@@ -800,7 +854,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div class="field">
       <label>Přednastavený popis / poznámka</label>
-      <textarea id="blockEditNote" rows="3" placeholder="Volný text — předvyplní se do popisu bloku při vložení" style="resize:vertical"></textarea>
+      <textarea id="blockEditNote" rows="3" placeholder="Volný text — předvyplní se do popisu bloku při vložení" oninput="autoGrowTextarea(this)"></textarea>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" id="blockEditResetBtn" onclick="resetBlockType()">obnovit výchozí</button>
@@ -812,15 +866,15 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Item detail / rename modal -->
 <div class="modal-bg" id="itemEditModal">
-  <div class="modal" style="max-width:460px;gap:.6rem;max-height:90vh;overflow-y:auto">
+  <div class="modal" style="max-width:min(900px,94vw);gap:.6rem;max-height:90vh;overflow-y:auto">
     <h2 id="itemEditTitle">Upravit položku</h2>
     <div class="field">
       <label>Název</label>
-      <input type="text" id="itemEditName" placeholder="Název položky" onkeydown="if(event.key==='Enter'){event.preventDefault();saveItemEdit();}if(event.key==='Escape')closeModal('itemEditModal')">
+      <input type="text" id="itemEditName" placeholder="Název položky" onkeydown="if(event.key==='Enter'){event.preventDefault();saveItemEdit();}">
     </div>
     <div class="field">
       <label>Popis / podúkoly</label>
-      <textarea id="itemEditNote" rows="7" placeholder="Další text — popis, poznámky, podúkoly…" style="resize:vertical"></textarea>
+      <textarea id="itemEditNote" rows="7" placeholder="Další text — popis, poznámky, podúkoly…" oninput="autoGrowTextarea(this)"></textarea>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" onclick="deleteItemEdit()">smazat</button>
@@ -856,95 +910,13 @@ let activeWin = 'main';
 function WK(base) { return activeWin === 'main' ? base : base + '::' + activeWin; }
 
 // ── BLOCK TYPES ───────────────────────────────────────────────────────────────
+// Žádné přednastavené bloky — uživatel si tvoří vlastní (syncují se přes settings.blockTypes).
+// TASK je jediný vestavěný typ: fallback pro prosté úkoly, nejde smazat.
 const DEFAULT_BLOCK_TYPES = {
-  MORNING_START:  { emoji: '🥣', label: 'Morning Start',  defaultDuration: 120 },
-  DEEP_WORK:      { emoji: '🆓', label: 'Deep Work',      defaultDuration: 120 },
-  LUNCH_BREAK:    { emoji: '🍽️', label: 'Lunch Break',    defaultDuration: 30  },
-  CREATIVE_ADMIN: { emoji: '🖇️', label: 'Creative Admin', defaultDuration: 120 },
-  EXPERIMENTS:    { emoji: '🧵', label: 'Experiments',    defaultDuration: 120 },
-  MEETING:        { emoji: '🗣️', label: 'Meeting',        defaultDuration: 60  },
-  WRAP_UP:        { emoji: '🏚️', label: 'Wrap Up',        defaultDuration: 30  },
-  BUFFER:         { emoji: '🧹', label: 'Buffer',         defaultDuration: 480 },
-  TASK:           { emoji: '',   label: 'Úkol',           defaultDuration: 15  },
+  TASK: { emoji: '', label: 'Úkol', defaultDuration: 30 },
 };
 let BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES };
 let blockTypeOrder = [];
-
-// ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
-function mkItem(text, blockType, duration, isSubtask, isEvent, eventStart, eventEnd, done) {
-  return { text, blockType: blockType||'TASK', duration: duration||15, isSubtask: !!isSubtask,
-           isEvent: !!isEvent, eventStart: eventStart||null, eventEnd: eventEnd||null,
-           done: !!done, urgent: false };
-}
-const DAY_TEMPLATES = {
-  'Po': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('Walk','MORNING_START',30,true),
-    mkItem('Planning','MORNING_START',15,true),
-    mkItem('Breakfast','MORNING_START',15,true),
-    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
-    mkItem('Meeting prep','DEEP_WORK',30,true),
-    mkItem('Focused tasks','DEEP_WORK',60,true),
-    mkItem('Snack','DEEP_WORK',15,true),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('Lunch','LUNCH_BREAK',30,true),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
-    mkItem('Walk','CREATIVE_ADMIN',30,true),
-    mkItem('AI exploration','CREATIVE_ADMIN',60,true),
-    mkItem('Snack','CREATIVE_ADMIN',15,true),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'Út': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',60,false),
-    mkItem('🗣️ Meeting','MEETING',60,false,true,'12:30','13:30'),
-    mkItem('Standup','MEETING',60,true),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'St': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('Walk','MORNING_START',30,true),
-    mkItem('Planning','MORNING_START',15,true),
-    mkItem('Breakfast','MORNING_START',15,true),
-    mkItem('🆓 Deep Work','DEEP_WORK',120,false),
-    mkItem('Meeting prep','DEEP_WORK',30,true),
-    mkItem('Focused tasks','DEEP_WORK',60,true),
-    mkItem('Snack','DEEP_WORK',15,true),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('Lunch','LUNCH_BREAK',30,true),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
-    mkItem('Walk','CREATIVE_ADMIN',30,true),
-    mkItem('AI exploration','CREATIVE_ADMIN',60,true),
-    mkItem('Snack','CREATIVE_ADMIN',15,true),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'Čt': [
-    mkItem('🥣 Morning Start','MORNING_START',120,false),
-    mkItem('🧵 Experiments','EXPERIMENTS',120,false),
-    mkItem('Trials','EXPERIMENTS',45,true),
-    mkItem('Snack','EXPERIMENTS',15,true),
-    mkItem('Trials','EXPERIMENTS',45,true),
-    mkItem('🍽️ Lunch Break','LUNCH_BREAK',30,false),
-    mkItem('Lunch','LUNCH_BREAK',30,true),
-    mkItem('🖇️ Creative Admin','CREATIVE_ADMIN',120,false),
-    mkItem('🏚️ Wrap Up','WRAP_UP',30,false,true,'13:30','14:00'),
-    mkItem('End of day','WRAP_UP',30,true),
-  ],
-  'Pá': [
-    mkItem('🧹 Buffer','BUFFER',480,false,true,'6:00','14:00'),
-    mkItem('Walk','BUFFER',30,true),
-    mkItem('Planning','BUFFER',30,true),
-    mkItem('Breakfast','BUFFER',20,true),
-    mkItem('Weekly planning','BUFFER',60,true),
-    mkItem('Buffer tasks','BUFFER',180,true),
-    mkItem('End of day','BUFFER',30,true),
-  ],
-};
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let items = [];
@@ -956,6 +928,7 @@ let library = [], activeLibId = null, archive = [];
 let weekPlans = [];
 let workingDaysByWeek = {}; // { 'YYYY-MM-DD': [dayNums] } keyed by Monday ISO date
 let undoStack = [], redoStack = [], savedSnapshot = null;
+let laterUndoStack = [], laterRedoStack = [];   // samostatný undo zásobník karty Później (deklarace brzy kvůli undo()/updateUndoBtn())
 let autoSave = false;
 const UNDO_MAX = 40;
 
@@ -1051,20 +1024,20 @@ function parseItemText(raw) {
     else if ((m = text.match(/(\d+)\s*m(?:in)?\b/i))) { duration = parseInt(m[1]); text = text.replace(m[0], '').trim(); }
   }
 
-  // Block type detection (emoji or text name)
+  // Detekce typu bloku JEN podle názvu typu (např. „DEEP WORK"). Emoji už blok netvoří ani se
+  // nestripuje — bloky se přidávají z menu/presetů, takže smajlík v úkolu zůstane zachovaný.
   for (const [key, bt] of Object.entries(BLOCK_TYPES)) {
     if (key === 'TASK') continue;
     const labelUpper = (bt.label || '').toUpperCase();
-    if ((bt.emoji && text.includes(bt.emoji)) || (labelUpper && text.toUpperCase().includes(labelUpper))) {
+    if (labelUpper && text.toUpperCase().includes(labelUpper)) {
       blockType = key;
-      if (bt.emoji) text = text.split(bt.emoji).join('').trim();  // don't keep emoji in text (rendered separately)
       if (!duration && !isEvent) duration = bt.defaultDuration;
       break;
     }
   }
 
-  if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15;
-  if (targetBlockKey) { blockType = targetBlockKey; if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 15; }
+  if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 30;
+  if (targetBlockKey) { blockType = targetBlockKey; if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 30; }
 
   return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent, targetBlockKey };
 }
@@ -1147,7 +1120,7 @@ function extractMonthRoute(text) {
 // ── OPAKOVÁNÍ (recurrence mini-jazyk) ──────────────────────────────────────────
 // r-token kdekoli na řádku → pravidlo opakování. Kombinovatelné (r12.m r24.m).
 // Diskriminátor:  N+písmeno = interval · tečka+m = den v měsíci · D.M. = výročí
-//                 holé 2 číslice = měsíc v roce · zkratka dne = den v týdnu
+//                 holé 1–2 číslice = měsíc v roce · zkratka dne = den v týdnu (i bez diakritiky)
 //   r4w          → každé 4 týdny (interval, kotva = datum karty)
 //   r12.m r24.m  → 12. a 24. každý měsíc
 //   r06 r09      → každý rok v červnu a září
@@ -1162,8 +1135,9 @@ function parseRecurToken(tok) {
   if ((m = b.match(/^(\d+)([dwmy])$/)))           { const n = +m[1]; return n >= 1 ? { t:'interval', n, u:m[2] } : null; }              // r4w
   if ((m = b.match(/^(\d{1,2})\.m$/)))            { const d = +m[1]; return (d>=1 && d<=31) ? { t:'dom', day:d } : null; }             // r12.m
   if ((m = b.match(/^(\d{1,2})\.(\d{1,2})\.?$/))) { const d=+m[1], mo=+m[2]; return (d>=1&&d<=31&&mo>=1&&mo<=12) ? { t:'yearly', day:d, mo } : null; }  // r24.7.
-  if ((m = b.match(/^(\d{2})$/)))                 { const mo = +m[1]; return (mo>=1 && mo<=12) ? { t:'month', mo } : null; }           // r06
-  const wd = DAY_ABBREV_CZ.findIndex(a => a.toLowerCase() === b);                                                                      // rpo
+  if ((m = b.match(/^(\d{1,2})$/)))               { const mo = +m[1]; return (mo>=1 && mo<=12) ? { t:'month', mo } : null; }           // r06 i r6
+  const bAscii = ({ ut:'út', ct:'čt', pa:'pá' })[b] || b;                                                                              // rpo (i bez diakritiky: rut rct rpa)
+  const wd = DAY_ABBREV_CZ.findIndex(a => a.toLowerCase() === bAscii);
   return wd >= 0 ? { t:'weekday', d: wd } : null;   // d = getDay() index (0=Ne)
 }
 // rozparsuj všechny r-tokeny z řádku (kdekoli), vrať { rules, rest } | null
@@ -1205,12 +1179,13 @@ function buildRecurEntry(rules, pItem, anchor) {
     anchor: anchor || todayIso(),         // kotva intervalu = datum karty
     payload: {
       text: pItem.text,
-      icon: pItem.icon || null,
+      icon: pItem.icon || '🔃',             // opakovaný úkol nese vždy ikonu (výchozí 🔃)
       dur: pItem.duration || null,
       blockType: pItem.blockType || 'TASK',
       isEvent: !!pItem.isEvent,
       eventStart: pItem.eventStart || null,
-      eventEnd: pItem.eventEnd || null
+      eventEnd: pItem.eventEnd || null,
+      note: pItem.note || ''                // přednastavený popis/poznámka — duch i potvrzený výskyt ji podědí
     },
     exceptions: {},                       // F2: { '<iso>': 'skip' | <upravený item> }
     until: null                           // volitelný konec opakování
@@ -1263,6 +1238,31 @@ function computeTimeline() {
   return { blocks: all, wStart, wEnd, nowMin };
 }
 
+// Naplánované časy top-level bloků pro LIBOVOLNÉ pole položek (stejná logika jako computeTimeline,
+// jen bez vykreslení a bez globálů) → mapa index→{startMin,endMin}. Používá náhled, aby ukázal,
+// kdy daný blok vychází při zadaném okně od–do.
+function computeScheduleTimes(arr, wStartStr) {
+  const wStart = timeToMin(wStartStr || '8:00');
+  const times = {};
+  if (!arr || !arr.length) return times;
+  const top = arr.reduce((a, it, i) => { if (!it.isSubtask) a.push(i); return a; }, []);
+  const fixed = top.filter(i => arr[i].isEvent && arr[i].eventStart).map(i => {
+    const s = timeToMin(arr[i].eventStart);
+    const e = arr[i].eventEnd ? timeToMin(arr[i].eventEnd) : s + getEffectiveDuration(i, arr);
+    return { i, s, e };
+  }).sort((a, b) => a.s - b.s);
+  fixed.forEach(f => { times[f.i] = { startMin: f.s, endMin: f.e }; });
+  let cursor = wStart;
+  top.filter(i => !(arr[i].isEvent && arr[i].eventStart)).forEach(i => {
+    const dur = getEffectiveDuration(i, arr);
+    let moved = true;
+    while (moved) { moved = false; for (const f of fixed) { if (cursor < f.e && cursor + dur > f.s) { cursor = f.e; moved = true; break; } } }
+    times[i] = { startMin: cursor, endMin: cursor + dur };
+    cursor += dur;
+  });
+  return times;
+}
+
 // ── RENDER TIMELINE ───────────────────────────────────────────────────────────
 const MINS_PER_ROW = 120;
 
@@ -1272,14 +1272,18 @@ function renderTimeline() {
   container.innerHTML = '';
 
   const { blocks, wStart, wEnd, nowMin } = computeTimeline();
+  const minStart = blocks.reduce((mn, b) => Math.min(mn, b.startMin), wStart);
   const maxEnd = blocks.reduce((mx, b) => Math.max(mx, b.endMin), wEnd);
+  // Rozšiř mřížku dozadu o celé řádky, ať jsou vidět i události před začátkem okna
+  let gridStart = wStart - Math.ceil(Math.max(0, wStart - minStart) / MINS_PER_ROW) * MINS_PER_ROW;
+  if (gridStart < 0) gridStart = 0;
   const totalEnd = Math.max(wEnd, maxEnd);
-  const numRows = Math.ceil((totalEnd - wStart) / MINS_PER_ROW);
+  const numRows = Math.ceil((totalEnd - gridStart) / MINS_PER_ROW);
 
   for (let row = 0; row < numRows; row++) {
-    const rowStart = wStart + row * MINS_PER_ROW;
+    const rowStart = gridStart + row * MINS_PER_ROW;
     const rowEnd = rowStart + MINS_PER_ROW;
-    const isOverflowRow = rowStart >= wEnd;
+    const isOverflowRow = rowStart >= wEnd || rowEnd <= wStart;
 
     const rowDiv = document.createElement('div');
     rowDiv.className = 'tl-row' + (isOverflowRow ? ' tl-overflow-row' : '');
@@ -1459,7 +1463,7 @@ function MCTX(ym) {
     rowsEl() { return el('later-list')?.querySelector('.later-rows[data-ym="' + ym + '"]')?.querySelectorAll('.item-row'); },
     input: 'quickInput',
     winStart() { return '8:00'; },
-    undo() {},                                  // měsíce zatím bez undo
+    undo() { pushLaterUndo(); },                // snapshot PŘED změnou → ↩ vrátí (mazání, přesun, editace…)
     save() { const b = laterBucket(ym); b.mt = Date.now(); saveLater(); },
     render() { renderLater(); },
     call(name, idx, extra) { return name + "('" + ym + "'," + idx + (extra != null ? ',' + extra : '') + ')'; },
@@ -1473,7 +1477,7 @@ const INBOXCTX = {
   input: 'quickInput',
   winStart() { return '8:00'; },
   undo() {},                                       // inbox zatím bez undo
-  save() { inboxMt = Date.now(); saveInbox(); },
+  save() { stampInboxChanges(); saveInbox(); },
   render() { renderInbox(); },
   call(name, idx, extra) { return name + '(' + idx + (extra != null ? ',' + extra : '') + ')'; },
 };
@@ -1503,12 +1507,14 @@ function rowsHtml(ctx, insertBefore = {}) {
       const tg = item.done ? '☑' : '☐';
       const _pd = item.dayLabel ? parseDayLabel(item.dayLabel, ctx.ym) : null;
       const _da = _pd ? ` data-day="${DAY_ABBREV_CZ[_pd.getDay()]}"` : '';
-      const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo konec června)">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`;
+      const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="přiřadit den (např. 7.6. nebo konec června) · d → duplikovat · r1m → opakování">${item.dayLabel ? esc(item.dayLabel) : '+den'}</span>`;
       const timeBadge = (item.isEvent && item.eventStart)
-        ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → bez času · -/✒ → úkol">${item.eventStart}–${item.eventEnd || '?'}</span>`
+        ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → bez času · -/✒ → úkol · d → duplikovat">${item.eventStart}–${item.eventEnd || '?'}</span>`
         : '';
       const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : '', item.isGhost ? 'is-ghost' : ''].filter(Boolean).join(' ');
-      const gBadge = item.isGhost ? '<span class="recur-ghost-badge" title="opakování — klikni pro potvrzení do tohoto měsíce">↻</span>' : '';
+      const gBadge = item.isGhost
+        ? `<span class="recur-ghost-badge is-confirm" onclick="${ctx.call('mConfirmGhost', idx)}" title="opakování — klikni pro potvrzení do tohoto měsíce">🔃</span>`
+        : (item.recurId != null ? '<span class="recur-ghost-badge" title="opakující se úkol (potvrzený)">🔃</span>' : '');
       return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" ${item.isGhost ? '' : 'draggable="true"'}>
         ${dayBadge}${timeBadge}${gBadge}
         <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="hotovo">${tg}</span>
@@ -1538,7 +1544,9 @@ function rowsHtml(ctx, insertBefore = {}) {
       item.isGhost ? 'is-ghost' : '',
       isHL        ? 'tl-highlight' : '',
     ].filter(Boolean).join(' ');
-    const ghostBadge = item.isGhost ? '<span class="recur-ghost-badge" title="opakování — klikni pro potvrzení do tohoto dne">↻</span>' : '';
+    const ghostBadge = item.isGhost
+      ? `<span class="recur-ghost-badge is-confirm" onclick="${ctx.call('confirmDayGhost', idx)}" title="opakování — klikni pro potvrzení do tohoto dne">🔃</span>`
+      : (item.recurId != null ? '<span class="recur-ghost-badge" title="opakující se úkol (potvrzený)">🔃</span>' : '');
 
     const toggle = item.isSubtask ? (item.done ? '☑' : '✒') : (item.done ? '☑' : '☐');
     // skutečné bloky i události: klikací ikona (přepis řádku / „-“,0,✒ → úkol); chybí-li, klikací placeholder „+“
@@ -1550,13 +1558,13 @@ function rowsHtml(ctx, insertBefore = {}) {
     let durLabel = '', durEditable = false, durClick = '';
     if (item.isEvent && item.eventStart) {
       durLabel = item.eventStart + '–' + (item.eventEnd || '?');
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → blok · -/✒ → úkol"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.ev, idx)}" title="klikni: uprav čas · 0 → blok · -/✒ → úkol · d → duplikovat"`;
     } else if (item.isSubtask && !parentIsEvent) {
       durLabel = formatDur(item.duration);
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.dur, idx)}" title="klikni: uprav čas · 9:00-10:00 → událost · 0 → blok · -/✒ → úkol"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.dur, idx)}" title="klikni: uprav čas · 9:00-10:00 → událost · 0 → blok · -/✒ → úkol · d → duplikovat"`;
     } else if (!item.isSubtask) {
       durLabel = formatDur(getEffectiveDuration(idx, list));
-      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="klikni: 9:00-10:00 → událost · -/✒ → úkol"`;
+      durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="klikni: 9:00-10:00 → událost · -/✒ → úkol · d → duplikovat"`;
     }
 
     const draggable = (!item.isEvent && !item.isGhost) ? 'draggable="true"' : '';   // události drží čas; duchové se nepřetahují
@@ -1610,6 +1618,7 @@ function renderAll() {
   renderTimeline();
   renderItemList();
   updateStats();
+  renderDayButtons();      // čas v názvu aktivního dne ber z živého stavu → aktualizuj hned při editaci
   updateDirtyState();
   updateAbbrevHint();
 }
@@ -1640,6 +1649,7 @@ function op_addQuickItems(ctx, forceType) {
   ctx.undo();
   const w = ctx.winStart();
   let addedHere = false, routedLater = false, lastYm = null, addedRecur = 0;
+  const routedYms = new Set();   // cílové měsíce routovaných řádků — k orazítkování mt
 
   lines.forEach(rawLine => {
     let line = rawLine;
@@ -1722,7 +1732,7 @@ function op_addQuickItems(ctx, forceType) {
     // ikona: bloky/události nesou item.icon, podúkoly si emoji nechají v textu (jen Den)
     if (icon) { if (parsed.isSubtask) parsed.text = icon + ' ' + parsed.text; else parsed.icon = icon; }
 
-    if (toLater) { routedLater = true; lastYm = route.ym; } else { addedHere = true; }
+    if (toLater) { routedLater = true; lastYm = route.ym; routedYms.add(route.ym); } else { addedHere = true; }
   });
 
   ta.value = '';
@@ -1733,8 +1743,16 @@ function op_addQuickItems(ctx, forceType) {
     if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
     showStatusMsg('↻ opakování přidáno (' + addedRecur + '×) — viz Později', 2800);
   }
-  if (addedHere) { ctx.save(); ctx.render(); }
+  if (addedHere) {
+    if (ctx.kind === 'month' && ctx.ym) { ensureLaterCollapsed(); laterCollapsed[ctx.ym] = false; saveLaterCollapsed(); }   // rozbal cílový měsíc, ať je nová položka vidět
+    ctx.save(); ctx.render();
+  }
   if (routedLater) {
+    // razítkni mt cílových bucketů — bez něj by LWW na druhém zařízení změnu nepřijalo
+    // a pozdější editace měsíce odjinud by routovanou položku přepsala
+    const rNow = Date.now();
+    routedYms.forEach(ym => { const b = later.find(x => x.ym === ym); if (b) b.mt = rNow; });
+    ensureLaterCollapsed(); routedYms.forEach(ym => { laterCollapsed[ym] = false; }); saveLaterCollapsed();   // rozbal cílové měsíce, ať je nová položka vidět
     saveLater();
     if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
     populateLaterAddMonth();
@@ -1785,7 +1803,7 @@ function op_addBlockItem(ctx, blockType) {
     ctx.list.push({
       id: Date.now() + Math.random() + (i + 1) * 0.001,
       text: task.text || '✒ úkol',
-      blockType, duration: task.duration || 15,
+      blockType, duration: task.duration || 30,
       isEvent: false, eventStart: null, eventEnd: null,
       isSubtask: true, done: false, urgent: false,
     });
@@ -1795,8 +1813,13 @@ function op_addBlockItem(ctx, blockType) {
 }
 
 // add-funkce míří na aktuální cíl (addCtx) — den nebo zvolený měsíc v Později
-function addQuickItems(forceType) { op_addQuickItems(addCtx, forceType); }
-function addBlockItem(blockType) { op_addBlockItem(addCtx, blockType); }
+// Cíl pro menu/preset přidání. Menu (blockMenu) může nést vlastní kontext (m._ctx) — používá náhled
+// (PREVIEWCTX), aby +Úkol/+Blok/+Událost přidávaly do prohlížené šablony/dne, ne do aktivní karty.
+// Když menu žádný kontext nemá (běžné karty, Enter v quickInput), padá na addCtx.
+let _previewMenuCtx = null;                       // jednorázový kontext pro NEJBLIŽŠÍ otevření menu
+function menuCtx() { const m = el('blockMenu'); return (m && m._ctx) || addCtx; }
+function addQuickItems(forceType) { op_addQuickItems(menuCtx(), forceType); }
+function addBlockItem(blockType) { op_addBlockItem(menuCtx(), blockType); }
 
 // klik na zkratku bloku pod polem → vloží napsaný text jako podúkol(y) pod KONKRÉTNÍ blok (dle id)
 // (prázdné pole → jen zaměří pole pro psaní)
@@ -1989,7 +2012,14 @@ function openItemEdit(ctx, idx) {
   el('itemEditName').value = item.text || '';
   el('itemEditNote').value = item.note || '';
   el('itemEditModal').classList.add('open');
+  autoGrowTextarea(el('itemEditNote'));
   const nameEl = el('itemEditName'); nameEl.focus(); nameEl.select();
+}
+// Textové pole roste s obsahem (atribut rows = minimum), strop ~70 % výšky obrazovky, ať zůstanou vidět tlačítka
+function autoGrowTextarea(ta) {
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, Math.round(window.innerHeight * 0.7)) + 'px';
 }
 function saveItemEdit() {
   const ctx = _itemEditCtx, item = _itemEditItem;
@@ -2014,7 +2044,13 @@ function deleteItemEdit() {
   closeModal('itemEditModal');
   if (!ctx || !item) return;
   const idx = ctx.list.indexOf(item);
-  if (idx >= 0) op_deleteItem(ctx, idx);
+  if (idx < 0) return;
+  // opakovaný výskyt → „skip" výjimka jako u ✕ na řádku, jinak by se duch do měsíce/dne vrátil
+  if (item.recurId != null) {
+    if (ctx.kind === 'month' && skipLaterOccurrence(ctx.ym, idx)) { ctx.render(); return; }
+    if (ctx.kind === 'day') { pushUndo(); if (skipGhostOccurrence(idx)) { schedSave(); renderAll(); return; } }
+  }
+  op_deleteItem(ctx, idx);
 }
 
 // ── DURATION HELPERS ──────────────────────────────────────────────────────────
@@ -2025,9 +2061,20 @@ function findParentBlock(idx, arr = items) {
   return -1;
 }
 
+// Minuty položky pro součty/plánování: událost s časem od–do = rozdíl časů (autoritativní,
+// i když je item.duration zastaralá — viz editace času v náhledu), jinak vlastní duration.
+function effItemMinutes(item) {
+  if (item.isEvent && item.eventStart && item.eventEnd) {
+    const d = timeToMin(item.eventEnd) - timeToMin(item.eventStart);
+    if (d > 0) return d;
+  }
+  return item.duration || 0;
+}
+
 function getEffectiveDuration(idx, arr = items) {
   const item = arr[idx];
-  if (item.isSubtask || item.isEvent) return item.duration;
+  if (item.isEvent) return effItemMinutes(item);
+  if (item.isSubtask) return item.duration;
   let sum = 0;
   for (let j = idx + 1; j < arr.length && arr[j].isSubtask; j++) {
     sum += arr[j].duration || 0;
@@ -2045,7 +2092,7 @@ function dayTimeSplit(arr) {
     const it = arr[i];
     if (it.isSubtask) continue;
     if (it.isEvent) {
-      const d = it.duration || 0;
+      const d = effItemMinutes(it);
       total += d; if (it.done) done += d;
       continue;
     }
@@ -2108,13 +2155,35 @@ function parseDuration(text) {
   return null;
 }
 
+// Duplikace položky: kopie hned za originál (blok jde i s podúkoly). Kopie dostane
+// nové id, je nehotová a bez vazby na opakování (jinak by mátla logiku duchů).
+function duplicateItem(ctx, idx) {
+  const list = ctx.list, item = list[idx];
+  if (!item) return false;
+  let count = 1;
+  if (!item.isSubtask) { while (idx + count < list.length && list[idx + count].isSubtask) count++; }
+  ctx.undo();
+  const copies = list.slice(idx, idx + count).map(x => {
+    const c = JSON.parse(JSON.stringify(x));
+    c.id = Date.now() + Math.random();
+    c.done = false;
+    delete c.recurId; delete c.isGhost;
+    return c;
+  });
+  list.splice(idx + count, 0, ...copies);
+  ctx.save(); ctx.render();
+  showStatusMsg('⧉ položka zduplikována', 2000);
+  return true;
+}
+
 // Přepnutí typu položky podle textu zadaného do pole ČASU (jednotné pro úkol/blok/událost):
-//   „9:00-10:00" → událost · „0" → blok · „-" nebo „✒" → úkol.
+//   „9:00-10:00" → událost · „0" → blok · „-" nebo „✒" → úkol · „d" → duplikovat.
 // Vrací true, pokud byl text rozpoznán jako konverze (a obsloužil ji — i no-op, když už je
 // položka cílového typu). false = text není konverzní příkaz, ať se zpracuje jako délka.
 function applyTimeConversion(ctx, idx, txt) {
   const item = ctx.list[idx];
   txt = (txt || '').trim();
+  if (txt.toLowerCase() === 'd') return duplicateItem(ctx, idx);            // „d" → duplikuj položku
   const rm = txt.match(/(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i);
   if (rm) {
     const dur = timeToMin(rm[2]) - timeToMin(rm[1]);
@@ -2143,77 +2212,146 @@ function applyTimeConversion(ctx, idx, txt) {
   return false;
 }
 
+// ── POPOVER „HODINY" — nastavení času události / délky úkolu klikáním ──────────
+// Jeden plovoucí panel nad odznakem času. Textové pole dole zachovává všechny
+// konverze (rozsah → událost · 0 → blok · -/✒ → úkol) — OK ho prožene stejnou
+// logikou jako dřívější inline editace.
+let _timePop = null;
+function closeTimePop() {
+  if (!_timePop) return;
+  document.removeEventListener('mousedown', _timePop._out, true);
+  document.removeEventListener('keydown', _timePop._esc, true);
+  _timePop.remove(); _timePop = null;
+}
+function _openTimePop(anchor) {
+  closeTimePop();
+  const pop = document.createElement('div');
+  pop.className = 'time-pop';
+  document.body.appendChild(pop);
+  _timePop = pop;
+  pop._out = e => { if (!pop.contains(e.target)) closeTimePop(); };
+  pop._esc = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeTimePop(); } };
+  document.addEventListener('mousedown', pop._out, true);
+  document.addEventListener('keydown', pop._esc, true);
+  pop._place = () => {
+    const br = anchor.getBoundingClientRect();
+    const mw = pop.offsetWidth, mh = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+    let left = br.left - (mw - br.width) / 2;
+    if (left + mw > vw - 8) left = vw - mw - 8;
+    if (left < 8) left = 8;
+    let top = br.top - mh - 6;                                   // primárně NAD odznak
+    if (top < 8) top = Math.min(vh - mh - 8, br.bottom + 6);     // nevejde se → pod něj
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  };
+  return pop;
+}
+function _tpBtn(label, title, fn, cls) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'time-pop-btn' + (cls ? ' ' + cls : ''); b.textContent = label;
+  if (title) b.title = title;
+  b.addEventListener('click', fn);
+  return b;
+}
+function _tpRow(lbl) {
+  const r = document.createElement('div'); r.className = 'time-pop-row';
+  if (lbl) { const l = document.createElement('span'); l.className = 'time-pop-lbl'; l.textContent = lbl; r.appendChild(l); }
+  return r;
+}
+const _tpClamp = v => Math.max(0, Math.min(23 * 60 + 55, v));
+
+// rozmezí od–do (události; bloky přes něj dostanou čas a stanou se událostí)
+function openRangePicker(ctx, idx, anchor, start, end) {
+  const pop = _openTimePop(anchor);
+  let s = timeToMin(start), e = timeToMin(end);
+  if (!(e > s)) e = _tpClamp(s + 60);
+
+  const input = document.createElement('input');
+  input.className = 'time-pop-input';
+  input.title = 'ručně: 9:00-10:00 · 0 → bez času (blok) · - → úkol · d → duplikovat';
+  const valS = document.createElement('span'); valS.className = 'time-pop-val';
+  const valE = document.createElement('span'); valE.className = 'time-pop-val';
+  const sync = () => { valS.textContent = minToTime(s); valE.textContent = minToTime(e); input.value = minToTime(s) + '-' + minToTime(e); };
+  // ruční zápis v poli → převezmi do stepperů (best effort)
+  const readInput = () => { const m = input.value.match(/(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i); if (m) { s = timeToMin(m[1]); e = timeToMin(m[2]); } };
+
+  const rowS = _tpRow('od');
+  rowS.appendChild(_tpBtn('−', 'o 15 min dřív (drží délku)', () => { readInput(); const d = e - s; s = _tpClamp(s - 15); e = _tpClamp(s + d); sync(); }));
+  rowS.appendChild(valS);
+  rowS.appendChild(_tpBtn('+', 'o 15 min později (drží délku)', () => { readInput(); const d = e - s; s = _tpClamp(s + 15); e = _tpClamp(s + d); sync(); }));
+  const rowE = _tpRow('do');
+  rowE.appendChild(_tpBtn('−', 'konec o 15 min dřív (zkrátí)', () => { readInput(); e = Math.max(s + 5, e - 15); sync(); }));
+  rowE.appendChild(valE);
+  rowE.appendChild(_tpBtn('+', 'konec o 15 min později (prodlouží)', () => { readInput(); e = _tpClamp(e + 15); sync(); }));
+
+  const foot = document.createElement('div'); foot.className = 'time-pop-foot';
+  foot.appendChild(_tpBtn('zrušit', '', () => closeTimePop()));
+  const ok = () => { const t = input.value.trim(); closeTimePop(); if (applyTimeConversion(ctx, idx, t)) ctx.render(); };
+  foot.appendChild(_tpBtn('OK', '', ok, 'primary'));
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
+
+  pop.appendChild(rowS); pop.appendChild(rowE); pop.appendChild(input); pop.appendChild(foot);
+  sync();
+  requestAnimationFrame(pop._place);
+}
+
+// délka úkolu (minuty) — steppery + presety; pole umí i konverze (rozsah/0/-)
+function openDurPicker(ctx, idx, anchor) {
+  const pop = _openTimePop(anchor);
+  let d = +(ctx.list[idx] && ctx.list[idx].duration) || 30;
+
+  const input = document.createElement('input');
+  input.className = 'time-pop-input';
+  input.title = 'ručně: 45m / 2h · 9:00-10:00 → událost · 0 → blok · - → úkol · d → duplikovat';
+  const val = document.createElement('span'); val.className = 'time-pop-val';
+  const sync = () => { val.textContent = formatDur(d); input.value = d + 'm'; };
+  const readInput = () => { const p = parseDuration(input.value); if (p && p > 0) d = p; };
+
+  const row = _tpRow(null);
+  row.appendChild(_tpBtn('−15', '', () => { readInput(); d = Math.max(5, d - 15); sync(); }));
+  row.appendChild(_tpBtn('−5', '', () => { readInput(); d = Math.max(5, d - 5); sync(); }));
+  row.appendChild(val);
+  row.appendChild(_tpBtn('+5', '', () => { readInput(); d += 5; sync(); }));
+  row.appendChild(_tpBtn('+15', '', () => { readInput(); d += 15; sync(); }));
+
+  const presets = document.createElement('div'); presets.className = 'time-pop-presets';
+  [15, 30, 45, 60, 90, 120].forEach(p => presets.appendChild(_tpBtn(formatDur(p), '', () => { d = p; sync(); })));
+
+  const foot = document.createElement('div'); foot.className = 'time-pop-foot';
+  foot.appendChild(_tpBtn('zrušit', '', () => closeTimePop()));
+  const ok = () => {
+    const t = input.value.trim(); closeTimePop();
+    if (applyTimeConversion(ctx, idx, t)) { ctx.render(); return; }   // rozsah → událost · 0 → blok · -/✒ → úkol
+    const parsed = parseDuration(t);
+    const item = ctx.list[idx];
+    if (item && parsed && parsed > 0 && parsed !== item.duration) { ctx.undo(); item.duration = parsed; ctx.save(); }
+    ctx.render();
+  };
+  foot.appendChild(_tpBtn('OK', '', ok, 'primary'));
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
+
+  pop.appendChild(row); pop.appendChild(presets); pop.appendChild(input); pop.appendChild(foot);
+  sync();
+  requestAnimationFrame(pop._place);
+}
+
 function op_startDurEdit(ctx, idx) {
-  const list = ctx.list;
-  const item = list[idx];
+  const item = ctx.list[idx];
   if (!item || !item.isSubtask) return;
   const rows = ctx.rowsEl();
   if (!rows || !rows[idx]) return;
   const durEl = rows[idx].querySelector('.dur-badge');
   if (!durEl) return;
-
-  durEl.contentEditable = 'true';
-  durEl.textContent = item.duration + 'm';
-  durEl.focus();
-  const range = document.createRange();
-  range.selectNodeContents(durEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges(); sel.addRange(range);
-
-  let committed = false;
-  const commit = () => {
-    if (committed) return;
-    committed = true;
-    durEl.contentEditable = 'false';
-    const txt = durEl.textContent.trim();
-    // rozsah → událost · 0 → blok · -/✒ → úkol
-    if (applyTimeConversion(ctx, idx, txt)) { ctx.render(); return; }
-    const parsed = parseDuration(txt);
-    if (parsed && parsed > 0 && parsed !== item.duration) {
-      ctx.undo();
-      list[idx].duration = parsed;
-      ctx.save();
-    }
-    ctx.render();
-  };
-  durEl.addEventListener('blur', commit, { once: true });
-  durEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
-    if (e.key === 'Escape') { durEl.textContent = formatDur(item.duration); durEl.blur(); }
-  });
+  openDurPicker(ctx, idx, durEl);
 }
 
 function op_startEventEdit(ctx, idx) {
-  const list = ctx.list;
-  const item = list[idx];
+  const item = ctx.list[idx];
   if (!item || !item.isEvent) return;
   const rows = ctx.rowsEl();
   if (!rows || !rows[idx]) return;
   const durEl = rows[idx].querySelector('.dur-badge');
   if (!durEl) return;
-
-  const original = durEl.textContent;
-  durEl.contentEditable = 'true';
-  durEl.focus();
-  const range = document.createRange();
-  range.selectNodeContents(durEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges(); sel.addRange(range);
-
-  let committed = false;
-  const commit = () => {
-    if (committed) return;
-    committed = true;
-    durEl.contentEditable = 'false';
-    // rozsah → uprav/ponech událost · 0 → blok · -/✒ → úkol
-    applyTimeConversion(ctx, idx, durEl.textContent.trim());
-    ctx.render();
-  };
-  durEl.addEventListener('blur', commit, { once: true });
-  durEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
-    if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
-  });
+  openRangePicker(ctx, idx, durEl, item.eventStart || ctx.winStart() || '8:00', item.eventEnd || null);
 }
 function startDurEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startDurEdit(DAYCTX, idx); }
 function startEventEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startEventEdit(DAYCTX, idx); }
@@ -2270,7 +2408,7 @@ function op_startIconEdit(ctx, idx) {
   });
 }
 
-// ── ČAS BLOKU (inline): zadaný rozsah 9:00-10:00 → blok se stane událostí ──────────
+// ── ČAS BLOKU: picker rozmezí — potvrzený rozsah 9:00-10:00 → blok se stane událostí ──
 function op_startBlockTimeEdit(ctx, idx) {
   const list = ctx.list;
   const item = list[idx];
@@ -2279,29 +2417,9 @@ function op_startBlockTimeEdit(ctx, idx) {
   if (!rows || !rows[idx]) return;
   const durEl = rows[idx].querySelector('.dur-badge');
   if (!durEl) return;
-
-  const original = durEl.textContent;
-  durEl.contentEditable = 'true';
-  durEl.focus();
-  const range = document.createRange();                  // označ obsah — uživatel rovnou přepíše rozsahem
-  range.selectNodeContents(durEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges(); sel.addRange(range);
-
-  let committed = false;
-  const commit = () => {
-    if (committed) return;
-    committed = true;
-    durEl.contentEditable = 'false';
-    // rozsah → událost · -/✒ → úkol  (0 = už je blok, nic)
-    applyTimeConversion(ctx, idx, durEl.textContent.trim());
-    ctx.render();
-  };
-  durEl.addEventListener('blur', commit, { once: true });
-  durEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); durEl.blur(); }
-    if (e.key === 'Escape') { durEl.textContent = original; durEl.blur(); }
-  });
+  const start = ctx.winStart() || '8:00';
+  const end = minToTime(_tpClamp(timeToMin(start) + (getEffectiveDuration(idx, list) || item.duration || 30)));
+  openRangePicker(ctx, idx, durEl, start, end);
 }
 function startIconEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startIconEdit(DAYCTX, idx); }
 function startBlockTimeEdit(idx) { if (items[idx] && items[idx].isGhost) materializeGhost(idx); op_startBlockTimeEdit(DAYCTX, idx); }
@@ -2309,17 +2427,6 @@ function mStartIconEdit(ym, idx) { materializeLaterGhost(ym, idx); op_startIconE
 function mStartBlockTimeEdit(ym, idx) { materializeLaterGhost(ym, idx); op_startBlockTimeEdit(MCTX(ym), idx); }
 function iStartIconEdit(idx) { op_startIconEdit(INBOXCTX, idx); }
 function iStartBlockTimeEdit(idx) { op_startBlockTimeEdit(INBOXCTX, idx); }
-
-// ── DAY TEMPLATES ─────────────────────────────────────────────────────────────
-async function loadDayTemplate(day) {
-  const tpl = DAY_TEMPLATES[day];
-  if (!tpl) return;
-  if (!await customConfirm('Nahradit aktuální plán šablonou ' + day + '?', 'nahradit')) return;
-  pushUndo();
-  items = tpl.map((t, i) => ({ ...t, id: Date.now() + i }));
-  activeLibId = null; savedSnapshot = null;
-  schedSave(); renderLibrary(); renderAll();
-}
 
 // ── WINDOW CHANGE ─────────────────────────────────────────────────────────────
 function onWindowChange() {
@@ -2398,7 +2505,12 @@ function newWinId() { return 'w' + Date.now().toString(36) + Math.random().toStr
 // Datový LWW engine se NEMĚNÍ — data každého okna zůstávají ve vlastním gistu.
 function winBinId(id) { try { return localStorage.getItem(id === 'main' ? 'todo-app-gist-id' : 'todo-app-gist-id::' + id) || ''; } catch(e) { return ''; } }
 function registryForPush() {
-  return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; const b = winBinId(w.id); if (b) o.binId = b; return o; });
+  return dayWindows.map(w => { const o = { id: w.id, name: w.name, mt: +w.mt || 0 }; const b = winBinId(w.id); if (b) o.binId = b; if (+w.binIdMt) o.binIdMt = +w.binIdMt; return o; });
+}
+// razítko změny Gist ID okna — registr ho šíří LWW, takže se přepis (i smazání) ID propíše na ostatní zařízení
+function stampWinBinIdMt(id) {
+  const w = dayWindows.find(x => x.id === id);
+  if (w) { w.binIdMt = Date.now(); saveWindows(); }
 }
 // sloučí cloud registr (LWW podle mt + náhrobky), předpropojí Gist ID nových oken
 function mergeWindowRegistry(cloudWins, cloudTomb) {
@@ -2409,13 +2521,21 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
   const byId = new Map(dayWindows.map(w => [w.id, w]));
   (Array.isArray(cloudWins) ? cloudWins : []).forEach(cw => {
     if (!cw || !cw.id) return;
-    if (cw.binId && cw.id !== 'main') {               // předpropoj Gist ID (jen doplň, nepřepisuj lokální)
+    if (cw.id !== 'main') {                           // Gist ID okna: LWW podle binIdMt (přepis i smazání); bez razítka jen doplň chybějící
       const k = 'todo-app-gist-id::' + cw.id;
-      try { if (!localStorage.getItem(k)) localStorage.setItem(k, cw.binId); } catch(e) {}
+      const ex0 = byId.get(cw.id);
+      const lbmt = ex0 ? (+ex0.binIdMt || 0) : 0;
+      const cbmt = +cw.binIdMt || 0;
+      const cb = cw.binId || '';
+      let cur = ''; try { cur = localStorage.getItem(k) || ''; } catch(e) {}
+      if (cb !== cur && (cbmt > lbmt || (cb && !cur && cbmt >= lbmt))) {
+        try { if (cb) localStorage.setItem(k, cb); else localStorage.removeItem(k); } catch(e) {}
+        if (ex0) { ex0.binIdMt = cbmt; changed = true; }
+      }
     }
     const cmt = +cw.mt || 0, ex = byId.get(cw.id), tomb = winTombstones[cw.id] || 0;
     if (ex) { if (cmt > (+ex.mt || 0)) { ex.name = cw.name || ex.name; ex.mt = cmt; changed = true; } }
-    else if (cmt >= tomb) { const w = { id: cw.id, name: cw.name || cw.id, mt: cmt }; dayWindows.push(w); byId.set(cw.id, w); changed = true; }
+    else if (cmt >= tomb) { const w = { id: cw.id, name: cw.name || cw.id, mt: cmt, binIdMt: +cw.binIdMt || 0 }; dayWindows.push(w); byId.set(cw.id, w); changed = true; }
   });
   // aplikuj náhrobky lokálně (okno smazané jinde) — nikdy ne hlavní/aktivní
   Object.keys(winTombstones).forEach(id => {
@@ -2440,7 +2560,7 @@ function windowHasData() {
 // per-okno klíče (pro mazání okna) — vč. sync klíčů z IIFE (hodnoty jsou stabilní)
 function winKeyBases() {
   return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
-    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY,
+    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_HORIZON_KEY,
     'todo-app-gist-id', 'todo-app-tombstones', 'todo-app-syncknown'];
 }
 
@@ -2467,8 +2587,9 @@ function activateWindow(id) {
   activeWin = id;
   try { localStorage.setItem(ACTIVE_WIN_KEY, id); } catch(e) {}
   activeLibId = null; savedSnapshot = null;
-  undoStack = []; redoStack = []; highlightedId = null; planWeekOffset = 0;
+  undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
+  laterCollapsed = null;   // přenačti sbalení měsíců pod WK() nového okna
   loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
   activePlanDate = todayIso();
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
@@ -2542,10 +2663,6 @@ function loadBlockTypes() {
         eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], note: bt.note || '', mt: +bt.mt || 0 };
     });
   } catch(e) {}
-  try {
-    const del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]');
-    del.forEach(k => { if (DEFAULT_BLOCK_TYPES[k]) delete BLOCK_TYPES[k]; });
-  } catch(e) {}
   const allKeys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
   try {
     const savedOrder = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_ORDER_KEY)) || 'null');
@@ -2573,8 +2690,7 @@ function updateQuickInputPlaceholder() {
   if (!ta) return;
   const { abbrevs } = getBlockAbbrevMap();
   let ex = 'D', exLabel = 'blok';
-  if (abbrevs['DEEP_WORK']) { ex = abbrevs['DEEP_WORK']; exLabel = BLOCK_TYPES['DEEP_WORK']?.label || 'Deep Work'; }
-  else { const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; } }
+  const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; }
   ta.placeholder = `úkol 20m  ·  9:30-10:00 standup  ·  -${ex} text (pod ${exLabel})  ·  text -${ex.toLowerCase()}`;
   updateAbbrevHint();
 }
@@ -2627,7 +2743,6 @@ function renderBlockTypeList() {
   if (!list) return;
   list.innerHTML = blockTypeOrder.map((key, idx) => {
     const bt = BLOCK_TYPES[key]; if (!bt) return '';
-    const isDefault = !!DEFAULT_BLOCK_TYPES[key];
     const tasks = bt.defaultTasks || [];
     const taskTotal = tasks.reduce((s, t) => s + (t.duration || 0), 0);
     const durStr = formatDur(tasks.length ? taskTotal : bt.defaultDuration);
@@ -2664,6 +2779,7 @@ function openBlockTypeEdit(key) {
   (bt.defaultTasks || []).forEach(t => addBlockEditTask(t.text, t.duration));
 
   el('blockEditModal').classList.add('open');
+  autoGrowTextarea(el('blockEditNote'));
   setTimeout(() => el('blockEditLabel').focus(), 50);
 }
 
@@ -2693,7 +2809,7 @@ function saveBlockType() {
   el('blockEditTasks').querySelectorAll('div').forEach(row => {
     const inputs = row.querySelectorAll('input');
     const text = inputs[0]?.value.trim();
-    const dur = parseInt(inputs[1]?.value) || 15;
+    const dur = parseInt(inputs[1]?.value) || 30;
     if (text) defaultTasks.push({ text, duration: dur });
   });
 
@@ -2729,13 +2845,6 @@ function resetBlockType() {
 async function deleteBlockType(key) {
   if (key === 'TASK') return;
   if (!await customConfirm('Smazat typ bloku "' + (BLOCK_TYPES[key]?.label || key) + '"?', 'smazat')) return;
-  if (DEFAULT_BLOCK_TYPES[key]) {
-    try {
-      const del = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]');
-      if (!del.includes(key)) del.push(key);
-      localStorage.setItem(WK(BLOCKTYPES_DELETED_KEY), JSON.stringify(del));
-    } catch(e) {}
-  }
   delete BLOCK_TYPES[key];
   blockTypeOrder = blockTypeOrder.filter(k => k !== key);
   saveBlockTypes();
@@ -2796,6 +2905,7 @@ function updateLibraryEntry() {
   entry.mt = Date.now();
   saveLibrary();
   markSaved();
+  renderLibrary();                 // přepočítej čas v názvu šablony hned, ne až po refresh
   showSave('✓ šablona aktualizována');
   updateDirtyState();
 }
@@ -2860,6 +2970,18 @@ async function applyLibEntry(id) {
 let _weekTplLoadId = null;
 let _previewSource = null;
 
+// Kontext pro přidávání v náhledu — sdílí op_add*/preset menu s kartami (Týden/Příští). Mění jen
+// položky v paměti náhledu (_previewSource.items); na disk se promítne až „uložit změny"/„aplikovat".
+const PREVIEWCTX = {
+  kind: 'preview',
+  get list() { return _previewSource ? _previewSource.items : []; },
+  input: 'previewAddText',
+  winStart() { return (_previewSource && _previewSource.windowStart) || '8:00'; },
+  undo() {},
+  save() {},
+  render() { renderPreviewList(); },
+};
+
 let _weekTplNextWeek = true;
 
 function openWeekTplLoadModal(entry) {
@@ -2879,9 +3001,9 @@ function openWeekTplLoadModal(entry) {
   el('weekTplDayList').innerHTML = DAY_ORDER.map((dayKey) => {
     const data = entry.weekData[dayKey];
     if (!data) return '';
-    const total = data.items.length;
+    const totalMin = dayTotalMinutes(data.items);
     return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.83rem">
-      <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${total}×</span></span>
+      <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${totalMin ? formatDur(totalMin) : '—'}</span></span>
       <span style="color:var(--muted);font-size:.75rem">→</span>
       <select id="wtl-${dayKey}" style="${selectStyle}">${targetOptions}</select>
       <button onclick="openPreview('weekTplDay',${entry.id},'${dayKey}')" style="border:none;background:none;cursor:pointer;padding:.15rem .2rem;flex-shrink:0;display:flex;align-items:center;opacity:.6" title="náhled">
@@ -2985,8 +3107,9 @@ function openPreview(type, id, dayKey) {
   if (applyBtn) applyBtn.style.display = isLib ? 'block' : 'none';
   // primární akce náhledu: u šablony „aplikovat", jinak „uložit změny"
   if (saveBtn) saveBtn.classList.toggle('primary', !isLib);
-  el('previewMeta').textContent = src.windowStart + '–' + src.windowEnd + ' · ' + src.items.length + 'p';
-  renderPreviewList();
+  if (el('previewWinStart')) el('previewWinStart').value = src.windowStart || '';
+  if (el('previewWinEnd'))   el('previewWinEnd').value   = src.windowEnd   || '';
+  renderPreviewList();   // sám nastaví previewMeta (celkový čas)
   el('previewModal').classList.add('open');
 }
 
@@ -3021,7 +3144,7 @@ function startPreviewTitleEdit() {
   inp.addEventListener('blur', () => finish(true));
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-    else if (e.key === 'Escape') { finish(false); }
+    else if (e.key === 'Escape') { finish(false); e.stopPropagation(); }
   });
 }
 
@@ -3034,21 +3157,27 @@ function applyPreviewTemplate() {
 function renderPreviewList() {
   const container = el('previewItemList');
   if (!container || !_previewSource) return;
-  const n = _previewSource.items.length;
-  const itemsHtml = n ? _previewSource.items.map((item, i) => {
+  const arr = _previewSource.items;
+  const n = arr.length;
+  const times = computeScheduleTimes(arr, _previewSource.windowStart);   // kdy daný blok vychází
+  const itemsHtml = n ? arr.map((item, i) => {
+    const isTop = !item.isSubtask;
     let durTxt;
     if (item.isEvent && item.eventStart) durTxt = item.eventStart + '–' + (item.eventEnd || '?');
+    else if (isTop) durTxt = formatDur(getEffectiveDuration(i, arr));   // blok = součet podúkolů
     else durTxt = formatDur(item.duration);
+    // čas bloku na ose dne (jen plovoucí top-level; událost už má fixní čas v durTxt)
+    const sched = (isTop && !item.isEvent && times[i])
+      ? `<span class="preview-item-sched">${minToTime(times[i].startMin)}–${minToTime(times[i].endMin)}</span>` : '';
     const pbt = BLOCK_TYPES[item.blockType] || BLOCK_TYPES.TASK;
     const pic = itemIcon(item);
-    const ptext = !item.isSubtask && pic
-      ? pic + ' ' + stripBlockEmoji(item.text, pbt)
-      : item.text;
+    const ptext = isTop && pic ? pic + ' ' + stripBlockEmoji(item.text, pbt) : item.text;
     return `<div class="preview-item${item.isSubtask ? ' subtask' : ' block'}" draggable="true" data-idx="${i}">
       <input type="checkbox" class="preview-item-chk" ${item.done ? 'checked' : ''}
         onchange="togglePreviewDone(${i},this.checked)">
       <span class="preview-item-text${item.done ? ' done' : ''}"
         onclick="startPreviewEdit(${i},this)">${esc(ptext)}</span>
+      ${sched}
       <span class="preview-item-dur" onclick="startPreviewDurEdit(${i},this)" title="upravit čas">${durTxt}</span>
       <div class="preview-item-move">
         <button onclick="movePreviewItem(${i},-1)" ${i===0?'disabled':''}>▲</button>
@@ -3060,13 +3189,34 @@ function renderPreviewList() {
     </div>` + (item.note ? `<div class="preview-item-note" onclick="startPreviewNoteEdit(${i},this)" title="upravit popis / poznámku">${esc(item.note)}</div>` : '');
   }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">Žádné položky.</div>';
   container.innerHTML = itemsHtml + `<div class="preview-add-row">
-    <input id="previewAddText" class="preview-add-text" placeholder="nová položka…"
+    <input id="previewAddText" class="preview-add-text" placeholder="nová položka… (např. úkol 20m)"
       onkeydown="if(event.key==='Enter')addPreviewItem(false)">
     <input id="previewAddDur" class="preview-add-dur" type="number" min="1" max="720"
       placeholder="min" title="délka v minutách" onkeydown="if(event.key==='Enter')addPreviewItem(false)">
-    <button class="modal-btn" style="padding:.25rem .45rem;flex:none" onclick="addPreviewItem(false)" title="přidat úkol">+ úkol</button>
-    <button class="modal-btn" style="padding:.25rem .45rem;flex:none" onclick="addPreviewItem(true)" title="přidat blok">+ blok</button>
+    <button class="btn-add" style="padding:.25rem .45rem;flex:none" onclick="previewMenu(event,'task')" title="přidat úkol — presety i vlastní">+ Úkol ▾</button>
+    <button class="btn-add" style="padding:.25rem .45rem;flex:none" onclick="previewMenu(event,'block')" title="přidat blok — presety i vlastní">+ Blok ▾</button>
+    <button class="btn-add" style="padding:.25rem .45rem;flex:none" onclick="previewMenu(event,'event')" title="přidat událost — presety i vlastní">+ Událost ▾</button>
   </div>`;
+  updatePreviewMeta();
+}
+
+// Meta náhledu = celkový čas položek (místo počtu); u rozpracovaných i hotovo/celkem.
+function updatePreviewMeta() {
+  const m = el('previewMeta');
+  if (!m || !_previewSource) return;
+  const { total, done } = dayTimeSplit(_previewSource.items);
+  m.textContent = (done > 0 && done < total)
+    ? formatDur(done) + ' / ' + formatDur(total)
+    : 'Σ ' + (total ? formatDur(total) : '0');
+}
+
+// Editace okna od–do přímo v náhledu → přepočítá časy bloků (uloží se přes „uložit změny"/„aplikovat").
+function setPreviewWindow() {
+  if (!_previewSource) return;
+  const s = el('previewWinStart')?.value.trim(), e = el('previewWinEnd')?.value.trim();
+  if (s) _previewSource.windowStart = s;
+  if (e) _previewSource.windowEnd = e;
+  renderPreviewList();
 }
 
 function togglePreviewDone(i, checked) {
@@ -3093,7 +3243,7 @@ function startPreviewEdit(i, span) {
   inp.addEventListener('blur', finish);
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-    if (e.key === 'Escape') { saved = true; renderPreviewList(); }
+    if (e.key === 'Escape') { saved = true; renderPreviewList(); e.stopPropagation(); }
   });
 }
 
@@ -3115,7 +3265,7 @@ function startPreviewNoteEdit(i, span) {
   };
   ta.addEventListener('blur', finish);
   ta.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { saved = true; renderPreviewList(); }   // Enter = nový řádek; uloží se na blur
+    if (e.key === 'Escape') { saved = true; renderPreviewList(); e.stopPropagation(); }   // Enter = nový řádek; uloží se na blur
   });
 }
 
@@ -3141,13 +3291,14 @@ function startPreviewDurEdit(i, span) {
         if (!wrap.contains(document.activeElement)) {
           if (s.value) item.eventStart = s.value;
           if (e2.value) item.eventEnd = e2.value;
+          if (item.eventStart && item.eventEnd) item.duration = effItemMinutes(item);   // drž duration v souladu s časem
           renderPreviewList();
         }
       }, 80);
     });
     [s, e2].forEach(inp => inp.addEventListener('keydown', ev => {
       if (ev.key === 'Enter') inp.blur();
-      if (ev.key === 'Escape') renderPreviewList();
+      if (ev.key === 'Escape') { renderPreviewList(); ev.stopPropagation(); }
     }));
   } else {
     const inp = document.createElement('input');
@@ -3167,7 +3318,7 @@ function startPreviewDurEdit(i, span) {
     inp.addEventListener('blur', finish);
     inp.addEventListener('keydown', ev => {
       if (ev.key === 'Enter') inp.blur();
-      if (ev.key === 'Escape') { saved = true; renderPreviewList(); }
+      if (ev.key === 'Escape') { saved = true; renderPreviewList(); ev.stopPropagation(); }
     });
   }
 }
@@ -3189,44 +3340,46 @@ function addPreviewItem(asBlock) {
   if (!text) { textInp?.focus(); return; }
   const dur = parseInt(durInp?.value) || 30;
   _previewSource.items.push({ id: Date.now(), text, blockType: 'TASK', duration: dur, done: false, isSubtask: !asBlock, isEvent: false });
-  el('previewMeta').textContent = _previewSource.windowStart + '–' + _previewSource.windowEnd + ' · ' + _previewSource.items.length + 'p';
-  renderPreviewList();
+  renderPreviewList();   // přepočítá i meta (celkový čas)
   el('previewAddText')?.focus();
 }
 
 function deletePreviewItem(i) {
   if (!_previewSource) return;
   _previewSource.items.splice(i, 1);
-  el('previewMeta').textContent = _previewSource.windowStart + '–' + _previewSource.windowEnd + ' · ' + _previewSource.items.length + 'p';
-  renderPreviewList();
+  renderPreviewList();   // přepočítá i meta (celkový čas)
 }
 
 function doPreviewSave() {
   if (!_previewSource) return;
-  const { type, id, dayKey, items: preItems } = _previewSource;
+  const { type, id, dayKey, items: preItems, windowStart: wS, windowEnd: wE } = _previewSource;
   const snapshot = JSON.parse(JSON.stringify(preItems));
   if (type === 'lib') {
     const entry = library.find(e => e.id === id);
     if (!entry) return;
     entry.data.items = stripDone(snapshot);
+    entry.data.windowStart = wS; entry.data.windowEnd = wE;
     entry.mt = Date.now();
     saveLibrary(); renderLibrary();
   } else if (type === 'weekDay') {
     const d = weekDays.find(d => d.id === id);
     if (!d) return;
     d.items = snapshot;
+    d.windowStart = wS; d.windowEnd = wE;
     d.mt = Date.now();
     saveWeek(); renderWeekTab(); renderDayButtons();
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
     entry.weekData[dayKey].items = stripDone(snapshot);
+    entry.weekData[dayKey].windowStart = wS; entry.weekData[dayKey].windowEnd = wE;
     entry.mt = Date.now();
-    saveLibrary();
+    saveLibrary(); renderLibrary();   // přepočítej celkový čas vícedenní šablony v jejím názvu
   } else if (type === 'weekPlan') {
     const p = weekPlans.find(p => p.id === id);
     if (!p) return;
     p.items = snapshot;
+    p.windowStart = wS; p.windowEnd = wE;
     p.mt = Date.now();
     saveWeekPlans(); renderWeekTab();
   }
@@ -3277,19 +3430,22 @@ function _openMenu(menu, html, btn) {
   if (html != null) menu.innerHTML = html;
   menu.style.display = 'flex';
   const br = btn.getBoundingClientRect();
-  menu.style.top = (br.bottom + 4) + 'px';
   requestAnimationFrame(() => {
-    const mw = menu.offsetWidth, vw = window.innerWidth;
+    const mw = menu.offsetWidth, mh = menu.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
     let left = br.left;
     if (left + mw > vw - 8) left = vw - mw - 8;
     if (left < 8) left = 8;
     menu.style.left = left + 'px';
+    let top = br.bottom + 4;
+    if (top + mh > vh - 8) top = Math.max(8, br.top - mh - 4);   // nevejde se dolů → otevři nad tlačítko
+    menu.style.top = top + 'px';
   });
 }
 
 function toggleBlockMenu(e) {
   e.stopPropagation();
   const menu = el('blockMenu');
+  menu._ctx = _previewMenuCtx; _previewMenuCtx = null;   // null = běžná karta (addCtx), jinak náhled
   if (menu._src === 'block' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   const html = Object.entries(BLOCK_TYPES)
     .filter(([k, bt]) => k !== 'TASK' && !bt.isEvent)
@@ -3302,6 +3458,7 @@ function toggleBlockMenu(e) {
 function toggleEventMenu(e) {
   e.stopPropagation();
   const menu = el('blockMenu');
+  menu._ctx = _previewMenuCtx; _previewMenuCtx = null;
   if (menu._src === 'event' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   const eventTypes = Object.entries(BLOCK_TYPES).filter(([k, bt]) => k !== 'TASK' && bt.isEvent);
   let html = eventTypes.map(([k, bt]) =>
@@ -3316,6 +3473,7 @@ function toggleEventMenu(e) {
 function toggleTaskMenu(e) {
   e.stopPropagation();
   const menu = el('blockMenu');
+  menu._ctx = _previewMenuCtx; _previewMenuCtx = null;
   if (menu._src === 'task' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   menu.innerHTML = '';
   const seen = new Set();
@@ -3326,7 +3484,7 @@ function toggleTaskMenu(e) {
       const btn = document.createElement('button');
       btn.className = 'block-menu-item';
       btn.innerHTML = `✒ ${esc(t.text)}<span style="margin-left:.5rem;font-family:'DM Mono',monospace;font-size:.78em;color:var(--muted)">${t.duration||15}m</span>`;
-      btn.addEventListener('click', () => addPredefinedTask(t.text, t.duration || 15));
+      btn.addEventListener('click', () => addPredefinedTask(t.text, t.duration || 30));
       menu.appendChild(btn);
     });
   });
@@ -3351,9 +3509,17 @@ function op_addPredefinedTask(ctx, text, duration) {
   ctx.save(); ctx.render();
   closeBlockMenu();
 }
-function addPredefinedTask(text, duration) { op_addPredefinedTask(addCtx, text, duration); }
+function addPredefinedTask(text, duration) { op_addPredefinedTask(menuCtx(), text, duration); }
 
-function closeBlockMenu() { const m = el('blockMenu'); if (m) { m.style.display = 'none'; m._src = null; } }
+function closeBlockMenu() { const m = el('blockMenu'); if (m) { m.style.display = 'none'; m._src = null; m._ctx = null; } }
+
+// Otevře preset menu (úkol/blok/událost) cílené na náhled — sdílí toggle* funkce přes jednorázový _previewMenuCtx.
+function previewMenu(e, which) {
+  _previewMenuCtx = PREVIEWCTX;
+  if (which === 'task') toggleTaskMenu(e);
+  else if (which === 'block') toggleBlockMenu(e);
+  else toggleEventMenu(e);
+}
 
 // ── CUSTOM PROMPT ─────────────────────────────────────────────────────────────
 function customPrompt(msg, defaultVal) {
@@ -3383,7 +3549,38 @@ function customPrompt(msg, defaultVal) {
     el('confirmCancelBtn').onclick = () => cleanup(null);
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') cleanup(input.value.trim() || null);
-      if (e.key === 'Escape') cleanup(null);
+      if (e.key === 'Escape') { cleanup(null); e.stopPropagation(); }
+    });
+  });
+}
+
+// víceřádkový prompt (textarea) — pro popis/poznámku; OK vrací i prázdný řetězec (= smazat), zrušení vrací null
+function customPromptArea(msg, defaultVal) {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    const input = document.createElement('textarea');
+    input.rows = 5;
+    input.value = defaultVal || '';
+    input.style.cssText = 'width:100%;padding:.4rem .5rem;font-family:"DM Mono",monospace;font-size:.85rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);outline:none;margin-top:.25rem;resize:vertical';
+    const origMsg = el('confirmMsg').textContent;
+    el('confirmMsg').textContent = msg;
+    el('confirmMsg').after(input);
+    el('confirmOkBtn').textContent = 'OK';
+    el('confirmCancelBtn').style.display = '';
+    el('confirmModal').classList.add('open');
+    input.focus();
+    const cleanup = val => {
+      input.remove();
+      el('confirmMsg').textContent = origMsg;
+      el('confirmModal').classList.remove('open');
+      _confirmResolve = null;
+      resolve(val);
+    };
+    _confirmResolve = () => cleanup(null);                       // klik na pozadí = zrušit
+    el('confirmOkBtn').onclick = () => cleanup(input.value);     // prázdné = smazat popis (≠ zrušit)
+    el('confirmCancelBtn').onclick = () => cleanup(null);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { cleanup(null); e.stopPropagation(); }   // Enter = nový řádek (commit jen přes OK)
     });
   });
 }
@@ -3407,6 +3604,7 @@ function pushUndo() {
   updateUndoBtn();
 }
 function undo() {
+  if (typeof isLaterTabActive === 'function' && isLaterTabActive()) { laterUndo(); return; }   // karta Później má vlastní undo
   if (!undoStack.length) return;
   redoStack.push(sessionSnap());
   const d = JSON.parse(undoStack.pop());
@@ -3415,6 +3613,7 @@ function undo() {
   schedSave(); updateUndoBtn(); renderLibrary(); renderAll(); renderDayButtons();
 }
 function redo() {
+  if (typeof isLaterTabActive === 'function' && isLaterTabActive()) { laterRedo(); return; }
   if (!redoStack.length) return;
   undoStack.push(sessionSnap());
   if (undoStack.length > UNDO_MAX) undoStack.shift();
@@ -3424,10 +3623,12 @@ function redo() {
   schedSave(); updateUndoBtn(); renderLibrary(); renderAll(); renderDayButtons();
 }
 function updateUndoBtn() {
+  const onLater = (typeof isLaterTabActive === 'function') && isLaterTabActive();
+  const us = onLater ? laterUndoStack : undoStack, rs = onLater ? laterRedoStack : redoStack;
   const u = el('undoBtn');
-  if (u) { u.disabled = !undoStack.length; u.title = undoStack.length ? 'zpět ' + undoStack.length + ' (Ctrl+Z)' : 'nic k vrácení'; }
+  if (u) { u.disabled = !us.length; u.title = us.length ? 'zpět ' + us.length + ' (Ctrl+Z)' : 'nic k vrácení'; }
   const r = el('redoBtn');
-  if (r) { r.disabled = !redoStack.length; r.title = redoStack.length ? 'vpřed ' + redoStack.length + ' (Ctrl+Y)' : 'nic vpřed'; }
+  if (r) { r.disabled = !rs.length; r.title = rs.length ? 'vpřed ' + rs.length + ' (Ctrl+Y)' : 'nic vpřed'; }
 }
 
 // ── STATUS / SAVE ─────────────────────────────────────────────────────────────
@@ -3449,6 +3650,8 @@ function schedSave() {
     // promítni živé úpravy aktivního dne do weekDays, ať se nasynchronizují i bez přepnutí dne
     autoSavePlanDay();
     saveSession(); showSave();
+    // den-tlačítka aktualizuje renderAll živě; tady po flushi dorovnej kartu Hotovo, je-li vidět
+    if (el('pane-hotovo')?.classList.contains('active')) renderWeekTab();
     if (window.autoSyncOnSave) window.autoSyncOnSave();
   }, 300);
 }
@@ -3456,7 +3659,8 @@ function schedSave() {
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────────
 function clearStorage() { el('clearStorageModal').classList.add('open'); }
 function toggleAllClear() {
-  const boxes = ['clr-session','clr-library','clr-archive','clr-week','clr-weekplans','clr-appearance'].map(id => el(id));
+  const boxes = ['clr-session','clr-library','clr-archive','clr-week','clr-weekplans','clr-appearance',
+                 'clr-thisweek','clr-nextweek','clr-later','clr-inbox'].map(id => el(id));
   const anyUnchecked = boxes.some(b => !b.checked);
   boxes.forEach(b => b.checked = anyUnchecked);
 }
@@ -3468,9 +3672,25 @@ async function doSelectiveClear() {
   if (el('clr-week').checked)       toDelete.push(WK(WEEK_KEY));
   if (el('clr-weekplans').checked)  toDelete.push(WK(WEEKPLANS_KEY));
   if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs',WK(WORKDAYS_KEY));
-  if (!toDelete.length) { closeModal('clearStorageModal'); return; }
+  // granulární koše: mutace v paměti + uložení — obalené save-funkce zapíšou náhrobky a naplánují sync
+  const clrThis = el('clr-thisweek').checked, clrNext = el('clr-nextweek').checked;
+  const clrLater = el('clr-later').checked, clrInbox = el('clr-inbox').checked;
+  const bucketChange = clrThis || clrNext || clrLater || clrInbox;
+  if (!toDelete.length && !bucketChange) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
   if (!await customConfirm('Opravdu smazat vybraná data?', 'smazat')) return;
+  if (clrThis || clrNext) {
+    const isos = new Set();
+    if (clrThis) getCurrentWeekDates(0).forEach(d => isos.add(d.iso));
+    if (clrNext) getCurrentWeekDates(1).forEach(d => isos.add(d.iso));
+    weekDays  = weekDays.filter(d => !isos.has(d.date));   saveWeek();
+    weekPlans = weekPlans.filter(p => !isos.has(p.date));  saveWeekPlans();
+    // živá session patřící smazanému týdnu by se po reloadu obnovila → smaž ji taky
+    let sp = null; try { sp = JSON.parse(localStorage.getItem(WK(SESSION_KEY)) || 'null')?.planDate; } catch(e) {}
+    if (sp && isos.has(sp) && !toDelete.includes(WK(SESSION_KEY))) toDelete.push(WK(SESSION_KEY));
+  }
+  if (clrLater) { later = [];  saveLater(); }
+  if (clrInbox) { inbox = []; inboxMt = Date.now(); saveInbox(); }
   try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
   location.reload();
 }
@@ -3595,9 +3815,8 @@ function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeBlockMenu();
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','blockEditModal','weekTplLoadModal','previewModal','itemEditModal','recurModal'].forEach(id => {
-    const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
-  });
+  // Klik na pozadí žádné okno nezavře — aby se nezahodily neuložené úpravy. Okna se zavírají jen tlačítky nebo Esc.
+  // Výjimka: potvrzovací dialog (confirmModal) → klik mimo = „zrušit“ (žádná data k uložení, bezpečné).
   const cm = el('confirmModal');
   if (cm && cm.classList.contains('open') && e.target === cm && _confirmResolve) _confirmResolve(false);
 });
@@ -3772,11 +3991,12 @@ function openExportModal() {
   setupSelTree('exportDayList', 'exDay', weekDays, 'expWdLbl', 'Uložené dny', dayWeekGroups, updateExportFilename);
   setupSelTree('exportPlanList', 'exPlan', weekPlans, 'expWpLbl', 'Plán týdne', dayWeekGroups, updateExportFilename);
   setupSelTree('exportLaterList', 'exLat', cleanLater(), 'expLtLbl', 'Později', monthYearGroups, updateExportFilename);
-  const setRow = el('expSetRow'), inboxRow = el('expInboxRow');
+  const setRow = el('expSetRow'), inboxRow = el('expInboxRow'), recurRow = el('expRecurRow');
   if (setRow) setRow.style.display = '';
   if (inboxRow) { inboxRow.style.display = inbox.length ? '' : 'none'; if (inbox.length) el('expInboxLbl').textContent = 'Inbox (' + inbox.length + ')'; }
-  const expSt = el('expSettings'), expIb = el('expInbox');
-  if (expSt) expSt.checked = true; if (expIb) expIb.checked = true;
+  if (recurRow) { recurRow.style.display = recurrences.length ? '' : 'none'; if (recurrences.length) el('expRecurLbl').textContent = 'Opakování (' + recurrences.length + ' prav.)'; }
+  const expSt = el('expSettings'), expIb = el('expInbox'), expRc = el('expRecur');
+  if (expSt) expSt.checked = true; if (expIb) expIb.checked = true; if (expRc) expRc.checked = true;
   updateExportFilename();
   el('exportModal').classList.add('open');
 }
@@ -3788,8 +4008,9 @@ function updateExportFilename() {
   const stFlag = el('expSettings')?.checked ? 'S' : '';
   const ibCount = el('expInbox')?.checked ? inbox.length : 0;
   const ltCount = selTreeSet('exLat').size;
+  const rcCount = el('expRecur')?.checked ? recurrences.length : 0;
   el('exportFilename').value = 'todo_' + yymmdd + '_I' + exportSelected.size + 'A' + exportArchSelected.size
-    + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + (ibCount ? 'B' + ibCount : '') + (ltCount ? 'L' + ltCount : '') + stFlag + '.json';
+    + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + (ibCount ? 'B' + ibCount : '') + (ltCount ? 'L' + ltCount : '') + (rcCount ? 'R' + rcCount : '') + stFlag + '.json';
 }
 function toggleExportSel(id, on) { on ? exportSelected.add(id) : exportSelected.delete(id); el('ei-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
 function toggleExportArchSel(id, on) { on ? exportArchSelected.add(id) : exportArchSelected.delete(id); el('eai-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
@@ -3797,8 +4018,8 @@ function selectAllExport() {
   library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
   archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
   ['exDay','exPlan','exLat'].forEach(p => { if (selTrees[p]) selTreeSelectAll(p); });
-  const st = el('expSettings'), ib = el('expInbox');
-  if (st) st.checked = true; if (ib) ib.checked = true;
+  const st = el('expSettings'), ib = el('expInbox'), rc = el('expRecur');
+  if (st) st.checked = true; if (ib) ib.checked = true; if (rc) rc.checked = true;
   updateExportFilename();
 }
 function buildSettingsExport() {
@@ -3807,9 +4028,7 @@ function buildSettingsExport() {
     return !def || def.emoji !== bt.emoji || def.label !== bt.label || def.defaultDuration !== bt.defaultDuration
       || (bt.defaultTasks && bt.defaultTasks.length) || bt.isEvent || bt.note;
   }).map(([key, bt]) => ({ key, ...bt }));
-  let blockTypesDeleted = [];   // smazané defaultní bloky — bez nich by se po importu na jiném zařízení vrátily
-  try { blockTypesDeleted = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_DELETED_KEY)) || '[]') || []; } catch(e) {}
-  return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek, blockTypesDeleted };
+  return { blockTypes: blockOverrides, blockTypeOrder, workingDaysByWeek };
 }
 function doExport() {
   const its = library.filter(e => exportSelected.has(e.id));
@@ -3820,11 +4039,13 @@ function doExport() {
   const settings = el('expSettings')?.checked ? buildSettingsExport() : null;
   const inb = el('expInbox')?.checked ? inbox : [];
   const lat = cleanLater().filter(b => latSel.has(b.ym));   // bez duchů
-  if (!its.length && !archs.length && !wdays.length && !wplans.length && !settings && !inb.length && !lat.length) { customAlert('Nic není vybráno.'); return; }
+  const rec = el('expRecur')?.checked ? recurrences : [];
+  if (!its.length && !archs.length && !wdays.length && !wplans.length && !settings && !inb.length && !lat.length && !rec.length) { customAlert('Nic není vybráno.'); return; }
   const payload = {v:2, items: its, archive: archs, weekDays: wdays, weekPlans: wplans};
   if (settings) payload.settings = settings;
   if (inb.length) { payload.inbox = inb; payload.inboxMt = inboxMt; }
   if (lat.length) payload.later = lat;
+  if (rec.length) payload.recurrences = rec;   // opakovací pravidla (jinak se duchové na druhém zařízení nevygenerují)
   const json = JSON.stringify(payload, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName + '.json';
@@ -3852,7 +4073,8 @@ let importData = [], importSelected = new Set(), importBlockSel = new Set();
 window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
   importData = []; importSelected = new Set();
-  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importLater = [];
+  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importInboxMt = 0; window._importLater = []; window._importRecur = [];
+  const recurRow = el('impRecurRow'); if (recurRow) recurRow.style.display = 'none';
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
   el('importFile').value = ''; el('importPaste').value = '';
@@ -3879,7 +4101,8 @@ function parseImportJson(text) {
     const hasPlans = parsed.weekPlans && parsed.weekPlans.length > 0;
     const hasInbox = parsed.inbox && parsed.inbox.length > 0;
     const hasLater = parsed.later && parsed.later.length > 0;
-    if (!its.length && !hasDays && !hasPlans && !hasInbox && !hasLater) throw new Error('Žádné položky v souboru');
+    const hasRecur = parsed.recurrences && parsed.recurrences.length > 0;
+    if (!its.length && !hasDays && !hasPlans && !hasInbox && !hasLater && !hasRecur) throw new Error('Žádné položky v souboru');
     importData = its; importSelected = new Set(its.map(x => x.id));
     if (its.length) {
       el('importList').innerHTML = its.map(x => `<label class="modal-item sel" id="ii-${x.id}"><input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />${esc(x.name||String(x.id))}</label>`).join('');
@@ -3891,6 +4114,8 @@ function parseImportJson(text) {
     window._importWeekPlans = parsed.weekPlans || [];
     window._importSettings = parsed.settings || null;
     window._importInbox = parsed.inbox || [];
+    window._importInboxMt = +parsed.inboxMt || 0;   // razítko pořadí inboxu (LWW při importu)
+    window._importRecur = (parsed.recurrences || []).map(normRecur).filter(Boolean);
     // později: starý plochý tvar převeď na měsíční buckety hned, ať se strom správně seskupí podle let
     let impLater = parsed.later || [];
     if (impLater.length && impLater[0] && impLater[0].ym && !Array.isArray(impLater[0].items)) impLater = migrateFlatLater(impLater);
@@ -3909,7 +4134,10 @@ function parseImportJson(text) {
     if (hasWorkDays && el('impWorkDaysLbl')) el('impWorkDaysLbl').textContent = 'Pracovní dny (' + Object.keys(parsed.settings.workingDaysByWeek).length + ' týd.)';
     if (inboxRow) inboxRow.style.display = hasInbox ? '' : 'none';
     if (hasInbox && el('impInboxLbl')) el('impInboxLbl').textContent = 'Inbox (' + parsed.inbox.length + ')';
-    if (daysSection) daysSection.style.display = (hasDays || hasPlans || hasSettings || hasInbox || hasLater) ? '' : 'none';
+    const recurRow = el('impRecurRow'), recurN = window._importRecur.length;
+    if (recurRow) recurRow.style.display = recurN ? '' : 'none';
+    if (recurN && el('impRecurLbl')) el('impRecurLbl').textContent = 'Opakování (' + recurN + ' prav.)';
+    if (daysSection) daysSection.style.display = (hasDays || hasPlans || hasSettings || hasInbox || hasLater || recurN) ? '' : 'none';
     el('importActions').style.display = 'flex'; el('importCancel').style.display = 'none';
   } catch(err) {
     el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Chyba: ' + err.message + '</p>';
@@ -3944,6 +4172,15 @@ function toggleImportBlockSel(i, on) {
   on ? importBlockSel.add(b.key) : importBlockSel.delete(b.key);
   el('ibk-'+i)?.classList.toggle('sel', on);
 }
+// LWW pro import: strukturovaná data (mt > 0) přepíšou lokální záznam JEN když jsou novější —
+// jinak by import staršího/prázdného cloudu (popup „cloud má jiná data") smazal novější lokální den/inbox
+// a razítkem mt = now to ještě rozšířil na ostatní zařízení. Legacy/ruční soubor bez mt = vědomá akce → vyhrává.
+function importRecordWins(impMt, locMt) {
+  const i = +impMt || 0;
+  if (!i) return true;              // bez razítka (legacy export / ruční soubor) → import je vědomá akce
+  return i > (+locMt || 0);         // strukturovaná data → LWW (novější vyhrává)
+}
+function importStamp(impMt) { return (+impMt || 0) || Date.now(); }   // zachovej razítko importu; legacy → teď
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
   const daySel = selTreeSet('imDay'), planSel = selTreeSet('imPlan'), latSel = selTreeSet('imLat');
@@ -3958,31 +4195,39 @@ function doImport() {
   const addWorkDays = !!(el('impWorkDays')?.checked && s && s.workingDaysByWeek && Object.keys(s.workingDaysByWeek).length);
   const addInbox = el('impInbox')?.checked && window._importInbox?.length;
   const addLater = laterSrc.length;
-  if (!toAdd.length && !addWdays && !addWplans && !addBlocks && !addWorkDays && !addInbox && !addLater) { customAlert('Nic není vybráno.'); return; }
+  const addRecur = el('impRecur')?.checked && window._importRecur?.length;
+  if (!toAdd.length && !addWdays && !addWplans && !addBlocks && !addWorkDays && !addInbox && !addLater && !addRecur) { customAlert('Nic není vybráno.'); return; }
   let tplAdded = 0, tplUpdated = 0;
   if (toAdd.length) {
     // dedup podle id — existující šablonu aktualizuj na místě, nezdvojuj (stejné chování jako bloky/dny)
     toAdd.forEach(t => {
-      t.mt = Date.now();   // import = vědomá akce → razítkem zajisti, že verze vyhraje při synchronizaci
       const i = library.findIndex(e => String(e.id) === String(t.id));
-      if (i >= 0) { library[i] = t; tplUpdated++; }
-      else { library.push(t); tplAdded++; }
+      if (i >= 0) {
+        if (!importRecordWins(t.mt, library[i].mt)) return;   // lokální šablona je novější → zachovej
+        t.mt = importStamp(t.mt); library[i] = t; tplUpdated++;
+      } else { t.mt = importStamp(t.mt); library.push(t); tplAdded++; }
     });
     saveLibrary(); renderLibrary();
   }
+  // stav aktivního dne PŘED mergem — živý buffer obnovíme jen když ho import opravdu změnil (LWW), ne naslepo
+  const prevCurDay = activePlanDate ? JSON.stringify(weekDays.find(d => d.date === activePlanDate) || null) : null;
   if (addWdays) {
     wdaysSrc.forEach(d => {
       const ex = weekDays.find(w => w.date === d.date);
-      if (ex) { ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = Date.now(); }
-      else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: Date.now() });
+      if (ex) {
+        if (!importRecordWins(d.mt, ex.mt)) return;   // lokální den je novější → zachovej (nepřepiš starším/prázdným)
+        ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = importStamp(d.mt);
+      } else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: importStamp(d.mt) });
     });
     saveWeek(); renderWeekTab(); renderDayButtons();
   }
   if (addWplans) {
     wplansSrc.forEach(p => {
       const ex = weekPlans.find(w => w.date === p.date);
-      if (ex) { ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = Date.now(); }
-      else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: Date.now() });
+      if (ex) {
+        if (!importRecordWins(p.mt, ex.mt)) return;   // lokální plán je novější → zachovej
+        ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = importStamp(p.mt);
+      } else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: importStamp(p.mt) });
     });
     saveWeekPlans(); renderWeekTab();
   }
@@ -4002,16 +4247,23 @@ function doImport() {
   }
   let inboxAdded = 0;
   if (addInbox) {
-    const existingIds = new Set(inbox.map(x => String(x.id)));
+    // LWW po položkách: existující položku přepiš jen když je importovaná novější, nové přidej.
+    // Pořadí (inboxMt) převezmi z importu jen když je razítko seznamu novější — jinak by starší cloud
+    // přerovnal/smazal čerstvě upravený lokální inbox a razítkem now to rozšířil na ostatní zařízení.
+    const impMt = +window._importInboxMt || 0;
+    const byId = new Map(inbox.map(x => [String(x.id), x]));
     (window._importInbox || []).forEach(it => {
       const ni = normItem(it); if (!ni || !ni.text) return;
-      if (!existingIds.has(String(ni.id))) {
-        inbox.push(ni);
-        existingIds.add(String(ni.id));
-        inboxAdded++;
-      }
+      const ex = byId.get(String(ni.id));
+      if (ex) { if (importRecordWins(ni.mt, ex.mt)) { ni.mt = importStamp(ni.mt); Object.assign(ex, ni); } }
+      else { ni.mt = importStamp(ni.mt); inbox.push(ni); byId.set(String(ni.id), ni); inboxAdded++; }
     });
-    inboxMt = Date.now();
+    if (importRecordWins(impMt, inboxMt)) {   // pořadí přebíráme jen při novějším razítku seznamu
+      const pos = new Map((window._importInbox || []).map((x, i) => [String(x && x.id), i]));
+      const P = x => { const p = pos.get(String(x.id)); return p == null ? 1e9 : p; };
+      inbox.sort((a, b) => P(a) - P(b));   // stabilní — lokální navíc-položky drží pořadí na konci
+      inboxMt = importStamp(impMt);
+    }
     saveInbox(); renderInbox();
   }
   let laterAdded = 0;
@@ -4019,25 +4271,41 @@ function doImport() {
     laterSrc.forEach(b => {
       const nb = normLaterBucket(b); if (!nb || !nb.items.length) return;
       const ex = later.find(x => x.ym === nb.ym);
-      if (ex) { ex.items = nb.items; ex.mt = Date.now(); } else { later.push({ ...nb, mt: Date.now() }); }
+      if (ex) { if (!importRecordWins(nb.mt, ex.mt)) return; ex.items = nb.items; ex.mt = importStamp(nb.mt); }
+      else { later.push({ ...nb, mt: importStamp(nb.mt) }); }
       laterAdded++;
     });
     saveLater(); renderLater();
   }
-  // obnov živý buffer aktivního dne z naimportovaných dat, jinak ho příští autoSavePlanDay() přepíše starým stavem
-  if (addWdays && activePlanDate) {
-    const cur = weekDays.find(w => w.date === activePlanDate);
-    if (cur) { applySessionData(cur); renderAll(); }
+  // opakovací pravidla — LWW podle id (bez nich se na druhém zařízení nevygenerují duchové opakování)
+  let recurAdded = 0, recurUpdated = 0;
+  if (addRecur) {
+    (window._importRecur || []).forEach(r => {
+      if (!r || r.id == null) return;
+      const i = recurrences.findIndex(e => String(e.id) === String(r.id));
+      if (i >= 0) { if (!importRecordWins(r.mt, recurrences[i].mt)) return; r.mt = importStamp(r.mt); recurrences[i] = r; recurUpdated++; }
+      else { r.mt = importStamp(r.mt); recurrences.push(r); recurAdded++; }
+    });
+    if (recurAdded || recurUpdated) saveRecur();
   }
+  // obnov živý buffer aktivního dne JEN když ho import opravdu změnil (LWW) — jinak by reset přepsal
+  // čerstvě upravený den prázdnem; zároveň bez změny ho příští autoSavePlanDay() nesmí přepsat starým stavem
+  if (activePlanDate) {
+    const cur = weekDays.find(w => w.date === activePlanDate);
+    if (cur && JSON.stringify(cur) !== prevCurDay) { applySessionData(cur); renderAll(); }
+  }
+  // nová/změněná pravidla → přegeneruj duchy v denním i měsíčním pohledu (renderAll/renderLater volají sync*Ghosts)
+  if (recurAdded || recurUpdated) { renderAll(); renderLater(); }
   const msgs = [];
-  if (toAdd.length) msgs.push(toAdd.length + ' šablon' + (tplUpdated ? ' (' + tplUpdated + ' aktualiz.)' : ''));
+  if (tplAdded + tplUpdated) msgs.push((tplAdded + tplUpdated) + ' šablon' + (tplUpdated ? ' (' + tplUpdated + ' aktualiz.)' : ''));
   if (addWdays) msgs.push(wdaysSrc.length + ' dní');
   if (addWplans) msgs.push(wplansSrc.length + ' plánů');
   if (addBlocks) msgs.push(addBlocks + ' bloků');
   if (addWorkDays) msgs.push('pracovní dny');
-  if (addInbox) msgs.push(inboxAdded + ' do inboxu');
-  if (addLater) msgs.push(laterAdded + ' měsíců do Později');
-  closeModal('importModal'); showSave('↓ importováno: ' + msgs.join(', '));
+  if (inboxAdded) msgs.push(inboxAdded + ' do inboxu');
+  if (laterAdded) msgs.push(laterAdded + ' měsíců do Později');
+  if (recurAdded + recurUpdated) msgs.push((recurAdded + recurUpdated) + ' opakování' + (recurUpdated ? ' (' + recurUpdated + ' aktualiz.)' : ''));
+  closeModal('importModal'); showSave('↓ importováno: ' + (msgs.length ? msgs.join(', ') : 'beze změny (lokální verze novější)'));
 }
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────────
@@ -4046,6 +4314,20 @@ el('quickInput').addEventListener('keydown', e => {
 });
 
 document.addEventListener('keydown', e => {
+  // Esc zavře vrchní otevřené okno (u potvrzovacího dialogu = „zrušit“). stopImmediatePropagation
+  // zabrání tomu, aby tentýž Esc navíc sbalil rozbalený panel (onExpandEsc).
+  if (e.key === 'Escape') {
+    const cm = el('confirmModal');
+    if (cm && cm.classList.contains('open')) {
+      if (_confirmResolve) _confirmResolve(false);
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+    const openModals = document.querySelectorAll('.modal-bg.open');
+    if (openModals.length) {
+      openModals[openModals.length - 1].classList.remove('open');
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+  }
   if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
     const a = document.activeElement;
     if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
@@ -4196,7 +4478,7 @@ function makeGhostItem(rec, iso) {
     eventStart: p.isEvent ? (p.eventStart || null) : null,
     eventEnd:   p.isEvent ? (p.eventEnd   || null) : null,
     isSubtask: false, done: false, urgent: false,
-    icon: p.icon || null, note: '',
+    icon: p.icon || '🔃', note: p.note || '',
   };
 }
 function stripGhosts(arr) { return (arr || []).filter(it => it && !it.isGhost); }
@@ -4238,47 +4520,97 @@ function skipGhostOccurrence(idx) {
 }
 
 // ── OPAKOVÁNÍ → KARTA POZDĚJI (F2): duchové v měsíčních bucketech ───────────────
-const RECUR_HORIZON_M = 18;   // kolik měsíců dopředu zobrazovat duchy opakování
 // dayLabel pravidla pro měsíc | false = nefiruje | null = celý měsíc (bez konkrétního dne)
 function ruleMonthDayLabel(r, Y, M, anchorIso) {   // M = 1..12
   if (!r) return false;
-  if (r.t === 'dom')    return r.day + '.';                                   // každý měsíc, na daný den
+  if (r.t === 'dom')    return r.day + '.' + M + '.';                         // každý měsíc, na daný den (s měsícem → třídí se)
   if (r.t === 'yearly') return (M === r.mo) ? (r.day + '.' + r.mo + '.') : false;
   if (r.t === 'month')  return (M === r.mo) ? null : false;                   // celý měsíc
-  if (r.t === 'interval') {
+  if (r.t === 'interval' && (r.u === 'm' || r.u === 'y')) {
     const aY = +String(anchorIso).slice(0, 4), aM = +String(anchorIso).slice(5, 7);
     if (r.u === 'm') { const md = (Y - aY) * 12 + (M - aM); return (md >= 0 && md % r.n === 0) ? null : false; }
-    if (r.u === 'y') { const yd = Y - aY; return (M === aM && yd >= 0 && yd % r.n === 0) ? null : false; }
-    return false;                                                            // d/w → sub-měsíční, zatím jen denní karty (časem)
+    const yd = Y - aY; return (M === aM && yd >= 0 && yd % r.n === 0) ? null : false;
   }
-  if (r.t === 'weekday') return false;                                       // časem (denní karty)
+  // d/w intervaly a dny v týdnu = víc výskytů v měsíci → popisek vyjmenuje dny (max 4, pak …)
+  if ((r.t === 'interval' && (r.u === 'd' || r.u === 'w')) || r.t === 'weekday') {
+    const last = new Date(Y, M, 0).getDate(), ds = [];
+    for (let day = 1; day <= last; day++) {
+      const iso = Y + '-' + String(M).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      if (anchorIso && iso < anchorIso) continue;                            // před kotvou nefiruje
+      if (recurRuleFires(r, new Date(Y, M - 1, day, 12), anchorIso)) ds.push(day);
+    }
+    if (!ds.length) return false;
+    return ds.slice(0, 4).map(x => x + '.').join(' ') + (ds.length > 4 ? ' …' : '');
+  }
   return false;
 }
-// výskyt pravidla v měsíci ym → { dayLabel } | null  (pravidla uvnitř = OR, bere první firující)
+// výskyt pravidla v měsíci ym → { dayLabel } | null  (pravidla uvnitř = OR, popisky firujících se spojí)
 function recurMonthOccurrence(rec, ym) {
   if (!rec) return null;
   if (rec.anchor && ym < String(rec.anchor).slice(0, 7)) return null;
   if (rec.until  && ym > String(rec.until).slice(0, 7))  return null;
   const [Y, M] = ym.split('-').map(Number);
+  const labels = []; let fires = false;
   for (const r of (rec.rules || [])) {
     const dl = ruleMonthDayLabel(r, Y, M, rec.anchor);
-    if (dl !== false) return { dayLabel: dl };
+    if (dl === false) continue;
+    fires = true;
+    if (dl != null && !labels.includes(dl)) labels.push(dl);
   }
-  return null;
+  return fires ? { dayLabel: labels.length ? labels.join(' ') : null } : null;
 }
-function makeLaterGhost(rec, dayLabel) {
+// SAMOSTATNÉ výskyty pravidla v měsíci → [{ dayLabel, dayKey, skipKey }]
+//  • dom / yearly = JEDEN výskyt na KAŽDÝ konkrétní den (kombinace „r1.m r2.m r3.m" = 3 výskyty)
+//  • celý měsíc / interval / rozsah (dny v týdnu) = jeden výskyt (popisek z ruleMonthDayLabel)
+// skipKey: konkrétní den → ISO datum (sjednoceno s denním pohledem); jinak ym (celý měsíc)
+function recurMonthOccurrences(rec, ym) {
+  if (!rec) return [];
+  if (rec.anchor && ym < String(rec.anchor).slice(0, 7)) return [];
+  if (rec.until  && ym > String(rec.until).slice(0, 7))  return [];
+  const [Y, M] = ym.split('-').map(Number);
+  const out = [], seen = new Set();
+  const add = (dayLabel, dayKey, skipKey) => {
+    const k = dayKey + '|' + (dayLabel || '');
+    if (seen.has(k)) return; seen.add(k);
+    out.push({ dayLabel: dayLabel || null, dayKey, skipKey });
+  };
+  (rec.rules || []).forEach((r, idx) => {
+    if (!r) return;
+    if (r.t === 'dom') {
+      add(r.day + '.' + M + '.', 'd' + r.day, ym + '-' + String(r.day).padStart(2, '0'));
+    } else if (r.t === 'yearly') {
+      if (M !== r.mo) return;
+      add(r.day + '.' + r.mo + '.', 'd' + r.day, ym + '-' + String(r.day).padStart(2, '0'));
+    } else {                                   // celý měsíc / interval / rozsah → jeden výskyt na měsíc
+      const dl = ruleMonthDayLabel(r, Y, M, rec.anchor);
+      if (dl === false) return;
+      add(dl, 'r' + idx, ym);
+    }
+  });
+  out.sort((a, b) => (parseInt(a.dayLabel, 10) || 999) - (parseInt(b.dayLabel, 10) || 999));
+  return out;
+}
+// skip klíč výskytu Později: konkrétní den („1.6.") → ISO datum, jinak celý měsíc (ym)
+function laterSkipKey(it, ym) {
+  if (it && it._skipKey) return it._skipKey;
+  const m = it && it.dayLabel && String(it.dayLabel).match(/^(\d{1,2})\./);
+  return m ? ym + '-' + String(m[1]).padStart(2, '0') : ym;
+}
+function makeLaterGhost(rec, occ) {
   const p = rec.payload || {};
   const bt = BLOCK_TYPES[p.blockType] || BLOCK_TYPES.TASK;
+  const dayKey = occ && occ.dayKey ? occ.dayKey : '';
   return {
-    id: 'g_' + rec.id, recurId: rec.id, isGhost: true,
+    id: 'g_' + rec.id + (dayKey ? '_' + dayKey : ''), recurId: rec.id, isGhost: true,
     text: p.text || '(opakování)',
     blockType: p.blockType || 'TASK',
-    duration: p.dur || bt.defaultDuration || 15,
+    duration: p.dur || bt.defaultDuration || 30,
     isEvent: !!p.isEvent,
     eventStart: p.isEvent ? (p.eventStart || null) : null,
     eventEnd:   p.isEvent ? (p.eventEnd   || null) : null,
-    isSubtask: false, dayLabel: dayLabel || null,
-    done: false, urgent: false, note: '',
+    isSubtask: false, dayLabel: (occ && occ.dayLabel) || null,
+    done: false, urgent: false, note: p.note || '',
+    icon: p.icon || '🔃', _skipKey: (occ && occ.skipKey) || null,
   };
 }
 // live `later` bez duchů a bez prázdných měsíců → JEDINÝ tvar pro perzistenci a sync (duchové se nikdy neukládají)
@@ -4290,18 +4622,20 @@ function syncLaterGhosts() {
   later.forEach(b => { if (b && b.items.some(it => it.isGhost)) b.items = b.items.filter(it => !it.isGhost); });
   later = later.filter(b => b && b.items.length);          // zahoď měsíce prázdné po odebrání duchů
   if (!recurrences.length) return;
-  const now = new Date();
-  for (let i = 0; i < RECUR_HORIZON_M; i++) {
+  const now = new Date(), H = laterHorizon();   // duchy generuj do stejného horizontu, jako se zobrazují měsíce
+  for (let i = 0; i <= H; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     recurrences.forEach(rec => {
-      const occ = recurMonthOccurrence(rec, ym);
-      if (!occ) return;
-      if (rec.exceptions && rec.exceptions[ym]) return;     // smazaný výskyt (skip)
-      let b = later.find(x => x.ym === ym);
-      if (b && b.items.some(it => it.recurId === rec.id)) return;   // už tam je (reálný i duch)
-      if (!b) { b = { ym, items: [], mt: 0 }; later.push(b); }      // ghost bucket: mt:0 → neviditelný pro sync
-      b.items.push(makeLaterGhost(rec, occ.dayLabel));
+      recurMonthOccurrences(rec, ym).forEach(occ => {
+        // skip: konkrétní den (occ.skipKey) NEBO celý měsíc (legacy ym náhrobek)
+        if (rec.exceptions && (rec.exceptions[occ.skipKey] || rec.exceptions[ym])) return;
+        let b = later.find(x => x.ym === ym);
+        // už tam je (reálný i duch) — porovnávej PER DEN podle dayLabel, ne jen podle pravidla
+        if (b && b.items.some(it => it.recurId === rec.id && (it.dayLabel || null) === (occ.dayLabel || null))) return;
+        if (!b) { b = { ym, items: [], mt: 0 }; later.push(b); }    // ghost bucket: mt:0 → neviditelný pro sync
+        b.items.push(makeLaterGhost(rec, occ));
+      });
     });
   }
 }
@@ -4314,13 +4648,21 @@ function materializeLaterGhost(ym, idx) {
   b.mt = Date.now(); saveLater();
   return true;
 }
+// klik na odznak 🔃 ducha → potvrď výskyt (zhmotni) bez další akce
+function mConfirmGhost(ym, idx) {
+  if (materializeLaterGhost(ym, idx)) { renderLater(); showStatusMsg('🔃 opakování potvrzeno do měsíce', 2200); }
+}
+function confirmDayGhost(idx) {
+  if (materializeGhost(idx)) { renderAll(); showStatusMsg('🔃 opakování potvrzeno do dne', 2200); }
+}
 // smazání měsíčního výskytu (duch i zhmotněný) → „skip" výjimka na pravidlo
 function skipLaterOccurrence(ym, idx) {
   const b = later.find(x => x.ym === ym); if (!b) return false;
   const it = b.items[idx];
   if (!it || it.recurId == null) return false;
+  pushLaterUndo();                          // ↩ vrátí výskyt (obnoví položku i zruší „skip")
   const rec = recurrences.find(r => r.id === it.recurId);
-  if (rec) { rec.exceptions = rec.exceptions || {}; rec.exceptions[ym] = 'skip'; rec.mt = Date.now(); saveRecur(); }
+  if (rec) { rec.exceptions = rec.exceptions || {}; rec.exceptions[laterSkipKey(it, ym)] = 'skip'; rec.mt = Date.now(); saveRecur(); }
   b.items.splice(idx, 1); b.mt = Date.now(); saveLater();
   return true;
 }
@@ -4330,9 +4672,9 @@ function convertItemToRecur(ym, idx, rules) {
   const item = b.items[idx]; if (!item) return false;
   const rec = buildRecurEntry(rules, item, ym + '-01');
   recurrences.push(rec); saveRecur();
-  item.recurId = rec.id; delete item.isGhost;            // ponech položku jako reálnou kotvu
-  const occ = recurMonthOccurrence(rec, ym);
-  item.dayLabel = (occ && occ.dayLabel) || null;
+  item.recurId = rec.id; delete item.isGhost;            // ponech položku jako reálnou kotvu (první výskyt)
+  const occs = recurMonthOccurrences(rec, ym);           // další dny doplní syncLaterGhosts jako duchy
+  item.dayLabel = (occs[0] && occs[0].dayLabel) || null;
   b.mt = Date.now(); saveLater();
   renderLater();
   showStatusMsg('↻ změněno na opakování — viz další měsíce', 2800);
@@ -4379,16 +4721,22 @@ function renderRecurList() {
       const occHtml = occ.length
         ? occ.map(o => { const lbl = monthShort(o.ym) + (o.dayLabel ? ' ' + o.dayLabel : ''); return o.skipped ? '<s>' + esc(lbl) + '</s>' : esc(lbl); }).join(' · ')
         : '—';
+      const note = rec.payload?.note || '';
+      const noteHtml = note
+        ? `<div class="recur-rule-desc" title="${esc(note)}">📝 ${esc(note.length > 90 ? note.slice(0, 90) + '…' : note)}</div>`
+        : '';
       return `<div class="recur-rule">
         <div class="recur-rule-head">
           <span class="recur-rule-text">${esc(rec.payload?.text || '(bez textu)')}</span>
           <span class="recur-rule-toks">${esc(recurTokens(rec))}</span>
         </div>
         <div class="recur-rule-desc">${esc(describeRecur(rec))}</div>
+        ${noteHtml}
         <div class="recur-rule-next">příště: ${occHtml}</div>
         <div class="recur-rule-btns">
           <button class="btn-io" onclick="editRecurText(${rec.id})">text</button>
           <button class="btn-io" onclick="editRecurRules(${rec.id})">pravidlo</button>
+          <button class="btn-io" onclick="editRecurNote(${rec.id})">popis</button>
           <button class="btn-io danger" onclick="deleteRecur(${rec.id})">smazat</button>
         </div>
       </div>`;
@@ -4401,6 +4749,19 @@ async function editRecurText(id) {
   closeModal('recurModal');
   const v = await customPrompt('Text opakované události:', rec.payload?.text || '');
   if (v != null) { rec.payload = rec.payload || {}; rec.payload.text = v; rec.mt = Date.now(); saveRecur(); renderLater(); }
+  openRecurManage();
+}
+async function editRecurNote(id) {
+  const rec = recurrences.find(r => r.id === id); if (!rec) return;
+  closeModal('recurModal');
+  const v = await customPromptArea('Přednastavený popis / poznámka (dostane ji každý nový výskyt):', rec.payload?.note || '');
+  if (v != null) {
+    const note = v.trim() ? v : '';
+    if ((rec.payload?.note || '') !== note) {
+      rec.payload = rec.payload || {}; rec.payload.note = note;
+      rec.mt = Date.now(); saveRecur(); renderLater();
+    }
+  }
   openRecurManage();
 }
 async function editRecurRules(id) {
@@ -4424,10 +4785,20 @@ async function deleteRecur(id) {
 
 // ── INBOX ───────────────────────────────────────────────────────────────────
 // Volné úkoly / bloky / události na příště. STEJNÝ model položek jako den/měsíc
-// (sdílený editor přes INBOXCTX). Synchronizace: LWW celého seznamu podle inboxMt.
+// (sdílený editor přes INBOXCTX). Synchronizace: LWW po položkách (id + mt, náhrobky
+// ns „inb"); pořadí seznamu nese inboxMt (novější razítko vyhrává — viz autoImportSilent).
 const INBOX_KEY = 'todo-app-v1-inbox';
 let inbox = [];
 let inboxMt = 0;
+let _inboxSnap = null;   // Map id → podpis obsahu při posledním load/save — mt se razítkuje JEN při skutečné změně
+function inboxItemSig(it) { const o = { ...it }; delete o.mt; return JSON.stringify(o); }
+function snapInbox() { _inboxSnap = new Map(inbox.map(it => [String(it.id), inboxItemSig(it)])); }
+// porovná položky s posledním snapshotem a razítkne mt jen změněným/novým (sdílené op_* nevědí, co se změnilo)
+function stampInboxChanges() {
+  const now = Date.now();
+  inbox.forEach(it => { if (!_inboxSnap || _inboxSnap.get(String(it.id)) !== inboxItemSig(it)) it.mt = now; });
+  inboxMt = now;   // razítko seznamu (pořadí); mazání položek řeší náhrobky
+}
 function loadInbox() {
   let raw = null;
   try { raw = JSON.parse(localStorage.getItem(WK(INBOX_KEY)) || 'null'); } catch(e) { raw = null; }
@@ -4438,8 +4809,12 @@ function loadInbox() {
     inbox = raw.items.map(normItem).filter(Boolean);
     inboxMt = +raw.mt || 0;
   } else { inbox = []; inboxMt = 0; }
+  snapInbox();
 }
-function saveInbox() { try { localStorage.setItem(WK(INBOX_KEY), JSON.stringify({ items: inbox, mt: inboxMt })); } catch(e) {} }
+function saveInbox() {
+  try { localStorage.setItem(WK(INBOX_KEY), JSON.stringify({ items: inbox, mt: inboxMt })); } catch(e) {}
+  snapInbox();
+}
 
 function renderInbox() {
   const c = el('inbox-list'); if (!c) return;
@@ -4470,7 +4845,7 @@ function normItem(it) {
     id: it.id != null ? it.id : (Date.now() + Math.random()),
     text: it.text || '',
     blockType,
-    duration: +it.duration || (BLOCK_TYPES[blockType]?.defaultDuration || 15),
+    duration: +it.duration || (BLOCK_TYPES[blockType]?.defaultDuration || 30),
     isEvent: !!it.isEvent,
     eventStart: it.eventStart || null,
     eventEnd: it.eventEnd || null,
@@ -4479,11 +4854,28 @@ function normItem(it) {
     done: !!it.done,
     urgent: !!it.urgent,
     note: it.note || '',              // volný text: popis / podúkoly
+    icon: it.icon || null,            // per-řádková ikona (jinak by se ztratila při load/sync)
+    mt: +it.mt || 0,                  // čas poslední editace položky — nosné pro inbox (LWW po položkách)
+    recurId: it.recurId != null ? it.recurId : null,   // vazba na pravidlo opakování — BEZ NÍ se potvrzený
+                                      // výskyt po reloadu/syncu „odpojí“ a duch se vrátí do měsíce
   };
 }
 function normLaterBucket(b) {
   if (!b || !b.ym) return null;
   return { ym: b.ym, items: (b.items || []).map(normItem).filter(Boolean), mt: +b.mt || 0 };
+}
+// normalizace importovaného opakovacího pravidla — chrání před neúplným tvarem (chybí rules/payload/exceptions)
+function normRecur(r) {
+  if (!r || typeof r !== 'object' || !Array.isArray(r.rules) || !r.rules.length) return null;
+  return {
+    id: r.id != null ? r.id : (Date.now() + Math.random()),
+    mt: +r.mt || 0,
+    rules: r.rules,
+    anchor: r.anchor || todayIso(),
+    payload: r.payload || { text: '(opakování)' },
+    exceptions: (r.exceptions && typeof r.exceptions === 'object') ? r.exceptions : {},
+    until: r.until || null,
+  };
 }
 // migrace staršího plochého tvaru [{id,text,ym,day,start,end,mt}] → měsíční buckety
 function migrateFlatLater(arr) {
@@ -4493,7 +4885,7 @@ function migrateFlatLater(arr) {
     if (!map.has(it.ym)) map.set(it.ym, { ym: it.ym, items: [], mt: 0 });
     const bucket = map.get(it.ym);
     const isEvent = !!it.start;
-    const dur = (it.start && it.end) ? Math.max(15, timeToMin(it.end) - timeToMin(it.start)) : 15;
+    const dur = (it.start && it.end) ? Math.max(15, timeToMin(it.end) - timeToMin(it.start)) : 30;
     bucket.items.push(normItem({
       text: it.text, blockType: 'TASK', duration: dur, isEvent,
       eventStart: it.start || null,
@@ -4525,18 +4917,14 @@ function laterBucket(ym) {
 }
 function monthLabel(ym) { const [y, m] = String(ym).split('-').map(Number); return (MONTHS_CZ[m - 1] || '?').toUpperCase() + ' ' + y; }
 
-// naplní select „přidat do měsíce" (aktuální + 17 dopředu + případné existující mimo okno)
+// naplní select „přidat do měsíce" (aktuální + horizont dopředu + případné existující mimo rozsah)
 function populateLaterAddMonth() {
   const sel = el('laterAddMonth'); if (!sel) return;
-  const now = new Date();
   const have = new Set();
   const opts = [];
-  for (let i = 0; i < 18; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    have.add(ym); opts.push([ym, MONTHS_CZ[d.getMonth()] + ' ' + d.getFullYear()]);
-  }
-  later.forEach(b => { if (b.ym && !have.has(b.ym)) { have.add(b.ym); const [y, m] = b.ym.split('-').map(Number); opts.push([b.ym, (MONTHS_CZ[m - 1] || '?') + ' ' + y]); } });
+  const shortYm = ym => { const [y, m] = ym.split('-'); return m + ' ' + y.slice(2); };   // „2026-02" → „02 26"
+  laterMonthRange().forEach(ym => { have.add(ym); opts.push([ym, shortYm(ym)]); });
+  later.forEach(b => { if (b.ym && !have.has(b.ym)) { have.add(b.ym); opts.push([b.ym, shortYm(b.ym)]); } });
   opts.sort((a, b) => a[0].localeCompare(b[0]));
   const prev = sel.value;
   sel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
@@ -4567,9 +4955,21 @@ function mEditDay(ym, idx) {
     // r-pravidlo v poli data → převeď položku na opakování (kotva = tento měsíc)
     const rr = extractRecurRoute(v);
     if (rr && rr.rules.length) { convertItemToRecur(ym, idx, rr.rules); return; }
-    if (materializeLaterGhost(ym, idx)) { ctx.render(); }   // editace dne ducha → zhmotni (přepočti idx-stabilní)
-    if (/^\d{1,2}\.?$/.test(v)) { const m = +String(ym).split('-')[1]; v = v.replace(/\.$/, '') + '.' + m + '.'; }
-    if (v !== (item.dayLabel || '')) { item.dayLabel = v || null; ctx.save(); }
+    // „d" v poli data → duplikuj položku v měsíci
+    if (v.toLowerCase() === 'd') { materializeLaterGhost(ym, idx); duplicateItem(ctx, idx); return; }
+    materializeLaterGhost(ym, idx);   // editace dne ducha → zhmotni (bez renderu, ať `item`/`idx` drží)
+    const parsed = parseLaterDayInput(v, ym);
+    if (parsed && parsed.ym !== ym) {   // datum s jiným měsícem → přesuň položku do správného bucketu
+      pushLaterUndo();                  // ↩ vrátí přesun
+      skipRecurInSource(item, ym);      // opakování → skip ve zdroji (PŘED změnou dayLabel)
+      item.dayLabel = parsed.label;
+      moveLaterGroup(ym, item, parsed.ym);
+      renderLater();
+      showStatusMsg('→ přesunuto do ' + monthLabel(parsed.ym), 2000);
+      return;
+    }
+    if (parsed) v = parsed.label;       // normalizace ve stejném měsíci („12" → „12.<měsíc>.")
+    if (v !== (item.dayLabel || '')) { pushLaterUndo(); item.dayLabel = v || null; ctx.save(); }
     ctx.render();
   };
   badge.addEventListener('blur', commit, { once: true });
@@ -4602,7 +5002,8 @@ function sendItemToField(ctx, idx) {
     const prefix = x.isSubtask ? '✒ ' : '';
     let suffix = '';
     if (x.isEvent && x.eventStart) suffix = ' ' + x.eventStart + '-' + (x.eventEnd || x.eventStart);
-    else if (x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // u bloku délku nese až podúkol
+    // délku úkolu přenášej jen ze dne — Později/Inbox časy nenesou (na cílové kartě se nic nepředvyplní)
+    else if (ctx.kind === 'day' && x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // u bloku délku nese až podúkol
     if (x.note) _sendNotes[x.text || ''] = x.note;                                         // poznámku pones podle čistého textu
     lines.push(prefix + emoji + (x.text || '') + suffix);
   }
@@ -4623,22 +5024,28 @@ function mSendToField(ym, idx) { materializeLaterGhost(ym, idx); sendItemToField
 function deleteSentSources() {
   if (!_sendSources.length) return false;
   if (activePlanDate) autoSavePlanDay();   // flushni cílový den do weekDays, ať saveWeek nepřebije živé změny
-  let liveDay = false, week = false, inboxT = false, laterT = false;
+  let liveDay = false, week = false, inboxT = false, laterT = false, recT = false;
+  // mazaný zdroj byl opakovaný výskyt → zapiš „skip" výjimku, jinak by se duch vrátil do zdroje
+  const skipRec = (it, key) => {
+    if (!it || it.recurId == null || !key) return;
+    const rec = recurrences.find(r => r.id === it.recurId);
+    if (rec) { rec.exceptions = rec.exceptions || {}; rec.exceptions[key] = 'skip'; rec.mt = Date.now(); recT = true; }
+  };
   _sendSources.forEach(src => {
     const idset = new Set((src.ids || []).map(String));
     if (!idset.size) return;
     if (src.kind === 'day') {
       if (src.date === activePlanDate) {     // zdroj = aktuálně zobrazený den → maž z živého bufferu
         const b = items.length;
-        for (let i = items.length - 1; i >= 0; i--) if (idset.has(String(items[i].id))) items.splice(i, 1);
+        for (let i = items.length - 1; i >= 0; i--) if (idset.has(String(items[i].id))) { skipRec(items[i], src.date); items.splice(i, 1); }
         if (items.length !== b) liveDay = true;
       } else {                               // jiný den → maž v jeho záznamu ve weekDays
         const wd = weekDays.find(d => d.date === src.date);
-        if (wd) { const b = wd.items.length; wd.items = wd.items.filter(x => !idset.has(String(x.id))); if (wd.items.length !== b) { wd.mt = Date.now(); week = true; } }
+        if (wd) { const b = wd.items.length; wd.items = wd.items.filter(x => { const del = idset.has(String(x.id)); if (del) skipRec(x, src.date); return !del; }); if (wd.items.length !== b) { wd.mt = Date.now(); week = true; } }
       }
     } else if (src.kind === 'month') {
       const bk = later.find(x => x.ym === src.ym);
-      if (bk) { const b = bk.items.length; bk.items = bk.items.filter(x => !idset.has(String(x.id))); if (bk.items.length !== b) { bk.mt = Date.now(); laterT = true; } }
+      if (bk) { const b = bk.items.length; bk.items = bk.items.filter(x => { const del = idset.has(String(x.id)); if (del) skipRec(x, laterSkipKey(x, src.ym)); return !del; }); if (bk.items.length !== b) { bk.mt = Date.now(); laterT = true; } }
     } else if (src.kind === 'inbox') {
       const b = inbox.length;
       for (let i = inbox.length - 1; i >= 0; i--) if (idset.has(String(inbox[i].id))) inbox.splice(i, 1);
@@ -4649,6 +5056,7 @@ function deleteSentSources() {
   if (liveDay || week) saveWeek();
   if (inboxT) { inboxMt = Date.now(); saveInbox(); }
   if (laterT) saveLater();
+  if (recT) saveRecur();
   _sendSources = [];
   renderAll(); renderDayButtons(); renderWeekTab();
   if (inboxT) renderInbox();
@@ -4672,9 +5080,10 @@ function parseDayLabel(label, ym) {
 }
 function getWeekMondayKey(date) {
   const d = new Date(date);
-  const day = d.getDay() || 7;
-  d.setDate(d.getDate() - day + 1);
-  return d.toISOString().slice(0, 10);
+  const day = d.getDay() || 7;           // Ne=0→7 → týden Po–Ne
+  d.setDate(d.getDate() - day + 1);      // pondělí daného týdne
+  // LOKÁLNÍ formát (ne toISOString → UTC, který v CZ čase posune půlnoc na předchozí den = neděli)
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 function buildWeekLabel(mondayIso) {
   const mon = new Date(mondayIso + 'T00:00:00');
@@ -4721,27 +5130,178 @@ function buildWeekHeaders(items, ym) {
   return ins;
 }
 
+// ── POZDĚJI: sbalování měsíců (per zařízení i per okno dne, nesynchronizuje se) ──
+const LATER_COLLAPSE_KEY = 'todo-app-later-collapsed', LATER_HORIZON_KEY = 'todo-app-later-horizon';
+let laterCollapsed = null;   // cache; resetuje se na null při přepnutí okna (activateWindow) → reload pod WK()
+function ensureLaterCollapsed() { if (laterCollapsed) return; try { laterCollapsed = JSON.parse(localStorage.getItem(WK(LATER_COLLAPSE_KEY)) || '{}') || {}; } catch(e) { laterCollapsed = {}; } }
+function saveLaterCollapsed() { try { localStorage.setItem(WK(LATER_COLLAPSE_KEY), JSON.stringify(laterCollapsed || {})); } catch(e) {} }
+function curMonthYm() { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
+// horizont = kolik měsíců dopředu zobrazovat (i prázdné); per zařízení i per okno dne, nesynchronizuje se
+function laterHorizon() { let h = 12; try { const v = parseInt(localStorage.getItem(WK(LATER_HORIZON_KEY)), 10); if (v >= 1 && v <= 60) h = v; } catch(e) {} return h; }
+function setLaterHorizon(v) { v = parseInt(v, 10); if (!(v >= 1 && v <= 60)) return; try { localStorage.setItem(WK(LATER_HORIZON_KEY), String(v)); } catch(e) {} populateLaterAddMonth(); renderLater(); }
+// ── POZDĚJI: undo/redo (snapshot `later` + výjimky opakování) ──────────────────
+// Karta Później má vlastní undo zásobník (deklarace u undoStack); ↩/↪ v hlavičce na ni přepnou, když je aktivní.
+// Snapshot zachytí reálné položky (duchy se regenerují) i `exceptions` pravidel kvůli „skip" mazání opakování.
+const LATER_UNDO_MAX = 40;
+function isLaterTabActive() { try { return !!el('pane-pozdeji')?.classList.contains('active'); } catch(e) { return false; } }
+function laterSnap() {
+  return JSON.stringify({
+    L: later.map(b => ({ ym: b.ym, mt: b.mt, items: stripGhosts(b.items) })),
+    X: recurrences.map(r => [r.id, r.exceptions || {}]),
+  });
+}
+function applyLaterSnap(json) {
+  let s; try { s = JSON.parse(json); } catch(e) { return; }
+  // podpis obsahu (bez ghostů, normalizovaný) → razítkuj jen buckety, které se obnovou liší od aktuálního stavu
+  const sig = its => JSON.stringify((stripGhosts(its) || []).map(normItem));
+  const cur = new Map(later.map(b => [b.ym, sig(b.items)]));
+  const now = Date.now();
+  later = (s.L || []).map(normLaterBucket).filter(Boolean).map(nb => {
+    if (cur.get(nb.ym) !== JSON.stringify(nb.items)) nb.mt = now;   // obnova mění obsah → razítko, jinak by novější mazání z cloudu undo přebilo (LWW)
+    return nb;
+  });
+  if (Array.isArray(s.X)) {                       // obnov „skip" výjimky pravidel (mazání opakovaného výskytu)
+    const byId = new Map(s.X);
+    let recChanged = false;
+    recurrences.forEach(r => {
+      if (!byId.has(r.id)) return;
+      const restored = byId.get(r.id) || {};
+      if (JSON.stringify(r.exceptions || {}) !== JSON.stringify(restored)) { r.exceptions = JSON.parse(JSON.stringify(restored)); r.mt = Date.now(); recChanged = true; }
+    });
+    if (recChanged) saveRecur();
+  }
+  saveLater(); renderLater();
+}
+function pushLaterUndo() { laterUndoStack.push(laterSnap()); if (laterUndoStack.length > LATER_UNDO_MAX) laterUndoStack.shift(); laterRedoStack = []; updateUndoBtn(); }
+function laterUndo() { if (!laterUndoStack.length) return; laterRedoStack.push(laterSnap()); applyLaterSnap(laterUndoStack.pop()); updateUndoBtn(); showStatusMsg('↩ vráceno', 1500); }
+function laterRedo() { if (!laterRedoStack.length) return; laterUndoStack.push(laterSnap()); applyLaterSnap(laterRedoStack.pop()); updateUndoBtn(); }
+// rozbalit/sbalit všechny (neprázdné) zobrazené měsíce najednou
+function toggleAllLaterMonths() {
+  ensureLaterCollapsed();
+  const yms = later.filter(b => b && b.items && b.items.length).map(b => b.ym);
+  const anyExpanded = yms.some(ym => !isLaterCollapsed(ym));
+  yms.forEach(ym => { laterCollapsed[ym] = anyExpanded; });   // něco rozbaleno → sbal vše; jinak rozbal vše
+  saveLaterCollapsed(); renderLater();
+}
+// souvislý rozsah měsíců „YYYY-MM" od aktuálního po aktuální+horizont (včetně)
+function laterMonthRange() {
+  const out = [], n = new Date(), H = laterHorizon();
+  for (let i = 0; i <= H; i++) { const d = new Date(n.getFullYear(), n.getMonth() + i, 1); out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); }
+  return out;
+}
+// klik na hlavičku prázdného měsíce → nasměruj přidávání do něj
+function pickLaterMonth(ym) {
+  const sel = el('laterAddMonth');
+  if (sel && [...sel.options].some(o => o.value === ym)) { sel.value = ym; setAddCtxLater(); }
+  const ta = el('quickInput'); if (ta) ta.focus();
+  showStatusMsg('+ přidávám do ' + monthLabel(ym), 1500);
+}
+// default: rozbalen jen aktuální měsíc, ostatní sbalené; explicitní přepnutí má přednost
+function isLaterCollapsed(ym) { ensureLaterCollapsed(); return (ym in laterCollapsed) ? !!laterCollapsed[ym] : (ym !== curMonthYm()); }
+function toggleLaterMonth(ym) { ensureLaterCollapsed(); laterCollapsed[ym] = !isLaterCollapsed(ym); saveLaterCollapsed(); renderLater(); }
+
+// Vstup pole „datum" v Później → { ym, label } | null (volný text).
+// „12" → den v aktuálním měsíci; „12.8." → 12. srpna (rok bucketu, posun na příští rok když měsíc už letos byl);
+// „12.8.2027" → explicitní rok.
+function parseLaterDayInput(v, curYm) {
+  v = String(v || '').trim();
+  const [cy, cm] = curYm.split('-').map(Number);
+  let m;
+  if ((m = v.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})\.?$/))) {
+    const day = +m[1], mo = +m[2]; let y = +m[3]; if (y < 100) y += 2000;
+    if (mo < 1 || mo > 12 || day < 1 || day > 31) return null;
+    return { ym: y + '-' + String(mo).padStart(2, '0'), label: day + '.' + mo + '.' };
+  }
+  if ((m = v.match(/^(\d{1,2})\.\s*(\d{1,2})\.?$/))) {
+    const day = +m[1], mo = +m[2];
+    if (mo < 1 || mo > 12 || day < 1 || day > 31) return null;
+    let y = cy, ym = y + '-' + String(mo).padStart(2, '0');
+    if (ym < curYm) { y++; ym = y + '-' + String(mo).padStart(2, '0'); }   // měsíc už letos byl → příští rok
+    return { ym, label: day + '.' + mo + '.' };
+  }
+  if ((m = v.match(/^(\d{1,2})\.?$/))) {
+    const day = +m[1]; if (day < 1 || day > 31) return null;
+    return { ym: curYm, label: day + '.' + cm + '.' };
+  }
+  return null;
+}
+// přesun opakovaného výskytu do jiného měsíce → zapiš „skip" ve ZDROJI (z původního dayLabel),
+// jinak by syncLaterGhosts ducha ve zdrojovém měsíci znovu vygeneroval (duplikát). Volat PŘED změnou dayLabel.
+function skipRecurInSource(item, srcYm) {
+  if (!item || item.recurId == null) return;
+  const rec = recurrences.find(r => r.id === item.recurId);
+  if (!rec) return;
+  rec.exceptions = rec.exceptions || {};
+  rec.exceptions[laterSkipKey(item, srcYm)] = 'skip';
+  rec.mt = Date.now(); saveRecur();
+}
+// přesun položky (blok + souvislé podúkoly) mezi měsíci; atIndex null = na konec cílového měsíce
+function moveLaterGroup(srcYm, item, dstYm, atIndex) {
+  const src = later.find(b => b.ym === srcYm); if (!src) return false;
+  const idx = src.items.indexOf(item); if (idx < 0) return false;
+  let L = 1; if (!item.isSubtask) { let e = idx + 1; while (e < src.items.length && src.items[e].isSubtask) e++; L = e - idx; }
+  const group = src.items.splice(idx, L);
+  let dst = later.find(b => b.ym === dstYm);
+  if (!dst) { dst = { ym: dstYm, items: [], mt: 0 }; later.push(dst); }
+  const at = (atIndex == null) ? dst.items.length : Math.max(0, Math.min(dst.items.length, atIndex));
+  dst.items.splice(at, 0, ...group);
+  src.mt = Date.now(); dst.mt = Date.now();
+  if (!src.items.length) later = later.filter(b => b !== src);
+  ensureLaterCollapsed(); laterCollapsed[dstYm] = false; saveLaterCollapsed();   // ať je cíl vidět
+  saveLater();
+  return true;
+}
+// přetažení v Później: stejný měsíc = přeřazení; jiný měsíc = přesun (+ má-li datum, přepiš měsíc)
+function applyLaterDnd(srcYm, srcIdx, dstYm, rawIdx) {
+  if (!dstYm) return;
+  if (srcYm === dstYm) { applyDndReorder(MCTX(srcYm), srcIdx, rawIdx); return; }
+  const src = later.find(b => b.ym === srcYm); if (!src) return;
+  const item = src.items[srcIdx]; if (!item) return;
+  pushLaterUndo();                                                                    // ↩ vrátí přesun mezi měsíci
+  skipRecurInSource(item, srcYm);                                                     // opakování → neregeneruj ve zdroji (PŘED změnou dayLabel)
+  if (item.isGhost) { delete item.isGhost; item.id = Date.now() + Math.random(); }   // duch → reálná položka
+  if (item.dayLabel && /^(\d{1,2})\.\s*\d{1,2}\.?$/.test(item.dayLabel)) {            // má datum → přepiš měsíc na cílový
+    item.dayLabel = item.dayLabel.match(/^(\d{1,2})\./)[1] + '.' + (+dstYm.split('-')[1]) + '.';
+  }
+  if (moveLaterGroup(srcYm, item, dstYm, rawIdx === 1e9 ? null : rawIdx)) {
+    showStatusMsg('→ přesunuto do ' + monthLabel(dstYm), 1800);
+    renderLater();
+  }
+}
+
 function renderLater() {
   const c = el('later-list'); if (!c) return;
   updateAbbrevHint();
   syncLaterGhosts();        // F2: doplň/obnov duchy opakování do měsíčních bucketů (idempotentní)
-  const buckets = later.filter(b => b && b.items && b.items.length).slice().sort((a, b) => a.ym.localeCompare(b.ym));
   const now = new Date();
+  const hsel = el('laterHorizonSel'); if (hsel) hsel.value = String(laterHorizon());
   const todayHtml = `<div class="later-today-bar">Dnes: <b>${DAY_NAMES_CZ_LONG[now.getDay()]}</b> ${now.getDate()}. ${now.getMonth()+1}. ${now.getFullYear()}</div>`;
-  if (!buckets.length) {
-    c.innerHTML = todayHtml + '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Prázdné — vyber měsíc nahoře a přidej úkol, blok nebo událost (stejně jako v Týdnu).</div>';
-    return;
-  }
-  buckets.forEach(b => sortBucketItems(b.items, b.ym));
-  c.innerHTML = todayHtml + buckets.map((b, gi) => {
-    const total = dayTotalMinutes(b.items);
-    const headers = buildWeekHeaders(b.items, b.ym);
-    const hols = monthHolidays(b.ym);
+  // měsíce k zobrazení: souvislý rozsah (aktuální + horizont) ∪ jakékoli buckety s položkami mimo rozsah
+  const monthsSet = new Set(laterMonthRange());
+  later.forEach(b => { if (b && b.items && b.items.length) monthsSet.add(b.ym); });
+  const months = [...monthsSet].sort();
+  const byYm = new Map(later.map(b => [b.ym, b]));
+  months.forEach(ym => { const b = byYm.get(ym); if (b && b.items.length) sortBucketItems(b.items, ym); });
+  const curYm = curMonthYm();
+  const addBtn = ym => `<button class="later-month-add" onclick="event.stopPropagation();pickLaterMonth('${ym}')" title="přidat do tohoto měsíce">+</button>`;
+  const odTag = ym => ym < curYm ? `<span class="later-month-od">po termínu</span>` : '';
+  c.innerHTML = todayHtml + months.map((ym, gi) => {
+    const b = byYm.get(ym);
+    const n = (b && b.items) ? b.items.length : 0;
+    const cnt = n + ' ' + (n === 1 ? 'položka' : n <= 4 ? 'položky' : 'položek');
+    const od = ym < curYm ? ' overdue' : '';
+    if (!n) {   // prázdný měsíc → jen hlavička (drop cíl + klik nasměruje přidávání)
+      return `<div class="later-month-hdr empty${od}${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="přidávat sem · nebo sem přetáhni položku"><span class="later-month-toggle">·</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
+    }
+    const collapsed = isLaterCollapsed(ym);
+    const hdr = `<div class="later-month-hdr${od}${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
+    if (collapsed) return hdr;
+    const headers = buildWeekHeaders(b.items, ym);
+    const hols = monthHolidays(ym);
     const holHtml = hols.length
       ? `<div class="later-month-holidays">${hols.map(h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); }).join(' · ')}</div>`
       : '';
-    return `<div class="later-month-hdr${gi === 0 ? ' first' : ''}">${monthLabel(b.ym)}<span class="later-month-sum">${formatDur(total)}</span></div>
-      ${holHtml}<div class="later-rows" data-ym="${b.ym}">${rowsHtml(MCTX(b.ym), headers)}</div>`;
+    return hdr + holHtml + `<div class="later-rows" data-ym="${ym}">${rowsHtml(MCTX(ym), headers)}</div>`;
   }).join('');
   initLaterDnd();
 }
@@ -4842,6 +5402,8 @@ function renderDayButtons() {
   if (!container) return;
   const minsByDate = {};
   weekDays.forEach(d => { minsByDate[d.date] = dayTotalMinutes(d.items); });
+  // aktivní den ber z živého stavu (items), ne z weekDays — ten se flushuje až debounced (schedSave)
+  if (activePlanDate) minsByDate[activePlanDate] = dayTotalMinutes(items);
   container.innerHTML = getCurrentWeekDates(planWeekOffset).map(({ iso, day }) => {
     const dayShort = PLAN_DAY_SHORT[day.getDay()];
     const dateStr = day.getDate() + '. ' + (day.getMonth() + 1) + '.';
@@ -4910,6 +5472,7 @@ function switchNotesTab(name) {
   // cíl přidávání (addCtx) podle aktivní karty
   if (isPlan) setAddCtx('day');
   else if (name === 'inbox') setAddCtx('inbox');
+  else if (name === 'pozdeji') setAddCtxLater();   // prostý text bez data → do vybraného měsíce (ne do dne)
   // tlačítka +Úkol/+Blok/+Událost a zkratky bloků jen na Dni; Inbox/Později = ploché jednořádkové položky
   const btns = el('inputBtns'); if (btns) btns.style.display = isPlan ? '' : 'none';
   const qta = el('quickInput');
@@ -4947,6 +5510,7 @@ function switchNotesTab(name) {
     renderLater();
   }
   updateAbbrevHint();
+  updateUndoBtn();   // ↩/↪ odráží zásobník aktivní karty (Później má vlastní)
 }
 
 async function deleteWeekDay(id) {
@@ -5338,9 +5902,10 @@ function applyDndReorder(ctx, srcIdx, rawIdx) {
   let L = 1;
   if (!item.isSubtask) { let e = srcIdx + 1; while (e < list.length && list[e].isSubtask) e++; L = e - srcIdx; }
   if (rawIdx > srcIdx && rawIdx <= srcIdx + L) return; // upuštěno uvnitř vlastní skupiny → nic
+  const insertAt = Math.max(0, Math.min(list.length - L, rawIdx > srcIdx ? rawIdx - L : rawIdx));
+  if (insertAt === srcIdx) return;                     // upuštěno na původním místě → beze změny (nerazítkovat mt)
   ctx.undo();
   const group = list.splice(srcIdx, L);
-  const insertAt = Math.max(0, Math.min(list.length, rawIdx > srcIdx ? rawIdx - L : rawIdx));
   list.splice(insertAt, 0, ...group);
   ctx.save(); ctx.render();
 }
@@ -5358,12 +5923,74 @@ function initInboxDnd() {
   initDnd(container, (s, f, raw) => applyDndReorder(INBOXCTX, s, raw));
 }
 
-// Později: každý měsíc má vlastní .later-rows, který se po renderu vytváří znovu →
-// připojuj po každém renderLater (čerstvé elementy, žádná akumulace listenerů).
+// Později: tažení V RÁMCI měsíce i MEZI měsíci. Kontejner #later-list je trvalý →
+// připoj delegovaně jen JEDNOU; řádky/hlavičky se hledají při každém pohybu (přežijí re-render).
 function initLaterDnd() {
-  el('later-list')?.querySelectorAll('.later-rows').forEach(c => {
-    const ym = c.dataset.ym;
-    initDnd(c, (s, f, raw) => applyDndReorder(MCTX(ym), s, raw));
+  const list = el('later-list'); if (!list || list._laterDnd) return;
+  list._laterDnd = true;
+  let srcRow = null, srcYm = null, srcIdx = null, pointerId = null, dragging = false;
+  let startX = 0, startY = 0, holdTimer = null;
+  const MOUSE_THRESHOLD = 6, SCROLL_THRESHOLD = 12, TOUCH_HOLD = 180;
+  const clearInd = () => list.querySelectorAll('.drag-over-top,.drag-over-bottom,.later-drop-into')
+    .forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom', 'later-drop-into'));
+  const rowAt = (x, y) => { const t = document.elementFromPoint(x, y); const r = t && t.closest('.later-rows [draggable="true"]'); return (r && list.contains(r)) ? r : null; };
+  const hdrAt = (x, y) => { const t = document.elementFromPoint(x, y); const h = t && t.closest('.later-month-hdr'); return (h && list.contains(h)) ? h : null; };
+  const beginDrag = () => { if (dragging || !srcRow) return; dragging = true; _dndActive = true; srcRow.classList.add('dragging'); srcRow.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; };
+  const end = () => {
+    clearTimeout(holdTimer); holdTimer = null; clearInd();
+    if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents = ''; }
+    document.body.style.userSelect = '';
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onUp, true);
+    srcRow = srcYm = srcIdx = pointerId = null; dragging = false; _dndActive = false;
+  };
+  const onMove = e => {
+    if (e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!dragging) {
+      if (e.pointerType === 'mouse') { if (Math.abs(dx) + Math.abs(dy) > MOUSE_THRESHOLD) beginDrag(); else return; }
+      else { if (Math.abs(dx) + Math.abs(dy) > SCROLL_THRESHOLD) end(); return; }
+    }
+    if (!dragging) return;
+    if (e.cancelable) e.preventDefault();
+    clearInd();
+    const row = rowAt(e.clientX, e.clientY);
+    if (row) { const rect = row.getBoundingClientRect(); row.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom'); return; }
+    const hdr = hdrAt(e.clientX, e.clientY);
+    if (hdr && hdr.dataset.ym !== srcYm) hdr.classList.add('later-drop-into');   // drop na hlavičku jiného měsíce
+  };
+  const onUp = e => {
+    if (e.pointerId !== pointerId) return;
+    if (dragging) {
+      let dstRow = null, insertBefore = true, hdr = null;
+      list.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(r => { insertBefore = r.classList.contains('drag-over-top'); dstRow = r; });
+      list.querySelectorAll('.later-drop-into').forEach(h => hdr = h);
+      const sYm = srcYm, sIdx = srcIdx;
+      if (dstRow && sYm != null) {
+        const dYm = dstRow.closest('.later-rows')?.dataset.ym;
+        const dstIdx = parseInt(dstRow.dataset.idx);
+        const rawIdx = insertBefore ? dstIdx : dstIdx + 1;
+        end();
+        applyLaterDnd(sYm, sIdx, dYm, rawIdx);
+        return;
+      }
+      if (hdr && sYm != null) { const dYm = hdr.dataset.ym; end(); if (dYm && dYm !== sYm) applyLaterDnd(sYm, sIdx, dYm, 1e9); return; }
+    }
+    end();
+  };
+  list.addEventListener('dragstart', e => e.preventDefault());
+  list.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    const row = e.target.closest('.later-rows [draggable="true"]');
+    if (!row || !list.contains(row)) return;
+    if (e.target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return;
+    srcRow = row; srcYm = row.closest('.later-rows')?.dataset.ym; srcIdx = parseInt(row.dataset.idx);
+    startX = e.clientX; startY = e.clientY; pointerId = e.pointerId; dragging = false;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    if (e.pointerType !== 'mouse') holdTimer = setTimeout(beginDrag, TOUCH_HOLD);
   });
 }
 
@@ -5518,16 +6145,41 @@ window.addEventListener('resize', updateAppGrid);
     try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(WK(GISTID))||''; } catch(e) {}
     try { const n = el('jbWinName'); if (n) n.textContent = (typeof windowName === 'function' ? windowName(activeWin) : '') || 'toto okno'; } catch(e) {}
     try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(WK(GISTID)) ? 'flex' : 'none'; } catch(e) {}
+    try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem('todo-app-gist-id') ? 'flex' : 'none'; } catch(e) {}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
+    let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      idChanged = id !== (localStorage.getItem(WK(GISTID)) || '');
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(WK(GISTID), id);  else localStorage.removeItem(WK(GISTID));
     } catch(e) {}
+    if (idChanged) { try { stampWinBinIdMt(activeWin); } catch(e) {} }   // razítko PŘED pushem registru — LWW propagace přepisu/smazání ID
     try { pushWindowRegistry(); } catch(e) {}   // nové/změněné Gist ID propaguj do registru
+    if (idChanged) {   // nově zadané ID → rovnou stáhni cloud (jinak až po reloadu)
+      try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+      try { checkCloudOnStartup(); } catch(e) {}
+    }
     closeModal('jsonbinModal');
+  }
+  // odkaz pro nové zařízení: Gist ID hlavního okna (volitelně token + autosync) v URL hashi —
+  // hash se na server neposílá a příjemce ho po načtení hned smaže z adresy i historie
+  async function copySyncLink() {
+    const mainGist = localStorage.getItem('todo-app-gist-id') || '';
+    if (!mainGist) { showStatusMsg('⚠ nejdřív ulož Gist ID hlavního okna', 3500); return; }
+    const token = localStorage.getItem(GHTOKEN) || '';
+    let withTok = false;
+    if (token) withTok = await customConfirm('Přibalit do odkazu i GitHub token? Odkaz pak zpřístupní všechna data — posílej jen mezi svá zařízení. Bez tokenu ho na novém zařízení zadáš ručně.', 'přibalit token');
+    const p = new URLSearchParams();
+    p.set('gid', mainGist);
+    if (withTok) p.set('tok', token);
+    if (autosyncEnabled()) p.set('as', '1');
+    const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/todo-app/';
+    const url = base + '#' + p.toString();
+    try { await navigator.clipboard.writeText(url); showStatusMsg('🔗 odkaz zkopírován — otevři ho na novém zařízení', 4000); }
+    catch(e) { await customPrompt('Zkopíruj odkaz pro nové zařízení:', url); }   // clipboard API chybí (http / starý prohlížeč)
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
   function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
@@ -5559,11 +6211,13 @@ window.addEventListener('resize', updateAppGrid);
     const lat = cleanLater().filter(b => latSel.has(b.ym));   // bez duchů
     const wantIb = el('expInbox')?.checked && inbox.length;
     const wantSt = el('expSettings')?.checked;
-    if (!its.length && !archs.length && !wDays.length && !wPlans.length && !wantIb && !lat.length && !wantSt) { customAlert('Nic není vybráno.'); return; }
+    const wantRc = el('expRecur')?.checked && recurrences.length;
+    if (!its.length && !archs.length && !wDays.length && !wPlans.length && !wantIb && !lat.length && !wantSt && !wantRc) { customAlert('Nic není vybráno.'); return; }
     const payload = {v:2, items: its, archive: archs, weekDays: wDays, weekPlans: wPlans};
     if (wantSt) payload.settings = buildSettingsExport();
     if (wantIb) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
     if (lat.length) payload.later = lat;
+    if (wantRc) payload.recurrences = recurrences;   // pravidla opakování (jinak je tento upload z cloudu odstraní)
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
     closeModal('exportModal'); showSyncTooltip('↑ nahrávám…');
     try {
@@ -5577,7 +6231,7 @@ window.addEventListener('resize', updateAppGrid);
       if (creating) {
         const json = await res.json().catch(() => null);
         const newId = json && json.id;
-        if (newId) { localStorage.setItem(WK(GISTID), newId); if (activeWin !== 'main') { try { pushWindowRegistry(); } catch(e) {} } }
+        if (newId) { localStorage.setItem(WK(GISTID), newId); if (activeWin !== 'main') { try { stampWinBinIdMt(activeWin); pushWindowRegistry(); } catch(e) {} } }
       }
       showSyncTooltip('↑ nahráno ' + new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'}));
     } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55)); }
@@ -5669,6 +6323,7 @@ window.addEventListener('resize', updateAppGrid);
     const s = new Set();
     library.forEach(e   => { if (e && e.id   != null) s.add('lib:' + e.id); });
     archive.forEach(e   => { if (e && e.id   != null) s.add('arc:' + e.id); });
+    inbox.forEach(e     => { if (e && e.id   != null) s.add('inb:' + e.id); });
     cleanLater().forEach(b => { if (b && b.ym)        s.add('lat:' + b.ym); });   // duchové se do sync klíčů nepočítají
     weekDays.forEach(d  => { if (d && d.date)         s.add('wd:'  + d.date); });
     weekPlans.forEach(p => { if (p && p.date)         s.add('wp:'  + p.date); });
@@ -5709,7 +6364,7 @@ window.addEventListener('resize', updateAppGrid);
     const tS  = o => Object.keys(o || {}).sort().join(',');
     const btS = arr => (arr || []).map(b => String((b && b.key) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
     const ymS = arr => (arr || []).map(b => String((b && b.ym) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
-    const ibS = o => (((o && o.items) || []).length) + '@' + ((o && o.mt) || 0);   // inbox = celý seznam podle mt
+    const ibS = o => inS((o && o.items) || []) + '@' + ((o && o.mt) || 0);   // inbox = položky (id@mt) + razítko pořadí
     return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || []), idS(rec || [])].join('||');
   }
   function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, cleanLater(), recurrences); }
@@ -5738,7 +6393,13 @@ window.addEventListener('resize', updateAppGrid);
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
     if (on && !hasApiKey()) { showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)', 4500); return; }
-    if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
+    if (on) {
+      reconcileTombstones();   // baseline náhrobků
+      // PULL → merge → push přes checkCloudOnStartup — přímý push by na novém zařízení
+      // přepsal gist prázdným lokálním stavem dřív, než se stihla stáhnout cloud data
+      try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+      checkCloudOnStartup();
+    }
   }
 
   // payload jako doCloudUpload s "vybrat vše": celá library + archive + weekDays + weekPlans + inbox + settings
@@ -5781,7 +6442,7 @@ window.addEventListener('resize', updateAppGrid);
         const newId = json && json.id;
         if (newId) {
           try { localStorage.setItem(idKey, newId); } catch(e) {}
-          if (winAtStart !== 'main') { try { pushWindowRegistry(); } catch(e) {} }   // propaguj nový gist do registru
+          if (winAtStart !== 'main') { try { stampWinBinIdMt(winAtStart); pushWindowRegistry(); } catch(e) {} }   // propaguj nový gist do registru
         }
       }
       lastPushTs = Date.now(); setSyncState('ok');
@@ -5866,7 +6527,7 @@ window.addEventListener('resize', updateAppGrid);
   }
 
   // tichý obousměrný merge cloud → local:
-  //  1) sjednotí náhrobky  2) LWW pro šablony/dny/plány (vč. mazání a editací)  3) doplní archiv/inbox/bloky
+  //  1) sjednotí náhrobky  2) LWW pro šablony/dny/plány/inbox/bloky (vč. mazání a editací)  3) doplní archiv
   function autoImportSilent(record) {
     if (!record || typeof record !== 'object') return;
     applyingRemote = true;
@@ -5893,11 +6554,16 @@ window.addEventListener('resize', updateAppGrid);
     (record.archive || []).forEach(it => {
       if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
     });
-    // inbox — LWW celého seznamu podle inboxMt (editace položek razítkuje inboxMt přes INBOXCTX.save)
+    // inbox — LWW po položkách (id + mt, náhrobky ns „inb"); pořadí společných položek
+    // určuje strana s novějším inboxMt (lokální navíc-položky zůstávají na konci)
+    const ibR = lwwMerge(inbox, (record.inbox || []), 'inb', x => x.id, c => normItem(c));
+    inbox = ibR.arr; added += ibR.added; updated += ibR.updated; removed += ibR.removed;
     const rInboxMt = +record.inboxMt || 0;
-    if (rInboxMt > inboxMt || (rInboxMt === inboxMt && (record.inbox || []).length > inbox.length)) {
-      inbox = (record.inbox || []).map(normItem).filter(Boolean);
-      inboxMt = rInboxMt || inboxMt;
+    if (rInboxMt > inboxMt) {
+      const pos = new Map((record.inbox || []).map((x, i) => [String(x && x.id), i]));
+      const P = x => { const p = pos.get(String(x.id)); return p == null ? 1e9 : p; };
+      inbox.sort((a, b) => P(a) - P(b));   // stabilní sort — lokální navíc-položky drží pořadí na konci
+      inboxMt = rInboxMt;
       updated++;
     }
     // později — LWW po celém měsíci podle ym (editace položek razítkuje bucket.mt přes MCTX.save)
@@ -6076,6 +6742,7 @@ window.addEventListener('resize', updateAppGrid);
   window.gistHistoryRestore   = gistHistoryRestore;
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
+  window.copySyncLink         = copySyncLink;
   window.doCloudUpload        = doCloudUpload;
   window.syncDownload         = syncDownload;
   window.checkCloudOnStartup  = checkCloudOnStartup;
@@ -6109,12 +6776,28 @@ window.addEventListener('resize', updateAppGrid);
   window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
   // PULL každých 5 minut (jen když je tab viditelný)
   setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
+  // ── SYNC ODKAZ: jednorázové nastavení zařízení z URL hashe (#gid=…&tok=…&as=1) ──
+  // Musí proběhnout PŘED checkCloudOnStartup, ať první cloud check už jede s novým ID.
+  (function importSyncLink() {
+    if ((location.hash || '').indexOf('gid=') === -1) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // smaž citlivý hash z adresy i historie
+    if (!gid) return;
+    try {
+      localStorage.setItem('todo-app-gist-id', gid);   // hlavní okno — jeho registr pak předpropojí Gist ID vedlejších oken
+      if (tok) localStorage.setItem(GHTOKEN, tok);
+      if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
+    } catch(e) {}
+    try { sessionStorage.removeItem('todo-app-cloud-checked::main'); } catch(e) {}
+    showStatusMsg(tok ? '🔗 sync nastaven z odkazu' : '🔗 Gist ID nastaveno — zadej token přes ⚙', 4500);
+  })();
   updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
 </script>
-<footer style="text-align:center; padding: 8px; font-size: 0.75rem; color: #999;">
-  This site is powered by <a href="https://www.netlify.com" style="color:#999;">Netlify</a>
+<footer style="text-align:center; padding: 8px;">
+  <a href="https://lordkrabaty.github.io/webapps/" title="úvodní stránka — všechny aplikace" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
 </footer>
 
 <!-- Gist history modal -->
@@ -6140,11 +6823,11 @@ window.addEventListener('resize', updateAppGrid);
         <tr><td><code>r4w</code> <code>r10d</code> <code>r1y</code></td><td>každé 4 týdny · 10 dní · 1 rok</td></tr>
         <tr><td><code>r12.m</code></td><td>každého 12. v měsíci</td></tr>
         <tr><td><code>r12.m r24.m</code></td><td>12. i 24. každý měsíc (kombinace)</td></tr>
-        <tr><td><code>r06</code> <code>r09</code> <code>r12</code></td><td>každý rok daný měsíc (06 = červen)</td></tr>
+        <tr><td><code>r06</code> <code>r6</code> <code>r12</code></td><td>každý rok daný měsíc (6 = červen)</td></tr>
         <tr><td><code>r24.7.</code></td><td>každý rok 24. 7.</td></tr>
-        <tr><td><code>rpo</code> <code>rst</code></td><td>den v týdnu — <i>zatím jen denní karty (časem)</i></td></tr>
+        <tr><td><code>rpo</code> <code>rst</code> <code>rut</code></td><td>den v týdnu (jde i bez diakritiky) — duch vypíše dny výskytů v měsíci</td></tr>
       </table>
-      <p style="margin:.4rem 0 0"><b>Měsíc zápisu = kotva.</b> Pravidlo se ukáže v daném měsíci a dál podle pravidla jako čárkovaný „duch" (↻). Klik = potvrdit, ✕ = přeskočit ten měsíc.</p>
+      <p style="margin:.4rem 0 0"><b>Měsíc zápisu = kotva.</b> Pravidlo se ukáže v daném měsíci a dál podle pravidla jako čárkovaný „duch" (🔃). Klik na 🔃 = potvrdit do měsíce, ✕ = přeskočit ten měsíc.</p>
     </details>
     <div class="modal-list" id="recurList"></div>
     <div class="modal-row" style="margin-top:.1rem">

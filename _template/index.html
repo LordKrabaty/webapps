@@ -87,7 +87,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 
 .app{
   padding:1.25rem 1.25rem 1.5rem;
-  display:grid;grid-template-columns:210px minmax(0,1fr) 330px;
+  display:grid;grid-template-columns:210px minmax(0,1fr) 440px;
   gap:1.25rem;
   overflow-x:clip;
   max-width:1480px;
@@ -737,7 +737,7 @@ function updateAppGrid() {
   const w = window.innerWidth;
   if (w <= 820) { app.style.gridTemplateColumns = ''; }
   else if (w <= 1020) { app.style.gridTemplateColumns = hidden ? '0 1fr' : '185px 1fr'; }
-  else { app.style.gridTemplateColumns = hidden ? '0 1fr 330px' : '210px 1fr 330px'; }
+  else { app.style.gridTemplateColumns = hidden ? '0 1fr 440px' : '210px 1fr 440px'; }
 }
 
 // ── NEW MENU ──────────────────────────────────────────────────────────────
@@ -956,6 +956,9 @@ document.addEventListener('keydown', e => {
     <div class="modal-row" id="gistHistoryRow" style="display:none">
       <button class="btn-io" onclick="openGistHistory()">⏱ historie verzí</button>
     </div>
+    <div class="modal-row" id="syncLinkRow" style="display:none">
+      <button class="btn-io" onclick="copySyncLink()" title="vygeneruje odkaz s Gist ID — otevřením na novém zařízení se sync nastaví sám">🔗 odkaz pro nové zařízení</button>
+    </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
       <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
@@ -1009,17 +1012,50 @@ document.addEventListener('keydown', e => {
   function openJsonBinSettings() {
     try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(GISTID)||''; } catch(e) {}
     try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
+    let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      idChanged = id !== (localStorage.getItem(GISTID) || '');
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
     } catch(e) {}
+    if (idChanged) {   // nově zadané ID → rovnou stáhni cloud (jinak až po reloadu)
+      try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
+      try { checkCloudOnStartup(); } catch(e) {}
+    }
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
+  // odkaz pro nové zařízení: Gist ID (volitelně token + autosync) v URL hashi —
+  // hash se na server neposílá a příjemce ho po načtení hned smaže z adresy i historie
+  async function copySyncLink() {
+    const gistId = localStorage.getItem(GISTID) || '';
+    if (!gistId) { showSyncTooltip('⚠ nejdřív ulož Gist ID'); return; }
+    const token = localStorage.getItem(GHTOKEN) || '';
+    let withTok = false;
+    if (token) withTok = await customConfirm('Přibalit do odkazu i GitHub token? Odkaz pak zpřístupní všechna data — posílej jen mezi svá zařízení. Bez tokenu ho na novém zařízení zadáš ručně.', 'přibalit token');
+    const p = new URLSearchParams();
+    p.set('gid', gistId);
+    if (withTok) p.set('tok', token);
+    if (autosyncEnabled()) p.set('as', '1');
+    // APP LOGIC: fallback URL uprav, pokud se složka app jmenuje jinak než APP_NAME
+    const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/APP_NAME/';
+    const url = base + '#' + p.toString();
+    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 odkaz zkopírován — otevři ho na novém zařízení'); }
+    catch(e) {   // clipboard API chybí (http / starý prohlížeč) → skrytá textarea, jinak odkaz aspoň ukaž
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch(e2) {}
+      document.body.removeChild(ta);
+      if (ok) showSyncTooltip('🔗 odkaz zkopírován — otevři ho na novém zařízení');
+      else await customAlert('Zkopíruj odkaz pro nové zařízení: ' + url);
+    }
+  }
   function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
   // GET gistu — vrací surovou Response (volající kontroluje res.ok)
   async function gistGet(gistId, token) {
@@ -1118,7 +1154,13 @@ document.addEventListener('keydown', e => {
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
     if (on && !hasToken()) { showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)', 4500); return; }
-    if (on) { reconcileTombstones(); scheduleAutoPush(); }   // baseline + push aktuálního stavu
+    if (on) {
+      reconcileTombstones();   // baseline náhrobků
+      // PULL → merge → push (přes checkCloudOnStartup): přímý push by na novém zařízení
+      // přepsal gist prázdným lokálním stavem dřív, než se stihla stáhnout cloud data
+      try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
+      checkCloudOnStartup();
+    }
   }
 
   // autosync nahrává celý stav + náhrobky (ne výběr jako doCloudUpload)
@@ -1440,6 +1482,7 @@ document.addEventListener('keydown', e => {
   window.syncDownload         = syncDownload;
   window.checkCloudOnStartup  = checkCloudOnStartup;
   window.toggleAutoSync       = toggleAutoSync;
+  window.copySyncLink         = copySyncLink;
   window.autoSyncOnSave       = autoSyncOnSave;   // hook po změně synchronizované kolekce (obalené save-funkce ho volají samy)
   loadTombstones(); loadKnownIds();
   // obal perzistentní save-funkce, aby i mazání spustilo reconcile (náhrobek) + push
@@ -1453,12 +1496,28 @@ document.addEventListener('keydown', e => {
   window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
   // PULL každých 5 minut (jen když je tab viditelný)
   setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
+  // ── SYNC ODKAZ: jednorázové nastavení zařízení z URL hashe (#gid=…&tok=…&as=1) ──
+  // Musí proběhnout PŘED checkCloudOnStartup, ať první cloud check už jede s novým ID.
+  (function importSyncLink() {
+    if ((location.hash || '').indexOf('gid=') === -1) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // smaž citlivý hash z adresy i historie
+    if (!gid) return;
+    try {
+      localStorage.setItem(GISTID, gid);
+      if (tok) localStorage.setItem(GHTOKEN, tok);
+      if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
+    } catch(e) {}
+    try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
+    showSyncTooltip(tok ? '🔗 sync nastaven z odkazu' : '🔗 Gist ID nastaveno — zadej token přes ⚙');
+  })();
   updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
 </script>
-<footer style="text-align:center; padding: 8px; font-size: 0.75rem; color: #999;">
-  This site is powered by <a href="https://www.netlify.com" style="color:#999;">Netlify</a>
+<footer style="text-align:center; padding: 8px;">
+  <a href="https://lordkrabaty.github.io/webapps/" title="úvodní stránka — všechny aplikace" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
 </footer>
 
 <!-- Gist history modal -->

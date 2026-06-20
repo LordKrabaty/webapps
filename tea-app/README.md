@@ -6,7 +6,7 @@ A web app for tracking tea brewing sessions.
 - Tea library with session logs
 - Brew templates
 - JSON export/import
-- JSONBin cloud sync
+- GitHub Gist cloud sync
 - Dark mode, offline-first (localStorage)
 
-**[Open app →](https://myteapp.netlify.app)**
+**[Open app →](https://lordkrabaty.github.io/webapps/tea-app/)**
