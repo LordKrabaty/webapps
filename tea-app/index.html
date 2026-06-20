@@ -82,6 +82,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
 .gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
 .gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
 .gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
 .gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
 .dup-name-tag{font-size:.68rem;padding:.05rem .28rem;background:rgba(0,0,0,.08);border-radius:3px;color:var(--muted);margin-left:auto;white-space:nowrap;flex-shrink:0}
@@ -3373,6 +3374,10 @@ document.addEventListener('keydown',e=>{
       <label>Gist ID</label>
       <input type="text" id="jbIdInput" placeholder="abc123def456… (empty = will be created)" spellcheck="false" autocomplete="off">
     </div>
+    <div class="jb-field">
+      <label>Device name</label>
+      <input type="text" id="jbDeviceInput" placeholder="e.g. work PC, phone…" spellcheck="false" autocomplete="off">
+    </div>
     <div class="modal-row" id="gistHistoryRow" style="display:none">
       <button class="btn-io" onclick="openGistHistory()">⏱ version history</button>
     </div>
@@ -3397,14 +3402,23 @@ document.addEventListener('keydown',e=>{
   const ASKEY='cajovy-autosync';
   const GIST_API='https://api.github.com/gists';
   const GIST_FILE='cajovy-sync.json';       // file name inside the gist (data = JSON string)
+  const DEVICE='cajovy-device';             // name of this device (added to the payload → visible in version history)
+  function defaultDeviceName(){
+    const ua=navigator.userAgent||'';
+    if(/Android/i.test(ua))return 'Android';
+    if(/iPhone|iPad|iPod/i.test(ua))return 'iPhone/iPad';
+    if(/Windows/i.test(ua))return 'PC (Windows)';
+    if(/Macintosh|Mac OS/i.test(ua))return 'Mac';
+    if(/Linux/i.test(ua))return 'PC (Linux)';
+    return 'device';
+  }
+  function getDeviceName(){
+    try{let n=localStorage.getItem(DEVICE);if(!n){n=defaultDeviceName();localStorage.setItem(DEVICE,n);}return n;}
+    catch(e){return defaultDeviceName();}
+  }
   const PUSH_MIN_INTERVAL=4000;             // max 1 push / 4 s
-<<<<<<< HEAD
   let pushTimer=null,lastPushTs=0,pushing=false,pushAgain=false,stateTimer=null,pulling=false;
-  let applyingRemote=false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
-=======
-  let pushTimer=null,lastPushTs=0,pushing=false,pushAgain=false,stateTimer=null;
   let applyingRemote=false;                 // true during a silent merge → suppresses the save-hook (no recursion)
->>>>>>> 97dd0157a0b775e1657768f899b55cf17ab733f2
 
   // One-time migration from the old JSONBin sync → Gist slots. A JSONBin key ≠ GitHub token and
   // Bin ID ≠ Gist ID — the values are only moved to the correct slot; the user must overwrite them
@@ -3505,7 +3519,7 @@ document.addEventListener('keydown',e=>{
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload(){
-    return {v:1,teas:library,templates:templates,archive:archive,tombstones:tombstones};
+    return {v:1,teas:library,templates:templates,archive:archive,tombstones:tombstones,device:getDeviceName()};
   }
   function scheduleAutoPush(){
     if(!autosyncEnabled()||!hasToken())return;
@@ -3597,16 +3611,16 @@ document.addEventListener('keydown',e=>{
           else if(JSON.stringify(cur.data||null)!==beforeActive&&typeof refreshActiveFromLibrary==='function')refreshActiveFromLibrary();
         }
         let msg;
-        if(added&&!updated&&!removed)      msg='☁ +'+added+' nových položek ze synchronizace';
-        else if(updated&&!added&&!removed) msg='☁ '+updated+' položek aktualizováno ze synchronizace';
+        if(added&&!updated&&!removed)      msg='☁ +'+added+' new items from sync';
+        else if(updated&&!added&&!removed) msg='☁ '+updated+' items updated from sync';
         else{
           const parts=[];
           if(added)parts.push('+'+added);
           if(updated)parts.push('~'+updated);
           if(removed)parts.push('−'+removed);
-          msg='☁ synchronizováno: '+parts.join(' ');
+          msg='☁ synced: '+parts.join(' ');
         }
-        if(removed)msg+=' — něco se smazalo (zkontroluj / obnov z historie)';
+        if(removed)msg+=' — something was deleted (check / restore from history)';
         showStatusMsg(msg,4000);
       }
       // align the baseline to the new state and save tombstones
@@ -3631,18 +3645,13 @@ document.addEventListener('keydown',e=>{
     if(Date.now()-lastPullTs<PULL_MIN_INTERVAL)return;
     lastPullTs=Date.now();
     const token=localStorage.getItem(GHTOKEN),gistId=localStorage.getItem(GISTID);
-<<<<<<< HEAD
-    if(!token||!gistId)return;               // bez tokenu i Gist ID není odkud stahovat
-    if(pushing)return;                       // probíhá push → nech ho dokončit
-    if(pulling)return;                       // pull už běží → nespouštěj druhý
+    if(!token||!gistId)return;               // without a token and Gist ID there is nowhere to download from
+    if(pushing)return;                       // a push is in progress → let it finish
+    if(pulling)return;                       // a pull is already running → don't start a second
     pulling=true;
     const sBtn=el('syncDownBtn');
     if(sBtn){sBtn.disabled=true;sBtn.classList.add('syncing');}
     let changed=false;
-=======
-    if(!token||!gistId)return;               // without a token and Gist ID there is nowhere to download from
-    if(pushing)return;                       // a push is in progress → let it finish
->>>>>>> 97dd0157a0b775e1657768f899b55cf17ab733f2
     try{
       const res=await gistGet(gistId,token);if(!res.ok)return;
       let record=await gistRecord(res);
@@ -3656,8 +3665,7 @@ document.addEventListener('keydown',e=>{
         changed=localStateSig()!==before;
       }
       if(autosyncEnabled())scheduleAutoPush();
-<<<<<<< HEAD
-    }catch(e){console.warn('[silentPull] selhal:',(e&&e.message)?e.message:e);}
+    }catch(e){console.warn('[silentPull] failed:',(e&&e.message)?e.message:e);}
     finally{
       pulling=false;
       if(sBtn){
@@ -3667,15 +3675,13 @@ document.addEventListener('keydown',e=>{
         else sBtn.textContent='↓';
       }
     }
-=======
-    }catch(e){console.warn('[silentPull] failed:',(e&&e.message)?e.message:e);}
->>>>>>> 97dd0157a0b775e1657768f899b55cf17ab733f2
   }
 
   function openJsonBinSettings(){
     try{
       el('jbKeyInput').value=localStorage.getItem(GHTOKEN)||'';
       el('jbIdInput').value=localStorage.getItem(GISTID)||'';
+      el('jbDeviceInput').value=getDeviceName();
     }catch(e){}
     try{const r=el('gistHistoryRow');if(r)r.style.display=localStorage.getItem(GISTID)?'flex':'none';}catch(e){}
     try{const sl=el('syncLinkRow');if(sl)sl.style.display=localStorage.getItem(GISTID)?'flex':'none';}catch(e){}
@@ -3686,6 +3692,8 @@ document.addEventListener('keydown',e=>{
     try{
       const token=el('jbKeyInput').value.trim();
       const id=el('jbIdInput').value.trim();
+      const dev=el('jbDeviceInput').value.trim();
+      if(dev)localStorage.setItem(DEVICE,dev);else localStorage.removeItem(DEVICE);
       idChanged=id!==(localStorage.getItem(GISTID)||'');
       if(token) localStorage.setItem(GHTOKEN,token); else localStorage.removeItem(GHTOKEN);
       if(id) localStorage.setItem(GISTID,id); else localStorage.removeItem(GISTID);
@@ -3894,10 +3902,23 @@ document.addEventListener('keydown',e=>{
     el('gistHistoryList').innerHTML=gistRevs.map((rev,i)=>{
       const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('en-GB'):'?';
       const tag=i===0?'<span class="gh-rev-chg">newest</span>':'';
-      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">'+esc(d)+'</span>'+tag+'</div>'
+      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">'+esc(d)+'</span>'
+        +'<span class="gh-rev-dev" id="ghDev'+i+'"></span>'+tag+'</div>'
         +'<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview('+i+')">preview</button>'
         +'<button class="btn-io" onclick="gistHistoryRestore('+i+')">restore</button></div></div>';
     }).join('');
+    loadHistoryDevices();
+  }
+  // fetches the device name (payload.device) for the top ≤20 revisions and fills it into the row — a few GET requests
+  function loadHistoryDevices(){
+    const N=Math.min(gistRevs.length,20);
+    for(let i=0;i<N;i++){
+      const rev=gistRevs[i];if(!rev||!rev.version)continue;
+      fetchGistRevision(rev.version).then(rec=>{
+        const span=el('ghDev'+i);
+        if(span&&rec&&rec.device)span.textContent='· '+rec.device;
+      }).catch(()=>{});
+    }
   }
   // downloads the content of a specific revision → record (object) or null
   async function fetchGistRevision(version){

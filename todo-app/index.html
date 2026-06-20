@@ -62,6 +62,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
 .gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
 .gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
 .gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
 .gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
 .modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
@@ -807,6 +808,7 @@ textarea::placeholder{color:var(--mid)}
     <p style="font-size:.78rem;color:var(--muted)">Token vytvoříš na <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). Gisty najdeš na <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
     <div class="jb-field"><label>GitHub Token</label><input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off"></div>
     <div class="jb-field"><label>Gist ID</label><input type="text" id="jbIdInput" placeholder="abc123def456… (prázdné = vytvoří se)" spellcheck="false" autocomplete="off"></div>
+    <div class="jb-field"><label>Název zařízení</label><input type="text" id="jbDeviceInput" placeholder="např. PC práce, mobil…" spellcheck="false" autocomplete="off"></div>
     <div class="modal-row" id="gistHistoryRow" style="display:none">
       <button class="btn-io" onclick="openGistHistory()">⏱ historie verzí</button>
     </div>
@@ -6125,6 +6127,20 @@ window.addEventListener('resize', updateAppGrid);
   const GISTID  = 'todo-app-gist-id';        // Gist ID aktivního okna (per-okno přes WK())
   const GIST_API  = 'https://api.github.com/gists';
   const GIST_FILE = 'todo-app-sync.json';    // jméno souboru uvnitř gistu (data = JSON string)
+  const DEVICE = 'todo-app-device';          // jméno tohoto zařízení (přibalí se do payloadu → vidět v historii verzí)
+  function defaultDeviceName() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'Android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iPhone/iPad';
+    if (/Windows/i.test(ua)) return 'PC (Windows)';
+    if (/Macintosh|Mac OS/i.test(ua)) return 'Mac';
+    if (/Linux/i.test(ua)) return 'PC (Linux)';
+    return 'zařízení';
+  }
+  function getDeviceName() {
+    try { let n = localStorage.getItem(DEVICE); if (!n) { n = defaultDeviceName(); localStorage.setItem(DEVICE, n); } return n; }
+    catch(e) { return defaultDeviceName(); }
+  }
 
   // hlavičky: čtení (GET) nepotřebuje Content-Type, zápis (POST/PATCH) ano
   function ghHeaders(token, write) {
@@ -6143,6 +6159,7 @@ window.addEventListener('resize', updateAppGrid);
   }
   function openJsonBinSettings() {
     try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(WK(GISTID))||''; } catch(e) {}
+    try { el('jbDeviceInput').value = getDeviceName(); } catch(e) {}
     try { const n = el('jbWinName'); if (n) n.textContent = (typeof windowName === 'function' ? windowName(activeWin) : '') || 'toto okno'; } catch(e) {}
     try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(WK(GISTID)) ? 'flex' : 'none'; } catch(e) {}
     try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem('todo-app-gist-id') ? 'flex' : 'none'; } catch(e) {}
@@ -6152,6 +6169,8 @@ window.addEventListener('resize', updateAppGrid);
     let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      const dev = el('jbDeviceInput').value.trim();
+      if (dev) localStorage.setItem(DEVICE, dev); else localStorage.removeItem(DEVICE);
       idChanged = id !== (localStorage.getItem(WK(GISTID)) || '');
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(WK(GISTID), id);  else localStorage.removeItem(WK(GISTID));
@@ -6410,6 +6429,7 @@ window.addEventListener('resize', updateAppGrid);
     const cl = cleanLater(); if (cl.length) payload.later = cl;   // duchové se nesynchronizují
     // registr oken jede jen v hlavním binu (data ostatních oken jsou v jejich vlastních binech)
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }
+    payload.device = getDeviceName();   // metadata: které zařízení push provedlo (mimo sigOf → neovlivní merge)
     return payload;
   }
   function scheduleAutoPush() {
@@ -6691,10 +6711,23 @@ window.addEventListener('resize', updateAppGrid);
     el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
       const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
       const tag = i === 0 ? '<span class="gh-rev-chg">nejnovější</span>' : '';
-      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>' + tag + '</div>'
+      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
+        + '<span class="gh-rev-dev" id="ghDev' + i + '"></span>' + tag + '</div>'
         + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">náhled</button>'
         + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">obnovit</button></div></div>';
     }).join('');
+    loadHistoryDevices();
+  }
+  // dotáhne jméno zařízení (payload.device) pro horních ≤20 revizí a doplní do řádku — pár GET requestů
+  function loadHistoryDevices() {
+    const N = Math.min(gistRevs.length, 20);
+    for (let i = 0; i < N; i++) {
+      const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+      fetchGistRevision(rev.version).then(rec => {
+        const span = el('ghDev' + i);
+        if (span && rec && rec.device) span.textContent = '· ' + rec.device;
+      }).catch(() => {});
+    }
   }
   // stáhne obsah konkrétní revize → record (objekt) nebo null
   async function fetchGistRevision(version) {
