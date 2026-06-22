@@ -83,6 +83,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
 .gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
 .gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-sum{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);word-break:break-word}
 .gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
 .gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
 .dup-name-tag{font-size:.68rem;padding:.05rem .28rem;background:rgba(0,0,0,.08);border-radius:3px;color:var(--muted);margin-left:auto;white-space:nowrap;flex-shrink:0}
@@ -747,7 +748,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     </div>
     <div class="modal-row" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
-      <button class="modal-btn primary" onclick="doImport()">import selected</button>
+      <button class="modal-btn primary" id="importApplyBtn" onclick="doImport()">import selected</button>
     </div>
     <div class="modal-row" id="importCancel">
       <button class="modal-btn" onclick="closeModal('importModal')">close</button>
@@ -2124,15 +2125,20 @@ function copyExportText(){
 
 /* ── IMPORT ─── */
 let importData=[],importTplData=[],importArchData=[];
+// restore mode: selected items OVERWRITE local by id (true rollback from version history) and are
+// stamped mt=now so the restored state propagates to other devices. Reset on every modal open.
+let importForceRestore=false;
 let importSelected=new Set(),importTplSelected=new Set(),importArchSelected=new Set();
 let importNameActions={}; // tea_id -> 'add'|'rename'|'merge'|'merge-pick'
 let importMergeConfig={}; // tea_id -> {logIds:Set, applySettings:bool, targetLibId?}
 let currentMergeTeaId=null;
 let libPickForTeaId=null;
 function openImportModal(){
+  importForceRestore=false;
   importData=[];importTplData=[];importArchData=[];importSelected=new Set();importTplSelected=new Set();importArchSelected=new Set();importNameActions={};importMergeConfig={};
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent='Import';
+  const applyBtn=el('importApplyBtn');if(applyBtn)applyBtn.textContent='import selected';
   el('importFile').value='';el('importPaste').value='';
   el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';
   el('importTeaSection').style.display='none';
@@ -2147,6 +2153,17 @@ function parseImportJson(text){
     const parsed=JSON.parse(text);
     if(!parsed.teas&&!parsed.templates&&!parsed.archive)throw new Error('Invalid format — missing teas, templates or archive');
     // Teas
+    if(importForceRestore){
+      // restore: simple selectable list — selected teas overwrite local by id (see doRestoreImport)
+      importData=(parsed.teas||[]).map(t=>{const e={...t};if(e.data)e.data={...e.data,teaCategory:normCat(e.data.teaCategory)};return e;});
+      importNameActions={};
+      importSelected=new Set(importData.map(t=>t.id));
+      if(importData.length){
+        el('importTeaSection').style.display='block';
+        const filterRow=el('importFilterRow');if(filterRow)filterRow.style.display='none';
+        el('importList').innerHTML=importData.map(t=>`<label class="modal-item sel" id="ii-${t.id}"><input type="checkbox" checked onchange="toggleImportSel(${t.id},this.checked)" />${esc(t.name)}</label>`).join('');
+      }
+    } else {
     const existingTeaNames=new Map(library.map(x=>[x.name.trim().toLowerCase(),x.id]));
     const existingTeaById=new Map(library.map(x=>[x.id,x]));
     importData=(parsed.teas||[]).map(t=>{
@@ -2225,10 +2242,11 @@ function parseImportJson(text){
       }).join('');
       applyImportFilter();
     }
+    }
     // Templates
     const existingTpls=new Set(templates.map(x=>x.id));
     importTplData=(parsed.templates||[]).map(t=>({...t,_dup:existingTpls.has(t.id)}));
-    importTplSelected=new Set(importTplData.filter(t=>!t._dup).map(t=>t.id));
+    importTplSelected=new Set((importForceRestore?importTplData:importTplData.filter(t=>!t._dup)).map(t=>t.id));
     if(importTplData.length){
       el('importTplSection').style.display='block';
       el('importTplList').innerHTML=importTplData.map(t=>`
@@ -2241,7 +2259,7 @@ function parseImportJson(text){
     // Archive
     const existingArchIds=new Set(archive.map(x=>x.id));
     importArchData=(parsed.archive||[]).map(e=>({...e,_dup:existingArchIds.has(e.id)}));
-    importArchSelected=new Set(importArchData.filter(e=>!e._dup).map(e=>e.id));
+    importArchSelected=new Set((importForceRestore?importArchData:importArchData.filter(e=>!e._dup)).map(e=>e.id));
     if(importArchData.length){
       el('importArchSection').style.display='block';
       el('importArchList').innerHTML=importArchData.map(e=>`
@@ -2539,7 +2557,45 @@ function genUniqueId(existingIds){
   existingIds.add(id);
   return id;
 }
+// version-history restore: selected teas/templates/archive OVERWRITE the local entry with the same id
+// (true rollback), stamped mt=now so the restored state wins on this device and propagates to the others.
+function doRestoreImport(){
+  const libById=new Map(library.map(x=>[x.id,x]));
+  let teas=0;
+  importData.filter(t=>importSelected.has(t.id)).forEach(t=>{
+    const e={...t};delete e._nameDup;delete e._idMatchRenamed;delete e._isIdentical;e.mt=Date.now();
+    const ex=libById.get(e.id);
+    if(ex){library[library.indexOf(ex)]=e;}else{library.push(e);libById.set(e.id,e);}
+    teas++;
+  });
+  saveLibrary();renderLibrary();
+  const tplById=new Map(templates.map(x=>[x.id,x]));let tpls=0;
+  importTplData.filter(t=>importTplSelected.has(t.id)).forEach(t=>{
+    const e={...t};delete e._dup;e.mt=Date.now();
+    const ex=tplById.get(e.id);
+    if(ex){templates[templates.indexOf(ex)]=e;}else{templates.push(e);tplById.set(e.id,e);}
+    tpls++;
+  });
+  saveTemplates();renderTemplates();
+  const arcById=new Map(archive.map(x=>[x.id,x]));let arc=0;
+  importArchData.filter(e=>importArchSelected.has(e.id)).forEach(it=>{
+    const e={...it};delete e._dup;
+    const ex=arcById.get(e.id);
+    if(ex){archive[archive.indexOf(ex)]=e;}else{archive.push(e);arcById.set(e.id,e);}
+    arc++;
+  });
+  saveArchive();renderArchive();
+  // the active tea may have been overwritten — reload its form state so the next flush doesn't re-save the old version
+  if(activeLibId&&libById.has(activeLibId)&&typeof refreshActiveFromLibrary==='function')refreshActiveFromLibrary();
+  closeModal('importModal');
+  const parts=[];
+  if(teas)parts.push(teas+' teas');
+  if(tpls)parts.push(tpls+' templates');
+  if(arc)parts.push(arc+' archive');
+  showSave('↩ restored: '+(parts.join(', ')||'nothing'));
+}
 function doImport(){
+  if(importForceRestore){doRestoreImport();return;}
   const existingIds=new Set(library.map(x=>x.id));
   const toAdd=importData.filter(t=>importSelected.has(t.id));
   let added=0,merged=0;
@@ -3878,50 +3934,90 @@ document.addEventListener('keydown',e=>{
   /* ── VERSION HISTORY (Gist revisions) ───
      Loads the gist history[], allows preview (via the import modal) and restore
      (via the standard LWW merge autoImportSilent + push). */
-  let gistRevs=[];   // the last ≤20 revisions from openGistHistory (index = order in the list)
+  const HISTORY_MAX=40;     // how many revisions to list + fetch metadata for
+  let gistRevs=[];          // revisions from openGistHistory (index = order in the list)
+  const gistRevCache={};    // version → parsed record (avoids refetching on filter/re-render)
+  const gistRevMeta={};     // version → { device, summary, loaded } shown in the row
+  let ghDevFilter='';       // active device filter ('' = all devices)
   function historyGistId(){try{return localStorage.getItem(GISTID);}catch(e){return null;}}
   async function openGistHistory(){
     const token=localStorage.getItem(GHTOKEN),gistId=historyGistId();
     if(!token||!gistId){showStatusMsg('⚠ missing Gist token or ID',3000);return;}
     closeModal('jsonbinModal');
-    gistRevs=[];
+    gistRevs=[];ghDevFilter='';
+    Object.keys(gistRevMeta).forEach(k=>delete gistRevMeta[k]);
+    const fsel=el('ghDevFilter');if(fsel){fsel.style.display='none';fsel.value='';}
     el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
     el('gistHistoryModal').classList.add('open');
     try{
       const res=await gistGet(gistId,token);
       if(!res.ok)throw new Error('HTTP '+res.status);
       const json=await res.json();
-      gistRevs=((json&&json.history)||[]).slice(0,100);
+      gistRevs=((json&&json.history)||[]).slice(0,HISTORY_MAX);
       renderGistHistory();
+      loadHistoryMeta();      // async — fills device names + content summary per revision
     }catch(e){
       el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
+  // compact content summary of a revision (so you can tell versions apart without opening the preview)
+  function revSummary(rec){
+    if(!rec||typeof rec!=='object')return '';
+    const parts=[];
+    const t=(rec.teas||rec.items||[]).length;  if(t)parts.push(t+' teas');
+    const tp=(rec.templates||[]).length;       if(tp)parts.push(tp+' tpl');
+    const ar=(rec.archive||[]).length;          if(ar)parts.push(ar+' arch');
+    return parts.join(' · ');
+  }
   function renderGistHistory(){
     if(!gistRevs.length){el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">No history available</p>';return;}
-    el('gistHistoryList').innerHTML=gistRevs.map((rev,i)=>{
+    const rows=gistRevs.map((rev,i)=>{
+      const meta=gistRevMeta[rev.version]||{};
+      if(ghDevFilter&&meta.device!==ghDevFilter)return '';   // filtered out by device
       const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('en-GB'):'?';
       const tag=i===0?'<span class="gh-rev-chg">newest</span>':'';
+      const dev=meta.device?'· '+esc(meta.device)+' ':'';
+      const sum=meta.loaded?esc(meta.summary||'empty'):'…';
       return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">'+esc(d)+'</span>'
-        +'<span class="gh-rev-dev" id="ghDev'+i+'"></span>'+tag+'</div>'
+        +'<span class="gh-rev-dev">'+dev+tag+'</span>'
+        +'<span class="gh-rev-sum">'+sum+'</span></div>'
         +'<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview('+i+')">preview</button>'
         +'<button class="btn-io" onclick="gistHistoryRestore('+i+')">restore</button></div></div>';
     }).join('');
-    loadHistoryDevices();
+    el('gistHistoryList').innerHTML=rows||'<p style="color:var(--muted);font-size:.82rem">No versions from this device</p>';
   }
-  // fetches the device name (payload.device) for the top ≤20 revisions and fills it into the row — a few GET requests
-  function loadHistoryDevices(){
-    const N=Math.min(gistRevs.length,20);
-    for(let i=0;i<N;i++){
-      const rev=gistRevs[i];if(!rev||!rev.version)continue;
-      fetchGistRevision(rev.version).then(rec=>{
-        const span=el('ghDev'+i);
-        if(span&&rec&&rec.device)span.textContent='· '+rec.device;
-      }).catch(()=>{});
-    }
+  // fetch device name + content summary for every listed revision (throttled, cached) and update the rows live
+  async function loadHistoryMeta(){
+    const devices=new Set();
+    let idx=0;
+    const next=async()=>{
+      while(idx<gistRevs.length){
+        const i=idx++;const rev=gistRevs[i];if(!rev||!rev.version)continue;
+        try{
+          const rec=await fetchGistRevision(rev.version);
+          gistRevMeta[rev.version]={device:(rec&&rec.device)||'',summary:revSummary(rec),loaded:true};
+          if(rec&&rec.device)devices.add(rec.device);
+        }catch(e){gistRevMeta[rev.version]={device:'',summary:'',loaded:true};}
+        updateDevFilter(devices);
+        renderGistHistory();
+      }
+    };
+    await Promise.all([next(),next(),next(),next(),next()]);   // 5 parallel workers
   }
-  // downloads the content of a specific revision → record (object) or null
+  // (re)build the device filter dropdown — only shown once ≥2 distinct devices are known
+  function updateDevFilter(devices){
+    const sel=el('ghDevFilter');if(!sel)return;
+    const list=[...devices].sort();
+    if(list.length<2){sel.style.display='none';return;}
+    const cur=sel.value;
+    sel.innerHTML='<option value="">all devices</option>'+list.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join('');
+    if(cur&&list.includes(cur))sel.value=cur;
+    sel.style.display='';
+  }
+  function onGhDevFilter(){ghDevFilter=(el('ghDevFilter').value)||'';renderGistHistory();}
+  // downloads the content of a specific revision → record (object) or null (cached per version)
   async function fetchGistRevision(version){
+    if(gistRevCache[version])return gistRevCache[version];
     const token=localStorage.getItem(GHTOKEN),gistId=historyGistId();
     const res=await fetch(gistUrl(gistId)+'/'+version,{mode:'cors',credentials:'omit',headers:ghHeaders(token,false)});
     if(!res.ok)throw new Error('HTTP '+res.status);
@@ -3933,34 +4029,37 @@ document.addEventListener('keydown',e=>{
     if(record&&'cajovy-v3-library' in record){
       record={v:1,teas:JSON.parse(record['cajovy-v3-library']||'[]'),templates:JSON.parse(record['cajovy-v3-templates']||'[]'),archive:JSON.parse(record['cajovy-v3-archive']||'[]')};
     }
+    gistRevCache[version]=record;
     return record;
   }
+  // open the revision in the import modal as a read-only-style preview (apply = name-dedup import)
   async function gistHistoryPreview(i){
     const rev=gistRevs[i];if(!rev)return;
     try{
       const record=await fetchGistRevision(rev.version);
       if(!record)throw new Error('empty revision');
-      openImportModal();
+      openImportModal();                       // resets importForceRestore = false
       el('importModal').classList.add('from-cloud');
       el('importModal').querySelector('h2').textContent='Revision preview';
       parseImportJson(JSON.stringify(record));
       closeModal('gistHistoryModal');
     }catch(e){
-      el('gistHistoryList').innerHTML='<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+      showStatusMsg('⚠ failed to load revision',3000);
     }
   }
+  // restore: open the same selectable preview, but in FORCE mode — selected items overwrite local by id (true rollback)
   async function gistHistoryRestore(i){
     const rev=gistRevs[i];if(!rev)return;
     const d=rev.committed_at?new Date(rev.committed_at).toLocaleString('en-GB'):'?';
-    if(!await customConfirm('Restore the version from '+d+'? Current data stays — the older version will be merged via the standard merge.','restore'))return;
-    const winAtStart=(typeof activeWin!=='undefined')?activeWin:null;
     try{
       const record=await fetchGistRevision(rev.version);
       if(!record)throw new Error('empty revision');
-      if(typeof activeWin!=='undefined'&&activeWin!==winAtStart)return;   // the window switched → the data belongs to another window
-      autoImportSilent(record);
-      scheduleAutoPush();
-      showStatusMsg('↩ version restored',3000);
+      openImportModal();                       // resets importForceRestore = false
+      el('importModal').classList.add('from-cloud');
+      importForceRestore=true;                 // selected items will OVERWRITE local even when older
+      el('importModal').querySelector('h2').textContent='Restore version — '+d;
+      parseImportJson(JSON.stringify(record));
+      const applyBtn=el('importApplyBtn');if(applyBtn)applyBtn.textContent='restore selected';
       closeModal('gistHistoryModal');
     }catch(e){
       showStatusMsg('⚠ restore failed',3000);
@@ -3969,6 +4068,7 @@ document.addEventListener('keydown',e=>{
   window.openGistHistory=openGistHistory;
   window.gistHistoryPreview=gistHistoryPreview;
   window.gistHistoryRestore=gistHistoryRestore;
+  window.onGhDevFilter=onGhDevFilter;
   window.openJsonBinSettings=openJsonBinSettings;
   window.saveJsonBinSettings=saveJsonBinSettings;
   window.doCloudUpload=doCloudUpload;
@@ -4016,6 +4116,7 @@ document.addEventListener('keydown',e=>{
 <div class="modal-bg" id="gistHistoryModal">
   <div class="modal" style="max-width:460px;gap:.65rem">
     <h2>Version history</h2>
+    <select id="ghDevFilter" onchange="onGhDevFilter()" style="display:none;font-family:'DM Sans';font-size:.8rem;padding:.3rem .4rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none"></select>
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>

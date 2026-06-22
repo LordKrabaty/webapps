@@ -201,6 +201,27 @@ Stará data mají `mt = 0`. LWW při `0 vs 0` **nepřepisuje** (jen doplní chyb
 
 ---
 
+## Version history (Gist revize) — obnova
+
+GitHub gist drží historii revizí (každý push = revize). Tlačítko „⏱ version history" (řádek `gistHistoryRow` v ⚙ modalu) otevře seznam revizí a umožní obnovu.
+
+**UX (hotové v `todo-app` i `tea-app`):**
+- Seznam revizí ukazuje datum, **název zařízení** (z `payload.device`) a **souhrn obsahu** (počty kolekcí, `revSummary()`) u každé revize. Metadata se dotahují pro všechny zobrazené revize (≤ `HISTORY_MAX`, throttle 5 paralelních workerů, cache per `version` v `gistRevCache`).
+- **Filtr podle zařízení** (`ghDevFilter`) — dropdown se objeví až při ≥2 zařízeních.
+- **preview** = otevře revizi v import modalu jako náhled; apply = běžný import (LWW / name-dedup), nedestruktivní.
+- **restore** = otevře stejný náhled se zaškrtáváním po kolekcích/položkách, ale ve **force režimu** (`importForceRestore = true`): vybrané položky **přepíšou** lokální záznam se stejným `id` i když jsou starší (skutečný rollback) a razítkují se `mt = Date.now()`, takže se vrácený stav prosadí i na ostatní zařízení přes sync.
+
+**Proč force, ne merge:** prostý LWW merge (`autoImportSilent`) starou verzi nikdy neprosadí — novější lokální `mt` vyhraje a tombstony blokují smazané položky. „Restore" by tak byl bez efektu pro cokoliv lokálně změněného/smazaného (typicky inbox, recurrences). Force overwrite + `mt = now` je jediný způsob, jak rollback skutečně proběhne a rozšíří se.
+
+**Pasti:**
+- `importForceRestore` resetuj na `false` v `openImportModal()` (preview ho nesmí zdědit) a nastav `true` až PO jeho zavolání v `gistHistoryRestore()`.
+- Po přepisu obnov živý buffer aktivního záznamu (`refreshActiveFromLibrary()` / `applySessionData()`), jinak ho příští flush přepíše starou verzí.
+- Tombstony smazaných položek se po restore samy uvolní přes save-hook (`reconcileTombstones` je smaže, protože položky zase existují) → resurrection funguje.
+
+**Mapování force-overwrite je per-app:** `todo-app` přes společný `importRecordWins()`/`importStamp()` (ve force režimu vrací vždy `true` / `now`); `tea-app` přes vlastní `doRestoreImport()` (overwrite by id — jeho běžný import jinak jede přes name-dedup + merge akce, ne LWW). `_template` zatím nemá — portovat na pokyn.
+
+---
+
 ## Responsive layout (hotový v šabloně)
 
 | Breakpoint | Layout |
