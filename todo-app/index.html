@@ -147,8 +147,9 @@ header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-i
 .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
 .field{display:flex;flex-direction:column;gap:.3rem;min-width:0}
 .field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
-.field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none;width:100%}
-.field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.field input[type="text"],.field input[type="number"],.field select,.field textarea{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none;width:100%}
+.field textarea{resize:vertical;min-height:3.2rem}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2.5px solid var(--black);outline-offset:1px}
 .notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
 .card-controls{position:absolute;top:.4rem;right:.5rem;display:flex;align-items:center;gap:.15rem;z-index:2}
@@ -4734,7 +4735,7 @@ function openRecurManage() { renderRecurList(); el('recurModal').classList.add('
 function renderRecurList() {
   const c = el('recurList'); if (!c) return;
   if (!recurrences.length) {
-    c.innerHTML = '<p style="color:var(--muted);font-size:.82rem;font-style:italic">No rules yet. Add them by typing a shortcut (see the legend above).</p>';
+    c.innerHTML = '<p style="color:var(--muted);font-size:.82rem;font-style:italic">No rules yet. Use “+ add rule” below, or type a shortcut into the task field (see the legend above).</p>';
     return;
   }
   c.innerHTML = recurrences.slice()
@@ -4796,6 +4797,32 @@ async function editRecurRules(id) {
     if (rr && rr.rules.length) { rec.rules = rr.rules; rec.mt = Date.now(); saveRecur(); renderLater(); }
     else await customAlert('Unrecognized rule. Examples: r2m · r12.m · r06 · r24.7.');
   }
+  openRecurManage();
+}
+// add a brand-new recurrence straight from the management modal — small form: text · rule · note
+function addRecur() {
+  closeModal('recurModal');
+  el('raText').value = '';
+  el('raRule').value = '';
+  el('raNote').value = '';
+  el('recurAddModal').classList.add('open');
+  setTimeout(() => el('raText').focus(), 0);
+}
+function cancelAddRecur() { closeModal('recurAddModal'); openRecurManage(); }
+async function submitAddRecur() {
+  const text    = el('raText').value.trim();
+  const ruleStr = el('raRule').value.trim();
+  const note    = el('raNote').value;                    // kept verbatim (may be multiline)
+  const rr = extractRecurRoute(ruleStr);
+  if (!rr || !rr.rules.length) { await customAlert('Unrecognized rule. Examples: r1m · r12.m · r06 · r24.7. · rmo'); return; }
+  if (!text)                   { await customAlert('Enter the task text.'); return; }
+  const pItem = parseItemText(text);                     // picks up icon / duration from the text, like the task field
+  pItem.text = pItem.text || text;
+  if (note.trim()) pItem.note = note;
+  recurrences.push(buildRecurEntry(rr.rules, pItem, todayIso()));
+  saveRecur(); renderLater();
+  closeModal('recurAddModal');
+  showStatusMsg('↻ recurrence added — see Later', 2200);
   openRecurManage();
 }
 async function deleteRecur(id) {
@@ -6936,7 +6963,31 @@ window.addEventListener('resize', updateAppGrid);
     </details>
     <div class="modal-list" id="recurList"></div>
     <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="addRecur()">+ add rule</button>
       <button class="modal-btn" onclick="closeModal('recurModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add recurrence (text · rule · note) -->
+<div class="modal-bg" id="recurAddModal">
+  <div class="modal" style="max-width:420px;gap:.6rem">
+    <h2>New recurrence</h2>
+    <div class="field">
+      <label>Text</label>
+      <input type="text" id="raText" placeholder="e.g. Pay rent" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddRecur();}">
+    </div>
+    <div class="field">
+      <label>Rule</label>
+      <input type="text" id="raRule" placeholder="e.g. r1m · r12.m r24.m · r06 · rmo" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddRecur();}">
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <textarea id="raNote" rows="3" placeholder="preset description — every occurrence inherits it"></textarea>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="submitAddRecur()">add</button>
+      <button class="modal-btn" onclick="cancelAddRecur()">cancel</button>
     </div>
   </div>
 </div>
