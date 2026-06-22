@@ -63,6 +63,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
 .gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
 .gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-sum{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);word-break:break-word}
 .gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
 .gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
 .modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
@@ -711,7 +712,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div class="modal-row" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
-      <button class="modal-btn primary" onclick="doImport()">import selected</button>
+      <button class="modal-btn primary" id="importApplyBtn" onclick="doImport()">import selected</button>
     </div>
     <div class="modal-row" id="importCancel">
       <button class="modal-btn" onclick="closeModal('importModal')">close</button>
@@ -4081,13 +4082,18 @@ function copyExportText() {
 
 // ── IMPORT ────────────────────────────────────────────────────────────────────
 let importData = [], importSelected = new Set(), importBlockSel = new Set();
+// restore mode: selected items OVERWRITE local even when older (true rollback from version history),
+// and are stamped mt = now so the restored state propagates to other devices. Reset on every modal open.
+let importForceRestore = false;
 window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
+  importForceRestore = false;
   importData = []; importSelected = new Set();
   window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importInboxMt = 0; window._importLater = []; window._importRecur = [];
   const recurRow = el('impRecurRow'); if (recurRow) recurRow.style.display = 'none';
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
+  const applyBtn = el('importApplyBtn'); if (applyBtn) applyBtn.textContent = 'import selected';
   el('importFile').value = ''; el('importPaste').value = '';
   el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
   const ds = el('importDaysSection'); if (ds) ds.style.display = 'none';
@@ -4187,11 +4193,14 @@ function toggleImportBlockSel(i, on) {
 // otherwise importing an older/empty cloud (the "cloud has different data" popup) would delete a newer local day/inbox
 // and with mt = now would even spread it to other devices. A legacy/manual file without mt = a deliberate action → wins.
 function importRecordWins(impMt, locMt) {
+  if (importForceRestore) return true;   // version-history restore → selected items overwrite local regardless of mt
   const i = +impMt || 0;
   if (!i) return true;              // no stamp (legacy export / manual file) → the import is a deliberate action
   return i > (+locMt || 0);         // structured data → LWW (newer wins)
 }
-function importStamp(impMt) { return (+impMt || 0) || Date.now(); }   // keep the import stamp; legacy → now
+// keep the import stamp; legacy → now. On restore, stamp = now so the rolled-back state wins on this device
+// and propagates to the others (otherwise the old mt would lose to whatever is currently in the cloud).
+function importStamp(impMt) { return importForceRestore ? Date.now() : ((+impMt || 0) || Date.now()); }
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
   const daySel = selTreeSet('imDay'), planSel = selTreeSet('imPlan'), latSel = selTreeSet('imLat');
@@ -4314,10 +4323,12 @@ function doImport() {
   if (addWplans) msgs.push(wplansSrc.length + ' plans');
   if (addBlocks) msgs.push(addBlocks + ' blocks');
   if (addWorkDays) msgs.push('working days');
-  if (inboxAdded) msgs.push(inboxAdded + ' do inboxu');
+  if (inboxAdded) msgs.push(inboxAdded + ' inbox');
   if (laterAdded) msgs.push(laterAdded + ' months to Later');
   if (recurAdded + recurUpdated) msgs.push((recurAdded + recurUpdated) + ' recurrences' + (recurUpdated ? ' (' + recurUpdated + ' updated)' : ''));
-  closeModal('importModal'); showSave('↓ imported: ' + (msgs.length ? msgs.join(', ') : 'no change (local version is newer)'));
+  closeModal('importModal');
+  if (importForceRestore) showSave('↩ restored: ' + (msgs.length ? msgs.join(', ') : 'nothing selected'));
+  else showSave('↓ imported: ' + (msgs.length ? msgs.join(', ') : 'no change (local version is newer)'));
 }
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────────
@@ -6697,84 +6708,133 @@ window.addEventListener('resize', updateAppGrid);
   /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
      Loads the history[] of the active window gist (WK), allows preview (via the import
      modal) and restore (via the standard LWW merge autoImportSilent + push). */
-  let gistRevs = [];   // the last ≤20 revisions from openGistHistory (index = order in the list)
+  const HISTORY_MAX = 40;     // how many revisions to list + fetch metadata for
+  let gistRevs = [];          // revisions from openGistHistory (index = order in the list)
+  const gistRevCache = {};    // version → parsed record (avoids refetching on filter/re-render)
+  const gistRevMeta = {};     // version → { device, summary, loaded } shown in the row
+  let ghDevFilter = '';       // active device filter ('' = all devices)
   function historyGistId() { try { return localStorage.getItem(WK(GISTID)); } catch(e) { return null; } }
   async function openGistHistory() {
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
     closeModal('jsonbinModal');
-    gistRevs = [];
+    gistRevs = []; ghDevFilter = '';
+    Object.keys(gistRevMeta).forEach(k => delete gistRevMeta[k]);
+    const fsel = el('ghDevFilter'); if (fsel) { fsel.style.display = 'none'; fsel.value = ''; }
     el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
     el('gistHistoryModal').classList.add('open');
     try {
       const res = await gistGet(gistId, token);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
-      gistRevs = ((json && json.history) || []).slice(0, 100);
+      gistRevs = ((json && json.history) || []).slice(0, HISTORY_MAX);
       renderGistHistory();
+      loadHistoryMeta();      // async — fills device names + content summary per revision
     } catch(e) {
       el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
+  // compact content summary of a revision (so you can tell versions apart without opening the preview)
+  function revSummary(rec) {
+    if (!rec || typeof rec !== 'object') return '';
+    const parts = [];
+    const t  = (rec.items || rec.teas || []).length;             if (t)  parts.push(t  + ' tpl');
+    const d  = (rec.weekDays || []).length;                      if (d)  parts.push(d  + ' days');
+    const p  = (rec.weekPlans || []).length;                     if (p)  parts.push(p  + ' plans');
+    const ib = (rec.inbox || []).length;                         if (ib) parts.push(ib + ' inbox');
+    const rc = (rec.recurrences || []).length;                   if (rc) parts.push(rc + ' recur');
+    const lt = (rec.later || []).length;                         if (lt) parts.push(lt + ' later');
+    const b  = ((rec.settings && rec.settings.blockTypes) || []).length; if (b) parts.push(b + ' blk');
+    const ar = (rec.archive || []).length;                       if (ar) parts.push(ar + ' arch');
+    return parts.join(' · ');
+  }
   function renderGistHistory() {
     if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">No history available</p>'; return; }
-    el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
+    const rows = gistRevs.map((rev, i) => {
+      const meta = gistRevMeta[rev.version] || {};
+      if (ghDevFilter && meta.device !== ghDevFilter) return '';   // filtered out by device
       const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('en-GB') : '?';
       const tag = i === 0 ? '<span class="gh-rev-chg">newest</span>' : '';
+      const dev = meta.device ? '· ' + esc(meta.device) + ' ' : '';
+      const sum = meta.loaded ? esc(meta.summary || 'empty') : '…';
       return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
-        + '<span class="gh-rev-dev" id="ghDev' + i + '"></span>' + tag + '</div>'
+        + '<span class="gh-rev-dev">' + dev + tag + '</span>'
+        + '<span class="gh-rev-sum">' + sum + '</span></div>'
         + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
         + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">restore</button></div></div>';
     }).join('');
-    loadHistoryDevices();
+    el('gistHistoryList').innerHTML = rows || '<p style="color:var(--muted);font-size:.82rem">No versions from this device</p>';
   }
-  // fetches the device name (payload.device) for the top ≤20 revisions and adds it to the row — a few GET requests
-  function loadHistoryDevices() {
-    const N = Math.min(gistRevs.length, 20);
-    for (let i = 0; i < N; i++) {
-      const rev = gistRevs[i]; if (!rev || !rev.version) continue;
-      fetchGistRevision(rev.version).then(rec => {
-        const span = el('ghDev' + i);
-        if (span && rec && rec.device) span.textContent = '· ' + rec.device;
-      }).catch(() => {});
-    }
+  // fetch device name + content summary for every listed revision (throttled, cached) and update the rows live
+  async function loadHistoryMeta() {
+    const devices = new Set();
+    let idx = 0;
+    const next = async () => {
+      while (idx < gistRevs.length) {
+        const i = idx++; const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+        try {
+          const rec = await fetchGistRevision(rev.version);
+          gistRevMeta[rev.version] = { device: (rec && rec.device) || '', summary: revSummary(rec), loaded: true };
+          if (rec && rec.device) devices.add(rec.device);
+        } catch(e) { gistRevMeta[rev.version] = { device: '', summary: '', loaded: true }; }
+        updateDevFilter(devices);
+        renderGistHistory();
+      }
+    };
+    await Promise.all([next(), next(), next(), next(), next()]);   // 5 parallel workers
   }
-  // downloads the content of a specific revision → record (object) or null
+  // (re)build the device filter dropdown — only shown once ≥2 distinct devices are known
+  function updateDevFilter(devices) {
+    const sel = el('ghDevFilter'); if (!sel) return;
+    const list = [...devices].sort();
+    if (list.length < 2) { sel.style.display = 'none'; return; }
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">all devices</option>' + list.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+    if (cur && list.includes(cur)) sel.value = cur;
+    sel.style.display = '';
+  }
+  function onGhDevFilter() { ghDevFilter = (el('ghDevFilter').value) || ''; renderGistHistory(); }
+  // downloads the content of a specific revision → record (object) or null (cached per version)
   async function fetchGistRevision(version) {
+    if (gistRevCache[version]) return gistRevCache[version];
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     const file = json && json.files && json.files[GIST_FILE];
     if (!file || !file.content) return null;
-    return JSON.parse(file.content);
+    const rec = JSON.parse(file.content);
+    gistRevCache[version] = rec;
+    return rec;
   }
+  // open the revision in the import modal as a read-only-style preview (apply = LWW merge, newer wins)
   async function gistHistoryPreview(i) {
     const rev = gistRevs[i]; if (!rev) return;
     try {
       const record = await fetchGistRevision(rev.version);
       if (!record) throw new Error('empty revision');
-      openImportModal();
+      openImportModal();                       // resets importForceRestore = false
       el('importModal').classList.add('from-cloud');
       el('importModal').querySelector('h2').textContent = 'Revision preview';
       parseImportJson(JSON.stringify(record));
       closeModal('gistHistoryModal');
     } catch(e) {
-      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+      showStatusMsg('⚠ failed to load revision', 3000);
     }
   }
+  // restore: open the same selectable preview, but in FORCE mode — selected items overwrite local (true rollback)
   async function gistHistoryRestore(i) {
     const rev = gistRevs[i]; if (!rev) return;
     const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('en-GB') : '?';
-    if (!await customConfirm('Restore the version from ' + d + '? Current data stays — the older version will be merged via the standard merge.', 'restore')) return;
-    const winAtStart = (typeof activeWin !== 'undefined') ? activeWin : null;
     try {
       const record = await fetchGistRevision(rev.version);
       if (!record) throw new Error('empty revision');
-      if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // the window switched → the data belongs to another window
-      autoImportSilent(record);
-      scheduleAutoPush();
-      showStatusMsg('↩ version restored', 3000);
+      openImportModal();                       // resets importForceRestore = false
+      el('importModal').classList.add('from-cloud');
+      importForceRestore = true;               // selected items will OVERWRITE local even when older
+      el('importModal').querySelector('h2').textContent = 'Restore version — ' + d;
+      parseImportJson(JSON.stringify(record));
+      const applyBtn = el('importApplyBtn'); if (applyBtn) applyBtn.textContent = 'restore selected';
       closeModal('gistHistoryModal');
     } catch(e) {
       showStatusMsg('⚠ restore failed', 3000);
@@ -6783,6 +6843,7 @@ window.addEventListener('resize', updateAppGrid);
   window.openGistHistory      = openGistHistory;
   window.gistHistoryPreview   = gistHistoryPreview;
   window.gistHistoryRestore   = gistHistoryRestore;
+  window.onGhDevFilter        = onGhDevFilter;
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
   window.copySyncLink         = copySyncLink;
@@ -6847,6 +6908,7 @@ window.addEventListener('resize', updateAppGrid);
 <div class="modal-bg" id="gistHistoryModal">
   <div class="modal" style="max-width:460px;gap:.65rem">
     <h2>Version history</h2>
+    <select id="ghDevFilter" onchange="onGhDevFilter()" style="display:none;font-family:'DM Sans';font-size:.8rem;padding:.3rem .4rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none"></select>
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
