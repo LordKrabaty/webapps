@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -281,34 +281,34 @@ textarea::placeholder{color:var(--mid)}
   <div class="header-right">
     <span id="statusMsg"></span>
     <div class="sync-group">
-      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / nahrát do cloudu (Gist)">↑</button>
-      <button class="btn-sync" onclick="openImportModal()" title="import ze souboru JSON">⇩</button>
-      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="stáhnout data z cloudu (Gist)">↓</button>
-      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="zapnout automatickou synchronizaci (Gist)">☁</button>
-      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="nastavení Gist synchronizace">⚙</button>
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / upload to cloud (Gist)">↑</button>
+      <button class="btn-sync" onclick="openImportModal()" title="import from JSON file">⇩</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="download data from cloud (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="enable automatic sync (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="Gist sync settings">⚙</button>
     </div>
-    <div class="fs-ctrl" title="velikost písma">
-      <button class="fs-btn" onclick="changeFs(-1)" title="zmenšit písmo">−</button>
+    <div class="fs-ctrl" title="font size">
+      <button class="fs-btn" onclick="changeFs(-1)" title="decrease font">−</button>
       <span class="fs-val" id="fsVal">100%</span>
-      <button class="fs-btn" onclick="changeFs(1)" title="zvětšit písmo">+</button>
+      <button class="fs-btn" onclick="changeFs(1)" title="increase font">+</button>
     </div>
-    <button id="darkToggle" onclick="toggleDark()" title="přepnout tmavý/světlý režim">☀</button>
-    <button id="libToggleBtn" onclick="toggleLibPanel()" title="knihovna">☰</button>
-    <button id="undoBtn" onclick="undo()" disabled title="zpět (Ctrl+Z)">↩</button>
-    <button id="redoBtn" onclick="redo()" disabled title="vpřed (Ctrl+Y)">↪</button>
-    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automaticky ukládat změny">
+    <button id="darkToggle" onclick="toggleDark()" title="toggle dark/light mode">☀</button>
+    <button id="libToggleBtn" onclick="toggleLibPanel()" title="library">☰</button>
+    <button id="undoBtn" onclick="undo()" disabled title="undo (Ctrl+Z)">↩</button>
+    <button id="redoBtn" onclick="redo()" disabled title="redo (Ctrl+Y)">↪</button>
+    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automatically save changes">
       <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
       ⟳
     </label>
-    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="uložit změny">✓</button>
+    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="save changes">✓</button>
     <div style="position:relative;display:inline-flex">
-      <button class="btn-sm" onclick="toggleNewMenu(event)" title="nové / uložit jako">+</button>
+      <button class="btn-sm" onclick="toggleNewMenu(event)" title="new / save as">+</button>
       <div id="newMenu" class="new-menu" style="display:none">
-        <button class="new-menu-item" onclick="newSession();closeNewMenu()">nové</button>
-        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">+ uložit jako nový</button>
+        <button class="new-menu-item" onclick="newSession();closeNewMenu()">new</button>
+        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">+ save as new</button>
       </div>
     </div>
-    <button class="btn-sm danger" onclick="clearStorage()" title="smazat">✕</button>
+    <button class="btn-sm danger" onclick="clearStorage()" title="delete">✕</button>
   </div>
 </header>
 
@@ -318,16 +318,16 @@ textarea::placeholder{color:var(--mid)}
   <div class="lib-card" id="panel-library">
     <div class="card-controls">
       <div class="pfs-ctrl">
-        <button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="zmenšit písmo sekce">−</button>
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="decrease section font">−</button>
         <span class="pfs-val" id="pfs-panel-library">100%</span>
-        <button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="zvětšit písmo sekce">+</button>
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="increase section font">+</button>
       </div>
-      <button class="expand-btn" onclick="toggleExpand('panel-library')" title="celá obrazovka">
+      <button class="expand-btn" onclick="toggleExpand('panel-library')" title="fullscreen">
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
     <div class="card-title"><span class="card-title-text">Knihovna</span></div>
-    <!-- LIBRARY PANEL: seznam položek, filtery, tlačítka -->
+    <!-- LIBRARY PANEL: item list, filters, buttons -->
   </div>
 </div>
 
@@ -335,16 +335,16 @@ textarea::placeholder{color:var(--mid)}
   <div class="card" id="panel-main">
     <div class="card-controls">
       <div class="pfs-ctrl">
-        <button class="pfs-btn" onclick="changePanelFs('panel-main',-1)" title="zmenšit písmo sekce">−</button>
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',-1)" title="decrease section font">−</button>
         <span class="pfs-val" id="pfs-panel-main">100%</span>
-        <button class="pfs-btn" onclick="changePanelFs('panel-main',1)" title="zvětšit písmo sekce">+</button>
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',1)" title="increase section font">+</button>
       </div>
-      <button class="expand-btn" onclick="toggleExpand('panel-main')" title="celá obrazovka">
+      <button class="expand-btn" onclick="toggleExpand('panel-main')" title="fullscreen">
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Hlavní panel</span></div>
-    <!-- MAIN PANEL: formulář / detail položky -->
+    <div class="card-title"><span class="card-title-text">Main panel</span></div>
+    <!-- MAIN PANEL: form / item detail -->
   </div>
 </div>
 
@@ -352,16 +352,16 @@ textarea::placeholder{color:var(--mid)}
   <div class="notes-card" id="panel-notes">
     <div class="card-controls">
       <div class="pfs-ctrl">
-        <button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="zmenšit písmo sekce">−</button>
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="decrease section font">−</button>
         <span class="pfs-val" id="pfs-panel-notes">100%</span>
-        <button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="zvětšit písmo sekce">+</button>
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="increase section font">+</button>
       </div>
-      <button class="expand-btn" onclick="toggleExpand('panel-notes')" title="celá obrazovka">
+      <button class="expand-btn" onclick="toggleExpand('panel-notes')" title="fullscreen">
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Poznámky</span></div>
-    <!-- NOTES PANEL: poznámky / log / detail -->
+    <div class="card-title"><span class="card-title-text">Notes</span></div>
+    <!-- NOTES PANEL: notes / log / detail -->
   </div>
 </div>
 
@@ -371,19 +371,19 @@ textarea::placeholder{color:var(--mid)}
 <div class="modal-bg" id="exportModal">
   <div class="modal" style="max-width:460px">
     <h2>Export</h2>
-    <p style="font-size:.8rem;color:var(--muted)">Položky z knihovny</p>
+    <p style="font-size:.8rem;color:var(--muted)">Items from the library</p>
     <div class="modal-list" id="exportList"></div>
-    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archivované</p>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archived</p>
     <div class="modal-list" id="exportArchList"></div>
     <div style="margin-top:.8rem">
-      <label style="font-size:.78rem;color:var(--muted)">Název souboru</label>
+      <label style="font-size:.78rem;color:var(--muted)">File name</label>
       <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
     </div>
     <div class="modal-row" style="margin-top:.5rem">
-      <button class="modal-btn" onclick="selectAllExport()">vybrat vše</button>
-      <button class="modal-btn" onclick="closeModal('exportModal')">zrušit</button>
-      <button class="modal-btn" onclick="doCloudUpload()">↑ nahrát do Gistu</button>
-      <button class="modal-btn primary" onclick="doExport()">stáhnout JSON</button>
+      <button class="modal-btn" onclick="selectAllExport()">select all</button>
+      <button class="modal-btn" onclick="closeModal('exportModal')">cancel</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ upload to Gist</button>
+      <button class="modal-btn primary" onclick="doExport()">download JSON</button>
     </div>
   </div>
 </div>
@@ -391,12 +391,12 @@ textarea::placeholder{color:var(--mid)}
 <!-- Export copy fallback modal -->
 <div class="modal-bg" id="exportCopyModal">
   <div class="modal" style="max-width:520px">
-    <h2>Zkopírovat JSON</h2>
-    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Stažení se nezdařilo. Zkopíruj obsah níže a ulož jako soubor .json.</p>
+    <h2>Copy JSON</h2>
+    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Download failed. Copy the content below and save it as a .json file.</p>
     <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
     <div class="modal-row">
-      <button class="modal-btn primary" onclick="copyExportText()">📋 kopírovat</button>
-      <button class="modal-btn" onclick="closeModal('exportCopyModal')">zavřít</button>
+      <button class="modal-btn primary" onclick="copyExportText()">📋 copy</button>
+      <button class="modal-btn" onclick="closeModal('exportCopyModal')">close</button>
     </div>
   </div>
 </div>
@@ -405,20 +405,20 @@ textarea::placeholder{color:var(--mid)}
 <div class="modal-bg" id="importModal">
   <div class="modal" style="max-width:460px">
     <h2>Import</h2>
-    <p class="jb-import-hide">Vyber JSON soubor exportovaný z této aplikace.</p>
+    <p class="jb-import-hide">Select a JSON file exported from this app.</p>
     <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
-    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">nebo vlož obsah JSON:</p>
+    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">or paste JSON content:</p>
     <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"items":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
     <div id="importItemSection" style="display:none">
-      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Položky</p>
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Items</p>
       <div class="modal-list" id="importList"></div>
     </div>
     <div class="modal-row" id="importActions" style="display:none">
-      <button class="modal-btn" onclick="closeModal('importModal')">zrušit</button>
-      <button class="modal-btn primary" onclick="doImport()">importovat vybrané</button>
+      <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
+      <button class="modal-btn primary" onclick="doImport()">import selected</button>
     </div>
     <div class="modal-row" id="importCancel">
-      <button class="modal-btn" onclick="closeModal('importModal')">zavřít</button>
+      <button class="modal-btn" onclick="closeModal('importModal')">close</button>
     </div>
   </div>
 </div>
@@ -460,12 +460,12 @@ function showStatusMsg(msg, duration=2200) {
     e._hide = setTimeout(() => { e.style.display = 'none'; }, 400);
   }, duration);
 }
-function showSave(msg='✓ uloženo') { showStatusMsg(msg, 2200); }
+function showSave(msg='✓ saved') { showStatusMsg(msg, 2200); }
 function schedSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
-    // APP LOGIC: pokud app průběžně ukládá editovaný záznam do synchronizované kolekce
-    // (jako todo-app dny), promítni ho sem (flush) a zavolej window.autoSyncOnSave()
+    // APP LOGIC: if the app continuously saves the edited record into a synced collection
+    // (like todo-app days), flush it here and call window.autoSyncOnSave()
     saveSession(); showSave();
   }, 300);
 }
@@ -477,8 +477,8 @@ function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE
 function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
 
 // ── SESSION ────────────────────────────────────────────────────────────────
-// APP LOGIC: applySessionData(d) musí položky KOPÍROVAT — items = JSON.parse(JSON.stringify(d.items)) —
-// nikdy nesdílet referenci s uloženým záznamem, jinak se rozbije detekce změny (mt) pro auto-sync.
+// APP LOGIC: applySessionData(d) must COPY the items — items = JSON.parse(JSON.stringify(d.items)) —
+// never share a reference with the stored record, otherwise change detection (mt) for auto-sync breaks.
 function sessionSnap() {
   // APP LOGIC: return JSON.stringify(getSessionData())
   return JSON.stringify({});
@@ -500,26 +500,26 @@ function isDirty() {
 function saveToLibrary() {
   // APP LOGIC: const entry = {id: Date.now(), name: '...', data: getSessionData(), mt: Date.now()};
   // library.push(entry); saveLibrary(); activeLibId = entry.id; markSaved();
-  // mt = čas editace pro auto-sync (LWW) — nastav při každém vytvoření i úpravě
-  showSave('✓ uloženo do knihovny');
+  // mt = edit time for auto-sync (LWW) — set it on every create and update
+  showSave('✓ saved to library');
 }
 function updateLibraryEntry() {
   // APP LOGIC: najdi entry dle activeLibId, nastav entry.data, entry.mt = Date.now(), saveLibrary(), markSaved()
-  showSave('✓ změny uloženy');
+  showSave('✓ changes saved');
 }
 function renderLibrary() {
   // APP LOGIC: render your item list into the library panel
   const hSave = el('headerSaveBtn'), hNew = el('headerSaveNewBtn');
   if (hSave) hSave.style.display = 'none';
-  if (hNew) hNew.textContent = '+ uložit jako nový';
+  if (hNew) hNew.textContent = '+ save as new';
 }
 async function newSession() {
-  if (!await customConfirm('Otevřít prázdnou kartu?','otevřít')) return;
+  if (!await customConfirm('Open a blank card?','open')) return;
   activeLibId = null; savedSnapshot = null;
   undoStack = []; redoStack = []; updateUndoBtn();
   // APP LOGIC: reset your form fields here
   renderLibrary(); schedSave();
-  showSave('nová karta');
+  showSave('new card');
 }
 
 // ── AUTO-SAVE ─────────────────────────────────────────────────────────────
@@ -557,9 +557,9 @@ function redo() {
 }
 function updateUndoBtn() {
   const u = el('undoBtn');
-  if (u) { u.disabled = undoStack.length === 0; u.title = undoStack.length ? 'zpět '+undoStack.length+' (Ctrl+Z)' : 'nic k vrácení'; }
+  if (u) { u.disabled = undoStack.length === 0; u.title = undoStack.length ? 'undo '+undoStack.length+' (Ctrl+Z)' : 'nothing to undo'; }
   const r = el('redoBtn');
-  if (r) { r.disabled = redoStack.length === 0; r.title = redoStack.length ? 'vpřed '+redoStack.length+' (Ctrl+Y)' : 'nic vpřed'; }
+  if (r) { r.disabled = redoStack.length === 0; r.title = redoStack.length ? 'redo '+redoStack.length+' (Ctrl+Y)' : 'nothing to redo'; }
 }
 
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────
@@ -575,15 +575,15 @@ async function doSelectiveClear() {
   if (el('clr-library').checked)    toDelete.push('APP_NAME-v1-library');
   if (el('clr-archive').checked)    toDelete.push('APP_NAME-v1-archive');
   if (el('clr-appearance').checked) toDelete.push('APP_NAME-fs','APP_NAME-dark','APP_NAME-panel-fs');
-  // mazání synchronizované kolekce → resetuj sync baseline, ať se po reloadu čistě stáhne stav z cloudu
-  // (jinak zastaralé knownIds vygeneruje hromadné náhrobky a smaže data i na ostatních zařízeních)
+  // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
+  // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
   if (el('clr-library').checked || el('clr-archive').checked) {
     toDelete.push('APP_NAME-syncknown');
     try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
   }
   if (!toDelete.length) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
-  if (!await customConfirm('Opravdu smazat vybraná data?','smazat')) return;
+  if (!await customConfirm('Really delete the selected data?','delete')) return;
   try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
   location.reload();
 }
@@ -647,8 +647,8 @@ function updatePfsVal(pid) {
   const marker = isPanelExpanded(pid) && ni !== ei ? '*' : '';
   valEl.textContent = Math.round(PFS_STEPS[idx]*100)+'%'+marker;
   valEl.title = isPanelExpanded(pid)
-    ? 'velikost v rozšířeném pohledu (normální: '+Math.round(PFS_STEPS[ni]*100)+'%)'
-    : 'velikost v normálním pohledu (rozšířený: '+Math.round(PFS_STEPS[ei]*100)+'%)';
+    ? 'size in expanded view (normal: '+Math.round(PFS_STEPS[ni]*100)+'%)'
+    : 'size in normal view (expanded: '+Math.round(PFS_STEPS[ei]*100)+'%)';
 }
 function changePanelFs(pid, dir) {
   if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
@@ -768,10 +768,10 @@ function openExportModal() {
   exportArchSelected = new Set(archive.map(e => e.id));
   el('exportList').innerHTML = library.length
     ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
-    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Knihovna je prázdná.</p>';
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
   el('exportArchList').innerHTML = archive.length
     ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
-    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archiv je prázdný.</p>';
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
   updateExportFilename();
   el('exportModal').classList.add('open');
 }
@@ -798,7 +798,7 @@ function selectAllExport() {
 function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
-  if (!items.length && !archItems.length) { customAlert('Nic není vybráno.'); return; }
+  if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
   const json = JSON.stringify({v:1, items, archive: archItems}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
@@ -812,16 +812,16 @@ function doExport() {
   closeModal('exportModal');
   el('exportCopyText').value = json;
   el('exportCopyNote').textContent = downloaded
-    ? 'Soubor by měl být stažen jako "'+fname+'". Pokud ne, zkopíruj obsah níže.'
-    : 'Stažení se nezdařilo — zkopíruj obsah níže a ulož jako soubor .json.';
+    ? 'The file should be downloaded as "'+fname+'". If not, copy the content below.'
+    : 'Download failed — copy the content below and save it as a .json file.';
   el('exportCopyModal').classList.add('open');
-  showSave('↑ exportováno');
+  showSave('↑ exported');
 }
 function copyExportText() {
   const ta = el('exportCopyText');
   try {
-    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(ta.value).then(() => showSave('✓ zkopírováno')); }
-    else { ta.select(); document.execCommand('copy'); showSave('✓ zkopírováno'); }
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(ta.value).then(() => showSave('✓ copied')); }
+    else { ta.select(); document.execCommand('copy'); showSave('✓ copied'); }
   } catch(e) { ta.select(); }
 }
 
@@ -841,7 +841,7 @@ function parseImportJson(text) {
   try {
     const parsed = JSON.parse(text);
     const items = parsed.items || parsed.teas || [];
-    if (!items.length) throw new Error('Žádné položky v souboru');
+    if (!items.length) throw new Error('No items in the file');
     importData = items;
     importSelected = new Set(items.map(x => x.id));
     el('importList').innerHTML = items.map(x => `
@@ -866,8 +866,8 @@ function previewImport() {
 function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
 function doImport() {
   const toAdd = importData.filter(x => importSelected.has(x.id));
-  if (!toAdd.length) { customAlert('Nic není vybráno.'); return; }
-  // dedup podle id — existující položku aktualizuj na místě, nezdvojuj; mt = teď (import vyhraje při synchronizaci)
+  if (!toAdd.length) { customAlert('Nothing is selected.'); return; }
+  // dedup by id — update an existing item in place, do not duplicate; mt = now (import wins on sync)
   let added = 0, updated = 0;
   toAdd.forEach(t => {
     t.mt = Date.now();
@@ -875,9 +875,9 @@ function doImport() {
     if (i >= 0) { library[i] = t; updated++; } else { library.push(t); added++; }
   });
   saveLibrary(); renderLibrary();
-  // APP LOGIC: importuj i další kolekce (archive, dny, inbox…) stejnou dedup logikou (viz CLAUDE.md)
+  // APP LOGIC: import other collections (archive, days, inbox…) with the same dedup logic (see CLAUDE.md)
   closeModal('importModal');
-  showSave('↓ importováno: ' + (added + updated) + ' položek' + (updated ? ' (' + updated + ' aktualiz.)' : ''));
+  showSave('↓ imported: ' + (added + updated) + ' items' + (updated ? ' (' + updated + ' updated)' : ''));
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
@@ -907,24 +907,24 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ── APP LOGIC: zde definuj svůj datový model a renderovací funkce ─────────
+// ── APP LOGIC: define your data model and rendering functions here ─────────
 </script>
 
 <!-- Clear storage modal -->
 <div class="modal-bg" id="clearStorageModal">
   <div class="modal" style="max-width:360px">
-    <h2>smazat data</h2>
-    <p style="font-size:.82rem;color:var(--muted)">Vyber co chceš smazat. Akce je nevratná.</p>
+    <h2>delete data</h2>
+    <p style="font-size:.82rem;color:var(--muted)">Select what you want to delete. This action cannot be undone.</p>
     <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
-      <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>aktuální session</span></label>
-      <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>knihovna</span></label>
-      <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>archiv</span></label>
-      <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>nastavení vzhledu (písmo, tmavý režim)</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>current session</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>library</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>archive</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings (font, dark mode)</span></label>
     </div>
     <div class="modal-row" style="margin-top:.25rem">
-      <button class="modal-btn" onclick="closeModal('clearStorageModal')">zrušit</button>
-      <button class="modal-btn" onclick="toggleAllClear()">vybrat/odznačit vše</button>
-      <button class="modal-btn primary" onclick="doSelectiveClear()">smazat</button>
+      <button class="modal-btn" onclick="closeModal('clearStorageModal')">cancel</button>
+      <button class="modal-btn" onclick="toggleAllClear()">select/deselect all</button>
+      <button class="modal-btn primary" onclick="doSelectiveClear()">delete</button>
     </div>
   </div>
 </div>
@@ -934,7 +934,7 @@ document.addEventListener('keydown', e => {
   <div class="modal" style="max-width:340px">
     <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
     <div class="modal-row" style="margin-top:.25rem">
-      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">zrušit</button>
+      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
       <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
     </div>
   </div>
@@ -943,47 +943,47 @@ document.addEventListener('keydown', e => {
 <!-- Gist settings modal -->
 <div class="modal-bg" id="jsonbinModal">
   <div class="modal" style="max-width:400px;gap:.65rem">
-    <h2>Nastavení Gist synchronizace</h2>
-    <p>Zadej svůj GitHub token a Gist ID. Data se ukládají pouze v tomto prohlížeči.</p>
-    <p style="font-size:.78rem;color:var(--muted)">Token vytvoříš na <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). Gisty najdeš na <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
+    <h2>Gist sync settings</h2>
+    <p>Enter your GitHub token and Gist ID. Data is stored only in this browser.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Create a token at <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). You can find your gists at <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
     <div class="jb-field">
       <label>GitHub Token</label>
       <input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off">
     </div>
     <div class="jb-field">
       <label>Gist ID</label>
-      <input type="text" id="jbIdInput" placeholder="abc123def456… (prázdné = vytvoří se)" spellcheck="false" autocomplete="off">
+      <input type="text" id="jbIdInput" placeholder="abc123def456… (empty = will be created)" spellcheck="false" autocomplete="off">
     </div>
     <div class="jb-field">
-      <label>Název zařízení</label>
-      <input type="text" id="jbDeviceInput" placeholder="např. PC práce, mobil…" spellcheck="false" autocomplete="off">
+      <label>Device name</label>
+      <input type="text" id="jbDeviceInput" placeholder="e.g. work PC, phone…" spellcheck="false" autocomplete="off">
     </div>
     <div class="modal-row" id="gistHistoryRow" style="display:none">
-      <button class="btn-io" onclick="openGistHistory()">⏱ historie verzí</button>
+      <button class="btn-io" onclick="openGistHistory()">⏱ version history</button>
     </div>
     <div class="modal-row" id="syncLinkRow" style="display:none">
-      <button class="btn-io" onclick="copySyncLink()" title="vygeneruje odkaz s Gist ID — otevřením na novém zařízení se sync nastaví sám">🔗 odkaz pro nové zařízení</button>
+      <button class="btn-io" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
-      <button class="modal-btn primary" onclick="saveJsonBinSettings()">uložit</button>
-      <button class="modal-btn" onclick="closeModal('jsonbinModal')">zrušit</button>
+      <button class="modal-btn primary" onclick="saveJsonBinSettings()">save</button>
+      <button class="modal-btn" onclick="closeModal('jsonbinModal')">cancel</button>
     </div>
   </div>
 </div>
 
 <script>
-/* ── GITHUB GIST SYNC + AUTO-SYNC (tichý obousměrný LWW) ───
-   Pravidla a pasti viz CLAUDE.md → "Auto-sync (tichý obousměrný LWW)".
-   Data jedou v jednom privátním gistu (soubor APP_NAME-sync.json).
+/* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
+   Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
+   Data lives in a single private gist (file APP_NAME-sync.json).
    Base kolekce: library (LWW dle id) + archive (append-only union).
-   Další kolekce přidej na místech označených // APP LOGIC. */
+   Add other collections at the spots marked // APP LOGIC. */
 (function(){
   const GHTOKEN = 'APP_NAME-gist-token';      // GitHub token (scope gist)
-  const GISTID  = 'APP_NAME-gist-id';          // Gist ID (prázdné = sync ho při prvním pushi vytvoří)
+  const GISTID  = 'APP_NAME-gist-id';          // Gist ID (empty = sync will create it on the first push)
   const ASKEY   = 'APP_NAME-autosync';
   const GIST_API  = 'https://api.github.com/gists';
-  const GIST_FILE = 'APP_NAME-sync.json';      // jméno souboru uvnitř gistu (data = JSON string)
-  const DEVICE = 'APP_NAME-device';           // jméno tohoto zařízení (přibalí se do payloadu → vidět v historii verzí)
+  const GIST_FILE = 'APP_NAME-sync.json';      // file name inside the gist (data = JSON string)
+  const DEVICE = 'APP_NAME-device';           // name of this device (attached to the payload → visible in version history)
   function defaultDeviceName() {
     const ua = navigator.userAgent || '';
     if (/Android/i.test(ua)) return 'Android';
@@ -991,7 +991,7 @@ document.addEventListener('keydown', e => {
     if (/Windows/i.test(ua)) return 'PC (Windows)';
     if (/Macintosh|Mac OS/i.test(ua)) return 'Mac';
     if (/Linux/i.test(ua)) return 'PC (Linux)';
-    return 'zařízení';
+    return 'device';
   }
   function getDeviceName() {
     try { let n = localStorage.getItem(DEVICE); if (!n) { n = defaultDeviceName(); localStorage.setItem(DEVICE, n); } return n; }
@@ -999,12 +999,12 @@ document.addEventListener('keydown', e => {
   }
   const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
   let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
-  let applyingRemote = false;                 // true během tichého merge → potlačí save-hook (žádná rekurze)
+  let applyingRemote = false;                 // true during a silent merge → suppresses the save-hook (no recursion)
 
-  // Jednorázová migrace ze starého JSONBin syncu → Gist sloty (u nově založené app můžeš smazat).
-  // POZOR: JSONBin klíč ≠ GitHub token a JSONBin Bin ID ≠ Gist ID — hodnoty se jen přesunou do
-  // správného slotu, uživatel je musí v ⚙ ručně přepsat. Neplatné Gist ID se samo zotaví (404 →
-  // založí nový gist). Běží před prvním čtením sync klíčů.
+  // One-time migration from the old JSONBin sync → Gist slots (you can delete this in a newly created app).
+  // NOTE: a JSONBin key ≠ GitHub token and a JSONBin Bin ID ≠ Gist ID — the values are only moved to
+  // the correct slot; the user must overwrite them manually in ⚙. An invalid Gist ID self-heals (404 →
+  // creates a new gist). Runs before the first read of the sync keys.
   (function migrateJsonbinToGist(){
     try {
       const move = (oldK, newK) => { const v = localStorage.getItem(oldK); if (v == null) return;
@@ -1014,7 +1014,7 @@ document.addEventListener('keydown', e => {
     } catch(e) {}
   })();
 
-  // hlavičky: čtení (GET) nepotřebuje Content-Type, zápis (POST/PATCH) ano
+  // headers: reading (GET) does not need Content-Type, writing (POST/PATCH) does
   function ghHeaders(token, write) {
     const h = { 'Accept': 'application/vnd.github+json' };
     if (token) h['Authorization'] = 'Bearer ' + token;
@@ -1022,7 +1022,7 @@ document.addEventListener('keydown', e => {
     return h;
   }
   function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
-  // fetch-init pro zápis: PATCH (existující) přepíše obsah souboru; POST (nový) navíc nastaví popis + private
+  // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private
   function gistWriteInit(token, creating, payload) {
     const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
     const body = creating ? { description: 'APP_NAME-sync', public: false, files } : { files };
@@ -1045,87 +1045,87 @@ document.addEventListener('keydown', e => {
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
     } catch(e) {}
-    if (idChanged) {   // nově zadané ID → rovnou stáhni cloud (jinak až po reloadu)
+    if (idChanged) {   // newly entered ID → download the cloud right away (otherwise only after reload)
       try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
       try { checkCloudOnStartup(); } catch(e) {}
     }
     closeModal('jsonbinModal');
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
-  // odkaz pro nové zařízení: Gist ID (volitelně token + autosync) v URL hashi —
-  // hash se na server neposílá a příjemce ho po načtení hned smaže z adresy i historie
+  // link for a new device: Gist ID (optionally token + autosync) in the URL hash —
+  // the hash is not sent to the server and the recipient removes it from the address and history right after load
   async function copySyncLink() {
     const gistId = localStorage.getItem(GISTID) || '';
-    if (!gistId) { showSyncTooltip('⚠ nejdřív ulož Gist ID'); return; }
+    if (!gistId) { showSyncTooltip('⚠ save a Gist ID first'); return; }
     const token = localStorage.getItem(GHTOKEN) || '';
     let withTok = false;
-    if (token) withTok = await customConfirm('Přibalit do odkazu i GitHub token? Odkaz pak zpřístupní všechna data — posílej jen mezi svá zařízení. Bez tokenu ho na novém zařízení zadáš ručně.', 'přibalit token');
+    if (token) withTok = await customConfirm('Include the GitHub token in the link too? The link will then expose all data — only send it between your own devices. Without the token you will enter it manually on the new device.', 'include token');
     const p = new URLSearchParams();
     p.set('gid', gistId);
     if (withTok) p.set('tok', token);
     if (autosyncEnabled()) p.set('as', '1');
-    // APP LOGIC: fallback URL uprav, pokud se složka app jmenuje jinak než APP_NAME
+    // APP LOGIC: adjust the fallback URL if the app folder is named differently from APP_NAME
     const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/APP_NAME/';
     const url = base + '#' + p.toString();
-    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 odkaz zkopírován — otevři ho na novém zařízení'); }
-    catch(e) {   // clipboard API chybí (http / starý prohlížeč) → skrytá textarea, jinak odkaz aspoň ukaž
+    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 link copied — open it on the new device'); }
+    catch(e) {   // clipboard API missing (http / old browser) → hidden textarea, otherwise at least show the link
       const ta = document.createElement('textarea');
       ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
       let ok = false; try { ok = document.execCommand('copy'); } catch(e2) {}
       document.body.removeChild(ta);
-      if (ok) showSyncTooltip('🔗 odkaz zkopírován — otevři ho na novém zařízení');
-      else await customAlert('Zkopíruj odkaz pro nové zařízení: ' + url);
+      if (ok) showSyncTooltip('🔗 link copied — open it on the new device');
+      else await customAlert('Copy the link for the new device: ' + url);
     }
   }
   function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
-  // GET gistu — vrací surovou Response (volající kontroluje res.ok)
+  // GET the gist — returns the raw Response (the caller checks res.ok)
   async function gistGet(gistId, token) {
     return fetch(gistUrl(gistId), { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
   }
-  // z odpovědi GET vytáhne uložená data (obsah GIST_FILE) jako objekt; null = nejde přečíst
+  // extracts the stored data (GIST_FILE content) from the GET response as an object; null = cannot read
   async function gistRecord(res) {
     let json; try { json = await res.json(); } catch(e) { return null; }
     const file = json && json.files && json.files[GIST_FILE];
     if (!file) return null;
     let content = file.content;
-    if (file.truncated && file.raw_url) {   // GitHub ořízne obsah > ~1 MB → dotáhni přes raw_url
+    if (file.truncated && file.raw_url) {   // GitHub truncates content > ~1 MB → fetch it via raw_url
       try { content = await (await fetch(file.raw_url, { mode:'cors', credentials:'omit' })).text(); } catch(e) {}
     }
     if (!content) return null;
     try { return JSON.parse(content); } catch(e) { return null; }
   }
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
-  function hasToken() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // stačí token → gist si sync vytvoří sám
+  function hasToken() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // a token is enough → sync creates the gist itself
 
-  /* ── TOMBSTONES (propagace mazání mezi zařízeními) ── */
+  /* ── TOMBSTONES (propagation of deletions between devices) ── */
   const TOMB_KEY  = 'APP_NAME-tombstones';    // { "<ns>:<id>": deletedAtTs }
-  const KNOWN_KEY = 'APP_NAME-syncknown';     // [ "<ns>:<id>", … ] stav z minulé reconcile
-  const TOMB_TTL  = 90 * 864e5;               // náhrobky starší než 90 dní zahodit
+  const KNOWN_KEY = 'APP_NAME-syncknown';     // [ "<ns>:<id>", … ] state from the previous reconcile
+  const TOMB_TTL  = 90 * 864e5;               // drop tombstones older than 90 days
   let tombstones = {};
-  let knownIds = null;                         // null = ještě nesledováno
+  let knownIds = null;                         // null = not tracked yet
   function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(TOMB_KEY) || '{}') || {}; } catch(e) { tombstones = {}; } }
   function saveTombstones() { try { localStorage.setItem(TOMB_KEY, JSON.stringify(tombstones)); } catch(e) {} }
   function loadKnownIds()   { try { const s = localStorage.getItem(KNOWN_KEY); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
   function saveKnownIds()   { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...(knownIds || [])])); } catch(e) {} }
   function isTombstoned(key) { return !!tombstones[key]; }
-  // množina "<ns>:<id>" všech aktuálně existujících položek
+  // set of "<ns>:<id>" of all currently existing items
   function currentKeySet() {
     const s = new Set();
     library.forEach(e => { if (e && e.id != null) s.add('lib:' + e.id); });
     archive.forEach(e => { if (e && e.id != null) s.add('arc:' + e.id); });
-    // APP LOGIC: přidej klíče dalších kolekcí (např. wd:date, inb:id, bt:key)
+    // APP LOGIC: add keys of other collections (e.g. wd:date, inb:id, bt:key)
     return s;
   }
   function pruneTombstones() {
     const cutoff = Date.now() - TOMB_TTL;
     Object.keys(tombstones).forEach(k => { if (!(tombstones[k] > cutoff)) delete tombstones[k]; });
   }
-  // diff aktuálního stavu proti poslednímu známému → mazání zapíše jako náhrobek
+  // diff the current state against the last known → deletions are recorded as tombstones
   function reconcileTombstones() {
     const cur = currentKeySet(), now = Date.now();
     if (knownIds) knownIds.forEach(k => { if (!cur.has(k)) tombstones[k] = now; });
-    cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // existuje ⇒ žije
+    cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // exists ⇒ alive
     knownIds = cur;
     pruneTombstones();
     saveKnownIds(); saveTombstones();
@@ -1134,33 +1134,33 @@ document.addEventListener('keydown', e => {
     if (!cloudTomb || typeof cloudTomb !== 'object') return;
     Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
   }
-  // smaž lokálně append-only kolekce, které mají náhrobek (LWW kolekce řeší lwwMerge)
+  // locally delete append-only collections that have a tombstone (LWW collections are handled by lwwMerge)
   function applyTombstones() {
     let removed = 0;
     const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
     archive = sweep('arc', x => x.id)(archive);
-    // APP LOGIC: další append-only kolekce smaž zde
+    // APP LOGIC: delete other append-only collections here
     return removed;
   }
-  // souhrnný podpis stavu (vč. mt a náhrobků) pro detekci rozdílu cloud↔local
+  // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
   function sigOf(items, arch, tomb) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const arcS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
-    // APP LOGIC: do podpisu přidej i další synchronizované kolekce (vždy s mt!), jinak se jejich editace nestáhne
+    // APP LOGIC: add other synced collections to the signature (always with mt!), otherwise their edits will not be pulled
     return [idS(items), arcS(arch), tS(tomb)].join('||');
   }
   function localSig() { return sigOf(library, archive, tombstones); }
   function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}); }
 
-  // tlačítko v toolbaru = zároveň stavový indikátor
+  // the toolbar button is also a status indicator
   function updateAutoSyncBtn() {
     const b = el('autoSyncBtn'); if (!b) return;
     const on = autosyncEnabled();
     b.classList.toggle('on', on);
     if (!b.classList.contains('syncing')) b.textContent = '☁';
-    b.title = on ? 'automatická synchronizace zapnutá — klikni pro vypnutí'
-                 : 'zapnout automatickou synchronizaci (Gist)';
+    b.title = on ? 'automatic sync enabled — click to disable'
+                 : 'enable automatic sync (Gist)';
   }
   function setSyncState(state) {
     const b = el('autoSyncBtn'); if (!b) return;
@@ -1175,24 +1175,24 @@ document.addEventListener('keydown', e => {
     const on = !autosyncEnabled();
     try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
     updateAutoSyncBtn();
-    if (on && !hasToken()) { showStatusMsg('⚠ nejdřív nastav GitHub token přes ⚙ (gist se vytvoří sám)', 4500); return; }
+    if (on && !hasToken()) { showStatusMsg('⚠ set a GitHub token via ⚙ first (the gist will be created automatically)', 4500); return; }
     if (on) {
-      reconcileTombstones();   // baseline náhrobků
-      // PULL → merge → push (přes checkCloudOnStartup): přímý push by na novém zařízení
-      // přepsal gist prázdným lokálním stavem dřív, než se stihla stáhnout cloud data
+      reconcileTombstones();   // tombstone baseline
+      // PULL → merge → push (via checkCloudOnStartup): a direct push on a new device would
+      // overwrite the gist with an empty local state before the cloud data is downloaded
       try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
       checkCloudOnStartup();
     }
   }
 
-  // autosync nahrává celý stav + náhrobky (ne výběr jako doCloudUpload)
+  // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
-    // APP LOGIC: přidej další synchronizované kolekce (settings, dny, inbox…)
+    // APP LOGIC: add other synced collections (settings, days, inbox…)
     return { v:1, items: library, archive: archive, tombstones: tombstones, device: getDeviceName() };
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
-    if (pushTimer) return;        // už naplánováno → coalesce
+    if (pushTimer) return;        // already scheduled → coalesce
     const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs));
     pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
   }
@@ -1202,12 +1202,12 @@ document.addEventListener('keydown', e => {
     const token = localStorage.getItem(GHTOKEN);
     if (!token) return;
     let gistId = localStorage.getItem(GISTID);
-    let creating = !gistId;        // gist ještě neexistuje → autosync ho vytvoří (POST)
+    let creating = !gistId;        // the gist does not exist yet → autosync creates it (POST)
     pushing = true; setSyncState('syncing');
     try {
       const payload = buildAutoPayload();
       let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
-      if (!creating && res.status === 404) {   // migrovaný/smazaný gist → založ nový
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
         creating = true; gistId = '';
         res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
       }
@@ -1227,8 +1227,8 @@ document.addEventListener('keydown', e => {
     }
   }
 
-  // LWW slučování klíčovaného pole: novější mt vyhrává; mazání vyhraje jen pokud je novější
-  // než poslední editace (editace po smazání = vzkříšení). Vrací nové pole + počty.
+  // LWW merge of a keyed array: the newer mt wins; a deletion wins only if it is newer
+  // than the last edit (an edit after deletion = resurrection). Returns a new array + counts.
   function lwwMerge(localArr, cloudArr, ns, keyOf, normalize) {
     const byKey = new Map();
     (localArr || []).forEach(x => { if (x && keyOf(x) != null) byKey.set(String(keyOf(x)), x); });
@@ -1246,74 +1246,74 @@ document.addEventListener('keydown', e => {
     for (const [k, x] of byKey) {
       const tomb = tombstones[ns + ':' + k] || 0;
       if (tomb && tomb >= (+x.mt || 0)) { byKey.delete(k); removed++; }
-      else if (tomb) delete tombstones[ns + ':' + k];   // lokální editace novější než smazání → ponech, zahoď náhrobek
+      else if (tomb) delete tombstones[ns + ':' + k];   // local edit newer than the deletion → keep it, drop the tombstone
     }
     return { arr: [...byKey.values()], added, updated, removed };
   }
 
-  // tichý obousměrný merge cloud → local
+  // silent two-way merge cloud → local
   function autoImportSilent(record) {
     if (!record || typeof record !== 'object') return;
     applyingRemote = true;
     try {
     mergeCloudTombstones(record.tombstones);
-    let removed = applyTombstones();           // append-only kolekce (archiv)
+    let removed = applyTombstones();           // append-only collections (archive)
     let added = 0, updated = 0;
-    // knihovna — LWW podle id
+    // library — LWW by id
     const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
     library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
-    // archiv — jen doplnit chybějící (append-only)
+    // archive — only add missing (append-only)
     const arcIds = new Set(archive.map(x => String(x.id)));
     (record.archive || []).forEach(it => {
       if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
     });
-    // APP LOGIC: další kolekce sluč zde — pole dle id/data přes lwwMerge(...), object-mapy (bloky) vlastním merge
+    // APP LOGIC: merge other collections here — arrays by id/data via lwwMerge(...), object-maps (blocks) with a custom merge
 
-    // APP LOGIC: pokud merge změnil právě editovanou položku (activeLibId), načti ji znovu do formuláře,
-    //            jinak ji příští uložení přepíše starou verzí (viz todo-app obnova aktivního dne)
+    // APP LOGIC: if the merge changed the currently edited item (activeLibId), reload it into the form,
+    //            otherwise the next save overwrites it with the old version (see todo-app active-day refresh)
 
     if (added || updated || removed) {
       saveLibrary(); saveArchive();
       if (typeof renderLibrary === 'function') renderLibrary();
-      // APP LOGIC: překresli ostatní pohledy
+      // APP LOGIC: re-render the other views
       let msg;
-      if (added && !updated && !removed)      msg = '☁ +' + added + ' nových položek ze synchronizace';
-      else if (updated && !added && !removed) msg = '☁ ' + updated + ' položek aktualizováno ze synchronizace';
+      if (added && !updated && !removed)      msg = '☁ +' + added + ' new items from sync';
+      else if (updated && !added && !removed) msg = '☁ ' + updated + ' items updated from sync';
       else {
         const parts = [];
         if (added)   parts.push('+' + added);
         if (updated) parts.push('~' + updated);
         if (removed) parts.push('−' + removed);
-        msg = '☁ synchronizováno: ' + parts.join(' ');
+        msg = '☁ synced: ' + parts.join(' ');
       }
-      if (removed) msg += ' — něco se smazalo (zkontroluj / obnov z historie)';
+      if (removed) msg += ' — something was deleted (check / restore from history)';
       showStatusMsg(msg, 4000);
     }
-    // srovnej baseline na nový stav a ulož náhrobky
+    // align the baseline to the new state and save tombstones
     knownIds = currentKeySet();
     pruneTombstones();
     saveKnownIds(); saveTombstones();
     } finally { applyingRemote = false; }
   }
 
-  // hook po každé perzistenci synchronizované kolekce: zaznamenej mazání (náhrobky) a naplánuj push
+  // hook after each persistence of a synced collection: record deletions (tombstones) and schedule a push
   function autoSyncOnSave() {
-    if (applyingRemote) return;      // změny z mergeu nesmí spustit reconcile/push
-    if (!hasToken()) return;         // bez tokenu není co sledovat (gist si sync vytvoří sám)
+    if (applyingRemote) return;      // changes from the merge must not trigger reconcile/push
+    if (!hasToken()) return;         // without a token there is nothing to track (sync creates the gist itself)
     reconcileTombstones();
     if (autosyncEnabled()) scheduleAutoPush();
   }
 
-  // tichý PULL (focus / visibilitychange / interval): stáhni cloud a sluč, pokud se liší — bez spinneru
+  // silent PULL (focus / visibilitychange / interval): download the cloud and merge if it differs — no spinner
   let lastPullTs = 0;
-  const PULL_MIN_INTERVAL = 30000;            // max 1 pull / 30 s (focus + visibility se spouští spolu)
+  const PULL_MIN_INTERVAL = 30000;            // max 1 pull / 30 s (focus + visibility fire together)
   async function silentPull() {
     if (Date.now() - lastPullTs < PULL_MIN_INTERVAL) return;
     lastPullTs = Date.now();
     const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(GISTID);
-    if (!token || !gistId) return;             // bez tokenu i Gist ID není odkud stahovat
-    if (pushing) return;                       // probíhá push → nech ho dokončit
-    if (pulling) return;                       // pull už běží → nespouštěj druhý
+    if (!token || !gistId) return;             // without a token and Gist ID there is nowhere to download from
+    if (pushing) return;                       // a push is in progress → let it finish
+    if (pulling) return;                       // a pull is already running → do not start a second
     pulling = true;
     const sBtn = el('syncDownBtn');
     if (sBtn) { sBtn.disabled = true; sBtn.classList.add('syncing'); }
@@ -1342,33 +1342,33 @@ document.addEventListener('keydown', e => {
 
   async function doCloudUpload() {
     const token = localStorage.getItem(GHTOKEN);
-    if (!token) { showSyncTooltip('⚠ chybí GitHub token — otevři ⚙'); return; }
+    if (!token) { showSyncTooltip('⚠ missing GitHub token — open ⚙'); return; }
     let gistId = localStorage.getItem(GISTID);
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
-    if (!items.length && !archItems.length) { customAlert('Nic není vybráno.'); return; }
+    if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
     const payload = {v:1, items, archive: archItems};
     closeModal('exportModal');
-    showSyncTooltip('↑ nahrávám…');
+    showSyncTooltip('↑ uploading…');
     try {
       let creating = !gistId;
       let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
-      if (!creating && res.status === 404) {   // migrovaný/smazaný gist → založ nový
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
         creating = true; gistId = '';
         res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
       }
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
       if (creating) { const json = await res.json().catch(() => null); const newId = json && json.id; if (newId) localStorage.setItem(GISTID, newId); }
       const t = new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-      showSyncTooltip('↑ nahráno '+t+' ('+items.length+'i '+archItems.length+'a)');
+      showSyncTooltip('↑ uploaded '+t+' ('+items.length+'i '+archItems.length+'a)');
     } catch(e) {
-      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55));
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
     }
   }
 
   async function syncDownload() {
     const gistId = localStorage.getItem(GISTID);
-    if (!gistId) { showSyncTooltip('⚠ chybí Gist ID — otevři ⚙'); return; }
+    if (!gistId) { showSyncTooltip('⚠ missing Gist ID — open ⚙'); return; }
     const btn = el('syncDownBtn'); btn.disabled = true;
     showSyncTooltip('↓ stahuji…');
     try {
@@ -1376,22 +1376,22 @@ document.addEventListener('keydown', e => {
       const res = await gistGet(gistId, token);
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
       const record = await gistRecord(res);
-      if (typeof record !== 'object' || record === null) throw new Error('Neplatná data v gistu');
-      if (!record.items && !record.teas && !record.archive) throw new Error('Gist neobsahuje položky');
+      if (typeof record !== 'object' || record === null) throw new Error('Invalid data in the gist');
+      if (!record.items && !record.teas && !record.archive) throw new Error('The gist contains no items');
       openImportModal();
       el('importModal').classList.add('from-cloud');
       el('importModal').querySelector('h2').textContent = 'Import z Gistu';
       parseImportJson(JSON.stringify(record));
-      showSyncTooltip('↓ staženo — zkontroluj výběr a importuj');
+      showSyncTooltip('↓ downloaded — check the selection and import');
     } catch(e) {
-      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – otevři přes localhost' : '⚠ '+e.message.slice(0,55));
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
     } finally { btn.disabled = false; }
   }
 
   async function checkCloudOnStartup() {
     const gistId = localStorage.getItem(GISTID);
     if (!gistId) {
-      // gist ještě neexistuje → při zapnutém autosyncu a existujících datech ho rovnou založ
+      // the gist does not exist yet → with autosync on and existing data, create it right away
       if (autosyncEnabled() && hasToken() && (library.length || archive.length)) scheduleAutoPush();
       return;
     }
@@ -1404,12 +1404,12 @@ document.addEventListener('keydown', e => {
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
-      // AUTOSYNC: tichý obousměrný merge (vč. mazání i editací)
+      // AUTOSYNC: silent two-way merge (incl. deletions and edits)
       if (autosyncEnabled()) {
         if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
         return;
       }
-      // jinak (autosync vypnutý): nabídni ruční import, pokud se data liší
+      // otherwise (autosync off): offer a manual import if the data differs
       const cloudItems = record.items || record.teas || [];
       const cloudArch  = record.archive || [];
       const idSig = arr => arr.map(x => String(x.id||'')).sort().join(',')+':'+arr.length;
@@ -1418,21 +1418,21 @@ document.addEventListener('keydown', e => {
       el('importModal').classList.add('from-cloud');
       el('importModal').querySelector('h2').textContent = 'Import z Gistu';
       parseImportJson(JSON.stringify(record));
-      showSyncTooltip('☁ cloud má jiná data — zkontroluj výběr');
+      showSyncTooltip('☁ cloud has different data — check the selection');
     } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
   }
 
-  /* ── HISTORIE VERZÍ (Gist revize) ─────────────────────────────
-     Načte history[] gistu, umožní náhled (přes import modal) i obnovu
-     (přes standardní LWW merge autoImportSilent + push). */
-  let gistRevs = [];   // posledních ≤20 revizí z openGistHistory (index = pořadí v seznamu)
+  /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
+     Loads the gist history[], allows preview (via the import modal) and restore
+     (via the standard LWW merge autoImportSilent + push). */
+  let gistRevs = [];   // the last ≤20 revisions from openGistHistory (index = order in the list)
   function historyGistId() { try { return localStorage.getItem(GISTID); } catch(e) { return null; } }
   async function openGistHistory() {
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
-    if (!token || !gistId) { showStatusMsg('⚠ chybí Gist token nebo ID', 3000); return; }
+    if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
     closeModal('jsonbinModal');
     gistRevs = [];
-    el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">načítám historii…</p>';
+    el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
     el('gistHistoryModal').classList.add('open');
     try {
       const res = await gistGet(gistId, token);
@@ -1441,22 +1441,22 @@ document.addEventListener('keydown', e => {
       gistRevs = ((json && json.history) || []).slice(0, 100);
       renderGistHistory();
     } catch(e) {
-      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
   function renderGistHistory() {
-    if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Žádná historie k dispozici</p>'; return; }
+    if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">No history available</p>'; return; }
     el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
       const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
-      const tag = i === 0 ? '<span class="gh-rev-chg">nejnovější</span>' : '';
+      const tag = i === 0 ? '<span class="gh-rev-chg">newest</span>' : '';
       return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
         + '<span class="gh-rev-dev" id="ghDev' + i + '"></span>' + tag + '</div>'
-        + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">náhled</button>'
+        + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
         + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">obnovit</button></div></div>';
     }).join('');
     loadHistoryDevices();
   }
-  // dotáhne jméno zařízení (payload.device) pro horních ≤20 revizí a doplní do řádku — pár GET requestů
+  // fetches the device name (payload.device) for the top ≤20 revisions and adds it to the row — a few GET requests
   function loadHistoryDevices() {
     const N = Math.min(gistRevs.length, 20);
     for (let i = 0; i < N; i++) {
@@ -1467,7 +1467,7 @@ document.addEventListener('keydown', e => {
       }).catch(() => {});
     }
   }
-  // stáhne obsah konkrétní revize → record (objekt) nebo null
+  // downloads the content of a specific revision → record (object) or null
   async function fetchGistRevision(version) {
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
@@ -1481,31 +1481,31 @@ document.addEventListener('keydown', e => {
     const rev = gistRevs[i]; if (!rev) return;
     try {
       const record = await fetchGistRevision(rev.version);
-      if (!record) throw new Error('prázdná revize');
+      if (!record) throw new Error('empty revision');
       openImportModal();
       el('importModal').classList.add('from-cloud');
-      el('importModal').querySelector('h2').textContent = 'Náhled revize';
+      el('importModal').querySelector('h2').textContent = 'Revision preview';
       parseImportJson(JSON.stringify(record));
       closeModal('gistHistoryModal');
     } catch(e) {
-      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Nepodařilo se načíst historii</p>';
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
   async function gistHistoryRestore(i) {
     const rev = gistRevs[i]; if (!rev) return;
     const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
-    if (!await customConfirm('Obnovit verzi z ' + d + '? Aktuální data zůstanou — starší verze se sloučí přes standardní merge.', 'obnovit')) return;
+    if (!await customConfirm('Restore the version from ' + d + '? Current data stays — the older version will be merged via the standard merge.', 'restore')) return;
     const winAtStart = (typeof activeWin !== 'undefined') ? activeWin : null;
     try {
       const record = await fetchGistRevision(rev.version);
-      if (!record) throw new Error('prázdná revize');
-      if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // okno se přepnulo → data patří jinému oknu
+      if (!record) throw new Error('empty revision');
+      if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // the window switched → the data belongs to another window
       autoImportSilent(record);
       scheduleAutoPush();
       showStatusMsg('↩ verze obnovena', 3000);
       closeModal('gistHistoryModal');
     } catch(e) {
-      showStatusMsg('⚠ obnovení selhalo', 3000);
+      showStatusMsg('⚠ restore failed', 3000);
     }
   }
   window.openGistHistory      = openGistHistory;
@@ -1518,26 +1518,26 @@ document.addEventListener('keydown', e => {
   window.checkCloudOnStartup  = checkCloudOnStartup;
   window.toggleAutoSync       = toggleAutoSync;
   window.copySyncLink         = copySyncLink;
-  window.autoSyncOnSave       = autoSyncOnSave;   // hook po změně synchronizované kolekce (obalené save-funkce ho volají samy)
+  window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones(); loadKnownIds();
-  // obal perzistentní save-funkce, aby i mazání spustilo reconcile (náhrobek) + push
-  // APP LOGIC: přidej sem save-funkce dalších synchronizovaných kolekcí (saveInbox, saveBlockTypes…)
+  // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
+  // APP LOGIC: add here the save functions of other synced collections (saveInbox, saveBlockTypes…)
   ['saveLibrary','saveArchive'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
-  // PULL ON FOCUS — návrat k tabu/oknu hned stáhne změny z jiného zařízení
+  // PULL ON FOCUS — returning to the tab/window immediately downloads changes from another device
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autosyncEnabled()) silentPull(); });
   window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
-  // PULL každých 5 minut (jen když je tab viditelný)
+  // PULL every 5 minutes (only when the tab is visible)
   setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
-  // ── SYNC ODKAZ: jednorázové nastavení zařízení z URL hashe (#gid=…&tok=…&as=1) ──
-  // Musí proběhnout PŘED checkCloudOnStartup, ať první cloud check už jede s novým ID.
+  // ── SYNC LINK: one-time device setup from the URL hash (#gid=…&tok=…&as=1) ──
+  // Must run BEFORE checkCloudOnStartup so the first cloud check already uses the new ID.
   (function importSyncLink() {
     if ((location.hash || '').indexOf('gid=') === -1) return;
     const p = new URLSearchParams(location.hash.slice(1));
     const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
-    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // smaž citlivý hash z adresy i historie
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // delete the sensitive hash from the address and history
     if (!gid) return;
     try {
       localStorage.setItem(GISTID, gid);
@@ -1545,23 +1545,23 @@ document.addEventListener('keydown', e => {
       if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
     } catch(e) {}
     try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
-    showSyncTooltip(tok ? '🔗 sync nastaven z odkazu' : '🔗 Gist ID nastaveno — zadej token přes ⚙');
+    showSyncTooltip(tok ? '🔗 sync set up from link' : '🔗 Gist ID set — enter the token via ⚙');
   })();
   updateAutoSyncBtn();
   checkCloudOnStartup();
 })();
 </script>
 <footer style="text-align:center; padding: 8px;">
-  <a href="https://lordkrabaty.github.io/webapps/" title="úvodní stránka — všechny aplikace" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
+  <a href="https://lordkrabaty.github.io/webapps/" title="home page — all apps" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
 </footer>
 
 <!-- Gist history modal -->
 <div class="modal-bg" id="gistHistoryModal">
   <div class="modal" style="max-width:460px;gap:.65rem">
-    <h2>Historie verzí</h2>
+    <h2>Version history</h2>
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
-      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">zavřít</button>
+      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
     </div>
   </div>
 </div>

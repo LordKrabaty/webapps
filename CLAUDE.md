@@ -17,6 +17,16 @@ Před prací na konkrétní app si přečti její složku — může obsahovat v
 
 ---
 
+## Jazyk aplikací
+
+Aplikace se píšou **primárně v angličtině** — veškerý uživatelsky viditelný text (UI, tlačítka, tooltipy, hlášky, prompty, placeholdery), vstupní zkratky i komentáře v kódu. Platí to i pro `_template`.
+
+Výjimka: napiš v jiném jazyce jen tehdy, když to výslovně zadám.
+
+Zpětně-kompatibilní data (migrační mapy starých hodnot, legacy regexy) smí původní jazyk obsahovat — nejsou vidět a slouží jen k načtení existujících dat.
+
+---
+
 ## Nová aplikace — postup
 
 1. Zkopíruj `_template\index.html` do `nova-app\index.html`
