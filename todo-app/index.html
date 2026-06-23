@@ -1142,6 +1142,7 @@ function extractMonthRoute(text) {
 //   r06 r09      → every year in June and September
 //   r24.7.       → every year on 24.7.
 //   rmo rwe      → every Monday and Wednesday
+//   r3sa rlsu    → the 3rd Saturday / the last Sunday of every month (ordinal weekday)
 function parseRecurToken(tok) {
   if (!tok) return null;
   const t = tok.toLowerCase().replace(/[,;]+$/, '');
@@ -1151,9 +1152,20 @@ function parseRecurToken(tok) {
   if ((m = b.match(/^(\d+)([dwmy])$/)))           { const n = +m[1]; return n >= 1 ? { t:'interval', n, u:m[2] } : null; }              // r4w
   if ((m = b.match(/^(\d{1,2})\.m$/)))            { const d = +m[1]; return (d>=1 && d<=31) ? { t:'dom', day:d } : null; }             // r12.m
   if ((m = b.match(/^(\d{1,2})\.(\d{1,2})\.?$/))) { const d=+m[1], mo=+m[2]; return (d>=1&&d<=31&&mo>=1&&mo<=12) ? { t:'yearly', day:d, mo } : null; }  // r24.7.
+  if ((m = b.match(/^([1-5l])(mo|tu|we|th|fr|sa|su)$/))) {                                                                              // r3sa · rlsu (ordinal weekday of month)
+    const wd = DAY_ABBREV_CZ.findIndex(a => a.toLowerCase() === m[2]);
+    return wd >= 0 ? { t:'nthwd', nth: m[1] === 'l' ? 'last' : +m[1], d: wd } : null;
+  }
   if ((m = b.match(/^(\d{1,2})$/)))               { const mo = +m[1]; return (mo>=1 && mo<=12) ? { t:'month', mo } : null; }           // r06 i r6
   const wd = DAY_ABBREV_CZ.findIndex(a => a.toLowerCase() === b);                                                                       // rmo rtu rwe rth rfr rsa rsu
   return wd >= 0 ? { t:'weekday', d: wd } : null;   // d = getDay() index (0=Sun)
+}
+// day-of-month (1..31) of the nth (1-5 | 'last') given weekday in a month, or null if it does not exist (Y, M=1..12, wd=getDay index)
+function nthWeekdayOfMonth(Y, M, wd, nth) {
+  const last = new Date(Y, M, 0).getDate(), days = [];
+  for (let day = 1; day <= last; day++) { if (new Date(Y, M - 1, day).getDay() === wd) days.push(day); }
+  if (!days.length) return null;
+  return nth === 'last' ? days[days.length - 1] : (days[nth - 1] || null);
 }
 // parse all r-tokens from the line (anywhere), return { rules, rest } | null
 function extractRecurRoute(text) {
@@ -1180,6 +1192,7 @@ function describeRecurRule(r) {
   if (r.t === 'yearly')  return 'every year on ' + r.day + '.' + r.mo + '.';
   if (r.t === 'month')   return 'every year – ' + (MONTHS_CZ[r.mo - 1] || ('month ' + r.mo));
   if (r.t === 'weekday') return 'every week – ' + (DAY_ABBREV_CZ[r.d] || '?');
+  if (r.t === 'nthwd')   { const ord = r.nth === 'last' ? 'last' : (['', '1st', '2nd', '3rd', '4th', '5th'][r.nth] || (r.nth + 'th')); return 'every ' + ord + ' ' + (DAY_NAMES_CZ_LONG[r.d] || '?') + ' of the month'; }
   return '?';
 }
 function describeRecur(rec) { return ((rec && rec.rules) || []).map(describeRecurRule).join(' + '); }
@@ -2075,7 +2088,7 @@ async function editGhostRule() {
   const v = await customPrompt('Recurrence rules (e.g. r2m r12.m):', recurTokens(rec));
   if (v == null) return;
   const rr = extractRecurRoute(v);
-  if (!rr || !rr.rules.length) { await customAlert('Unrecognized rule. Examples: r2m · r12.m · r06 · r24.7.'); return; }
+  if (!rr || !rr.rules.length) { await customAlert('Unrecognized rule. Examples: r2m · r12.m · r06 · r24.7. · r3sa'); return; }
   rec.rules = rr.rules; rec.mt = Date.now();             // content change → LWW stamp
   saveRecur(); renderLater(); if (typeof renderAll === 'function') renderAll();
   showStatusMsg('↻ rule updated', 1800);
@@ -4506,6 +4519,7 @@ function recurRuleFires(r, d, anchorIso) {
   if (r.t === 'dom')     return d.getDate() === r.day;
   if (r.t === 'yearly')  return d.getDate() === r.day && (d.getMonth() + 1) === r.mo;
   if (r.t === 'month')   return (d.getMonth() + 1) === r.mo && d.getDate() === 1;   // month of the year → 1st day
+  if (r.t === 'nthwd')   return d.getDate() === nthWeekdayOfMonth(d.getFullYear(), d.getMonth() + 1, r.d, r.nth);   // the nth (or last) weekday of the month
   if (r.t === 'interval') {
     const a = new Date((anchorIso || '') + 'T12:00:00');
     if (isNaN(a) || d < a) return false;
@@ -4594,6 +4608,12 @@ function ruleMonthDayLabel(r, Y, M, anchorIso) {   // M = 1..12
   if (r.t === 'dom')    return r.day + '.' + M + '.';                         // every month, on the given day (with the month → sorts)
   if (r.t === 'yearly') return (M === r.mo) ? (r.day + '.' + r.mo + '.') : false;
   if (r.t === 'month')  return (M === r.mo) ? null : false;                   // whole month
+  if (r.t === 'nthwd')  {                                                     // nth (or last) weekday of the month → its specific day
+    const day = nthWeekdayOfMonth(Y, M, r.d, r.nth);
+    if (!day) return false;
+    if (anchorIso && (Y + '-' + String(M).padStart(2, '0') + '-' + String(day).padStart(2, '0')) < anchorIso) return false;
+    return day + '.' + M + '.';
+  }
   if (r.t === 'interval' && (r.u === 'm' || r.u === 'y')) {
     const aY = +String(anchorIso).slice(0, 4), aM = +String(anchorIso).slice(5, 7);
     if (r.u === 'm') { const md = (Y - aY) * 12 + (M - aM); return (md >= 0 && md % r.n === 0) ? null : false; }
@@ -4649,7 +4669,21 @@ function recurMonthOccurrences(rec, ym) {
     } else if (r.t === 'yearly') {
       if (M !== r.mo) return;
       add(r.day + '.' + r.mo + '.', 'd' + r.day, ym + '-' + String(r.day).padStart(2, '0'));
-    } else {                                   // whole month / interval / range → one occurrence per month
+    } else if (r.t === 'nthwd') {              // nth (or last) weekday → ONE specific day (date-based skip, unified with the day view)
+      const day = nthWeekdayOfMonth(Y, M, r.d, r.nth);
+      if (!day) return;
+      const iso = ym + '-' + String(day).padStart(2, '0');
+      if (rec.anchor && iso < rec.anchor) return;
+      add(day + '.' + M + '.', 'd' + day, iso);
+    } else if ((r.t === 'interval' && (r.u === 'd' || r.u === 'w')) || r.t === 'weekday') {
+      // multiple hits per month (every N days/weeks · weekday) → ONE SEPARATE item per firing day, so each lands in its week
+      const last = new Date(Y, M, 0).getDate();
+      for (let day = 1; day <= last; day++) {
+        const iso = ym + '-' + String(day).padStart(2, '0');
+        if (rec.anchor && iso < rec.anchor) continue;
+        if (recurRuleFires(r, new Date(Y, M - 1, day, 12), rec.anchor)) add(day + '.' + M + '.', 'd' + day, iso);
+      }
+    } else {                                   // whole month / interval m·y / month-of-year → one occurrence per month
       const dl = ruleMonthDayLabel(r, Y, M, rec.anchor);
       if (dl === false) return;
       add(dl, 'r' + idx, ym);
@@ -4760,6 +4794,7 @@ function recurRuleToToken(r) {
   if (r.t === 'yearly')   return 'r' + r.day + '.' + r.mo + '.';
   if (r.t === 'month')    return 'r' + String(r.mo).padStart(2, '0');
   if (r.t === 'weekday')  return 'r' + (DAY_ABBREV_CZ[r.d] || '').toLowerCase();
+  if (r.t === 'nthwd')    return 'r' + (r.nth === 'last' ? 'l' : r.nth) + (DAY_ABBREV_CZ[r.d] || '').toLowerCase();
   return '';
 }
 function recurTokens(rec) { return (rec.rules || []).map(recurRuleToToken).join(' '); }
@@ -4840,7 +4875,7 @@ async function editRecurRules(id) {
   if (v != null) {
     const rr = extractRecurRoute(v);
     if (rr && rr.rules.length) { rec.rules = rr.rules; rec.mt = Date.now(); saveRecur(); renderLater(); }
-    else await customAlert('Unrecognized rule. Examples: r2m · r12.m · r06 · r24.7.');
+    else await customAlert('Unrecognized rule. Examples: r2m · r12.m · r06 · r24.7. · r3sa');
   }
   openRecurManage();
 }
@@ -4862,7 +4897,7 @@ async function submitAddRecur() {
   const note    = el('raNote').value;                    // kept verbatim (may be multiline)
   const from    = el('raFrom').value;                    // YYYY-MM-DD from the date picker (empty → today)
   const rr = extractRecurRoute(ruleStr);
-  if (!rr || !rr.rules.length) { await customAlert('Unrecognized rule. Examples: r1m · r12.m · r06 · r24.7. · rmo'); return; }
+  if (!rr || !rr.rules.length) { await customAlert('Unrecognized rule. Examples: r1m · r12.m · r06 · r24.7. · rmo · r3sa'); return; }
   if (!text)                   { await customAlert('Enter the task text.'); return; }
   const pItem = parseItemText(text);                     // picks up icon / duration from the text, like the task field
   pItem.text = pItem.text || text;
@@ -7040,6 +7075,7 @@ window.addEventListener('resize', updateAppGrid);
         <tr><td><code>r06</code> <code>r6</code> <code>r12</code></td><td>every year in the given month (6 = June)</td></tr>
         <tr><td><code>r24.7.</code></td><td>every year on 24.7.</td></tr>
         <tr><td><code>rmo</code> <code>rwe</code> <code>rtu</code></td><td>day of the week — the ghost lists the occurrence days in the month</td></tr>
+        <tr><td><code>r3sa</code> <code>rlsu</code></td><td>the 3rd Saturday · the last Sunday of every month (1–5 or l = last)</td></tr>
       </table>
       <p style="margin:.4rem 0 0"><b>The month of entry = anchor.</b> The rule shows in that month and onward per the rule as a dashed "ghost" (🔃). Click 🔃 = confirm into the month, ✕ = skip that month.</p>
     </details>
@@ -7061,7 +7097,7 @@ window.addEventListener('resize', updateAppGrid);
     </div>
     <div class="field">
       <label>Rule</label>
-      <input type="text" id="raRule" placeholder="e.g. r1m · r12.m r24.m · r06 · rmo" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddRecur();}">
+      <input type="text" id="raRule" placeholder="e.g. r1m · r12.m r24.m · r06 · rmo · r3sa" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddRecur();}">
     </div>
     <div class="field">
       <label>Valid from</label>
