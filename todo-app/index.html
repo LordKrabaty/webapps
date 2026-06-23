@@ -304,6 +304,7 @@ textarea::placeholder{color:var(--mid)}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
 .later-week-hdr.first-in-month{border-top:none;margin-top:0;padding-top:.05rem}
+.later-week-hdr.none{color:var(--dark);font-style:italic;border-top:1.5px solid var(--mid);margin-top:.35rem;text-transform:none}
 .later-today-bar{font-size:.8rem;padding:.1rem .15rem .3rem;border-bottom:1.5px solid var(--mid);margin-bottom:.25rem}
 .day-badge[data-day]::after{content:' · ' attr(data-day);color:var(--muted);font-size:.85em}
 [contenteditable="true"].day-badge::after{display:none}
@@ -5256,16 +5257,21 @@ function sortBucketItems(items, ym) {
 }
 function buildWeekHeaders(items, ym) {
   const ins = {};
-  let cur = null, first = true;
+  let cur = null, first = true, anyDated = false, noneDone = false;
   for (let i = 0; i < items.length; i++) {
     if (items[i].isSubtask) continue;
     const dt = parseDayLabel(items[i].dayLabel, ym);
-    if (!dt) continue;
-    const wk = getWeekMondayKey(dt);
-    if (wk !== cur) {
-      cur = wk;
-      ins[i] = `<div class="later-week-hdr${first ? ' first-in-month' : ''}">${buildWeekLabel(wk)}</div>`;
-      first = false;
+    if (dt) {
+      anyDated = true;
+      const wk = getWeekMondayKey(dt);
+      if (wk !== cur) {
+        cur = wk;
+        ins[i] = `<div class="later-week-hdr${first ? ' first-in-month' : ''}">${buildWeekLabel(wk)}</div>`;
+        first = false;
+      }
+    } else if (!noneDone && anyDated) {   // first undated item after dated ones → divider for "no specific week" group
+      noneDone = true;
+      ins[i] = `<div class="later-week-hdr none">no specific week</div>`;
     }
   }
   return ins;
