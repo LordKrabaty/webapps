@@ -304,7 +304,7 @@ textarea::placeholder{color:var(--mid)}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
 .later-week-hdr.first-in-month{border-top:none;margin-top:0;padding-top:.05rem}
-.later-week-hdr.none{color:var(--dark);font-style:italic;border-top:1.5px solid var(--mid);margin-top:.35rem;text-transform:none}
+.later-week-hdr.none{color:var(--dark);font-style:italic;border-top:none;margin-top:0;padding-top:.05rem;text-transform:none}
 .later-today-bar{font-size:.8rem;padding:.1rem .15rem .3rem;border-bottom:1.5px solid var(--mid);margin-bottom:.25rem}
 .day-badge[data-day]::after{content:' · ' attr(data-day);color:var(--muted);font-size:.85em}
 [contenteditable="true"].day-badge::after{display:none}
@@ -5249,32 +5249,36 @@ function sortBucketItems(items, ym) {
   }
   groups.sort((a, b) => {
     if (a.date && b.date) return a.date - b.date;
-    if (a.date) return -1; if (b.date) return 1; return 0;
+    if (a.date) return 1; if (b.date) return -1; return 0;   // undated first (top of month), then dated by date — stable keeps undated order
   });
   const sorted = [];
   groups.forEach(g => g.indices.forEach(i => sorted.push(items[i])));
   items.splice(0, items.length, ...sorted);
 }
-function buildWeekHeaders(items, ym) {
-  const ins = {};
-  let cur = null, first = true, anyDated = false, noneDone = false;
+// holsByWeek: { mondayKey → "DD.M. name · …" } → holidays are rendered under their week header.
+// Returns { ins, usedWeeks } so the caller can show holidays of item-less weeks elsewhere (nothing is lost).
+function buildWeekHeaders(items, ym, holsByWeek) {
+  const ins = {}, usedWeeks = new Set();
+  const hasDated = items.some(it => !it.isSubtask && parseDayLabel(it.dayLabel, ym));
+  let cur = null, firstWeek = true, noneDone = false, sawUndated = false;
   for (let i = 0; i < items.length; i++) {
     if (items[i].isSubtask) continue;
     const dt = parseDayLabel(items[i].dayLabel, ym);
-    if (dt) {
-      anyDated = true;
+    if (!dt) {                              // undated items live at the TOP of the month
+      sawUndated = true;
+      if (!noneDone && hasDated) { noneDone = true; ins[i] = `<div class="later-week-hdr none">no specific week</div>`; }
+    } else {
       const wk = getWeekMondayKey(dt);
       if (wk !== cur) {
-        cur = wk;
-        ins[i] = `<div class="later-week-hdr${first ? ' first-in-month' : ''}">${buildWeekLabel(wk)}</div>`;
-        first = false;
+        cur = wk; usedWeeks.add(wk);
+        const holLine = (holsByWeek && holsByWeek[wk]) ? `<div class="later-month-holidays">${holsByWeek[wk]}</div>` : '';
+        // the first week header keeps its top border when undated items sit above it (acts as the divider)
+        ins[i] = `<div class="later-week-hdr${firstWeek && !sawUndated ? ' first-in-month' : ''}">${buildWeekLabel(wk)}</div>` + holLine;
+        firstWeek = false;
       }
-    } else if (!noneDone && anyDated) {   // first undated item after dated ones → divider for "no specific week" group
-      noneDone = true;
-      ins[i] = `<div class="later-week-hdr none">no specific week</div>`;
     }
   }
-  return ins;
+  return { ins, usedWeeks };
 }
 
 // ── LATER: month collapsing (per device and per day window, not synced) ──
@@ -5468,11 +5472,15 @@ function renderLater() {
     const collapsed = isLaterCollapsed(ym);
     const hdr = `<div class="later-month-hdr${od}${fr}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
     if (collapsed) { html += hdr; return; }
-    const headers = buildWeekHeaders(b.items, ym);
     const hols = monthHolidays(ym);
-    const holHtml = hols.length
-      ? `<div class="later-month-holidays">${hols.map(h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); }).join(' · ')}</div>`
-      : '';
+    const holFmt = h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); };
+    const holsByWeek = {};   // group month holidays by their week → shown under that week's header
+    hols.forEach(h => { const wk = getWeekMondayKey(new Date(h.iso + 'T12:00:00')); (holsByWeek[wk] = holsByWeek[wk] || []).push(holFmt(h)); });
+    const byWeekStr = {}; Object.keys(holsByWeek).forEach(wk => byWeekStr[wk] = holsByWeek[wk].join(' · '));
+    const { ins: headers, usedWeeks } = buildWeekHeaders(b.items, ym, byWeekStr);
+    // holidays whose week has no dated item (so no week header) → keep them visible at the top of the month
+    const leftover = hols.filter(h => !usedWeeks.has(getWeekMondayKey(new Date(h.iso + 'T12:00:00'))));
+    const holHtml = leftover.length ? `<div class="later-month-holidays">${leftover.map(holFmt).join(' · ')}</div>` : '';
     html += hdr + holHtml + `<div class="later-rows" data-ym="${ym}">${rowsHtml(MCTX(ym), headers)}</div>`;
   });
   c.innerHTML = html;
