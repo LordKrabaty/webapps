@@ -95,6 +95,9 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .recur-rule-desc{font-size:.76rem;color:var(--dark)}
 .recur-rule-next{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
 .recur-rule-next s{opacity:.6}
+.recur-rule-from{display:flex;align-items:center;gap:.4rem;font-size:.72rem;margin-top:.1rem}
+.recur-rule-from label{color:var(--muted);letter-spacing:.07em;text-transform:uppercase;font-weight:500}
+.recur-rule-from input{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.18rem .4rem;outline:none}
 .recur-rule-btns{display:flex;gap:.35rem;margin-top:.2rem}
 .recur-rule-btns .btn-io{flex:0 0 auto;padding:.26rem .6rem}
 .btn-io.danger{border-color:#c0392b;color:#c0392b}
@@ -147,7 +150,7 @@ header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-i
 .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
 .field{display:flex;flex-direction:column;gap:.3rem;min-width:0}
 .field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
-.field input[type="text"],.field input[type="number"],.field select,.field textarea{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none;width:100%}
+.field input[type="text"],.field input[type="number"],.field input[type="date"],.field select,.field textarea{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none;width:100%}
 .field textarea{resize:vertical;min-height:3.2rem}
 .field input:focus,.field select:focus,.field textarea:focus{outline:2.5px solid var(--black);outline-offset:1px}
 .notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
@@ -4756,6 +4759,7 @@ function renderRecurList() {
         </div>
         <div class="recur-rule-desc">${esc(describeRecur(rec))}</div>
         ${noteHtml}
+        <div class="recur-rule-from"><label>valid from</label><input type="date" value="${esc((rec.anchor || '').slice(0, 10))}" onchange="setRecurAnchor(${rec.id}, this.value)"></div>
         <div class="recur-rule-next">next: ${occHtml}</div>
         <div class="recur-rule-btns">
           <button class="btn-io" onclick="editRecurText(${rec.id})">text</button>
@@ -4799,12 +4803,14 @@ async function editRecurRules(id) {
   }
   openRecurManage();
 }
-// add a brand-new recurrence straight from the management modal — small form: text · rule · note
+// add a brand-new recurrence straight from the management modal — small form: text · rule · valid-from · note
 function addRecur() {
   closeModal('recurModal');
   el('raText').value = '';
   el('raRule').value = '';
+  el('raFrom').value = todayIso();                       // anchor defaults to today (= valid from now on)
   el('raNote').value = '';
+  autoGrowTextarea(el('raNote'));
   el('recurAddModal').classList.add('open');
   setTimeout(() => el('raText').focus(), 0);
 }
@@ -4813,17 +4819,26 @@ async function submitAddRecur() {
   const text    = el('raText').value.trim();
   const ruleStr = el('raRule').value.trim();
   const note    = el('raNote').value;                    // kept verbatim (may be multiline)
+  const from    = el('raFrom').value;                    // YYYY-MM-DD from the date picker (empty → today)
   const rr = extractRecurRoute(ruleStr);
   if (!rr || !rr.rules.length) { await customAlert('Unrecognized rule. Examples: r1m · r12.m · r06 · r24.7. · rmo'); return; }
   if (!text)                   { await customAlert('Enter the task text.'); return; }
   const pItem = parseItemText(text);                     // picks up icon / duration from the text, like the task field
   pItem.text = pItem.text || text;
   if (note.trim()) pItem.note = note;
-  recurrences.push(buildRecurEntry(rr.rules, pItem, todayIso()));
+  recurrences.push(buildRecurEntry(rr.rules, pItem, /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : todayIso()));
   saveRecur(); renderLater();
   closeModal('recurAddModal');
   showStatusMsg('↻ recurrence added — see Later', 2200);
   openRecurManage();
+}
+// inline "valid from" (anchor) change in the management list — the rule only shows from this date onward
+function setRecurAnchor(id, val) {
+  const rec = recurrences.find(r => r.id === id); if (!rec) return;
+  const v = /^\d{4}-\d{2}-\d{2}$/.test(val) ? val : todayIso();
+  if ((rec.anchor || '') === v) return;
+  rec.anchor = v; rec.mt = Date.now();          // content change → LWW stamp
+  saveRecur(); renderLater(); renderRecurList();
 }
 async function deleteRecur(id) {
   const rec = recurrences.find(r => r.id === id); if (!rec) return;
@@ -6947,7 +6962,7 @@ window.addEventListener('resize', updateAppGrid);
 <div class="modal-bg" id="recurModal">
   <div class="modal" style="max-width:480px;gap:.6rem">
     <h2>Recurrence</h2>
-    <details class="recur-legend" open>
+    <details class="recur-legend">
       <summary>Shortcuts — how to enter recurrence</summary>
       <p style="margin:.35rem 0 0">Type a shortcut into the task field (with a month selected) or into the date field of an existing item. You can combine several rules in a row.</p>
       <table>
@@ -6982,8 +6997,12 @@ window.addEventListener('resize', updateAppGrid);
       <input type="text" id="raRule" placeholder="e.g. r1m · r12.m r24.m · r06 · rmo" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddRecur();}">
     </div>
     <div class="field">
+      <label>Valid from</label>
+      <input type="date" id="raFrom">
+    </div>
+    <div class="field">
       <label>Note (optional)</label>
-      <textarea id="raNote" rows="3" placeholder="preset description — every occurrence inherits it"></textarea>
+      <textarea id="raNote" rows="3" placeholder="preset description — every occurrence inherits it" oninput="autoGrowTextarea(this)"></textarea>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="submitAddRecur()">add</button>
