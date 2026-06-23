@@ -100,6 +100,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .recur-rule-from input{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.18rem .4rem;outline:none}
 .recur-rule-btns{display:flex;gap:.35rem;margin-top:.2rem}
 .recur-rule-btns .btn-io{flex:0 0 auto;padding:.26rem .6rem}
+#itemEditRecurRow .btn-io{flex:0 0 auto;padding:.3rem .7rem}
 .btn-io.danger{border-color:#c0392b;color:#c0392b}
 @media(hover:hover){.btn-io.danger:hover{background:#c0392b;color:var(--w)}}
 .recur-legend{font-size:.76rem;color:var(--muted);line-height:1.55;border:var(--b);border-radius:var(--r);padding:.5rem .6rem}
@@ -882,6 +883,10 @@ textarea::placeholder{color:var(--mid)}
     <div class="field">
       <label>Description / subtasks</label>
       <textarea id="itemEditNote" rows="7" placeholder="More text — description, notes, subtasks…" oninput="autoGrowTextarea(this)"></textarea>
+    </div>
+    <div class="modal-row" id="itemEditRecurRow" style="display:none;justify-content:flex-start;gap:.4rem">
+      <button class="btn-io" onclick="editGhostRule()" title="edit the recurrence rule this occurrence belongs to">↻ edit rule</button>
+      <button class="btn-io" onclick="revertItemToGhost()" title="discard this occurrence and turn it back into a recurrence ghost">↺ back to ghost</button>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" onclick="deleteItemEdit()">delete</button>
@@ -2015,6 +2020,7 @@ function openItemEdit(ctx, idx) {
   el('itemEditTitle').textContent = 'Edit ' + type;
   el('itemEditName').value = item.text || '';
   el('itemEditNote').value = item.note || '';
+  el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
   el('itemEditModal').classList.add('open');
   autoGrowTextarea(el('itemEditNote'));
   const nameEl = el('itemEditName'); nameEl.focus(); nameEl.select();
@@ -2055,6 +2061,37 @@ function deleteItemEdit() {
     if (ctx.kind === 'day') { pushUndo(); if (skipGhostOccurrence(idx)) { schedSave(); renderAll(); return; } }
   }
   op_deleteItem(ctx, idx);
+}
+// edit the recurrence RULE this occurrence belongs to — straight from the detail window (item stays open)
+async function editGhostRule() {
+  const item = _itemEditItem;
+  if (!item || item.recurId == null) return;
+  const rec = recurrences.find(r => r.id === item.recurId);
+  if (!rec) { await customAlert('The linked recurrence no longer exists.'); return; }
+  const v = await customPrompt('Recurrence rules (e.g. r2m r12.m):', recurTokens(rec));
+  if (v == null) return;
+  const rr = extractRecurRoute(v);
+  if (!rr || !rr.rules.length) { await customAlert('Unrecognized rule. Examples: r2m · r12.m · r06 · r24.7.'); return; }
+  rec.rules = rr.rules; rec.mt = Date.now();             // content change → LWW stamp
+  saveRecur(); renderLater(); if (typeof renderAll === 'function') renderAll();
+  showStatusMsg('↻ rule updated', 1800);
+}
+// turn a materialized occurrence back into a ghost — remove the real item, clear its skip so the ghost regenerates
+async function revertItemToGhost() {
+  const ctx = _itemEditCtx, item = _itemEditItem;
+  if (!ctx || !item || item.recurId == null) return;
+  const ok = await customConfirm('Turn this back into a recurrence ghost? Edits to this occurrence will be discarded.', 'back to ghost');
+  if (!ok) return;
+  const idx = ctx.list.indexOf(item);
+  const rec = recurrences.find(r => r.id === item.recurId);
+  const exKey = ctx.kind === 'month' ? laterSkipKey(item, ctx.ym) : (ctx.kind === 'day' ? activePlanDate : null);
+  if (rec && exKey && rec.exceptions && rec.exceptions[exKey]) { delete rec.exceptions[exKey]; rec.mt = Date.now(); saveRecur(); }
+  _itemEditCtx = null; _itemEditItem = null;
+  closeModal('itemEditModal');
+  if (idx < 0) return;
+  ctx.undo();                                            // snapshot for ↩
+  ctx.list.splice(idx, 1);                               // ghost is re-added by syncDayGhosts / syncLaterGhosts on render
+  ctx.save(); ctx.render();
 }
 
 // ── DURATION HELPERS ──────────────────────────────────────────────────────────
