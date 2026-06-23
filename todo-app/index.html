@@ -411,6 +411,9 @@ textarea::placeholder{color:var(--mid)}
 .week-section-hdr{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .15rem;border-top:1.5px solid var(--light);margin-top:.2rem;display:flex;align-items:center;gap:.5rem}
 .week-section-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .week-section-sel{font-size:.68rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);cursor:pointer;margin-left:auto}
+.week-note{font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.55;color:var(--black);background:var(--off);border:1px dashed var(--mid);border-radius:var(--r);padding:.4rem .55rem;outline:none;resize:vertical;width:100%;min-height:2rem;margin-top:.1rem}
+.week-note:focus{outline:2px solid var(--black);outline-offset:1px;background:var(--w)}
+.week-note::placeholder{color:var(--mid)}
 @media(hover:hover){.week-section-sel:hover{color:var(--black)}}
 .week-day-row{display:flex;align-items:center;gap:.35rem;padding:.35rem .45rem;border:1px solid var(--light);border-radius:var(--r);user-select:none}
 .week-day-date{flex:1;font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2625,13 +2628,13 @@ function pushRegistry() { try { if (typeof window.pushWindowRegistry === 'functi
 // does the active window have any data at all? (decides whether autosync creates a gist for a window without a Gist ID)
 function windowHasData() {
   return !!(library.length || archive.length || weekDays.length || weekPlans.length || inbox.length || cleanLater().length
-    || recurrences.length || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
+    || recurrences.length || weekNotes.length || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
 }
 
 // per-window keys (for deleting a window) — incl. sync keys from the IIFE (values are stable)
 function winKeyBases() {
   return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
-    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_YEAR_COLLAPSE_KEY, LATER_HORIZON_KEY,
+    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, WEEKNOTES_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_YEAR_COLLAPSE_KEY, LATER_HORIZON_KEY,
     'todo-app-gist-id', 'todo-app-tombstones', 'todo-app-syncknown'];
 }
 
@@ -2661,7 +2664,7 @@ function activateWindow(id) {
   undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
   laterCollapsed = null; laterYearCollapsed = null;   // reload month/year collapse state under WK() of the new window
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes();
   activePlanDate = todayIso();
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
   if (todayEntry) applySessionData(todayEntry);
@@ -3740,7 +3743,7 @@ async function doSelectiveClear() {
   if (el('clr-session').checked)    toDelete.push(WK(SESSION_KEY));
   if (el('clr-library').checked)    toDelete.push(WK(LIBRARY_KEY));
   if (el('clr-archive').checked)    toDelete.push(WK(ARCHIVE_KEY));
-  if (el('clr-week').checked)       toDelete.push(WK(WEEK_KEY));
+  if (el('clr-week').checked)       toDelete.push(WK(WEEK_KEY), WK(WEEKNOTES_KEY));
   if (el('clr-weekplans').checked)  toDelete.push(WK(WEEKPLANS_KEY));
   if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs',WK(WORKDAYS_KEY));
   // granular buckets: in-memory mutation + save — the wrapped save functions write tombstones and schedule sync
@@ -4117,6 +4120,7 @@ function doExport() {
   if (inb.length) { payload.inbox = inb; payload.inboxMt = inboxMt; }
   if (lat.length) payload.later = lat;
   if (rec.length) payload.recurrences = rec;   // recurrence rules (otherwise ghosts will not be generated on another device)
+  const wn = weekNotes.filter(n => n && n.key && n.text); if (wn.length) payload.weekNotes = wn;   // week evaluations
   const json = JSON.stringify(payload, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName + '.json';
@@ -4148,7 +4152,7 @@ window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
   importForceRestore = false;
   importData = []; importSelected = new Set();
-  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importInboxMt = 0; window._importLater = []; window._importRecur = [];
+  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importInboxMt = 0; window._importLater = []; window._importRecur = []; window._importWeekNotes = [];
   const recurRow = el('impRecurRow'); if (recurRow) recurRow.style.display = 'none';
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
@@ -4192,6 +4196,7 @@ function parseImportJson(text) {
     window._importInbox = parsed.inbox || [];
     window._importInboxMt = +parsed.inboxMt || 0;   // inbox order stamp (LWW on import)
     window._importRecur = (parsed.recurrences || []).map(normRecur).filter(Boolean);
+    window._importWeekNotes = (parsed.weekNotes || []).filter(n => n && n.key && n.text);
     // later: convert the old flat form to monthly buckets right away so the tree groups correctly by years
     let impLater = parsed.later || [];
     if (impLater.length && impLater[0] && impLater[0].ym && !Array.isArray(impLater[0].items)) impLater = migrateFlatLater(impLater);
@@ -4368,6 +4373,15 @@ function doImport() {
     });
     if (recurAdded || recurUpdated) saveRecur();
   }
+  // week notes — LWW by week key (no separate selection UI; carried with the import / restore)
+  let wnAdded = 0, wnUpdated = 0;
+  (window._importWeekNotes || []).forEach(n => {
+    if (!n || !n.key || !n.text) return;
+    const ex = weekNotes.find(x => x.key === n.key);
+    if (ex) { if (!importRecordWins(n.mt, ex.mt)) return; ex.text = n.text; ex.mt = importStamp(n.mt); wnUpdated++; }
+    else { weekNotes.push({ key: n.key, text: n.text, mt: importStamp(n.mt) }); wnAdded++; }
+  });
+  if (wnAdded || wnUpdated) { saveWeekNotes(); renderWeekTab(); }
   // refresh the active day live buffer ONLY if the import really changed it (LWW) — otherwise a reset would overwrite
   // the freshly edited day with emptiness; also without a change the next autoSavePlanDay() must not overwrite it with old state
   if (activePlanDate) {
@@ -4385,6 +4399,7 @@ function doImport() {
   if (inboxAdded) msgs.push(inboxAdded + ' inbox');
   if (laterAdded) msgs.push(laterAdded + ' months to Later');
   if (recurAdded + recurUpdated) msgs.push((recurAdded + recurUpdated) + ' recurrences' + (recurUpdated ? ' (' + recurUpdated + ' updated)' : ''));
+  if (wnAdded + wnUpdated) msgs.push((wnAdded + wnUpdated) + ' week notes');
   closeModal('importModal');
   if (importForceRestore) showSave('↩ restored: ' + (msgs.length ? msgs.join(', ') : 'nothing selected'));
   else showSave('↓ imported: ' + (msgs.length ? msgs.join(', ') : 'no change (local version is newer)'));
@@ -4504,6 +4519,13 @@ async function loadHolidays() {
 
 function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WK(WEEK_KEY)) || '[]'); } catch(e) { weekDays = []; } }
 function saveWeek()  { try { localStorage.setItem(WK(WEEK_KEY), JSON.stringify(weekDays)); } catch(e) {} }
+
+// ── WEEK NOTES: free-text user evaluation per Done week (LWW synced, keyed by 'YYYY-Wnn') ──
+const WEEKNOTES_KEY = 'todo-app-v1-weeknotes';
+let weekNotes = [];   // [{ key:'YYYY-Wnn', text, mt }]
+function loadWeekNotes() { try { weekNotes = JSON.parse(localStorage.getItem(WK(WEEKNOTES_KEY)) || '[]'); } catch(e) { weekNotes = []; } }
+function saveWeekNotes() { try { localStorage.setItem(WK(WEEKNOTES_KEY), JSON.stringify(weekNotes)); } catch(e) {} }
+function getWeekNote(key) { const n = weekNotes.find(x => x.key === key); return n ? n.text : ''; }
 
 // ── RECURRENCE: rule collection (per-window like weekDays). F3: only the management modal is missing ──
 const RECUR_KEY = 'todo-app-v1-recur';
@@ -5795,18 +5817,44 @@ function renderWeekTab() {
     const tplBtn = rg
       ? `<button class="week-section-sel" style="background:none;border:none;font-family:inherit" onclick="weekGroupToTemplate('${key}')" title="save the whole week as a template">+ template</button>`
       : '';
+    const noteVal = getWeekNote(key);
+    const noteSection = `<div class="week-sub-hdr">Note</div>`
+      + `<textarea class="week-note" placeholder="week evaluation, general remarks…" oninput="onWeekNoteInput('${key}',this)" onfocus="autoGrowTextarea(this)">${esc(noteVal)}</textarea>`;
     return `<div class="week-section">
       <div class="week-section-hdr${gi === 0 ? ' first' : ''}">
         <span class="week-hdr-toggle" onclick="toggleHotovoWeek('${key}')"><span class="sel-caret">${isColl ? '▸' : '▾'}</span>Week ${week} &middot; ${year}${isColl ? ` <span class="sel-count">${dayCount}×</span>` : ''}</span>${tplBtn}
       </div>
-      <div class="week-section-body"${isColl ? ' style="display:none"' : ''}>${planSection}${realSection}</div>
+      <div class="week-section-body"${isColl ? ' style="display:none"' : ''}>${planSection}${realSection}${noteSection}</div>
     </div>`;
   }).join('');
+  // size multi-line notes to fit (visible sections only — collapsed ones have no layout height)
+  list.querySelectorAll('.week-note').forEach(ta => { if (ta.value && ta.offsetParent) autoGrowTextarea(ta); });
 }
 function toggleHotovoWeek(key) {
   if (!hotovoCollapsed) hotovoCollapsed = new Set();
   if (hotovoCollapsed.has(key)) hotovoCollapsed.delete(key); else hotovoCollapsed.add(key);
   renderWeekTab();
+}
+
+// Free-text week evaluation in Done — update the model immediately, persist (+sync) debounced.
+// mt is stamped only on a real content change (LWW). Saving without re-render keeps the cursor in place.
+let _weekNoteTimer = null;
+function onWeekNoteInput(key, ta) {
+  if (typeof autoGrowTextarea === 'function') autoGrowTextarea(ta);
+  const text = ta.value;
+  const ex = weekNotes.find(n => n.key === key);
+  if (ex) {
+    if (ex.text === text) return;
+    ex.text = text; ex.mt = Date.now();
+  } else {
+    if (!text) return;
+    weekNotes.push({ key, text, mt: Date.now() });
+  }
+  clearTimeout(_weekNoteTimer);
+  _weekNoteTimer = setTimeout(() => {
+    weekNotes = weekNotes.filter(n => n.text && n.text.trim());   // drop emptied notes → save-hook tombstones them
+    saveWeekNotes();
+  }, 500);
 }
 
 // Saves a whole saved week (reality) from Done as a week template — without unchecking.
@@ -5949,6 +5997,8 @@ function doExportWeekText() {
     if (key !== lastWeekKey) {
       if (lastWeekKey) lines.push('');
       lines.push('=== Week ' + g.week + ' · ' + g.year + ' ===');
+      const note = getWeekNote(key);
+      if (note && note.trim()) { lines.push('[note]'); note.split('\n').forEach(nl => lines.push(nl)); }
       lastWeekKey = key;
     }
     const plan = weekPlans.find(p => p.date === day.date);
@@ -6242,7 +6292,7 @@ function init() {
   // day windows — first the registry + active window, then everything runs WK-namespaced
   loadWindows(); loadWinTomb();
   try { const a = localStorage.getItem(ACTIVE_WIN_KEY); if (a && dayWindows.some(w => w.id === a)) activeWin = a; } catch(e) {}
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes();
 
   const today = todayIso();
   activePlanDate = today;
@@ -6416,6 +6466,7 @@ window.addEventListener('resize', updateAppGrid);
     if (wantIb) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
     if (lat.length) payload.later = lat;
     if (wantRc) payload.recurrences = recurrences;   // recurrence rules (otherwise this upload would remove them from the cloud)
+    { const wn = weekNotes.filter(n => n && n.key && n.text); if (wn.length) payload.weekNotes = wn; }   // week evaluations (otherwise this upload would remove them)
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
     closeModal('exportModal'); showSyncTooltip('↑ uploading…');
     try {
@@ -6526,6 +6577,7 @@ window.addEventListener('resize', updateAppGrid);
     weekDays.forEach(d  => { if (d && d.date)         s.add('wd:'  + d.date); });
     weekPlans.forEach(p => { if (p && p.date)         s.add('wp:'  + p.date); });
     recurrences.forEach(e => { if (e && e.id != null)  s.add('rec:' + e.id); });
+    weekNotes.forEach(n => { if (n && n.key && n.text)  s.add('wn:' + n.key); });   // empty notes do not count
     Object.keys(BLOCK_TYPES).forEach(k => { if (!DEFAULT_BLOCK_TYPES[k]) s.add('bt:' + k); });
     return s;
   }
@@ -6555,18 +6607,19 @@ window.addEventListener('resize', updateAppGrid);
   }
   // summary signature of the state (incl. tombstones) to detect a cloud↔local difference
   // mt is part of the signature → it also detects editing an existing item (same id/date, different content)
-  function sigOf(items, arch, inb, wd, wp, tomb, bt, lat, rec) {
+  function sigOf(items, arch, inb, wd, wp, tomb, bt, lat, rec, wn) {
     const idS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const inS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join('|') + ':' + arr.length;
     const dS  = arr => arr.map(x => String((x && x.date) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS  = o => Object.keys(o || {}).sort().join(',');
     const btS = arr => (arr || []).map(b => String((b && b.key) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
     const ymS = arr => (arr || []).map(b => String((b && b.ym) || '') + '@' + ((b && b.mt) || 0)).sort().join(',') + ':' + (arr || []).length;
+    const wnS = arr => (arr || []).filter(n => n && n.key && n.text).map(n => String(n.key) + '@' + (n.mt || 0)).sort().join(',') + ':' + (arr || []).filter(n => n && n.key && n.text).length;
     const ibS = o => inS((o && o.items) || []) + '@' + ((o && o.mt) || 0);   // inbox = items (id@mt) + order stamp
-    return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || []), idS(rec || [])].join('||');
+    return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || []), idS(rec || []), wnS(wn || [])].join('||');
   }
-  function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, cleanLater(), recurrences); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], { items: r.inbox || [], mt: +r.inboxMt || 0 }, r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || [], r.recurrences || []); }
+  function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, cleanLater(), recurrences, weekNotes); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], { items: r.inbox || [], mt: +r.inboxMt || 0 }, r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || [], r.recurrences || [], r.weekNotes || []); }
 
   // the toolbar button also serves as a status indicator
   function updateAutoSyncBtn() {
@@ -6605,6 +6658,7 @@ window.addEventListener('resize', updateAppGrid);
     const payload = { v:2, items: library, archive: archive, weekDays: weekDays, weekPlans: weekPlans, settings: buildSettingsExport(), tombstones: tombstones };
     payload.inbox = inbox; payload.inboxMt = inboxMt;   // the whole list + mt (even empty, so deletion propagates)
     payload.recurrences = recurrences;                  // recurrence rules (always, even empty — deletion propagation)
+    payload.weekNotes = weekNotes.filter(n => n && n.key && n.text);   // week evaluations (always, even empty — deletion propagation)
     const cl = cleanLater(); if (cl.length) payload.later = cl;   // ghosts are not synced
     // the window registry travels only in the main bin (other windows data is in their own bins)
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }
@@ -6748,6 +6802,9 @@ window.addEventListener('resize', updateAppGrid);
     // recurrence rules — LWW by id (exceptions are carried whole in the record, not merged per item)
     const recR = lwwMerge(recurrences, (record.recurrences || []), 'rec', x => x.id, c => c);
     recurrences = recR.arr; added += recR.added; updated += recR.updated; removed += recR.removed;
+    // week notes — LWW by week key (whole text replaced, newer mt wins)
+    const wnR = lwwMerge(weekNotes, (record.weekNotes || []).filter(n => n && n.key && n.text), 'wn', x => x.key, c => ({ key: c.key, text: c.text, mt: +c.mt || 0 }));
+    weekNotes = wnR.arr; added += wnR.added; updated += wnR.updated; removed += wnR.removed;
     // archive — only add missing (append-only)
     const arcIds = new Set(archive.map(x => String(x.id)));
     (record.archive || []).forEach(it => {
@@ -6784,7 +6841,7 @@ window.addEventListener('resize', updateAppGrid);
       if (curDay && JSON.stringify(curDay) !== prevActiveSnap) applySessionData(curDay);
     }
     if (added || updated || removed) {
-      saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans(); saveRecur();
+      saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans(); saveRecur(); saveWeekNotes();
       if (typeof saveInbox === 'function') saveInbox();
       if (typeof saveLater === 'function') saveLater();
       if (typeof renderLibrary === 'function') renderLibrary();
@@ -6902,6 +6959,7 @@ window.addEventListener('resize', updateAppGrid);
     const ib = (rec.inbox || []).length;                         if (ib) parts.push(ib + ' inbox');
     const rc = (rec.recurrences || []).length;                   if (rc) parts.push(rc + ' recur');
     const lt = (rec.later || []).length;                         if (lt) parts.push(lt + ' later');
+    const wn = (rec.weekNotes || []).length;                     if (wn) parts.push(wn + ' notes');
     const b  = ((rec.settings && rec.settings.blockTypes) || []).length; if (b) parts.push(b + ' blk');
     const ar = (rec.archive || []).length;                       if (ar) parts.push(ar + ' arch');
     return parts.join(' · ');
@@ -7029,7 +7087,7 @@ window.addEventListener('resize', updateAppGrid);
   };
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions outside schedSave (inbox, blocks, plans…) also trigger sync
-  ['saveInbox','saveLater','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive','saveRecur'].forEach(fn => {
+  ['saveInbox','saveLater','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive','saveRecur','saveWeekNotes'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
