@@ -297,6 +297,10 @@ textarea::placeholder{color:var(--mid)}
 .later-month-add{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--muted);background:var(--w);border:var(--bh);border-radius:var(--r);padding:0 .3rem;cursor:pointer}
 .later-month-add:hover{color:var(--black);border-color:var(--black)}
 .later-month-sum{margin-left:auto;font-family:'DM Mono',monospace;font-weight:400;text-transform:none;letter-spacing:0}
+.later-year-hdr{display:flex;align-items:center;gap:.4rem;font-family:'DM Mono',monospace;font-size:.95rem;font-weight:600;color:var(--black);letter-spacing:.03em;padding:.5rem .1rem .3rem;border-top:2.5px solid var(--black);margin-top:.85rem;cursor:pointer;user-select:none;-webkit-user-select:none}
+.later-year-hdr.first{border-top:none;margin-top:.1rem}
+.later-year-hdr.overdue{opacity:.7}
+.later-year-hdr .later-month-sum{margin-left:auto;font-size:.78rem;color:var(--muted)}
 .later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
 .later-week-hdr.first-in-month{border-top:none;margin-top:0;padding-top:.05rem}
@@ -1753,7 +1757,7 @@ function op_addQuickItems(ctx, forceType) {
     showStatusMsg('↻ recurrence added (' + addedRecur + '×) — see Later', 2800);
   }
   if (addedHere) {
-    if (ctx.kind === 'month' && ctx.ym) { ensureLaterCollapsed(); laterCollapsed[ctx.ym] = false; saveLaterCollapsed(); }   // expand the target month so the new item is visible
+    if (ctx.kind === 'month' && ctx.ym) expandLaterTarget(ctx.ym);   // expand the target month + its year so the new item is visible
     ctx.save(); ctx.render();
   }
   if (routedLater) {
@@ -1761,7 +1765,7 @@ function op_addQuickItems(ctx, forceType) {
     // and a later month edit from elsewhere would overwrite the routed item
     const rNow = Date.now();
     routedYms.forEach(ym => { const b = later.find(x => x.ym === ym); if (b) b.mt = rNow; });
-    ensureLaterCollapsed(); routedYms.forEach(ym => { laterCollapsed[ym] = false; }); saveLaterCollapsed();   // expand the target months so the new item is visible
+    routedYms.forEach(expandLaterTarget);   // expand the target months + their years so the new item is visible
     saveLater();
     if (!el('pane-pozdeji')?.classList.contains('active')) switchNotesTab('pozdeji');
     populateLaterAddMonth();
@@ -2613,7 +2617,7 @@ function windowHasData() {
 // per-window keys (for deleting a window) — incl. sync keys from the IIFE (values are stable)
 function winKeyBases() {
   return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
-    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_HORIZON_KEY,
+    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_YEAR_COLLAPSE_KEY, LATER_HORIZON_KEY,
     'todo-app-gist-id', 'todo-app-tombstones', 'todo-app-syncknown'];
 }
 
@@ -2642,7 +2646,7 @@ function activateWindow(id) {
   activeLibId = null; savedSnapshot = null;
   undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
-  laterCollapsed = null;   // reload month collapse state under WK() of the new window
+  laterCollapsed = null; laterYearCollapsed = null;   // reload month/year collapse state under WK() of the new window
   loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur();
   activePlanDate = todayIso();
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
@@ -5233,7 +5237,7 @@ function buildWeekHeaders(items, ym) {
 }
 
 // ── LATER: month collapsing (per device and per day window, not synced) ──
-const LATER_COLLAPSE_KEY = 'todo-app-later-collapsed', LATER_HORIZON_KEY = 'todo-app-later-horizon';
+const LATER_COLLAPSE_KEY = 'todo-app-later-collapsed', LATER_HORIZON_KEY = 'todo-app-later-horizon', LATER_YEAR_COLLAPSE_KEY = 'todo-app-later-year-collapsed';
 let laterCollapsed = null;   // cache; reset to null on window switch (activateWindow) → reload under WK()
 function ensureLaterCollapsed() { if (laterCollapsed) return; try { laterCollapsed = JSON.parse(localStorage.getItem(WK(LATER_COLLAPSE_KEY)) || '{}') || {}; } catch(e) { laterCollapsed = {}; } }
 function saveLaterCollapsed() { try { localStorage.setItem(WK(LATER_COLLAPSE_KEY), JSON.stringify(laterCollapsed || {})); } catch(e) {} }
@@ -5277,13 +5281,14 @@ function applyLaterSnap(json) {
 function pushLaterUndo() { laterUndoStack.push(laterSnap()); if (laterUndoStack.length > LATER_UNDO_MAX) laterUndoStack.shift(); laterRedoStack = []; updateUndoBtn(); }
 function laterUndo() { if (!laterUndoStack.length) return; laterRedoStack.push(laterSnap()); applyLaterSnap(laterUndoStack.pop()); updateUndoBtn(); showStatusMsg('↩ undone', 1500); }
 function laterRedo() { if (!laterRedoStack.length) return; laterUndoStack.push(laterSnap()); applyLaterSnap(laterRedoStack.pop()); updateUndoBtn(); }
-// expand/collapse all (non-empty) shown months at once
+// expand/collapse all (non-empty) shown months — and their years — at once
 function toggleAllLaterMonths() {
-  ensureLaterCollapsed();
+  ensureLaterCollapsed(); ensureLaterYearCollapsed();
   const yms = later.filter(b => b && b.items && b.items.length).map(b => b.ym);
-  const anyExpanded = yms.some(ym => !isLaterCollapsed(ym));
-  yms.forEach(ym => { laterCollapsed[ym] = anyExpanded; });   // something expanded → collapse all; otherwise expand all
-  saveLaterCollapsed(); renderLater();
+  const anyExpanded = yms.some(ym => !isLaterCollapsed(ym) && !isLaterYearCollapsed(ym.slice(0, 4)));
+  yms.forEach(ym => { laterCollapsed[ym] = anyExpanded; });                          // something expanded → collapse all; otherwise expand all
+  [...new Set(yms.map(ym => ym.slice(0, 4)))].forEach(y => { laterYearCollapsed[y] = anyExpanded; });
+  saveLaterCollapsed(); saveLaterYearCollapsed(); renderLater();
 }
 // contiguous range of months "YYYY-MM" from current to current+horizon (inclusive)
 function laterMonthRange() {
@@ -5301,6 +5306,14 @@ function pickLaterMonth(ym) {
 // default: only the current month expanded, others collapsed; an explicit toggle takes precedence
 function isLaterCollapsed(ym) { ensureLaterCollapsed(); return (ym in laterCollapsed) ? !!laterCollapsed[ym] : (ym !== curMonthYm()); }
 function toggleLaterMonth(ym) { ensureLaterCollapsed(); laterCollapsed[ym] = !isLaterCollapsed(ym); saveLaterCollapsed(); renderLater(); }
+// YEAR-level collapse (groups months) — mirrors the month behaviour: current year expanded by default, others collapsed
+let laterYearCollapsed = null;   // cache; reset to null on window switch like laterCollapsed
+function ensureLaterYearCollapsed() { if (laterYearCollapsed) return; try { laterYearCollapsed = JSON.parse(localStorage.getItem(WK(LATER_YEAR_COLLAPSE_KEY)) || '{}') || {}; } catch(e) { laterYearCollapsed = {}; } }
+function saveLaterYearCollapsed() { try { localStorage.setItem(WK(LATER_YEAR_COLLAPSE_KEY), JSON.stringify(laterYearCollapsed || {})); } catch(e) {} }
+function isLaterYearCollapsed(y) { ensureLaterYearCollapsed(); y = String(y); return (y in laterYearCollapsed) ? !!laterYearCollapsed[y] : (y !== String(new Date().getFullYear())); }
+function toggleLaterYear(y) { ensureLaterYearCollapsed(); y = String(y); laterYearCollapsed[y] = !isLaterYearCollapsed(y); saveLaterYearCollapsed(); renderLater(); }
+// expand both the month and its year so a freshly added/moved item is visible
+function expandLaterTarget(ym) { ensureLaterCollapsed(); ensureLaterYearCollapsed(); laterCollapsed[ym] = false; laterYearCollapsed[String(ym).slice(0, 4)] = false; saveLaterCollapsed(); saveLaterYearCollapsed(); }
 
 // Input of the "date" field in Later → { ym, label } | null (free text).
 // "12" → a day in the current month; "12.8." → 12 August (bucket year, shift to next year if the month already passed this year);
@@ -5349,7 +5362,7 @@ function moveLaterGroup(srcYm, item, dstYm, atIndex) {
   dst.items.splice(at, 0, ...group);
   src.mt = Date.now(); dst.mt = Date.now();
   if (!src.items.length) later = later.filter(b => b !== src);
-  ensureLaterCollapsed(); laterCollapsed[dstYm] = false; saveLaterCollapsed();   // so the target is visible
+  expandLaterTarget(dstYm);   // so the target month + its year is visible
   saveLater();
   return true;
 }
@@ -5385,26 +5398,43 @@ function renderLater() {
   const byYm = new Map(later.map(b => [b.ym, b]));
   months.forEach(ym => { const b = byYm.get(ym); if (b && b.items.length) sortBucketItems(b.items, ym); });
   const curYm = curMonthYm();
+  const curYear = String(now.getFullYear());
   const addBtn = ym => `<button class="later-month-add" onclick="event.stopPropagation();pickLaterMonth('${ym}')" title="add to this month">+</button>`;
   const odTag = ym => ym < curYm ? `<span class="later-month-od">overdue</span>` : '';
-  c.innerHTML = todayHtml + months.map((ym, gi) => {
+  // items per year → year-header summary
+  const yearCount = {};
+  months.forEach(ym => { const b = byYm.get(ym); yearCount[ym.slice(0, 4)] = (yearCount[ym.slice(0, 4)] || 0) + ((b && b.items) ? b.items.length : 0); });
+  let html = todayHtml, lastYear = null, yearIdx = 0, firstInYear = false;
+  months.forEach(ym => {
+    const year = ym.slice(0, 4);
+    if (year !== lastYear) {   // new year → group header (collapsible, like months) + clear separation
+      const yc = isLaterYearCollapsed(year);
+      const yn = yearCount[year] || 0;
+      const yod = year < curYear ? ' overdue' : '';
+      html += `<div class="later-year-hdr${yod}${yearIdx === 0 ? ' first' : ''}" onclick="toggleLaterYear('${year}')"><span class="later-month-toggle">${yc ? '▸' : '▾'}</span>${year}<span class="later-month-sum">${yn} ${yn === 1 ? 'item' : 'items'}</span></div>`;
+      lastYear = year; yearIdx++; firstInYear = true;
+    }
+    if (isLaterYearCollapsed(year)) return;   // collapsed year hides all its months
     const b = byYm.get(ym);
     const n = (b && b.items) ? b.items.length : 0;
     const cnt = n + ' ' + (n === 1 ? 'item' : 'items');
     const od = ym < curYm ? ' overdue' : '';
+    const fr = firstInYear ? ' first' : ''; firstInYear = false;   // first month under a year header drops its own top border
     if (!n) {   // empty month → header only (drop target + click directs adding)
-      return `<div class="later-month-hdr empty${od}${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="add here · or drag an item here"><span class="later-month-toggle">·</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
+      html += `<div class="later-month-hdr empty${od}${fr}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="add here · or drag an item here"><span class="later-month-toggle">·</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
+      return;
     }
     const collapsed = isLaterCollapsed(ym);
-    const hdr = `<div class="later-month-hdr${od}${gi === 0 ? ' first' : ''}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
-    if (collapsed) return hdr;
+    const hdr = `<div class="later-month-hdr${od}${fr}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
+    if (collapsed) { html += hdr; return; }
     const headers = buildWeekHeaders(b.items, ym);
     const hols = monthHolidays(ym);
     const holHtml = hols.length
       ? `<div class="later-month-holidays">${hols.map(h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); }).join(' · ')}</div>`
       : '';
-    return hdr + holHtml + `<div class="later-rows" data-ym="${ym}">${rowsHtml(MCTX(ym), headers)}</div>`;
-  }).join('');
+    html += hdr + holHtml + `<div class="later-rows" data-ym="${ym}">${rowsHtml(MCTX(ym), headers)}</div>`;
+  });
+  c.innerHTML = html;
   initLaterDnd();
 }
 
