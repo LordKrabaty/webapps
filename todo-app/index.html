@@ -649,10 +649,12 @@ textarea::placeholder{color:var(--mid)}
       <div class="modal-list sel-list" id="exportPlanList" style="display:none"></div>
       <p id="expLtLbl" style="font-size:.8rem;color:var(--muted);margin-top:.6rem;margin-bottom:.25rem;display:none">Later</p>
       <div class="modal-list sel-list" id="exportLaterList" style="display:none"></div>
+      <p id="expBlkLbl" style="font-size:.8rem;color:var(--muted);margin-top:.6rem;margin-bottom:.25rem;display:none">Saved blocks</p>
+      <div class="modal-list" id="exportBlockList" style="display:none"></div>
       <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.6rem">
       <label id="expSetRow" class="modal-item" style="cursor:pointer;display:none">
         <input type="checkbox" id="expSettings" checked onchange="updateExportFilename()">
-        <span id="expSettingsLbl">Settings (blocks, working days)</span>
+        <span id="expSettingsLbl">Working days</span>
       </label>
       <label id="expInboxRow" class="modal-item" style="cursor:pointer;display:none">
         <input type="checkbox" id="expInbox" checked onchange="updateExportFilename()">
@@ -4051,7 +4053,42 @@ function setupSelTree(listId, prefix, arr, lblId, lblBase, grouper, after, recen
   }
   buildSelTree(listId, prefix, groups, sel, after, collapsed);
 }
-let exportSelected = new Set(), exportArchSelected = new Set();
+let exportSelected = new Set(), exportArchSelected = new Set(), exportBlockSel = new Set();
+// custom (non-default) blocks that are exportable — same shape as the sync payload
+function exportableBlocks() { return buildSettingsExport().blockTypes; }
+// individual saved blocks → checkbox list in the export modal; selection held by exportBlockSel (set of keys)
+function renderExportBlocks() {
+  const blocks = exportableBlocks();
+  exportBlockSel = new Set(blocks.map(b => b.key));
+  const lbl = el('expBlkLbl'), list = el('exportBlockList');
+  if (!blocks.length) {
+    if (lbl) lbl.style.display = 'none';
+    if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+    return;
+  }
+  if (lbl) lbl.style.display = '';
+  if (list) {
+    list.style.display = '';
+    list.innerHTML = blocks.map((b, i) => {
+      const name = ((b.emoji ? b.emoji + ' ' : '') + (b.label || b.key || '?')).trim();
+      return `<label class="modal-item sel" id="ebk-${i}"><input type="checkbox" checked onchange="toggleExportBlockSel(${i},this.checked)" />${esc(name)}</label>`;
+    }).join('');
+  }
+}
+function toggleExportBlockSel(i, on) {
+  const b = exportableBlocks()[i];
+  if (!b || b.key == null) return;
+  on ? exportBlockSel.add(b.key) : exportBlockSel.delete(b.key);
+  el('ebk-'+i)?.classList.toggle('sel', on);
+  updateExportFilename();
+}
+// settings for the manual export: only the selected blocks (+ working days when checked); null if nothing
+function buildSettingsExportSel() {
+  const selBlocks = exportableBlocks().filter(b => exportBlockSel.has(b.key));
+  const wantWd = !!(el('expSettings')?.checked && Object.keys(workingDaysByWeek).length);
+  if (!selBlocks.length && !wantWd) return null;
+  return { blockTypes: selBlocks, blockTypeOrder, workingDaysByWeek: wantWd ? workingDaysByWeek : {} };
+}
 function openExportModal() {
   exportSelected = new Set(library.map(e => e.id));
   exportArchSelected = new Set(archive.map(e => e.id));
@@ -4065,8 +4102,9 @@ function openExportModal() {
   setupSelTree('exportDayList', 'exDay', weekDays, 'expWdLbl', 'Saved days', dayWeekGroups, updateExportFilename);
   setupSelTree('exportPlanList', 'exPlan', weekPlans, 'expWpLbl', 'Week plan', dayWeekGroups, updateExportFilename);
   setupSelTree('exportLaterList', 'exLat', cleanLater(), 'expLtLbl', 'Later', monthYearGroups, updateExportFilename);
+  renderExportBlocks();   // individual saved blocks → selectable list (like templates)
   const setRow = el('expSetRow'), inboxRow = el('expInboxRow'), recurRow = el('expRecurRow');
-  if (setRow) setRow.style.display = '';
+  if (setRow) setRow.style.display = Object.keys(workingDaysByWeek).length ? '' : 'none';   // working days only when present
   if (inboxRow) { inboxRow.style.display = inbox.length ? '' : 'none'; if (inbox.length) el('expInboxLbl').textContent = 'Inbox (' + inbox.length + ')'; }
   if (recurRow) { recurRow.style.display = recurrences.length ? '' : 'none'; if (recurrences.length) el('expRecurLbl').textContent = 'Recurrence (' + recurrences.length + ' rules)'; }
   const expSt = el('expSettings'), expIb = el('expInbox'), expRc = el('expRecur');
@@ -4083,8 +4121,9 @@ function updateExportFilename() {
   const ibCount = el('expInbox')?.checked ? inbox.length : 0;
   const ltCount = selTreeSet('exLat').size;
   const rcCount = el('expRecur')?.checked ? recurrences.length : 0;
+  const kCount = exportBlockSel.size;
   el('exportFilename').value = 'todo_' + yymmdd + '_I' + exportSelected.size + 'A' + exportArchSelected.size
-    + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + (ibCount ? 'B' + ibCount : '') + (ltCount ? 'L' + ltCount : '') + (rcCount ? 'R' + rcCount : '') + stFlag + '.json';
+    + (wdCount ? 'D' + wdCount : '') + (wpCount ? 'P' + wpCount : '') + (ibCount ? 'B' + ibCount : '') + (ltCount ? 'L' + ltCount : '') + (rcCount ? 'R' + rcCount : '') + (kCount ? 'K' + kCount : '') + stFlag + '.json';
 }
 function toggleExportSel(id, on) { on ? exportSelected.add(id) : exportSelected.delete(id); el('ei-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
 function toggleExportArchSel(id, on) { on ? exportArchSelected.add(id) : exportArchSelected.delete(id); el('eai-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
@@ -4092,6 +4131,7 @@ function selectAllExport() {
   library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
   archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
   ['exDay','exPlan','exLat'].forEach(p => { if (selTrees[p]) selTreeSelectAll(p); });
+  exportableBlocks().forEach((b, i) => { exportBlockSel.add(b.key); const el2 = el('ebk-'+i); el2?.classList.add('sel'); const cb = el2?.querySelector('input'); if (cb) cb.checked = true; });
   const st = el('expSettings'), ib = el('expInbox'), rc = el('expRecur');
   if (st) st.checked = true; if (ib) ib.checked = true; if (rc) rc.checked = true;
   updateExportFilename();
@@ -4110,7 +4150,7 @@ function doExport() {
   const daySel = selTreeSet('exDay'), planSel = selTreeSet('exPlan'), latSel = selTreeSet('exLat');
   const wdays = weekDays.filter(d => daySel.has(d.date));
   const wplans = weekPlans.filter(p => planSel.has(p.date));
-  const settings = el('expSettings')?.checked ? buildSettingsExport() : null;
+  const settings = buildSettingsExportSel();   // only the selected blocks (+ working days when checked)
   const inb = el('expInbox')?.checked ? inbox : [];
   const lat = cleanLater().filter(b => latSel.has(b.ym));   // without ghosts
   const rec = el('expRecur')?.checked ? recurrences : [];
@@ -6458,11 +6498,11 @@ window.addEventListener('resize', updateAppGrid);
     const wPlans = weekPlans.filter(p => planSel.has(p.date));
     const lat = cleanLater().filter(b => latSel.has(b.ym));   // without ghosts
     const wantIb = el('expInbox')?.checked && inbox.length;
-    const wantSt = el('expSettings')?.checked;
+    const settings = buildSettingsExportSel();   // only the selected blocks (+ working days when checked)
     const wantRc = el('expRecur')?.checked && recurrences.length;
-    if (!its.length && !archs.length && !wDays.length && !wPlans.length && !wantIb && !lat.length && !wantSt && !wantRc) { customAlert('Nothing is selected.'); return; }
+    if (!its.length && !archs.length && !wDays.length && !wPlans.length && !wantIb && !lat.length && !settings && !wantRc) { customAlert('Nothing is selected.'); return; }
     const payload = {v:2, items: its, archive: archs, weekDays: wDays, weekPlans: wPlans};
-    if (wantSt) payload.settings = buildSettingsExport();
+    if (settings) payload.settings = settings;
     if (wantIb) { payload.inbox = inbox; payload.inboxMt = inboxMt; }
     if (lat.length) payload.later = lat;
     if (wantRc) payload.recurrences = recurrences;   // recurrence rules (otherwise this upload would remove them from the cloud)
