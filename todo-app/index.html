@@ -199,6 +199,22 @@ textarea::placeholder{color:var(--mid)}
 
 /* ── TIMELINE ── */
 .tl-container{display:flex;flex-direction:column;width:100%;border:1.5px solid var(--dark);border-radius:var(--r);overflow:hidden}
+/* Later overview: month mini-calendars marking days that have tasks (no times) */
+.tl-container.later-mode{border:none;gap:.8rem;overflow:visible}
+.tl-later-month{display:flex;flex-direction:column;gap:.3rem}
+.tl-later-mlabel{display:flex;align-items:baseline;gap:.4rem;font-size:.82rem;font-weight:500;color:var(--dark)}
+.tl-later-mlabel.overdue{color:var(--muted)}
+.tl-later-od{font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border:1px solid var(--light);border-radius:var(--r);padding:0 .25rem}
+.tl-later-msum{margin-left:auto;font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace}
+.tl-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.tl-cal-wd{font-size:.55rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:center;padding:.05rem 0}
+.tl-cal-day{position:relative;min-height:1.7rem;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--mid);border:1px solid var(--light);border-radius:var(--r);font-family:'DM Mono',monospace}
+.tl-cal-day.blank{border:none}
+.tl-cal-day.today{outline:2px solid var(--dark);outline-offset:-2px;color:var(--dark)}
+.tl-cal-day.has{background:var(--black);color:var(--w);border-color:var(--black);font-weight:500;cursor:pointer}
+.tl-cal-cnt{position:absolute;top:0;right:2px;font-size:.5rem;line-height:1;opacity:.85}
+.tl-later-undated{font-size:.66rem;color:var(--muted);font-style:italic;cursor:pointer}
+.tl-later-empty{color:var(--muted);font-style:italic;font-size:.85rem;padding:.6rem .2rem}
 .tl-row{display:flex;align-items:stretch;min-height:46px;border-bottom:1px solid var(--light)}
 .tl-row:last-child{border-bottom:none}
 .tl-row.tl-overflow-row{background:rgba(0,0,0,.02)}
@@ -1308,6 +1324,16 @@ const MINS_PER_ROW = 120;
 function renderTimeline() {
   const container = el('tl-container');
   if (!container) return;
+  const titleEl = document.querySelector('#panel-main .card-title-text');
+  // On the Later card the central panel shows a day-overview calendar instead of the hour timeline
+  if (isLaterTabActive()) {
+    container.classList.add('later-mode');
+    if (titleEl) titleEl.textContent = 'Later · days with tasks';
+    renderLaterTimeline(container);
+    return;
+  }
+  container.classList.remove('later-mode');
+  if (titleEl) titleEl.textContent = 'Timeline';
   container.innerHTML = '';
 
   const { blocks, wStart, wEnd, nowMin } = computeTimeline();
@@ -1649,6 +1675,55 @@ function updateStats() {
     remEl.textContent = '−' + remain + 'min';
     remEl.classList.remove('overflow');
   }
+}
+
+// ── LATER OVERVIEW (central panel on the Later card) ──────────────────────────
+// A compact month calendar per month that has items; days carrying tasks are filled,
+// with a count. No times — just "which concrete days have something". Clicking a day
+// jumps to that month in the Later list.
+const CAL_WD = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+function renderLaterTimeline(container) {
+  container = container || el('tl-container'); if (!container) return;
+  const buckets = later.filter(b => b && b.items && b.items.length).sort((a, b) => a.ym.localeCompare(b.ym));
+  if (!buckets.length) { container.innerHTML = '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
+  const now = new Date();
+  const todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
+  const curYm = curMonthYm();
+  container.innerHTML = buckets.map(b => {
+    const [yy, mm] = b.ym.split('-').map(Number);
+    const counts = {}; let undated = 0;
+    b.items.forEach(it => {
+      const d = it.dayLabel ? parseDayLabel(it.dayLabel, b.ym) : null;
+      if (d && d.getFullYear() === yy && d.getMonth() === mm - 1) counts[d.getDate()] = (counts[d.getDate()] || 0) + 1;
+      else undated++;
+    });
+    const daysInMonth = new Date(yy, mm, 0).getDate();
+    const startWd = (new Date(yy, mm - 1, 1).getDay() + 6) % 7;   // Mon=0
+    let cells = '';
+    for (let i = 0; i < startWd; i++) cells += `<div class="tl-cal-day blank"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const n = counts[d] || 0;
+      const isToday = yy === todayY && mm - 1 === todayM && d === todayD;
+      const cls = ['tl-cal-day', n ? 'has' : '', isToday ? 'today' : ''].filter(Boolean).join(' ');
+      const click = n ? ` onclick="laterCalJump('${b.ym}')" title="${n} task${n > 1 ? 's' : ''} — jump to month"` : '';
+      cells += `<div class="${cls}"${click}>${d}${n > 1 ? `<span class="tl-cal-cnt">${n}</span>` : ''}</div>`;
+    }
+    const od = b.ym < curYm;
+    const total = b.items.length;
+    const undatedHtml = undated ? `<div class="tl-later-undated" onclick="laterCalJump('${b.ym}')" title="jump to month">+ ${undated} without a specific day</div>` : '';
+    return `<div class="tl-later-month">
+      <div class="tl-later-mlabel${od ? ' overdue' : ''}">${monthLabel(b.ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}<span class="tl-later-msum">${total} ${total === 1 ? 'item' : 'items'}</span></div>
+      <div class="tl-cal-grid">${CAL_WD.map(w => `<div class="tl-cal-wd">${w}</div>`).join('')}${cells}</div>
+      ${undatedHtml}
+    </div>`;
+  }).join('');
+}
+// jump from the calendar to the month in the Later list (expand + scroll into view)
+function laterCalJump(ym) {
+  expandLaterTarget(ym);
+  renderLater();
+  const hdr = el('later-list')?.querySelector(`.later-month-hdr[data-ym="${ym}"]`);
+  if (hdr) hdr.scrollIntoView({ block: 'nearest' });
 }
 
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
@@ -5568,6 +5643,7 @@ function renderLater() {
   c.innerHTML = html;
   initLaterDnd();
   applyLaterFilter();
+  if (isLaterTabActive()) renderLaterTimeline();   // keep the central day-overview calendar in sync with Later edits
 }
 
 let laterSearchTerm = '';
@@ -5817,6 +5893,7 @@ function switchNotesTab(name) {
     setAddCtxLater();
     renderLater();
   }
+  renderTimeline();  // central panel follows the tab: Later → day-overview calendar, otherwise the hour timeline
   updateAbbrevHint();
   updateUndoBtn();   // ↩/↪ reflects the active card stack (Later has its own)
 }
