@@ -627,6 +627,10 @@ textarea::placeholder{color:var(--mid)}
         <button class="btn-sm later-icon-btn" onclick="toggleAllLaterMonths()" title="expand / collapse all months">⊟</button>
         <button class="btn-sm later-icon-btn" onclick="openRecurManage()" title="recurrence — manage rules + shortcut legend">↻</button>
       </div>
+      <div class="later-search-row" style="display:flex;align-items:center;gap:.3rem;margin-top:.25rem;flex-shrink:0">
+        <input id="laterSearch" type="text" placeholder="search items…" oninput="setLaterSearch(this.value)" style="flex:1;min-width:0;font-size:.8rem;padding:.3rem .5rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none">
+        <button class="btn-sm later-icon-btn" onclick="clearLaterSearch()" title="clear search">✕</button>
+      </div>
       <div id="later-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.05rem;margin-top:.1rem"></div>
     </div>
   </div>
@@ -4876,6 +4880,12 @@ function nextRecurOccurrences(rec, n) {
   }
   return out;
 }
+let recurSearchTerm = '';
+function setRecurSearch(v) { recurSearchTerm = v; renderRecurList(); }
+// haystack for keyword search: rule text + note + shortcut tokens + human description
+function recurHaystack(rec) {
+  return [rec.payload?.text || '', rec.payload?.note || '', recurTokens(rec), describeRecur(rec)].join(' ').toLowerCase();
+}
 function openRecurManage() { renderRecurList(); el('recurModal').classList.add('open'); }
 function renderRecurList() {
   const c = el('recurList'); if (!c) return;
@@ -4883,7 +4893,13 @@ function renderRecurList() {
     c.innerHTML = '<p style="color:var(--muted);font-size:.82rem;font-style:italic">No rules yet. Use “+ add rule” below, or type a shortcut into the task field (see the legend above).</p>';
     return;
   }
-  c.innerHTML = recurrences.slice()
+  const term = (recurSearchTerm || '').trim().toLowerCase();
+  const matched = term ? recurrences.filter(rec => recurHaystack(rec).includes(term)) : recurrences.slice();
+  if (!matched.length) {
+    c.innerHTML = '<p style="color:var(--muted);font-size:.82rem;font-style:italic">No rules match “' + esc(recurSearchTerm.trim()) + '”.</p>';
+    return;
+  }
+  c.innerHTML = matched
     .sort((a, b) => (a.payload?.text || '').localeCompare(b.payload?.text || '', 'cs'))
     .map(rec => {
       const occ = nextRecurOccurrences(rec, 5);
@@ -5497,6 +5513,7 @@ function applyLaterDnd(srcYm, srcIdx, dstYm, rawIdx) {
 function renderLater() {
   const c = el('later-list'); if (!c) return;
   updateAbbrevHint();
+  const searching = (laterSearchTerm || '').trim().length > 0;   // while searching, expand everything so matches in collapsed months/years are reachable
   syncLaterGhosts();        // F2: add/refresh recurrence ghosts into the monthly buckets (idempotent)
   const now = new Date();
   const hsel = el('laterHorizonSel'); if (hsel) hsel.value = String(laterHorizon());
@@ -5518,13 +5535,13 @@ function renderLater() {
   months.forEach(ym => {
     const year = ym.slice(0, 4);
     if (year !== lastYear) {   // new year → group header (collapsible, like months) + clear separation
-      const yc = isLaterYearCollapsed(year);
+      const yc = searching ? false : isLaterYearCollapsed(year);
       const yn = yearCount[year] || 0;
       const yod = year < curYear ? ' overdue' : '';
       html += `<div class="later-year-hdr${yod}${yearIdx === 0 ? ' first' : ''}" onclick="toggleLaterYear('${year}')"><span class="later-month-toggle">${yc ? '▸' : '▾'}</span>${year}<span class="later-month-sum">${yn} ${yn === 1 ? 'item' : 'items'}</span></div>`;
       lastYear = year; yearIdx++; firstInYear = true;
     }
-    if (isLaterYearCollapsed(year)) return;   // collapsed year hides all its months
+    if (!searching && isLaterYearCollapsed(year)) return;   // collapsed year hides all its months
     const b = byYm.get(ym);
     const n = (b && b.items) ? b.items.length : 0;
     const cnt = n + ' ' + (n === 1 ? 'item' : 'items');
@@ -5534,7 +5551,7 @@ function renderLater() {
       html += `<div class="later-month-hdr empty${od}${fr}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="add here · or drag an item here"><span class="later-month-toggle">·</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
       return;
     }
-    const collapsed = isLaterCollapsed(ym);
+    const collapsed = searching ? false : isLaterCollapsed(ym);
     const hdr = `<div class="later-month-hdr${od}${fr}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
     if (collapsed) { html += hdr; return; }
     const hols = monthHolidays(ym);
@@ -5550,6 +5567,47 @@ function renderLater() {
   });
   c.innerHTML = html;
   initLaterDnd();
+  applyLaterFilter();
+}
+
+let laterSearchTerm = '';
+function setLaterSearch(v) { laterSearchTerm = v; renderLater(); }
+function clearLaterSearch() { laterSearchTerm = ''; const i = el('laterSearch'); if (i) i.value = ''; renderLater(); }
+// keyword filter over the rendered Later list (items are flat lines — no subtask hierarchy):
+// hide non-matching rows, then any month/year that ends up with nothing visible. Week sub-headers
+// are dropped while searching (the result is a flat match list). Indices stay intact (rows only hidden).
+function applyLaterFilter() {
+  const list = el('later-list'); if (!list) return;
+  const term = (laterSearchTerm || '').trim().toLowerCase();
+  if (!term) return;
+  const hide = e => { e.style.display = 'none'; };
+  const match = new Map();   // item id → matches the term (text + note)
+  later.forEach(b => (b.items || []).forEach(it => match.set(String(it.id), ((it.text || '') + ' ' + (it.note || '')).toLowerCase().includes(term))));
+  const kids = [...list.children];
+  let yearHdr = null, yearVisible = false;
+  const flushYear = () => { if (yearHdr && !yearVisible) hide(yearHdr); yearHdr = null; yearVisible = false; };
+  for (let i = 0; i < kids.length; ) {
+    const k = kids[i];
+    if (k.classList.contains('later-today-bar')) { i++; continue; }
+    if (k.classList.contains('later-year-hdr')) { flushYear(); yearHdr = k; yearVisible = false; i++; continue; }
+    if (k.classList.contains('later-month-hdr')) {
+      const monthEls = [k];
+      let j = i + 1;
+      while (j < kids.length && !kids[j].classList.contains('later-month-hdr') && !kids[j].classList.contains('later-year-hdr')) { monthEls.push(kids[j]); j++; }
+      const rowsC = monthEls.find(e => e.classList.contains('later-rows'));
+      let monthVisible = false;
+      if (rowsC) {
+        rowsC.querySelectorAll(':scope > .later-week-hdr').forEach(hide);   // flat result → drop week sub-headers
+        rowsC.querySelectorAll(':scope > .item-row').forEach(r => {
+          if (match.get(r.getAttribute('data-id'))) monthVisible = true; else hide(r);
+        });
+      }
+      if (!monthVisible) monthEls.forEach(hide); else yearVisible = true;
+      i = j; continue;
+    }
+    i++;
+  }
+  flushYear();
 }
 
 function autoSavePlanDay() {
@@ -7198,6 +7256,7 @@ window.addEventListener('resize', updateAppGrid);
       </table>
       <p style="margin:.4rem 0 0"><b>The month of entry = anchor.</b> The rule shows in that month and onward per the rule as a dashed "ghost" (🔃). Click 🔃 = confirm into the month, ✕ = skip that month.</p>
     </details>
+    <input id="recurSearch" type="text" placeholder="search rules — text, note, rule…" oninput="setRecurSearch(this.value)" style="width:100%;box-sizing:border-box;font-size:.82rem;padding:.35rem .55rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none">
     <div class="modal-list" id="recurList"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="addRecur()">+ add rule</button>
