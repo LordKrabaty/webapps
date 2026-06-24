@@ -1573,7 +1573,7 @@ function rowsHtml(ctx, insertBefore = {}) {
       const tg = item.done ? '☑' : '☐';
       const _pd = item.dayLabel ? parseDayLabel(item.dayLabel, ctx.ym) : null;
       const _da = _pd ? ` data-day="${DAY_ABBREV_CZ[_pd.getDay()]}"` : '';
-      const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="assign a day (e.g. 7.6. or end of June) · d → duplicate · r1m → recurrence">${item.dayLabel ? esc(item.dayLabel) : '+day'}</span>`;
+      const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="assign a day (e.g. 7.6.) · range 15.-18.7. = multi-day · d → duplicate · r1m → recurrence">${item.dayLabel ? esc(laterDayDisplay(item)) : '+day'}</span>`;
       const timeBadge = (item.isEvent && item.eventStart)
         ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="click: edit time · 0 → no time · -/✒ → task · d → duplicate">${item.eventStart}–${item.eventEnd || '?'}</span>`
         : '';
@@ -1685,21 +1685,38 @@ function updateStats() {
 const CAL_WD = ['Mo','Tu','We','Th','Fr','Sa','Su'];
 function renderLaterTimeline(container) {
   container = container || el('tl-container'); if (!container) return;
-  const buckets = later.filter(b => b && b.items && b.items.length).sort((a, b) => a.ym.localeCompare(b.ym));
-  if (!buckets.length) { container.innerHTML = '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
+  const ymKey = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+  // collect dated spans (single day or multi-day) and per-month undated names
+  const spans = [];                 // { s:Date, e:Date, nm }
+  const undatedByYm = {};           // ym → [names]
+  const itemCountByYm = {};         // ym → bucket item count (for the month label)
+  const monthSet = new Set();
+  later.forEach(b => {
+    if (!b || !b.items || !b.items.length) return;
+    monthSet.add(b.ym); itemCountByYm[b.ym] = b.items.length;
+    b.items.forEach(it => {
+      const s = it.dayLabel ? parseDayLabel(it.dayLabel, b.ym) : null;
+      const nm = (it.text || '').trim() || '(untitled)';
+      if (s) spans.push({ s, e: it.dayEnd ? laterEndDate(s, it.dayEnd) : s, nm });
+      else (undatedByYm[b.ym] = undatedByYm[b.ym] || []).push(nm);
+    });
+  });
+  // every month a span touches must be shown (a multi-day range can spill into a month with no bucket)
+  spans.forEach(sp => { const c = new Date(sp.s.getFullYear(), sp.s.getMonth(), 1), end = new Date(sp.e.getFullYear(), sp.e.getMonth(), 1); while (c <= end) { monthSet.add(ymKey(c)); c.setMonth(c.getMonth() + 1); } });
+  if (!monthSet.size) { container.innerHTML = '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
   const now = new Date();
   const todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
   const curYm = curMonthYm();
-  container.innerHTML = buckets.map(b => {
-    const [yy, mm] = b.ym.split('-').map(Number);
-    const dayNames = {}; const undatedNames = [];   // collect item names per day (+ undated) for hover tooltips
-    b.items.forEach(it => {
-      const d = it.dayLabel ? parseDayLabel(it.dayLabel, b.ym) : null;
-      const nm = (it.text || '').trim() || '(untitled)';
-      if (d && d.getFullYear() === yy && d.getMonth() === mm - 1) (dayNames[d.getDate()] = dayNames[d.getDate()] || []).push(nm);
-      else undatedNames.push(nm);
+  const tip = names => esc(names.map(x => '• ' + x).join('\n'));   // newline-separated → multiline native tooltip
+  container.innerHTML = [...monthSet].sort().map(ym => {
+    const [yy, mm] = ym.split('-').map(Number);
+    const dayNames = {};
+    spans.forEach(sp => {
+      for (const c = new Date(sp.s); c <= sp.e; c.setDate(c.getDate() + 1)) {
+        if (c.getFullYear() === yy && c.getMonth() === mm - 1) (dayNames[c.getDate()] = dayNames[c.getDate()] || []).push(sp.nm);
+      }
     });
-    const tip = names => esc(names.map(x => '• ' + x).join('\n'));   // newline-separated → multiline native tooltip
+    const undatedNames = undatedByYm[ym] || [];
     const daysInMonth = new Date(yy, mm, 0).getDate();
     const startWd = (new Date(yy, mm - 1, 1).getDay() + 6) % 7;   // Mon=0
     let cells = '';
@@ -1709,16 +1726,17 @@ function renderLaterTimeline(container) {
       const n = names.length;
       const isToday = yy === todayY && mm - 1 === todayM && d === todayD;
       const cls = ['tl-cal-day', n ? 'has' : '', isToday ? 'today' : ''].filter(Boolean).join(' ');
-      const click = n ? ` onclick="laterCalJump('${b.ym}')" title="${tip(names)}"` : '';
+      const click = n ? ` onclick="laterCalJump('${ym}')" title="${tip(names)}"` : '';
       cells += `<div class="${cls}"${click}>${d}${n > 1 ? `<span class="tl-cal-cnt">${n}</span>` : ''}</div>`;
     }
-    const od = b.ym < curYm;
-    const total = b.items.length;
+    const od = ym < curYm;
+    const total = itemCountByYm[ym] || 0;
     const undatedBadge = undatedNames.length
-      ? `<span class="tl-later-undated" onclick="laterCalJump('${b.ym}')" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
+      ? `<span class="tl-later-undated" onclick="laterCalJump('${ym}')" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
       : '';
+    const sum = total ? `<span class="tl-later-msum">${total} ${total === 1 ? 'item' : 'items'}</span>` : '';
     return `<div class="tl-later-month">
-      <div class="tl-later-mlabel${od ? ' overdue' : ''}">${monthLabel(b.ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}<span class="tl-later-msum">${total} ${total === 1 ? 'item' : 'items'}</span></div>
+      <div class="tl-later-mlabel${od ? ' overdue' : ''}">${monthLabel(ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}${sum}</div>
       <div class="tl-cal-grid">${CAL_WD.map(w => `<div class="tl-cal-wd">${w}</div>`).join('')}${cells}</div>
     </div>`;
   }).join('');
@@ -5154,6 +5172,7 @@ function normItem(it) {
     eventEnd: it.eventEnd || null,
     isSubtask: !!it.isSubtask,
     dayLabel: it.dayLabel || null,    // free day label (top-level items only): "7.6." / "end of June"
+    dayEnd: it.dayEnd || null,        // optional end day of a multi-day range ("18.7.") — start is dayLabel
     done: !!it.done,
     urgent: !!it.urgent,
     note: it.note || '',              // free text: description / subtasks
@@ -5243,7 +5262,7 @@ function mEditDay(ym, idx) {
   const item = ctx.list[idx]; if (!item) return;
   const rows = ctx.rowsEl(); if (!rows || !rows[idx]) return;
   const badge = rows[idx].querySelector('.day-badge'); if (!badge) return;
-  const orig = item.dayLabel || '';
+  const orig = laterDayInputValue(item);   // round-trips ranges (e.g. "15.7.-18.7.")
   badge.classList.remove('empty');
   badge.textContent = orig;
   badge.contentEditable = 'true';
@@ -5261,18 +5280,29 @@ function mEditDay(ym, idx) {
     // "d" in the date field → duplicate the item in the month
     if (v.toLowerCase() === 'd') { materializeLaterGhost(ym, idx); duplicateItem(ctx, idx); return; }
     materializeLaterGhost(ym, idx);   // editing a ghost day → materialize (without render so `item`/`idx` hold)
+    // multi-day range ("15.-18.7.") → start day anchors the bucket, end day stored separately
+    const range = parseLaterRangeInput(v, ym);
+    if (range) {
+      pushLaterUndo();
+      const changed = item.dayLabel !== range.label || (item.dayEnd || null) !== range.endLabel || range.ym !== ym;
+      item.dayLabel = range.label; item.dayEnd = range.endLabel;
+      if (range.ym !== ym) { skipRecurInSource(item, ym); moveLaterGroup(ym, item, range.ym); renderLater(); showStatusMsg('→ moved to ' + monthLabel(range.ym), 2000); return; }
+      if (changed) ctx.save();
+      ctx.render();
+      return;
+    }
     const parsed = parseLaterDayInput(v, ym);
     if (parsed && parsed.ym !== ym) {   // a date with a different month → move the item to the correct bucket
       pushLaterUndo();                  // ↩ reverts the move
       skipRecurInSource(item, ym);      // recurrence → skip in the source (BEFORE changing dayLabel)
-      item.dayLabel = parsed.label;
+      item.dayLabel = parsed.label; item.dayEnd = null;
       moveLaterGroup(ym, item, parsed.ym);
       renderLater();
       showStatusMsg('→ moved to ' + monthLabel(parsed.ym), 2000);
       return;
     }
     if (parsed) v = parsed.label;       // normalization within the same month ("12" → "12.<month>.")
-    if (v !== (item.dayLabel || '')) { pushLaterUndo(); item.dayLabel = v || null; ctx.save(); }
+    if (v !== (item.dayLabel || '') || item.dayEnd) { pushLaterUndo(); item.dayLabel = v || null; item.dayEnd = null; ctx.save(); }
     ctx.render();
   };
   badge.addEventListener('blur', commit, { once: true });
@@ -5546,6 +5576,63 @@ function parseLaterDayInput(v, curYm) {
   }
   return null;
 }
+// one side of a date: "12" | "12.8." | "12.8.26" → { day, mo|null, year|null }
+function parseDayPart(s) {
+  let m;
+  if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\.?$/))) return { day: +m[1], mo: +m[2], year: +m[3] < 100 ? 2000 + +m[3] : +m[3] };
+  if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.?$/)))            return { day: +m[1], mo: +m[2], year: null };
+  if ((m = s.match(/^(\d{1,2})\.?$/)))                        return { day: +m[1], mo: null, year: null };
+  return null;
+}
+// Multi-day range in the date field: "15.-18.7." · "15.7.-18.7." · "15.-18." · "28.7.-2.8." (cross-month) · with years.
+// A side without a month inherits the other side's month (else current). End is forced to be on/after start.
+// → { ym (start month), label (start "D.M."), endLabel (end "D.M.") } | null when not a range.
+function parseLaterRangeInput(v, curYm) {
+  v = String(v || '').trim().replace(/\s+/g, '');
+  const parts = v.split(/[-–—]/);
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  const A = parseDayPart(parts[0]), B = parseDayPart(parts[1]);
+  if (!A || !B) return null;
+  const [cy, cm] = curYm.split('-').map(Number);
+  let aMo = A.mo, bMo = B.mo;
+  if (aMo == null && bMo == null) { aMo = bMo = cm; }
+  else if (aMo == null) aMo = bMo;
+  else if (bMo == null) bMo = aMo;
+  if (aMo < 1 || aMo > 12 || bMo < 1 || bMo > 12 || A.day < 1 || A.day > 31 || B.day < 1 || B.day > 31) return null;
+  // start year: explicit, else current — and bump if the month already passed (same rule as single-day input)
+  let aYear = A.year || cy, startYm = aYear + '-' + String(aMo).padStart(2, '0');
+  if (!A.year && startYm < curYm) { aYear++; startYm = aYear + '-' + String(aMo).padStart(2, '0'); }
+  const startDate = new Date(aYear, aMo - 1, A.day);
+  if (startDate.getMonth() !== aMo - 1 || startDate.getDate() !== A.day) return null;
+  // end year: explicit, else start year. Bump a year only for a real calendar wrap (end month before start
+  // month, e.g. 28.12.-3.1.); an end before the start within the same/later month is a typo → reject.
+  let bYear = B.year || aYear, endDate = new Date(bYear, bMo - 1, B.day);
+  if (endDate.getMonth() !== bMo - 1 || endDate.getDate() !== B.day) return null;
+  if (endDate < startDate) {
+    if (!B.year && bMo < aMo) { bYear++; endDate = new Date(bYear, bMo - 1, B.day); }
+    else return null;
+  }
+  return { ym: startYm, label: A.day + '.' + aMo + '.', endLabel: B.day + '.' + bMo + '.' };
+}
+// end Date of a multi-day item from its start Date + end label ("D.M."); end is forced on/after start
+function laterEndDate(startDate, endLabel) {
+  const m = String(endLabel || '').match(/^(\d{1,2})\.(\d{1,2})\.?$/); if (!m) return startDate;
+  const day = +m[1], mo = +m[2];
+  let e = new Date(startDate.getFullYear(), mo - 1, day);
+  if (e < startDate) e = new Date(startDate.getFullYear() + 1, mo - 1, day);
+  if (e.getMonth() !== mo - 1 || e.getDate() !== day) return startDate;
+  return e;
+}
+// editable text for the date badge (round-trips through the range parser)
+function laterDayInputValue(item) { return item && item.dayLabel ? (item.dayEnd ? item.dayLabel + '-' + item.dayEnd : item.dayLabel) : ''; }
+// compact display of the date badge: single day, or a range ("15.–18.7." within a month, else "28.7.–2.8.")
+function laterDayDisplay(item) {
+  if (!item || !item.dayLabel) return '';
+  if (!item.dayEnd) return item.dayLabel;
+  const a = item.dayLabel.match(/^(\d{1,2})\.(\d{1,2})\.?$/), b = item.dayEnd.match(/^(\d{1,2})\.(\d{1,2})\.?$/);
+  if (a && b && a[2] === b[2]) return a[1] + '.–' + b[1] + '.' + b[2] + '.';
+  return item.dayLabel + '–' + item.dayEnd;
+}
 // moving a recurring occurrence to another month → write "skip" in the SOURCE (from the original dayLabel),
 // otherwise syncLaterGhosts would regenerate the ghost in the source month (duplicate). Call BEFORE changing dayLabel.
 function skipRecurInSource(item, srcYm) {
@@ -5583,6 +5670,7 @@ function applyLaterDnd(srcYm, srcIdx, dstYm, rawIdx) {
   if (item.isGhost) { delete item.isGhost; item.id = Date.now() + Math.random(); }   // ghost → real item
   if (item.dayLabel && /^(\d{1,2})\.\s*\d{1,2}\.?$/.test(item.dayLabel)) {            // has a date → overwrite the month with the target
     item.dayLabel = item.dayLabel.match(/^(\d{1,2})\./)[1] + '.' + (+dstYm.split('-')[1]) + '.';
+    item.dayEnd = null;   // a multi-day range loses meaning when the item is dragged to another month
   }
   if (moveLaterGroup(srcYm, item, dstYm, rawIdx === 1e9 ? null : rawIdx)) {
     showStatusMsg('→ moved to ' + monthLabel(dstYm), 1800);
