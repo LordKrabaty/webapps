@@ -213,7 +213,8 @@ textarea::placeholder{color:var(--mid)}
 .tl-cal-day.today{outline:2px solid var(--dark);outline-offset:-2px;color:var(--dark)}
 .tl-cal-day.has{background:var(--black);color:var(--w);border-color:var(--black);font-weight:500;cursor:pointer}
 .tl-cal-cnt{position:absolute;top:0;right:2px;font-size:.5rem;line-height:1;opacity:.85}
-.tl-later-undated{font-size:.66rem;color:var(--muted);font-style:italic;cursor:pointer}
+.tl-later-undated{font-size:.6rem;color:var(--muted);font-family:'DM Mono',monospace;border:1px dashed var(--mid);border-radius:var(--r);padding:0 .3rem;cursor:pointer}
+@media(hover:hover){.tl-later-undated:hover{color:var(--black);border-color:var(--black)}}
 .tl-later-empty{color:var(--muted);font-style:italic;font-size:.85rem;padding:.6rem .2rem}
 .tl-row{display:flex;align-items:stretch;min-height:46px;border-bottom:1px solid var(--light)}
 .tl-row:last-child{border-bottom:none}
@@ -1691,30 +1692,34 @@ function renderLaterTimeline(container) {
   const curYm = curMonthYm();
   container.innerHTML = buckets.map(b => {
     const [yy, mm] = b.ym.split('-').map(Number);
-    const counts = {}; let undated = 0;
+    const dayNames = {}; const undatedNames = [];   // collect item names per day (+ undated) for hover tooltips
     b.items.forEach(it => {
       const d = it.dayLabel ? parseDayLabel(it.dayLabel, b.ym) : null;
-      if (d && d.getFullYear() === yy && d.getMonth() === mm - 1) counts[d.getDate()] = (counts[d.getDate()] || 0) + 1;
-      else undated++;
+      const nm = (it.text || '').trim() || '(untitled)';
+      if (d && d.getFullYear() === yy && d.getMonth() === mm - 1) (dayNames[d.getDate()] = dayNames[d.getDate()] || []).push(nm);
+      else undatedNames.push(nm);
     });
+    const tip = names => esc(names.map(x => '• ' + x).join('\n'));   // newline-separated → multiline native tooltip
     const daysInMonth = new Date(yy, mm, 0).getDate();
     const startWd = (new Date(yy, mm - 1, 1).getDay() + 6) % 7;   // Mon=0
     let cells = '';
     for (let i = 0; i < startWd; i++) cells += `<div class="tl-cal-day blank"></div>`;
     for (let d = 1; d <= daysInMonth; d++) {
-      const n = counts[d] || 0;
+      const names = dayNames[d] || [];
+      const n = names.length;
       const isToday = yy === todayY && mm - 1 === todayM && d === todayD;
       const cls = ['tl-cal-day', n ? 'has' : '', isToday ? 'today' : ''].filter(Boolean).join(' ');
-      const click = n ? ` onclick="laterCalJump('${b.ym}')" title="${n} task${n > 1 ? 's' : ''} — jump to month"` : '';
+      const click = n ? ` onclick="laterCalJump('${b.ym}')" title="${tip(names)}"` : '';
       cells += `<div class="${cls}"${click}>${d}${n > 1 ? `<span class="tl-cal-cnt">${n}</span>` : ''}</div>`;
     }
     const od = b.ym < curYm;
     const total = b.items.length;
-    const undatedHtml = undated ? `<div class="tl-later-undated" onclick="laterCalJump('${b.ym}')" title="jump to month">+ ${undated} without a specific day</div>` : '';
+    const undatedBadge = undatedNames.length
+      ? `<span class="tl-later-undated" onclick="laterCalJump('${b.ym}')" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
+      : '';
     return `<div class="tl-later-month">
-      <div class="tl-later-mlabel${od ? ' overdue' : ''}">${monthLabel(b.ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}<span class="tl-later-msum">${total} ${total === 1 ? 'item' : 'items'}</span></div>
+      <div class="tl-later-mlabel${od ? ' overdue' : ''}">${monthLabel(b.ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}<span class="tl-later-msum">${total} ${total === 1 ? 'item' : 'items'}</span></div>
       <div class="tl-cal-grid">${CAL_WD.map(w => `<div class="tl-cal-wd">${w}</div>`).join('')}${cells}</div>
-      ${undatedHtml}
     </div>`;
   }).join('');
 }
