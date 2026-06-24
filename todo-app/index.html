@@ -1149,6 +1149,16 @@ function extractMonthRoute(text) {
   text = (text || '').trim();
   if (!text) return null;
   const tokens = text.split(/\s+/);
+  // multi-day range as the leading or trailing token ("15.-18.7. vacation"); needs a dot so "items 5-10" stays a plain task
+  for (const pos of ['start', 'end']) {
+    const tok = pos === 'start' ? tokens[0] : tokens[tokens.length - 1];
+    if (!/[-–—]/.test(tok) || tok.indexOf('.') < 0) continue;
+    const rng = parseLaterRangeInput(tok, curMonthYm());
+    if (!rng) continue;
+    const rest = (pos === 'start' ? tokens.slice(1) : tokens.slice(0, -1)).join(' ').trim();
+    if (!rest) continue;
+    return { ym: rng.ym, dayLabel: rng.label, dayEnd: rng.endLabel, rest };
+  }
   for (const pos of ['start', 'end']) {
     const cand = _monthCandidate(tokens, pos);
     if (!cand) continue;
@@ -1158,7 +1168,7 @@ function extractMonthRoute(text) {
     if (!rest) continue;                                  // a date alone without a task → do not route
     let y = p.year;
     if (!y) { const now = new Date(); y = now.getFullYear(); if (p.mo - 1 < now.getMonth()) y++; }   // the month already passed this year → next year
-    return { ym: y + '-' + String(p.mo).padStart(2, '0'), dayLabel: p.day ? (p.day + '.' + p.mo + '.') : null, rest };
+    return { ym: y + '-' + String(p.mo).padStart(2, '0'), dayLabel: p.day ? (p.day + '.' + p.mo + '.') : null, dayEnd: null, rest };
   }
   return null;
 }
@@ -1844,6 +1854,7 @@ function op_addQuickItems(ctx, forceType) {
     }
     parsed.id = Date.now() + Math.random();
     if (toLater && route.dayLabel) parsed.dayLabel = route.dayLabel;
+    if (toLater && route.dayEnd) parsed.dayEnd = route.dayEnd;   // multi-day range from the quick-add field
 
     if (onDay && targetBlockId != null) {                   // under a specific block instance (like clicking an abbreviation)
       const bIdx = targetList.findIndex(it => String(it.id) === String(targetBlockId) && !it.isSubtask);
@@ -5956,7 +5967,7 @@ function switchNotesTab(name) {
   if (qta) {
     if (isPlan) updateQuickInputPlaceholder();
     else if (name === 'inbox') qta.placeholder = 'task…';
-    else if (name === 'pozdeji') qta.placeholder = '15.6. task  ·  15.6. 9:00-10:00 event';
+    else if (name === 'pozdeji') qta.placeholder = '15.6. task  ·  15.-18.6. multi-day  ·  15.6. 9:00-10:00 event';
   }
   if (name === 'tyden') {
     planWeekOffset = 0;
