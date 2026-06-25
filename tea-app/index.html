@@ -968,6 +968,11 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 
 </div>
 <script>
+// Schema version (forward-compat guard). Bump when the synced data shape changes in a way older
+// clients can't fully represent. A client that pulls a payload with a higher `schema` PAUSES its
+// own push (so it can't overwrite newer data) and warns the user to reload. tea-app keeps whole
+// objects on merge/import (identity normalize), so additive fields already round-trip losslessly.
+const APP_SCHEMA=1;
 const SESSION_KEY='cajovy-v3-session';
 const LIBRARY_KEY='cajovy-v3-library';
 const ARCHIVE_KEY='cajovy-v3-archive';
@@ -2084,7 +2089,7 @@ function doExport(){
   const tpls=templates.filter(t=>exportTplSelected.has(t.id));
   const archItems=archive.filter(e=>exportArchSelected.has(e.id));
   if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
-  const json=JSON.stringify({v:1,teas:items,templates:tpls,archive:archItems},null,2);
+  const json=JSON.stringify({v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems},null,2);
   const rawName=(el('exportFilename').value.trim()||'export');
   const fname=rawName.endsWith('.json')?rawName:rawName+'.json';
 
@@ -3475,6 +3480,19 @@ document.addEventListener('keydown',e=>{
   const PUSH_MIN_INTERVAL=4000;             // max 1 push / 4 s
   let pushTimer=null,lastPushTs=0,pushing=false,pushAgain=false,stateTimer=null,pulling=false;
   let applyingRemote=false;                 // true during a silent merge → suppresses the save-hook (no recursion)
+  let cloudSchemaAhead=false;               // cloud written by a newer app version → pause our push so we can't overwrite it
+  let schemaWarnShown=false;                // the blocking warning is shown at most once per session
+  // Inspect a freshly fetched cloud record: is its schema newer than what this build understands?
+  function checkCloudSchema(record){
+    const cs=+(record&&record.schema)||0;
+    cloudSchemaAhead=cs>APP_SCHEMA;
+    updateAutoSyncBtn();
+    if(cloudSchemaAhead){
+      showStatusMsg('⚠ A newer version of the app is in use on another device — reload this page before editing (sync paused to protect your data)',8000);
+      if(!schemaWarnShown){schemaWarnShown=true;try{customAlert('A newer version of this app is in use on another device.\n\nReload this page (Ctrl+Shift+R) before editing here. Until you do, this older version will NOT upload its changes, so it cannot overwrite the newer data in the cloud.');}catch(e){}}
+    }
+    return cloudSchemaAhead;
+  }
 
   // One-time migration from the old JSONBin sync → Gist slots. A JSONBin key ≠ GitHub token and
   // Bin ID ≠ Gist ID — the values are only moved to the correct slot; the user must overwrite them
@@ -3547,6 +3565,11 @@ document.addEventListener('keydown',e=>{
     const b=el('autoSyncBtn');if(!b)return;
     const on=autosyncEnabled();
     b.classList.toggle('on',on);
+    if(cloudSchemaAhead){   // outdated build — push is paused; make it visible
+      if(!b.classList.contains('syncing'))b.textContent='⚠';
+      b.title='this app version is outdated — reload the page; uploads are paused so you cannot overwrite newer data';
+      return;
+    }
     if(!b.classList.contains('syncing'))b.textContent='☁';
     b.title=on?'automatic sync enabled — click to disable':'enable automatic sync (Gist)';
   }
@@ -3575,7 +3598,7 @@ document.addEventListener('keydown',e=>{
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload(){
-    return {v:1,teas:library,templates:templates,archive:archive,tombstones:tombstones,device:getDeviceName()};
+    return {v:1,schema:APP_SCHEMA,teas:library,templates:templates,archive:archive,tombstones:tombstones,device:getDeviceName()};
   }
   function scheduleAutoPush(){
     if(!autosyncEnabled()||!hasToken())return;
@@ -3585,6 +3608,7 @@ document.addEventListener('keydown',e=>{
   }
   async function doAutoPush(){
     if(!autosyncEnabled()||!hasToken())return;
+    if(cloudSchemaAhead){setSyncState('err');showStatusMsg('⚠ sync paused — a newer app version is in the cloud. Reload to update.',5000);return;}   // never let an older build overwrite newer data
     if(pushing){pushAgain=true;return;}
     const token=localStorage.getItem(GHTOKEN);
     if(!token)return;
@@ -3715,6 +3739,7 @@ document.addEventListener('keydown',e=>{
       if('cajovy-v3-library' in record){     // backward compat: old format of raw localStorage strings
         record={v:1,teas:JSON.parse(record['cajovy-v3-library']||'[]'),templates:JSON.parse(record['cajovy-v3-templates']||'[]'),archive:JSON.parse(record['cajovy-v3-archive']||'[]')};
       }
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       if(localStateSig()!==cloudStateSig(record)){
         const before=localStateSig();
         autoImportSilent(record);
@@ -3827,7 +3852,7 @@ document.addEventListener('keydown',e=>{
     const tpls=templates.filter(t=>exportTplSelected.has(t.id));
     const archItems=archive.filter(e=>exportArchSelected.has(e.id));
     if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
-    const payload={v:1,teas:items,templates:tpls,archive:archItems};
+    const payload={v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try{
@@ -3908,6 +3933,7 @@ document.addEventListener('keydown',e=>{
           archive:JSON.parse(record['cajovy-v3-archive']||'[]')
         };
       }
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       // AUTOSYNC: silent two-way merge (incl. deletions and edits)
       if(autosyncEnabled()){
         if(localStateSig()!==cloudStateSig(record)){autoImportSilent(record);scheduleAutoPush();}
