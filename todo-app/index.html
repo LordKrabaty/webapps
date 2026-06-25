@@ -931,6 +931,13 @@ textarea::placeholder{color:var(--mid)}
 </div>
 
 <script>
+// ── SCHEMA VERSION (forward-compat guard) ────────────────────────────────────
+// Bump whenever the synced data shape changes in a way older clients can't fully
+// represent. A client that pulls a payload whose `schema` is higher than this
+// PAUSES its own push (so the older version can't overwrite newer data) and warns
+// the user to reload. Combined with preserve-unknown normalizers (normItem etc.),
+// additive field changes already round-trip losslessly across versions.
+const APP_SCHEMA = 3;
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const SESSION_KEY   = 'todo-app-v1-session';
 const LIBRARY_KEY   = 'todo-app-v1-library';
@@ -4277,6 +4284,7 @@ function doExport() {
   if (lat.length) payload.later = lat;
   if (rec.length) payload.recurrences = rec;   // recurrence rules (otherwise ghosts will not be generated on another device)
   const wn = weekNotes.filter(n => n && n.key && n.text); if (wn.length) payload.weekNotes = wn;   // week evaluations
+  payload.schema = APP_SCHEMA;
   const json = JSON.stringify(payload, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName + '.json';
@@ -5173,7 +5181,10 @@ const MONTHS_CZ = ['january','february','march','april','may','june','july','aug
 function normItem(it) {
   if (!it || typeof it !== 'object') return null;
   const blockType = it.blockType || 'TASK';
+  // spread first → unknown/newer fields from another app version survive the round-trip (no data loss on
+  // an older client); the explicit fields below then normalize the shape we DO know about.
   return {
+    ...it,
     id: it.id != null ? it.id : (Date.now() + Math.random()),
     text: it.text || '',
     blockType,
@@ -5195,12 +5206,13 @@ function normItem(it) {
 }
 function normLaterBucket(b) {
   if (!b || !b.ym) return null;
-  return { ym: b.ym, items: (b.items || []).map(normItem).filter(Boolean), mt: +b.mt || 0 };
+  return { ...b, ym: b.ym, items: (b.items || []).map(normItem).filter(Boolean), mt: +b.mt || 0 };   // spread → keep unknown/newer bucket fields
 }
 // normalize an imported recurrence rule — guards against an incomplete shape (missing rules/payload/exceptions)
 function normRecur(r) {
   if (!r || typeof r !== 'object' || !Array.isArray(r.rules) || !r.rules.length) return null;
   return {
+    ...r,                              // spread → keep unknown/newer fields across versions
     id: r.id != null ? r.id : (Date.now() + Math.random()),
     mt: +r.mt || 0,
     rules: r.rules,
@@ -6753,6 +6765,7 @@ window.addEventListener('resize', updateAppGrid);
     if (lat.length) payload.later = lat;
     if (wantRc) payload.recurrences = recurrences;   // recurrence rules (otherwise this upload would remove them from the cloud)
     { const wn = weekNotes.filter(n => n && n.key && n.text); if (wn.length) payload.weekNotes = wn; }   // week evaluations (otherwise this upload would remove them)
+    payload.schema = APP_SCHEMA;
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
     closeModal('exportModal'); showSyncTooltip('↑ uploading…');
     try {
@@ -6812,6 +6825,7 @@ window.addEventListener('resize', updateAppGrid);
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       // CRITICAL: the window may have switched meanwhile → this gist data belongs to ANOTHER window, do not apply it to the current one
       if (activeWin !== winAtStart) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       // AUTOSYNC: silent two-way merge (incl. deletions) — full state comparison
       if (autosyncEnabled()) {
         if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
@@ -6837,6 +6851,22 @@ window.addEventListener('resize', updateAppGrid);
   const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
   let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
   let applyingRemote = false;   // true during a silent merge → suppresses the save-hook (no recursion)
+  let cloudSchemaAhead = false; // cloud written by a newer app version → pause our push so we can't overwrite it
+  let schemaWarnShown = false;  // the blocking warning is shown at most once per session
+  // Inspect a freshly fetched cloud record: is its schema newer than what this build understands?
+  function checkCloudSchema(record) {
+    const cs = +(record && record.schema) || 0;
+    cloudSchemaAhead = cs > APP_SCHEMA;
+    updateAutoSyncBtn();
+    if (cloudSchemaAhead) {
+      showStatusMsg('⚠ A newer version of the app is in use on another device — reload this page before editing (sync paused to protect your data)', 8000);
+      if (!schemaWarnShown) {
+        schemaWarnShown = true;
+        try { customAlert('A newer version of this app is in use on another device.\n\nReload this page (Ctrl+Shift+R) before editing here. Until you do, this older version will NOT upload its changes, so it cannot overwrite the newer data in the cloud.'); } catch(e) {}
+      }
+    }
+    return cloudSchemaAhead;
+  }
 
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
   function hasApiKey() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // a token is enough → autosync creates the gist itself
@@ -6912,6 +6942,11 @@ window.addEventListener('resize', updateAppGrid);
     const b = el('autoSyncBtn'); if (!b) return;
     const on = autosyncEnabled();
     b.classList.toggle('on', on);
+    if (cloudSchemaAhead) {   // outdated build — push is paused; make it visible
+      if (!b.classList.contains('syncing')) b.textContent = '⚠';
+      b.title = 'this app version is outdated — reload the page; uploads are paused so you cannot overwrite newer data';
+      return;
+    }
     if (!b.classList.contains('syncing')) b.textContent = '☁';
     b.title = on ? 'automatic sync enabled — click to disable'
                  : 'enable automatic sync (Gist)';
@@ -6949,6 +6984,7 @@ window.addEventListener('resize', updateAppGrid);
     // the window registry travels only in the main bin (other windows data is in their own bins)
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }
     payload.device = getDeviceName();   // metadata: which device performed the push (outside sigOf → does not affect the merge)
+    payload.schema = APP_SCHEMA;        // forward-compat guard (outside sigOf — metadata only)
     return payload;
   }
   function scheduleAutoPush() {
@@ -6959,6 +6995,7 @@ window.addEventListener('resize', updateAppGrid);
   }
   async function doAutoPush() {
     if (!autosyncEnabled() || !hasApiKey()) return;
+    if (cloudSchemaAhead) { setSyncState('err'); showStatusMsg('⚠ sync paused — a newer app version is in the cloud. Reload to update.', 5000); return; }   // never let an older build overwrite newer data
     if (pushing) { pushAgain = true; return; }
     const token = localStorage.getItem(GHTOKEN);
     if (!token) return;
@@ -7188,6 +7225,7 @@ window.addEventListener('resize', updateAppGrid);
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       // CRITICAL: the window may have switched meanwhile → this per-window data belongs to ANOTHER window, must not overwrite the current one
       if (activeWin !== winAtStart) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       if (localSig() !== cloudSig(record)) {
         const before = localSig();
         autoImportSilent(record);
