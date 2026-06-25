@@ -1746,7 +1746,7 @@ function renderLaterTimeline(container) {
     b.items.forEach(it => {
       const s = it.dayLabel ? parseDayLabel(it.dayLabel, b.ym) : null;
       const nm = (it.text || '').trim() || '(untitled)';
-      if (s) spans.push({ s, e: it.dayEnd ? laterEndDate(s, it.dayEnd) : s, nm });
+      if (s) spans.push({ s, e: it.dayEnd ? laterEndDate(s, it.dayEnd) : s, nm, label: laterDayDisplay(it) });
       else (undatedByYm[b.ym] = undatedByYm[b.ym] || []).push(nm);
     });
   });
@@ -1791,7 +1791,7 @@ function renderLaterTimeline(container) {
       const dayNames = {};
       spans.forEach(sp => {
         for (const c = new Date(sp.s); c <= sp.e; c.setDate(c.getDate() + 1)) {
-          if (c.getFullYear() === yy && c.getMonth() === mm - 1) (dayNames[c.getDate()] = dayNames[c.getDate()] || []).push(sp.nm);
+          if (c.getFullYear() === yy && c.getMonth() === mm - 1) (dayNames[c.getDate()] = dayNames[c.getDate()] || []).push((sp.label ? sp.label + ' · ' : '') + sp.nm);
         }
       });
       const daysInMonth = new Date(yy, mm, 0).getDate();
