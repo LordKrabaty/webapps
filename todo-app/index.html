@@ -226,6 +226,8 @@ textarea::placeholder{color:var(--mid)}
 .tl-later-undated{font-size:.6rem;color:var(--muted);font-family:'DM Mono',monospace;border:1px dashed var(--mid);border-radius:var(--r);padding:0 .3rem;cursor:pointer}
 @media(hover:hover){.tl-later-undated:hover{color:var(--black);border-color:var(--black)}}
 .tl-later-empty{color:var(--muted);font-style:italic;font-size:.85rem;padding:.6rem .2rem}
+/* touch long-press preview popover (mobile substitute for the hover title) */
+.tl-preview-pop{position:fixed;z-index:200;max-width:78vw;background:var(--black);color:var(--w);font-size:.78rem;line-height:1.5;padding:.5rem .65rem;border-radius:var(--r);white-space:pre-line;pointer-events:none;border:1px solid var(--black)}
 .tl-row{display:flex;align-items:stretch;min-height:46px;border-bottom:1px solid var(--light)}
 .tl-row:last-child{border-bottom:none}
 .tl-row.tl-overflow-row{background:rgba(0,0,0,.02)}
@@ -1736,10 +1738,11 @@ function renderLaterTimeline(container) {
   const spans = [];                 // { s:Date, e:Date, nm }
   const undatedByYm = {};           // ym → [names]
   const itemCountByYm = {};         // ym → bucket item count (for the month label)
+  const itemsByYm = {};             // ym → bucket items (for the month-sum preview)
   const monthSet = new Set();
   later.forEach(b => {
     if (!b || !b.items || !b.items.length) return;
-    monthSet.add(b.ym); itemCountByYm[b.ym] = b.items.length;
+    monthSet.add(b.ym); itemCountByYm[b.ym] = b.items.length; itemsByYm[b.ym] = b.items;
     b.items.forEach(it => {
       const s = it.dayLabel ? parseDayLabel(it.dayLabel, b.ym) : null;
       const nm = (it.text || '').trim() || '(untitled)';
@@ -1779,7 +1782,9 @@ function renderLaterTimeline(container) {
     const undatedBadge = undatedNames.length
       ? `<span class="tl-later-undated" onclick="event.stopPropagation();laterCalJump('${ym}')" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
       : '';
-    const sum = total ? `<span class="tl-later-msum">${total} ${total === 1 ? 'item' : 'items'}</span>` : '';
+    // month-sum preview: every item of the month, dated ones prefixed with their day/range
+    const sumNames = (itemsByYm[ym] || []).map(it => (it.dayLabel ? laterDayDisplay(it) + ' · ' : '') + ((it.text || '').trim() || '(untitled)'));
+    const sum = total ? `<span class="tl-later-msum" title="${tip(sumNames)}">${total} ${total === 1 ? 'item' : 'items'}</span>` : '';
     html += `<div class="tl-later-month">
       <div class="tl-later-mlabel${od ? ' overdue' : ''}" onclick="toggleLaterCalMonth('${ym}')"><span class="tl-cal-caret">${mColl ? '▸' : '▾'}</span>${monthLabel(ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}${sum}</div>`;
     if (!mColl) {   // expanded → the day grid
@@ -1814,6 +1819,39 @@ function laterCalJump(ym) {
   const hdr = el('later-list')?.querySelector(`.later-month-hdr[data-ym="${ym}"]`);
   if (hdr) hdr.scrollIntoView({ block: 'nearest' });
 }
+// Touch long-press → preview popover for the overview calendar (day cells, undated badge, month count).
+// Desktop keeps the native hover title; on touch we read that same title and show a custom popover,
+// and swallow the click that follows so a long-press previews instead of jumping/toggling.
+(function setupTlTouchPreview() {
+  let timer = null, pop = null, sx = 0, sy = 0, suppress = false;
+  const hide = () => { if (pop) { pop.remove(); pop = null; } };
+  function show(text, x, y) {
+    hide();
+    pop = document.createElement('div'); pop.className = 'tl-preview-pop'; pop.textContent = text;
+    document.body.appendChild(pop);
+    const r = pop.getBoundingClientRect();
+    pop.style.left = Math.min(Math.max(8, x - r.width / 2), window.innerWidth - r.width - 8) + 'px';
+    let py = y - r.height - 14; if (py < 8) py = Math.min(y + 20, window.innerHeight - r.height - 8);
+    pop.style.top = py + 'px';
+  }
+  document.addEventListener('touchstart', e => {
+    suppress = false;
+    if (pop && !e.target.closest('.tl-preview-pop')) hide();
+    const t = e.target.closest('#tl-container [title]');
+    if (!t || !t.getAttribute('title')) return;
+    const tp = e.touches[0]; sx = tp.clientX; sy = tp.clientY;
+    clearTimeout(timer);
+    timer = setTimeout(() => { suppress = true; show(t.getAttribute('title'), sx, sy); try { navigator.vibrate && navigator.vibrate(12); } catch(_) {} }, 450);
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!timer) return; const tp = e.touches[0];
+    if (Math.abs(tp.clientX - sx) > 12 || Math.abs(tp.clientY - sy) > 12) { clearTimeout(timer); timer = null; }
+  }, { passive: true });
+  const endTouch = () => { clearTimeout(timer); timer = null; };
+  document.addEventListener('touchend', endTouch, { passive: true });
+  document.addEventListener('touchcancel', endTouch, { passive: true });
+  document.addEventListener('click', e => { if (suppress) { e.stopPropagation(); e.preventDefault(); suppress = false; } }, true);   // swallow the post-long-press click
+})();
 
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
 function renderAll() {
