@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vision</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --w:#ffffff;--off:#f2f2f2;--light:#e0e0e0;--mid:#aaaaaa;
+  --muted:#777777;--dark:#333333;--black:#000000;
+  --b:1.5px solid #aaaaaa;--bh:1.5px solid #000000;--r:4px;
+  --fs:1;
+}
+html{font-size:calc(16px * var(--fs))}
+html.dark{
+  --w:#000000;--off:#111111;--light:#222222;--mid:#555555;
+  --muted:#888888;--dark:#cccccc;--black:#ffffff;
+  --b:1.5px solid #555555;--bh:1.5px solid #ffffff;
+}
+html.dark body{background:var(--w);color:var(--black)}
+html.dark .lib-item.active{background:var(--black);border-color:var(--black)}
+html.dark .lib-item.active .lib-item-name{color:var(--w)}
+html.dark .lib-item.active .lib-item-del svg{stroke:var(--mid)}
+html.dark .lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){html.dark .btn-lib.primary:hover{background:var(--dark)}}
+@media(hover:hover){html.dark .btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+
+/* dark mode toggle */
+#darkToggle{font-size:1rem;width:34px;height:34px;border:var(--bh);border-radius:50%;background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
+@media(hover:hover){#darkToggle:hover{background:var(--light)}}
+
+/* Gist sync */
+.sync-group{display:flex;align-items:center;gap:.15rem}
+.btn-sync{font-size:.85rem;width:32px;height:32px;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s;font-family:'DM Mono',monospace}
+@media(hover:hover){.btn-sync:hover{background:var(--light)}}
+.btn-sync:active{background:var(--light)}
+.btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync.on{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.btn-sync.on:hover{background:var(--dark)}}
+.btn-sync.syncing{animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:.3}}
+.btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
+@media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
+#statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
+.jb-field{display:flex;flex-direction:column;gap:.3rem}
+.jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
+.jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
+#importModal.from-cloud .jb-import-hide{display:none!important}
+
+/* export/import buttons */
+.lib-io{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.1rem}
+.btn-io{flex:1;font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .4rem;cursor:pointer;text-align:center;white-space:nowrap}
+.btn-io:active{background:var(--off);border-color:var(--dark)}
+@media(hover:hover){.btn-io:hover{background:var(--off);border-color:var(--dark)}}
+
+/* modal overlay */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
+html.dark .modal-bg{background:rgba(255,255,255,.25)}
+.modal-bg.open{display:flex}
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
+.modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+.gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
+.gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
+.gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
+.gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
+.gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
+.modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
+@media(hover:hover){.modal-item:hover{background:var(--off)}}
+.modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
+.modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
+@media(hover:hover){.modal-btn:hover{background:var(--light)}}
+.modal-btn.primary{background:var(--black);color:var(--w)}
+@media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
+.modal-btn.danger{border-color:#c0392b;color:#c0392b}
+@media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
+html{-webkit-text-size-adjust:100%;overflow-x:clip}
+body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
+
+.app{
+  padding:1.25rem 1.25rem 1.5rem;
+  display:grid;grid-template-columns:210px minmax(0,1fr) 440px;
+  gap:1.25rem;
+  overflow-x:clip;
+  max-width:1480px;
+  margin:0 auto;
+}
+
+/* HEADER */
+header{
+  position:sticky;top:0;z-index:50;background:var(--w);
+  display:flex;align-items:baseline;
+  justify-content:space-between;
+  padding:.9rem 1.25rem .85rem;
+  border-bottom:2.5px solid var(--black);flex-wrap:wrap;gap:.5rem;
+}
+.brand{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.brand h1{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:600;color:var(--black);letter-spacing:-.02em;line-height:1}
+.header-sep{font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:var(--mid);display:none}
+.header-sub{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:500;color:var(--dark);font-style:italic;display:none;letter-spacing:-.01em}
+.header-right{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+
+.btn-sm{font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.38rem .8rem;cursor:pointer;transition:background .08s;letter-spacing:.02em}
+.btn-sm:active{background:var(--light)}
+@media(hover:hover){.btn-sm:hover{background:var(--light)}}
+.btn-sm.danger:active{background:var(--black);color:var(--w)}
+@media(hover:hover){.btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+
+/* CARDS */
+.card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1rem 1.15rem;overflow:hidden;position:relative}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:var(--black);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.7rem;padding-bottom:.4rem;border-bottom:1.5px solid var(--black)}
+.card-title-text svg{display:block;stroke:var(--black);width:17px;height:17px}
+
+/* LIBRARY */
+.library-panel{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:.75rem}
+.lib-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1;position:relative}
+.lib-item{display:flex;align-items:center;gap:.35rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0;overflow:hidden}
+.lib-item:active{background:var(--off);border-color:var(--mid)}
+@media(hover:hover){.lib-item:hover{background:var(--off);border-color:var(--mid)}}
+.lib-item.active{background:var(--black);border-color:var(--black)}
+.lib-item.active .lib-item-name{color:var(--w)}
+.lib-item-name{flex:1;font-size:.85rem;color:var(--black);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3}
+.lib-item-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0}
+.lib-item.active .lib-item-del{opacity:.55}
+@media(hover:hover){.lib-item:hover .lib-item-del{opacity:.55}}
+@media(hover:hover){.lib-item-del:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+.lib-item-del svg{width:10px;height:10px;stroke:var(--w);fill:none;stroke-width:2.5;stroke-linecap:round}
+.lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+.lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
+.lib-cat-header{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.55rem .55rem .1rem;margin-top:.1rem}
+.lib-cat-header:first-child{margin-top:0;padding-top:.1rem}
+.btn-lib{width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.42rem .6rem;cursor:pointer;text-align:center;letter-spacing:.02em}
+.btn-lib:active{background:var(--light)}
+@media(hover:hover){.btn-lib:hover{background:var(--light)}}
+.btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+.btn-lib.primary:active{background:var(--dark)}
+@media(hover:hover){.btn-lib.primary:hover{background:var(--dark)}}
+
+/* MAIN */
+.main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:1rem}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
+.field{display:flex;flex-direction:column;gap:.3rem}
+.field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none}
+.field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.field select{cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .6rem center;padding-right:1.8rem}
+input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--black);border-radius:1px;outline:none;cursor:pointer;margin:.35rem 0}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--w);border:2.5px solid var(--black);cursor:pointer}
+html.dark input[type="range"]::-webkit-slider-thumb{background:var(--w)}
+
+/* CHECKS */
+.checks-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.check-item{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;padding:.42rem .72rem .42rem .5rem;border-radius:var(--r);border:var(--bh);background:var(--w);font-size:.85rem;color:var(--dark)}
+.check-item:active{background:var(--off)}
+@media(hover:hover){.check-item:hover{background:var(--off)}}
+.check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+.check-box{width:17px;height:17px;border:2px solid var(--mid);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--w)}
+.check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+html.dark .check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+html.dark .check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+.check-mark{width:9px;height:6px;border-left:2px solid var(--black);border-bottom:2px solid var(--black);transform:rotate(-45deg) translateY(-1px);opacity:0}
+.check-item.checked .check-mark{opacity:1}
+html.dark .check-item.checked .check-mark{border-color:var(--black)}
+
+/* NOTES */
+.notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.card-controls{position:absolute;top:.4rem;right:.5rem;display:flex;align-items:center;gap:.15rem;z-index:2}
+textarea{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:1.8;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.7rem .75rem;outline:none;resize:none;flex:1;min-height:220px}
+textarea:focus{outline:2px solid var(--black);outline-offset:1px}
+textarea::placeholder{color:var(--mid)}
+
+/* dirty / undo */
+.btn-lib.dirty{background:var(--w);color:var(--black);border:var(--bh);font-weight:600}
+.btn-lib.dirty::before{content:'! ';color:var(--black)}
+.btn-sm.dirty{font-weight:700}
+.btn-sm.dirty::before{content:'! '}
+.btn-sm.saved{color:var(--muted);border-color:var(--light);pointer-events:none}
+#undoBtn,#redoBtn{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.33rem .65rem;cursor:pointer;transition:all .1s;letter-spacing:.02em}
+@media(hover:hover){#undoBtn:not(:disabled):hover,#redoBtn:not(:disabled):hover{background:var(--light);color:var(--black);border-color:var(--dark)}}
+#undoBtn:disabled,#redoBtn:disabled{opacity:.3;cursor:default}
+
+/* FONT SIZE CONTROL */
+.fs-ctrl{display:flex;align-items:center;border:var(--bh);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.fs-btn{width:28px;height:28px;border:none;background:var(--w);color:var(--black);cursor:pointer;font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fs-btn:active{background:var(--light)}
+@media(hover:hover){.fs-btn:hover{background:var(--light)}}
+.fs-val{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);padding:0 .3rem;border-left:var(--b);border-right:var(--b);line-height:28px;white-space:nowrap;min-width:36px;text-align:center}
+
+/* EXPAND / FULLSCREEN PANEL */
+.card-title{display:flex;align-items:center;gap:.3rem;flex-wrap:nowrap}
+.expand-btn{width:18px;height:18px;border:var(--b);border-radius:2px;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45;transition:opacity .15s;margin-left:.2rem}
+.expand-btn:active{opacity:1;background:var(--off)}
+@media(hover:hover){.expand-btn:hover{opacity:1;background:var(--off)}}
+.expand-btn svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel-expanded{position:fixed!important;inset:0!important;z-index:80;border-radius:0!important;overflow-y:auto;padding:1.1rem 1.3rem!important;background:var(--w)!important;border:none!important;display:flex;flex-direction:column}
+.notes-card.panel-expanded{overflow:hidden}
+.panel-expanded .expand-btn{opacity:1}
+.expand-esc{font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;margin-left:.4rem;letter-spacing:.04em}
+
+/* PER-PANEL FONT SIZE */
+.pfs-ctrl{display:flex;align-items:center;gap:0;margin-left:.3rem;flex-shrink:0}
+.pfs-btn{width:15px;height:15px;border:var(--b);background:none;color:var(--black);cursor:pointer;font-size:.68rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45}
+.pfs-btn:first-child{border-radius:2px 0 0 2px}
+.pfs-btn:last-child{border-radius:0 2px 2px 0;border-left:none}
+.pfs-btn:active{background:var(--off);opacity:1}
+@media(hover:hover){.pfs-btn:hover{background:var(--off);opacity:1}}
+.pfs-val{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted);padding:0 .12rem;border-top:var(--b);border-bottom:var(--b);line-height:17px;min-width:22px;text-align:center;white-space:nowrap}
+.card-title-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* MOBILE LIB TOGGLE */
+#libToggleBtn{display:inline-flex;align-items:center;font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.35rem .7rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;white-space:nowrap}
+.library-panel.lib-hidden{display:none!important}
+
+/* NEW MENU DROPDOWN */
+.new-menu{position:fixed;background:var(--w);border:var(--bh);border-radius:var(--r);z-index:200;min-width:160px;flex-direction:column;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.new-menu-item{background:none;border:none;padding:.38rem .72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.8rem;text-align:left;color:var(--black);white-space:nowrap;width:100%;border-radius:0}
+@media(hover:hover){.new-menu-item:hover{background:var(--off)}}
+.new-menu-sep{height:1px;background:var(--light);margin:.2rem 0}
+
+/* TOUCH DEVICE TWEAKS */
+@media(hover:none){
+  .lib-item:not(.active) .lib-item-del{opacity:.45}
+}
+
+/* RESPONSIVE */
+@media(max-width:1020px){
+  .app{grid-template-columns:185px 1fr;padding:1rem 1rem 1.5rem}
+  .notes-panel{grid-column:1/-1;grid-row:2}
+}
+@media(max-width:820px){
+  .app{grid-template-columns:1fr;padding:1rem .85rem;gap:.85rem}
+  .library-panel,.main-panel,.notes-panel{grid-column:1!important;grid-row:auto!important}
+  .setup-grid{grid-template-columns:1fr 1fr}
+  header{flex-direction:column;align-items:flex-start;gap:.35rem;padding:.65rem .85rem .65rem}
+  .brand h1{font-size:1.5rem}
+  .header-sub,.header-sep{font-size:1.15rem}
+  .header-right{gap:.4rem}
+  #libList{display:flex;flex-direction:column;gap:.15rem}
+  textarea{min-height:100px}
+}
+@media(max-width:820px){
+  header{flex-wrap:wrap;row-gap:.5rem;padding-bottom:.85rem}
+  .header-right{flex-wrap:wrap;gap:.35rem}
+}
+@media(max-width:400px){
+  .app{padding:.75rem .65rem;gap:.7rem}
+  .setup-grid{grid-template-columns:1fr}
+  .checks-row{gap:.35rem}
+}
+
+/* NOTES TABS (optional — keep for multi-pane notes) */
+.notes-tabs{display:flex;border-bottom:var(--bh);margin-bottom:.75rem;gap:0}
+.notes-tab{font-family:'DM Sans',sans-serif;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:.4rem .85rem;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .1s}
+.notes-tab.active{color:var(--black);border-bottom-color:var(--black)}
+@media(hover:hover){.notes-tab:hover:not(.active){color:var(--dark)}}
+.notes-pane{display:none;flex-direction:column;flex:1;min-height:0;gap:.55rem}
+.notes-pane.active{display:flex}
+
+/* FIELD placeholder state */
+.field input:placeholder-shown:not(:focus){background:var(--off);border-color:var(--light)}
+
+/* ── VISION APP ─────────────────────────────────────────── */
+.vis-title-input{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;color:var(--black);background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.35rem .1rem;outline:none;width:100%;letter-spacing:.01em}
+.vis-title-input:focus{border-bottom-color:var(--black)}
+.vis-title-input::placeholder{color:var(--mid)}
+#blockList{display:flex;flex-direction:column;gap:.7rem;margin:.85rem 0 .6rem}
+.vis-block{border:var(--b);border-radius:var(--r);padding:.5rem .6rem .6rem;display:flex;flex-direction:column;gap:.35rem;background:var(--w)}
+.vis-block-head{display:flex;align-items:center;gap:.3rem}
+.vis-block-head input{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.92rem;color:var(--black);background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.22rem .1rem;outline:none;letter-spacing:.01em}
+.vis-block-head input:focus{border-bottom-color:var(--black)}
+.vis-block-head input::placeholder{color:var(--mid)}
+.vis-block-btn{width:24px;height:24px;border:var(--b);border-radius:3px;background:var(--w);color:var(--black);cursor:pointer;font-size:.8rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.vis-block-btn:active{background:var(--off)}
+@media(hover:hover){.vis-block-btn:hover{background:var(--off)}}
+.vis-block-btn:disabled{opacity:.3;cursor:default}
+.vis-block-btn.danger:active{background:var(--black);color:var(--w)}
+@media(hover:hover){.vis-block-btn.danger:hover{background:var(--black);color:var(--w)}}
+.vis-ta{font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.65;color:var(--black);background:var(--w);border:none;border-radius:var(--r);padding:.1rem;outline:none;resize:none;width:100%;min-height:2.6rem;overflow:hidden}
+.vis-ta::placeholder{color:var(--mid)}
+
+/* strengths Q&A */
+.q-block{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.15rem}
+.q-block label{font-size:.8rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.q-hint{font-size:.78rem;color:var(--muted);line-height:1.5;font-style:italic}
+.q-block textarea{font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.7;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.55rem .6rem;outline:none;resize:vertical;min-height:92px;width:100%}
+.q-block textarea:focus{outline:2px solid var(--black);outline-offset:1px}
+.q-block textarea::placeholder{color:var(--mid)}
+
+/* version list */
+.ver-item{display:flex;align-items:center;gap:.4rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0}
+.ver-item:active{background:var(--off);border-color:var(--mid)}
+@media(hover:hover){.ver-item:hover{background:var(--off);border-color:var(--mid)}}
+.ver-item.active{background:var(--black);border-color:var(--black)}
+.ver-item.active .ver-date,.ver-item.active .ver-sum{color:var(--w)}
+.ver-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:.08rem}
+.ver-date{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--black)}
+.ver-sum{font-size:.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ver-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.4;font-size:.7rem;color:var(--black);line-height:1;padding:0}
+.ver-item.active .ver-del{color:var(--w);opacity:.6}
+@media(hover:hover){.ver-del:hover{opacity:1}}
+
+/* compare */
+.cmp-sec{margin-bottom:1rem}
+.cmp-h{font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem;padding-bottom:.2rem;border-bottom:1.5px solid var(--light)}
+.cmp-row{padding:.4rem 0;border-bottom:1px solid var(--off)}
+.cmp-tag{font-family:'DM Mono',monospace;font-size:.66rem;font-weight:500;padding:.05rem .32rem;border:var(--b);border-radius:3px;margin-right:.4rem;white-space:nowrap}
+.cmp-name{font-size:.86rem;font-weight:600;color:var(--black)}
+.cmp-old{font-size:.82rem;color:var(--muted);line-height:1.5;margin-top:.3rem;text-decoration:line-through;white-space:pre-wrap}
+.cmp-new{font-size:.82rem;color:var(--black);line-height:1.5;margin-top:.3rem;white-space:pre-wrap}
+.cmp-empty{font-size:.84rem;color:var(--muted);font-style:italic;line-height:1.5}
+
+/* guide (left rail) */
+.guide-sec{margin-bottom:1rem}
+.guide-h{font-family:'Cormorant Garamond',serif;font-size:.98rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--black);margin-bottom:.35rem;padding-bottom:.2rem;border-bottom:1.5px solid var(--light)}
+.guide-sec ul{list-style:none;display:flex;flex-direction:column;gap:.3rem}
+.guide-sec li{font-size:.8rem;line-height:1.5;color:var(--dark);padding-left:.75rem;position:relative}
+.guide-sec li::before{content:'·';position:absolute;left:.1rem;color:var(--mid);font-weight:700}
+
+/* snapshot preview */
+.snap-bar{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;padding:.5rem .6rem;border:var(--bh);border-radius:var(--r);margin-bottom:.85rem;background:var(--off)}
+.snap-bar-label{font-size:.82rem;color:var(--black);flex:1;min-width:120px}
+.snap-bar-label b{font-family:'DM Mono',monospace}
+.snap-block{margin-bottom:.85rem}
+.snap-block-h{font-weight:600;font-size:.92rem;color:var(--black);margin-bottom:.25rem}
+.snap-block-t{font-size:.88rem;line-height:1.65;color:var(--dark);white-space:pre-wrap}
+.snap-title{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;color:var(--black);margin-bottom:.7rem}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Vision</h1>
+    <span class="header-sep" id="headerSep">—</span>
+    <span class="header-sub" id="headerSub"></span>
+  </div>
+  <div class="header-right">
+    <span id="statusMsg"></span>
+    <div class="sync-group">
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / upload to cloud (Gist)">↑</button>
+      <button class="btn-sync" onclick="openImportModal()" title="import from JSON file">⇩</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="download data from cloud (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="enable automatic sync (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="Gist sync settings">⚙</button>
+    </div>
+    <div class="fs-ctrl" title="font size">
+      <button class="fs-btn" onclick="changeFs(-1)" title="decrease font">−</button>
+      <span class="fs-val" id="fsVal">100%</span>
+      <button class="fs-btn" onclick="changeFs(1)" title="increase font">+</button>
+    </div>
+    <button id="darkToggle" onclick="toggleDark()" title="toggle dark/light mode">☀</button>
+    <button id="libToggleBtn" onclick="toggleLibPanel()" title="library">☰</button>
+    <button id="undoBtn" onclick="undo()" disabled title="undo (Ctrl+Z)">↩</button>
+    <button id="redoBtn" onclick="redo()" disabled title="redo (Ctrl+Y)">↪</button>
+    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automatically save changes">
+      <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
+      ⟳
+    </label>
+    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="save changes">✓</button>
+    <div style="position:relative;display:inline-flex">
+      <button class="btn-sm" onclick="toggleNewMenu(event)" title="new / save as">+</button>
+      <div id="newMenu" class="new-menu" style="display:none">
+        <button class="new-menu-item" onclick="newSession();closeNewMenu()">new vision</button>
+        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">+ duplicate vision</button>
+      </div>
+    </div>
+    <button class="btn-sm danger" onclick="clearStorage()" title="delete">✕</button>
+  </div>
+</header>
+
+<div class="app">
+
+<div class="library-panel">
+  <div class="lib-card" id="panel-library">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-library">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-library')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Guide</span></div>
+    <div style="overflow-y:auto;flex:1;min-height:0">
+      <div class="guide-sec">
+        <div class="guide-h">Why a vision</div>
+        <ul>
+          <li>It lets you see meaning and feel you can influence your life (agency).</li>
+          <li>Lower the ego, be a healthy donor — focus on sense, not recognition.</li>
+          <li>Problems give life meaning. Don't give up easily — stay on the bus long enough.</li>
+          <li>The universe doesn't care, so wanting to be just a little bit better is fully OK.</li>
+        </ul>
+      </div>
+      <div class="guide-sec">
+        <div class="guide-h">How to build it</div>
+        <ul>
+          <li>First, want the change. Then ask "how?" top→bottom and "why?" bottom→top.</li>
+          <li>Blend the Ikigai overlap: good at · love · the world needs · feeds you.</li>
+          <li>Describe the journey, not just the destination — real life is in the moment.</li>
+          <li>Keep the upper layers stable; stay creative in the lower layers.</li>
+          <li>Put it on paper. Start simple, then update it constantly for the better.</li>
+          <li>Strive for overlap, emotion and visualization. Use it to decide and to move.</li>
+        </ul>
+      </div>
+      <div class="guide-sec">
+        <div class="guide-h">From chaos to meaning</div>
+        <ul>
+          <li>Know your why and the how comes easily. Adaptability is the key skill today.</li>
+          <li>Money, status and recognition don't bring lasting contentment.</li>
+          <li>You can't fake meaning and nobody hands it to you — keep searching yourself.</li>
+          <li>Questions matter more than answers — keep returning to your Ikigai.</li>
+          <li>First find your strengths, then use them meaningfully → flow → better results.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="main-panel">
+  <div class="card" id="panel-main">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-main">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-main')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text" id="mainTitle">Vision</span></div>
+
+    <div id="mainEditor">
+      <div class="notes-tabs">
+        <button class="notes-tab active" id="mtab-vision" onclick="switchMainTab('vision')">Vision</button>
+        <button class="notes-tab" id="mtab-strengths" onclick="switchMainTab('strengths')">Strengths</button>
+      </div>
+
+      <!-- VISION TAB -->
+      <div class="notes-pane active" id="mpane-vision">
+        <input type="text" class="vis-title-input vis-edit" id="visTitle" placeholder="Title — e.g. How would my ideal self act?" oninput="onTitleInput()">
+        <div id="blockList"></div>
+        <button class="btn-lib" onclick="addBlock()">+ add block</button>
+      </div>
+
+      <!-- STRENGTHS TAB -->
+      <div class="notes-pane" id="mpane-strengths">
+        <div class="q-block">
+          <label>1 · Strengths &amp; unique skills</label>
+          <p class="q-hint">What are your strengths and unique skills? And which strengths do the people around you appreciate in you?</p>
+          <textarea class="vis-edit" id="q1" placeholder="Write here…" oninput="onStrengthInput()"></textarea>
+        </div>
+        <div class="q-block">
+          <label>2 · Meaningful use</label>
+          <p class="q-hint">How can you use your strengths for something meaningful? How can you make the world a slightly better place? And what could be the main mission of your work?</p>
+          <textarea class="vis-edit" id="q2" placeholder="Write here…" oninput="onStrengthInput()"></textarea>
+        </div>
+        <div class="q-block">
+          <label>3 · Flow activities</label>
+          <p class="q-hint">Which activities have historically energized you the most? During which activities do you get into a state of flow — absorbed so much you lose track of time?</p>
+          <textarea class="vis-edit" id="q3" placeholder="Write here…" oninput="onStrengthInput()"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- SNAPSHOT PREVIEW (read-only, shown when viewing a version) -->
+    <div id="snapPreview" style="display:none"></div>
+  </div>
+</div>
+
+<div class="notes-panel">
+  <div class="notes-card" id="panel-notes">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-notes">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-notes')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Versions</span></div>
+    <div class="notes-tabs">
+      <button class="notes-tab active" id="ntab-library" onclick="switchNotesTab('library')">Versions</button>
+      <button class="notes-tab" id="ntab-compare" onclick="switchNotesTab('compare')">Compare</button>
+    </div>
+
+    <!-- VERSIONS / VISIONS -->
+    <div class="notes-pane active" id="npane-library" style="overflow-y:auto">
+      <div class="lib-cat-header">VISIONS</div>
+      <div id="visionList"></div>
+      <button class="btn-lib" onclick="newVision()" style="margin:.4rem 0 .2rem">+ new vision</button>
+      <div class="lib-cat-header">VERSIONS</div>
+      <div id="versionList"></div>
+      <button class="btn-lib primary" onclick="saveVersion()" style="margin-top:.4rem">📸 save version</button>
+    </div>
+
+    <!-- COMPARE -->
+    <div class="notes-pane" id="npane-compare" style="overflow-y:auto">
+      <div id="compareOut"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- Export modal -->
+<div class="modal-bg" id="exportModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Export</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Visions</p>
+    <div class="modal-list" id="exportList"></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Saved versions</p>
+    <div class="modal-list" id="exportArchList"></div>
+    <div style="margin-top:.8rem">
+      <label style="font-size:.78rem;color:var(--muted)">File name</label>
+      <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
+    </div>
+    <div class="modal-row" style="margin-top:.5rem">
+      <button class="modal-btn" onclick="selectAllExport()">select all</button>
+      <button class="modal-btn" onclick="closeModal('exportModal')">cancel</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ upload to Gist</button>
+      <button class="modal-btn primary" onclick="doExport()">download JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export copy fallback modal -->
+<div class="modal-bg" id="exportCopyModal">
+  <div class="modal" style="max-width:520px">
+    <h2>Copy JSON</h2>
+    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Download failed. Copy the content below and save it as a .json file.</p>
+    <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
+    <div class="modal-row">
+      <button class="modal-btn primary" onclick="copyExportText()">📋 copy</button>
+      <button class="modal-btn" onclick="closeModal('exportCopyModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="modal-bg" id="importModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Import</h2>
+    <p class="jb-import-hide">Select a JSON file exported from this app.</p>
+    <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
+    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">or paste JSON content:</p>
+    <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"items":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
+    <div id="importItemSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Items</p>
+      <div class="modal-list" id="importList"></div>
+    </div>
+    <div class="modal-row" id="importActions" style="display:none">
+      <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
+      <button class="modal-btn primary" onclick="doImport()">import selected</button>
+    </div>
+    <div class="modal-row" id="importCancel">
+      <button class="modal-btn" onclick="closeModal('importModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STORAGE KEYS ──────────────────────────────────────────────────────────
+const SESSION_KEY = 'vision-v1-session';
+const LIBRARY_KEY = 'vision-v1-library';
+const ARCHIVE_KEY = 'vision-v1-archive';
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let library = [], activeLibId = null;
+let archive = [];
+let undoStack = [], redoStack = [], savedSnapshot = null;
+let autoSave = false;
+const UNDO_MAX = 40;
+// ── VISION STATE (declared before init() runs to avoid TDZ) ──
+let blocks = [];                 // live blocks of the active vision: [{id, heading, text}]
+let previewId = null;            // id of the snapshot currently previewed (null = editing)
+let _focusSnap = null, _pushedThisFocus = false;   // undo coalescing across a typing session
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function parseNum(v) { return parseFloat(String(v).replace(',','.')); }
+function normDec(v) { return (v || '').toString().replace(',','.'); }
+
+document.addEventListener('input', function(e) {
+  const inp = e.target; if (inp.inputMode !== 'decimal') return;
+  const v = inp.value; if (!v.includes(',')) return;
+  const s = inp.selectionStart; inp.value = v.replace(',','.'); inp.setSelectionRange(s,s);
+}, true);
+
+// ── STATUS / SAVE ─────────────────────────────────────────────────────────
+let saveT;
+function showStatusMsg(msg, duration=2200) {
+  const e = el('statusMsg');
+  clearTimeout(e._to); clearTimeout(e._hide);
+  e.style.display = 'inline'; e.textContent = msg;
+  requestAnimationFrame(() => { e.style.opacity = '1'; });
+  e._to = setTimeout(() => {
+    e.style.opacity = '0';
+    e._hide = setTimeout(() => { e.style.display = 'none'; }, 400);
+  }, duration);
+}
+function showSave(msg='✓ saved') { showStatusMsg(msg, 2200); }
+function schedSave() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    // APP LOGIC: if the app continuously saves the edited record into a synced collection
+    // (like todo-app days), flush it here and call window.autoSyncOnSave()
+    saveSession(); showSave();
+  }, 300);
+}
+
+// ── LIBRARY / ARCHIVE ─────────────────────────────────────────────────────
+function loadLibrary() { try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch(e) { library = []; } }
+function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
+function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch(e) { archive = []; } }
+function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
+
+// ── SESSION ────────────────────────────────────────────────────────────────
+// APP LOGIC: applySessionData(d) must COPY the items — items = JSON.parse(JSON.stringify(d.items)) —
+// never share a reference with the stored record, otherwise change detection (mt) for auto-sync breaks.
+function sessionSnap() {
+  return JSON.stringify({ data: getSessionData(), activeLibId });
+}
+function saveSession() {
+  const data = getSessionData();
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ data, activeLibId })); } catch(e) {}
+  // flush the live vision into its library entry (LWW) — stamp mt ONLY on a real content change
+  if (activeLibId != null) {
+    const e = library.find(x => String(x.id) === String(activeLibId));
+    if (e && JSON.stringify(e.data) !== JSON.stringify(data)) {
+      e.data = JSON.parse(JSON.stringify(data));
+      e.name = (data.title || '').trim() || 'Untitled vision';
+      e.mt = Date.now();
+      saveLibrary();            // wrapped → autoSyncOnSave (tombstones + push)
+      renderVisions();          // keep the vision-list label in sync
+    }
+  }
+}
+function loadSession() {
+  let sess = null;
+  try { sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) {}
+  if (!library.length) seedDefaultVision();         // first run → seed one vision
+  // choose the active vision
+  if (sess && sess.activeLibId != null && library.some(e => String(e.id) === String(sess.activeLibId))) {
+    activeLibId = sess.activeLibId;
+  } else {
+    activeLibId = library[0].id;
+  }
+  const entry = library.find(e => String(e.id) === String(activeLibId));
+  applySessionData(entry ? entry.data : {});
+  renderLibrary();   // re-render after a possible first-run seed (init's earlier render saw an empty library)
+  return !!sess;     // true = actually restored a prior session (not a fresh seed)
+}
+function markSaved() { savedSnapshot = sessionSnap(); }
+function isDirty() {
+  if (!activeLibId || !savedSnapshot) return false;
+  return sessionSnap() !== savedSnapshot;
+}
+
+// ── LIBRARY OPERATIONS ────────────────────────────────────────────────────
+function saveToLibrary() {
+  // "duplicate vision" — fork the current vision into a new entry
+  const cur = getSessionData();
+  const now = Date.now();
+  const entry = { id: now, name: ((cur.title || '').trim() || 'Untitled vision') + ' (copy)', mt: now,
+                  data: JSON.parse(JSON.stringify(cur)) };
+  library.push(entry); activeLibId = now;
+  undoStack = []; redoStack = []; updateUndoBtn();
+  saveLibrary(); applySessionData(entry.data); markSaved();
+  renderLibrary(); saveSession();
+  showSave('✓ duplicated as a new vision');
+}
+function updateLibraryEntry() {
+  // explicit flush of the active vision (header ✓) — auto-flush already covers this
+  saveSession(); markSaved(); renderLibrary();
+  showSave('✓ changes saved');
+}
+function renderLibrary() {
+  renderVisions();
+  renderVersions();
+  const hSave = el('headerSaveBtn'), hNew = el('headerSaveNewBtn');
+  if (hSave) hSave.style.display = 'none';
+  if (hNew) hNew.textContent = '+ duplicate vision';
+}
+async function newSession() {
+  newVision();
+}
+
+// ── AUTO-SAVE ─────────────────────────────────────────────────────────────
+function initAutoSave() {
+  try { autoSave = !!localStorage.getItem('vision-autosave'); } catch(e) {}
+  const chk = el('autoSaveChk'); if (chk) chk.checked = autoSave;
+}
+function toggleAutoSave(on) {
+  autoSave = on;
+  try { if (on) localStorage.setItem('vision-autosave','1'); else localStorage.removeItem('vision-autosave'); } catch(e) {}
+  if (on && activeLibId && isDirty()) updateLibraryEntry();
+}
+
+// ── UNDO ──────────────────────────────────────────────────────────────────
+function pushUndo() {
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = [];
+  updateUndoBtn();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(sessionSnap());
+  const prev = JSON.parse(undoStack.pop());
+  if (prev.activeLibId != null && library.some(e => String(e.id) === String(prev.activeLibId))) activeLibId = prev.activeLibId;
+  applySessionData(prev.data || {});
+  schedSave(); updateUndoBtn(); renderLibrary();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  const next = JSON.parse(redoStack.pop());
+  if (next.activeLibId != null && library.some(e => String(e.id) === String(next.activeLibId))) activeLibId = next.activeLibId;
+  applySessionData(next.data || {});
+  schedSave(); updateUndoBtn(); renderLibrary();
+}
+function updateUndoBtn() {
+  const u = el('undoBtn');
+  if (u) { u.disabled = undoStack.length === 0; u.title = undoStack.length ? 'undo '+undoStack.length+' (Ctrl+Z)' : 'nothing to undo'; }
+  const r = el('redoBtn');
+  if (r) { r.disabled = redoStack.length === 0; r.title = redoStack.length ? 'redo '+redoStack.length+' (Ctrl+Y)' : 'nothing to redo'; }
+}
+
+// ── CLEAR STORAGE ─────────────────────────────────────────────────────────
+function clearStorage() { el('clearStorageModal').classList.add('open'); }
+function toggleAllClear() {
+  const boxes = ['clr-session','clr-library','clr-archive','clr-appearance'].map(id => el(id));
+  const anyUnchecked = boxes.some(b => !b.checked);
+  boxes.forEach(b => b.checked = anyUnchecked);
+}
+async function doSelectiveClear() {
+  const toDelete = [];
+  if (el('clr-session').checked)    toDelete.push('vision-v1-session');
+  if (el('clr-library').checked)    toDelete.push('vision-v1-library');
+  if (el('clr-archive').checked)    toDelete.push('vision-v1-archive');
+  if (el('clr-appearance').checked) toDelete.push('vision-fs','vision-dark','vision-panel-fs');
+  // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
+  // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
+  if (el('clr-library').checked || el('clr-archive').checked) {
+    toDelete.push('vision-syncknown');
+    try { sessionStorage.removeItem('vision-cloud-checked'); } catch(e) {}
+  }
+  if (!toDelete.length) { closeModal('clearStorageModal'); return; }
+  closeModal('clearStorageModal');
+  if (!await customConfirm('Really delete the selected data?','delete')) return;
+  try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
+  location.reload();
+}
+
+// ── FONT SIZE ─────────────────────────────────────────────────────────────
+const FS_STEPS = [0.75,0.85,0.9,1,1.1,1.2,1.35,1.5,1.7,2.0];
+let fsIdx = 3;
+function applyFs() {
+  const v = FS_STEPS[fsIdx];
+  document.documentElement.style.setProperty('--fs', v);
+  el('fsVal').textContent = Math.round(v*100)+'%';
+  try { localStorage.setItem('vision-fs', fsIdx); } catch(e) {}
+}
+function changeFs(dir) {
+  fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, fsIdx+dir));
+  applyFs();
+}
+function initFs() {
+  try { const s = localStorage.getItem('vision-fs'); if (s !== null) { const p = parseInt(s); if (!isNaN(p)) fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, p)); } } catch(e) {}
+  applyFs();
+}
+
+// ── DARK MODE ─────────────────────────────────────────────────────────────
+function toggleDark() {
+  const on = document.documentElement.classList.toggle('dark');
+  el('darkToggle').textContent = on ? '☾' : '☀';
+  try { localStorage.setItem('vision-dark', on ? '1' : '0'); } catch(e) {}
+}
+function initDark() {
+  try { if (localStorage.getItem('vision-dark') === '1') { document.documentElement.classList.add('dark'); el('darkToggle').textContent = '☾'; } } catch(e) {}
+}
+
+// ── PER-PANEL FONT SIZE ───────────────────────────────────────────────────
+const PFS_STEPS = [0.7,0.8,0.9,1.0,1.1,1.2,1.35,1.5,1.7,2.0];
+const PFS_DEFAULT = 3;
+const PFS_ALL = ['panel-library','panel-main','panel-notes'];
+let panelFs = {};
+
+function loadPanelFs() {
+  try { const s = localStorage.getItem('vision-panel-fs'); if (s) panelFs = JSON.parse(s); } catch(e) {}
+  PFS_ALL.forEach(pid => {
+    if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+    applyPanelFs(pid);
+  });
+}
+function savePanelFs() { try { localStorage.setItem('vision-panel-fs', JSON.stringify(panelFs)); } catch(e) {} }
+function isPanelExpanded(pid) { return expandedPanel && expandedPanel === el(pid); }
+function applyPanelFs(pid) {
+  const panel = el(pid); if (!panel) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  panel.style.zoom = PFS_STEPS[idx];
+  updatePfsVal(pid);
+}
+function updatePfsVal(pid) {
+  const valEl = el('pfs-'+pid); if (!valEl) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  const ni = (panelFs[pid] || {}).n ?? PFS_DEFAULT;
+  const ei = (panelFs[pid] || {}).e ?? PFS_DEFAULT;
+  const marker = isPanelExpanded(pid) && ni !== ei ? '*' : '';
+  valEl.textContent = Math.round(PFS_STEPS[idx]*100)+'%'+marker;
+  valEl.title = isPanelExpanded(pid)
+    ? 'size in expanded view (normal: '+Math.round(PFS_STEPS[ni]*100)+'%)'
+    : 'size in normal view (expanded: '+Math.round(PFS_STEPS[ei]*100)+'%)';
+}
+function changePanelFs(pid, dir) {
+  if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  panelFs[pid][mode] = Math.max(0, Math.min(PFS_STEPS.length-1, (panelFs[pid][mode] ?? PFS_DEFAULT)+dir));
+  applyPanelFs(pid); savePanelFs();
+}
+
+// ── EXPAND PANEL ──────────────────────────────────────────────────────────
+let expandedPanel = null;
+function toggleExpand(id) {
+  const panel = el(id); if (!panel) return;
+  if (expandedPanel && expandedPanel !== panel) collapsePanel(expandedPanel);
+  if (panel.classList.contains('panel-expanded')) collapsePanel(panel);
+  else expandPanel(panel);
+}
+function expandPanel(panel) {
+  panel.classList.add('panel-expanded');
+  expandedPanel = panel;
+  applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
+  if (!panel.querySelector('.expand-esc')) {
+    const hint = document.createElement('span');
+    hint.className = 'expand-esc'; hint.textContent = 'Esc';
+    btn && btn.parentNode.appendChild(hint);
+  }
+  document.addEventListener('keydown', onExpandEsc);
+}
+function collapsePanel(panel) {
+  panel.classList.remove('panel-expanded');
+  expandedPanel = null;
+  applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+  const hint = panel.querySelector('.expand-esc'); if (hint) hint.remove();
+  document.removeEventListener('keydown', onExpandEsc);
+}
+function onExpandEsc(e) { if (e.key === 'Escape' && expandedPanel) collapsePanel(expandedPanel); }
+
+// ── CUSTOM CONFIRM / ALERT ────────────────────────────────────────────────
+let _confirmResolve = null;
+function customConfirm(msg, okLabel='potvrdit') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmCancelBtn').style.display = '';
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); _confirmResolve = null; resolve(val); };
+  });
+}
+function customAlert(msg, okLabel='ok') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmCancelBtn').style.display = 'none';
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); el('confirmCancelBtn').style.display = ''; _confirmResolve = null; resolve(val); };
+  });
+}
+
+// ── MODALS ────────────────────────────────────────────────────────────────
+function closeModal(id) { el(id).classList.remove('open'); }
+document.addEventListener('click', e => {
+  closeNewMenu();
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal'].forEach(id => {
+    const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
+  });
+  const cm = el('confirmModal');
+  if (cm && cm.classList.contains('open') && e.target === cm && _confirmResolve) _confirmResolve(false);
+});
+
+// ── LIBRARY PANEL TOGGLE ──────────────────────────────────────────────────
+function toggleLibPanel() {
+  const lp = document.querySelector('.library-panel'); if (!lp) return;
+  const hidden = lp.classList.toggle('lib-hidden');
+  el('libToggleBtn').textContent = hidden ? '☰' : '«';
+  updateAppGrid();
+}
+function updateAppGrid() {
+  const lp = document.querySelector('.library-panel');
+  const app = document.querySelector('.app');
+  if (!app || !lp) return;
+  const hidden = lp.classList.contains('lib-hidden');
+  const w = window.innerWidth;
+  if (w <= 820) { app.style.gridTemplateColumns = ''; }
+  else if (w <= 1020) { app.style.gridTemplateColumns = hidden ? '0 1fr' : '185px 1fr'; }
+  else { app.style.gridTemplateColumns = hidden ? '0 1fr 440px' : '210px 1fr 440px'; }
+}
+
+// ── NEW MENU ──────────────────────────────────────────────────────────────
+function toggleNewMenu(e) {
+  e.stopPropagation();
+  const m = el('newMenu');
+  if (m.style.display === 'flex') { m.style.display = 'none'; return; }
+  m.style.display = 'flex';
+  const btn = e.currentTarget;
+  const br = btn.getBoundingClientRect();
+  m.style.top = (br.bottom+4+window.scrollY)+'px';
+  m.style.left = ''; m.style.right = '';
+  requestAnimationFrame(() => {
+    const mw = m.offsetWidth, vw = window.innerWidth;
+    let left = br.right - mw;
+    if (left < 8) left = 8;
+    if (left+mw > vw-8) left = vw-mw-8;
+    m.style.left = left+'px';
+  });
+}
+function closeNewMenu() { const m = el('newMenu'); if (m) m.style.display = 'none'; }
+
+// ── EXPORT ────────────────────────────────────────────────────────────────
+let exportSelected = new Set(), exportArchSelected = new Set();
+function openExportModal() {
+  exportSelected = new Set(library.map(e => e.id));
+  exportArchSelected = new Set(archive.map(e => e.id));
+  el('exportList').innerHTML = library.length
+    ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
+  el('exportArchList').innerHTML = archive.length
+    ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
+  updateExportFilename();
+  el('exportModal').classList.add('open');
+}
+function updateExportFilename() {
+  const d = new Date();
+  const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  el('exportFilename').value = 'APP_'+yymmdd+'_I'+exportSelected.size+'A'+exportArchSelected.size+'.json';
+}
+function toggleExportSel(id, on) {
+  on ? exportSelected.add(id) : exportSelected.delete(id);
+  el('ei-'+id)?.classList.toggle('sel', on);
+  updateExportFilename();
+}
+function toggleExportArchSel(id, on) {
+  on ? exportArchSelected.add(id) : exportArchSelected.delete(id);
+  el('eai-'+id)?.classList.toggle('sel', on);
+  updateExportFilename();
+}
+function selectAllExport() {
+  library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
+  archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
+  updateExportFilename();
+}
+function doExport() {
+  const items = library.filter(e => exportSelected.has(e.id));
+  const archItems = archive.filter(e => exportArchSelected.has(e.id));
+  if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
+  const json = JSON.stringify({v:1, items, archive: archItems}, null, 2);
+  const rawName = (el('exportFilename').value.trim() || 'export');
+  const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
+  let downloaded = false;
+  try {
+    const dataUri = 'data:application/json;charset=utf-8,'+encodeURIComponent(json);
+    const a = document.createElement('a'); a.href = dataUri; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    downloaded = true;
+  } catch(e) { downloaded = false; }
+  closeModal('exportModal');
+  el('exportCopyText').value = json;
+  el('exportCopyNote').textContent = downloaded
+    ? 'The file should be downloaded as "'+fname+'". If not, copy the content below.'
+    : 'Download failed — copy the content below and save it as a .json file.';
+  el('exportCopyModal').classList.add('open');
+  showSave('↑ exported');
+}
+function copyExportText() {
+  const ta = el('exportCopyText');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(ta.value).then(() => showSave('✓ copied')); }
+    else { ta.select(); document.execCommand('copy'); showSave('✓ copied'); }
+  } catch(e) { ta.select(); }
+}
+
+// ── IMPORT ────────────────────────────────────────────────────────────────
+let importData = [], importSelected = new Set(), importArchiveData = [];
+function openImportModal() {
+  importData = []; importSelected = new Set();
+  el('importModal').classList.remove('from-cloud');
+  el('importModal').querySelector('h2').textContent = 'Import';
+  el('importFile').value = ''; el('importPaste').value = '';
+  el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
+  el('importActions').style.display = 'none';
+  el('importCancel').style.display = 'flex';
+  el('importModal').classList.add('open');
+}
+function parseImportJson(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const items = parsed.items || parsed.teas || [];
+    if (!items.length) throw new Error('No items in the file');
+    importData = items;
+    importArchiveData = parsed.archive || [];   // saved versions travel with the import
+    importSelected = new Set(items.map(x => x.id));
+    el('importList').innerHTML = items.map(x => `
+      <label class="modal-item sel" id="ii-${x.id}">
+        <input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />
+        ${esc(x.name||String(x.id))}
+      </label>`).join('');
+    el('importItemSection').style.display = 'block';
+    el('importActions').style.display = 'flex';
+    el('importCancel').style.display = 'none';
+  } catch(err) {
+    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Error: '+err.message+'</p>';
+    el('importItemSection').style.display = 'block';
+  }
+}
+function previewImportPaste() { const text = el('importPaste').value.trim(); if (!text) return; parseImportJson(text); }
+function previewImport() {
+  const file = el('importFile').files[0]; if (!file) return;
+  el('importPaste').value = '';
+  const r = new FileReader(); r.onload = ev => parseImportJson(ev.target.result); r.readAsText(file);
+}
+function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
+function doImport() {
+  const toAdd = importData.filter(x => importSelected.has(x.id));
+  if (!toAdd.length) { customAlert('Nothing is selected.'); return; }
+  // dedup by id — update an existing item in place, do not duplicate; mt = now (import wins on sync)
+  let added = 0, updated = 0;
+  toAdd.forEach(t => {
+    t.mt = Date.now();
+    const i = library.findIndex(e => String(e.id) === String(t.id));
+    if (i >= 0) { library[i] = t; updated++; } else { library.push(t); added++; }
+  });
+  saveLibrary();
+  // saved versions (archive) — append-only union by id
+  let arcAdded = 0;
+  (importArchiveData || []).forEach(a => {
+    if (a && a.id != null && !archive.some(x => String(x.id) === String(a.id))) { archive.push(a); arcAdded++; }
+  });
+  if (arcAdded) saveArchive();
+  // if the active vision was overwritten by the import, refresh the live editor buffer
+  const ae = library.find(e => String(e.id) === String(activeLibId));
+  if (ae) applySessionData(ae.data);
+  exitPreview();
+  renderLibrary();
+  closeModal('importModal');
+  showSave('↓ imported: ' + (added + updated) + ' vision' + ((added+updated)!==1?'s':'') + (updated ? ' (' + updated + ' updated)' : '') + (arcAdded ? ' + ' + arcAdded + ' versions' : ''));
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+function init() {
+  initAutoSave();
+  initFs();
+  initDark();
+  loadPanelFs();
+  loadLibrary(); renderLibrary();
+  loadArchive();
+  const restored = loadSession();
+  if (activeLibId) markSaved();
+  updateUndoBtn();
+  if (restored) showSave('↓ restored');
+  renderCompare(null);
+  // undo coalescing: snapshot the pre-edit state on focus, push it on the first keystroke of that session
+  document.addEventListener('focusin', e => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('vis-edit')) { _focusSnap = sessionSnap(); _pushedThisFocus = false; }
+  });
+}
+init();
+window.addEventListener('resize', updateAppGrid);
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
+  }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); undo(); }
+  }
+});
+
+// ── APP LOGIC: VISION DATA MODEL + RENDERING ───────────────────────────────
+function uid() { return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function defaultVisionData() {
+  return {
+    title: 'How would my ideal self act in my personal life?',
+    strengths: { q1:'', q2:'', q3:'' },
+    blocks: [
+      { id:uid(), heading:'Where am I going?', text:'Leave the world a bit better —\nWithout destroying myself —\nBy using my strengths and values —' },
+      { id:uid(), heading:'Ikigai overlap',    text:'What I am good at:\nWhat I love:\nWhat the world needs:\nWhat feeds me (money):' },
+      { id:uid(), heading:'Project',           text:'' },
+      { id:uid(), heading:'My values',         text:'' },
+      { id:uid(), heading:'My strengths',      text:'' },
+      { id:uid(), heading:'Mantras',           text:'' }
+    ]
+  };
+}
+function seedDefaultVision() {
+  // stable id → the seed merges into one across devices; mt:0 baseline never overwrites real cloud data
+  const entry = { id:'default-vision', name:'Personal vision', mt:0, data:defaultVisionData() };
+  library.push(entry); activeLibId = 'default-vision'; saveLibrary();
+}
+
+// ── session data <-> form ──
+function getSessionData() {
+  return {
+    title: el('visTitle') ? el('visTitle').value : '',
+    strengths: {
+      q1: el('q1') ? el('q1').value : '',
+      q2: el('q2') ? el('q2').value : '',
+      q3: el('q3') ? el('q3').value : ''
+    },
+    blocks: blocks.map(b => ({ id:b.id, heading:b.heading, text:b.text }))
+  };
+}
+function applySessionData(d) {
+  d = d || {};
+  // deep copy — the live buffer must never share a reference with the stored record (sync change-detection)
+  blocks = (d.blocks || []).map(b => ({ id:b.id || uid(), heading:b.heading || '', text:b.text || '' }));
+  if (el('visTitle')) el('visTitle').value = d.title || '';
+  const s = d.strengths || {};
+  if (el('q1')) el('q1').value = s.q1 || '';
+  if (el('q2')) el('q2').value = s.q2 || '';
+  if (el('q3')) el('q3').value = s.q3 || '';
+  renderBlocks();
+  updateMainTitle();
+}
+
+// ── block editor ──
+function renderBlocks() {
+  const wrap = el('blockList'); if (!wrap) return;
+  if (!blocks.length) { wrap.innerHTML = '<p class="lib-empty">No blocks yet — click "add block" to start.</p>'; return; }
+  wrap.innerHTML = blocks.map((b,i) => `
+    <div class="vis-block">
+      <div class="vis-block-head">
+        <input type="text" class="vis-edit" value="${esc(b.heading)}" placeholder="Heading…" oninput="onBlockHead(${i},this.value)">
+        <button class="vis-block-btn" onclick="moveBlock(${i},-1)" ${i===0?'disabled':''} title="move up">↑</button>
+        <button class="vis-block-btn" onclick="moveBlock(${i},1)" ${i===blocks.length-1?'disabled':''} title="move down">↓</button>
+        <button class="vis-block-btn danger" onclick="delBlock(${i})" title="delete block">✕</button>
+      </div>
+      <textarea class="vis-ta vis-edit" placeholder="Write here…" oninput="onBlockText(${i},this.value);autoGrow(this)">${esc(b.text)}</textarea>
+    </div>`).join('');
+  wrap.querySelectorAll('textarea').forEach(autoGrow);
+}
+function autoGrow(ta) {
+  if (!ta || ta.offsetParent === null) return;   // hidden → scrollHeight would be 0
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+function coalesceUndo() {
+  if (_pushedThisFocus) return;
+  if (_focusSnap) { undoStack.push(_focusSnap); if (undoStack.length > UNDO_MAX) undoStack.shift(); }
+  redoStack = []; updateUndoBtn(); _pushedThisFocus = true;
+}
+function onTitleInput()    { coalesceUndo(); updateMainTitle(); schedSave(); }
+function onStrengthInput() { coalesceUndo(); schedSave(); }
+function onBlockHead(i,v)  { coalesceUndo(); if (blocks[i]) blocks[i].heading = v; schedSave(); }
+function onBlockText(i,v)  { coalesceUndo(); if (blocks[i]) blocks[i].text = v; schedSave(); }
+function addBlock() {
+  pushUndo();
+  blocks.push({ id:uid(), heading:'', text:'' });
+  renderBlocks(); schedSave();
+  const items = el('blockList').querySelectorAll('.vis-block');
+  const last = items[items.length-1];
+  if (last) { const h = last.querySelector('input'); if (h) h.focus(); }
+}
+function moveBlock(i,dir) {
+  const j = i + dir; if (j < 0 || j >= blocks.length) return;
+  pushUndo();
+  const t = blocks[i]; blocks[i] = blocks[j]; blocks[j] = t;
+  renderBlocks(); schedSave();
+}
+async function delBlock(i) {
+  if (!blocks[i]) return;
+  if ((blocks[i].heading || blocks[i].text) && !await customConfirm('Delete this block?','delete')) return;
+  pushUndo();
+  blocks.splice(i,1);
+  renderBlocks(); schedSave();
+}
+function updateMainTitle() {
+  const t = el('mainTitle'); if (!t) return;
+  const v = el('visTitle') ? el('visTitle').value.trim() : '';
+  t.textContent = v || 'Vision';
+}
+
+// ── tabs ──
+function switchMainTab(t) {
+  ['vision','strengths'].forEach(x => {
+    const tab = el('mtab-'+x), pane = el('mpane-'+x);
+    if (tab) tab.classList.toggle('active', x===t);
+    if (pane) pane.classList.toggle('active', x===t);
+  });
+  if (t === 'vision') { const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow); }
+}
+function switchNotesTab(t) {
+  ['library','compare'].forEach(x => {
+    const tab = el('ntab-'+x), pane = el('npane-'+x);
+    if (tab) tab.classList.toggle('active', x===t);
+    if (pane) pane.classList.toggle('active', x===t);
+  });
+}
+
+// ── visions list ──
+function renderVisions() {
+  const wrap = el('visionList'); if (!wrap) return;
+  if (!library.length) { wrap.innerHTML = '<p class="lib-empty">No visions.</p>'; return; }
+  wrap.innerHTML = library.map(e => {
+    const active = String(e.id) === String(activeLibId);
+    const nm = e.name || (e.data && e.data.title) || 'Untitled vision';
+    return `<div class="lib-item${active?' active':''}" onclick="selectVision('${e.id}')">
+      <span class="lib-item-name">${esc(nm)}</span>
+      <button class="lib-item-del" title="delete vision" onclick="event.stopPropagation();deleteVision('${e.id}')"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8"/></svg></button>
+    </div>`;
+  }).join('');
+}
+function selectVision(id) {
+  if (String(id) === String(activeLibId)) { exitPreview(); return; }
+  saveSession();                                   // flush current vision first
+  exitPreview();
+  const e = library.find(x => String(x.id) === String(id)); if (!e) return;
+  activeLibId = e.id;
+  undoStack = []; redoStack = []; updateUndoBtn();
+  applySessionData(e.data); markSaved();
+  renderLibrary(); switchMainTab('vision'); saveSession();
+}
+function newVision() {
+  saveSession();
+  const now = Date.now();
+  const entry = { id:now, name:'New vision', mt:now, data:defaultVisionData() };
+  library.push(entry); activeLibId = now;
+  undoStack = []; redoStack = []; updateUndoBtn();
+  exitPreview();
+  saveLibrary(); applySessionData(entry.data); markSaved();
+  renderLibrary(); switchMainTab('vision'); saveSession();
+  showSave('✓ new vision');
+}
+async function deleteVision(id) {
+  if (library.length <= 1) { customAlert('Keep at least one vision — create another first.'); return; }
+  const e = library.find(x => String(x.id) === String(id)); if (!e) return;
+  if (!await customConfirm('Delete this vision? Its saved versions stay in history.','delete')) return;
+  library = library.filter(x => String(x.id) !== String(id));
+  saveLibrary();                                   // wrapped → tombstone propagates the deletion
+  if (String(activeLibId) === String(id)) {
+    activeLibId = library[0].id;
+    undoStack = []; redoStack = []; updateUndoBtn();
+    exitPreview(); applySessionData(library[0].data); markSaved();
+  }
+  renderLibrary(); saveSession();
+  showSave('✕ vision deleted');
+}
+
+// ── versions (snapshots) ──
+function versionsForActive() {
+  return archive.filter(s => String(s.srcId) === String(activeLibId)).sort((a,b) => (b.ts||0) - (a.ts||0));
+}
+function verSummary(s) {
+  const d = s.data || {};
+  const nb = (d.blocks || []).filter(b => b.heading || b.text).length;
+  const ns = ['q1','q2','q3'].filter(k => (d.strengths || {})[k]).length;
+  return nb + ' block' + (nb!==1?'s':'') + (ns ? ', ' + ns + ' answer' + (ns!==1?'s':'') : '');
+}
+function renderVersions() {
+  const wrap = el('versionList'); if (!wrap) return;
+  const vers = versionsForActive();
+  if (!vers.length) { wrap.innerHTML = '<p class="lib-empty">No saved versions yet. Click "save version" to snapshot the current vision.</p>'; return; }
+  wrap.innerHTML = vers.map(s => {
+    const active = String(s.id) === String(previewId);
+    return `<div class="ver-item${active?' active':''}" onclick="viewSnapshot('${s.id}')">
+      <div class="ver-meta"><span class="ver-date">${esc(s.name||'')}</span><span class="ver-sum">${esc(verSummary(s))}</span></div>
+      <button class="ver-del" title="delete version" onclick="event.stopPropagation();deleteVersion('${s.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+function saveVersion() {
+  saveSession();                                   // flush the latest edits first
+  const data = getSessionData();
+  const empty = !(data.title||'').trim()
+    && !(data.blocks||[]).some(b => b.heading || b.text)
+    && !['q1','q2','q3'].some(k => data.strengths && data.strengths[k]);
+  if (empty) { customAlert('Nothing to save yet — write something first.'); return; }
+  const now = Date.now();
+  const label = new Date(now).toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const snap = { id:'s'+now, mt:now, ts:now, srcId:activeLibId, name:label, note:'', data:JSON.parse(JSON.stringify(data)) };
+  archive.push(snap); saveArchive(); renderVersions();
+  showSave('📸 version saved');
+}
+function viewSnapshot(id) {
+  const s = archive.find(x => String(x.id) === String(id)); if (!s) return;
+  previewId = id;
+  renderSnapPreview(s);
+  renderCompare(s.data, getSessionData(), s);
+  switchNotesTab('compare');
+  renderVersions();
+}
+function exitPreview() {
+  if (previewId == null) return;
+  previewId = null;
+  const p = el('snapPreview'); if (p) { p.style.display = 'none'; p.innerHTML = ''; }
+  const ed = el('mainEditor'); if (ed) ed.style.display = '';
+  const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow);   // re-grow after un-hide
+  renderCompare(null);
+  renderVersions();
+}
+async function restoreVersion(id) {
+  const s = archive.find(x => String(x.id) === String(id)); if (!s) return;
+  if (!await customConfirm('Restore this version into your current vision? Current text will be replaced (you can undo).','restore')) return;
+  pushUndo();
+  applySessionData(s.data);
+  exitPreview();
+  switchMainTab('vision');
+  schedSave();                                     // flush → mt stamped → the rollback also syncs
+  renderLibrary();
+  showSave('↩ version restored');
+}
+async function deleteVersion(id) {
+  const s = archive.find(x => String(x.id) === String(id)); if (!s) return;
+  if (!await customConfirm('Delete this saved version permanently?','delete')) return;
+  archive = archive.filter(x => String(x.id) !== String(id));
+  if (String(previewId) === String(id)) exitPreview();
+  saveArchive(); renderVersions();                 // wrapped → tombstone propagates the deletion
+  showSave('✕ version deleted');
+}
+function renderSnapPreview(s) {
+  const ed = el('mainEditor'); if (ed) ed.style.display = 'none';
+  const p = el('snapPreview'); if (!p) return;
+  const d = s.data || {};
+  let html = `<div class="snap-bar"><span class="snap-bar-label">Viewing version <b>${esc(s.name||'')}</b> — read-only</span>`
+    + `<button class="btn-sm" onclick="restoreVersion('${s.id}')" title="replace current vision with this version">↩ restore</button>`
+    + `<button class="btn-sm" onclick="exitPreview()">✕ exit</button></div>`;
+  if (d.title) html += `<div class="snap-title">${esc(d.title)}</div>`;
+  (d.blocks || []).forEach(b => { if (!(b.heading || b.text)) return;
+    html += `<div class="snap-block"><div class="snap-block-h">${esc(b.heading||'')}</div><div class="snap-block-t">${esc(b.text||'')}</div></div>`; });
+  const st = d.strengths || {};
+  if (st.q1 || st.q2 || st.q3) {
+    html += `<div class="snap-block"><div class="snap-block-h">Strengths</div>`;
+    [st.q1,st.q2,st.q3].forEach((q,i) => { if (q) html += `<div class="snap-block-t" style="margin-bottom:.45rem"><b>${i+1}.</b> ${esc(q)}</div>`; });
+    html += `</div>`;
+  }
+  p.innerHTML = html; p.style.display = '';
+}
+
+// ── version comparison (block-level diff: snapshot = old, current = new) ──
+function renderCompare(snap, cur, meta) {
+  const out = el('compareOut'); if (!out) return;
+  if (!snap) { out.innerHTML = '<p class="cmp-empty">Pick a saved version on the Versions tab to see what changed between it and your current vision.</p>'; return; }
+  cur = cur || getSessionData();
+  const sLabels = { q1:'Strengths & skills', q2:'Meaningful use', q3:'Flow activities' };
+  const sChanged = [];
+  ['q1','q2','q3'].forEach(k => {
+    const a = ((snap.strengths||{})[k]||'').trim(), b = ((cur.strengths||{})[k]||'').trim();
+    if (a !== b) sChanged.push({ k, a, b });
+  });
+  const snapB = snap.blocks || [], curB = cur.blocks || [];
+  const sMap = new Map(snapB.map(x => [String(x.id), x]));
+  const cMap = new Map(curB.map(x => [String(x.id), x]));
+  const added = [], removed = [], changed = [];
+  curB.forEach(c => {
+    const o = sMap.get(String(c.id));
+    if (!o) { if (c.heading || c.text) added.push(c); }
+    else if ((o.heading||'') !== (c.heading||'') || (o.text||'') !== (c.text||'')) changed.push([o,c]);
+  });
+  snapB.forEach(o => { if (!cMap.has(String(o.id)) && (o.heading || o.text)) removed.push(o); });
+
+  if (!sChanged.length && !added.length && !removed.length && !changed.length) {
+    out.innerHTML = `<p class="cmp-empty">No differences — the version${meta?' from '+esc(meta.name):''} matches your current vision.</p>`;
+    return;
+  }
+  const tag = t => `<span class="cmp-tag">${t}</span>`;
+  let html = '';
+  if (meta) html += `<div class="cmp-sec"><div class="cmp-h">Changes since ${esc(meta.name)}</div>`
+    + `<p style="font-size:.78rem;color:var(--muted);line-height:1.5">+${added.length} added · ~${changed.length+sChanged.length} changed · −${removed.length} removed</p></div>`;
+  if (changed.length) {
+    html += '<div class="cmp-sec"><div class="cmp-h">Changed</div>';
+    changed.forEach(([o,c]) => {
+      html += `<div class="cmp-row">${tag('~')}<span class="cmp-name">${esc(c.heading||o.heading||'(untitled)')}</span>`;
+      if ((o.text||'') !== (c.text||'')) {
+        if (o.text) html += `<div class="cmp-old">${esc(o.text)}</div>`;
+        if (c.text) html += `<div class="cmp-new">${esc(c.text)}</div>`;
+      }
+      if ((o.heading||'') !== (c.heading||'')) html += `<div class="cmp-new">heading: ${esc(o.heading||'∅')} → ${esc(c.heading||'∅')}</div>`;
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  if (added.length) {
+    html += '<div class="cmp-sec"><div class="cmp-h">Added since</div>';
+    added.forEach(c => { html += `<div class="cmp-row">${tag('+')}<span class="cmp-name">${esc(c.heading||'(untitled)')}</span>` + (c.text?`<div class="cmp-new">${esc(c.text)}</div>`:'') + `</div>`; });
+    html += '</div>';
+  }
+  if (removed.length) {
+    html += '<div class="cmp-sec"><div class="cmp-h">Removed since</div>';
+    removed.forEach(o => { html += `<div class="cmp-row">${tag('−')}<span class="cmp-name">${esc(o.heading||'(untitled)')}</span>` + (o.text?`<div class="cmp-old">${esc(o.text)}</div>`:'') + `</div>`; });
+    html += '</div>';
+  }
+  if (sChanged.length) {
+    html += '<div class="cmp-sec"><div class="cmp-h">Strengths</div>';
+    sChanged.forEach(({k,a,b}) => {
+      html += `<div class="cmp-row">${tag('~')}<span class="cmp-name">${esc(sLabels[k])}</span>`;
+      if (a) html += `<div class="cmp-old">${esc(a)}</div>`;
+      if (b) html += `<div class="cmp-new">${esc(b)}</div>`;
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  out.innerHTML = html;
+}
+</script>
+
+<!-- Clear storage modal -->
+<div class="modal-bg" id="clearStorageModal">
+  <div class="modal" style="max-width:360px">
+    <h2>delete data</h2>
+    <p style="font-size:.82rem;color:var(--muted)">Select what you want to delete. This action cannot be undone.</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
+      <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>current session</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>visions</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>saved versions</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings (font, dark mode)</span></label>
+    </div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" onclick="closeModal('clearStorageModal')">cancel</button>
+      <button class="modal-btn" onclick="toggleAllClear()">select/deselect all</button>
+      <button class="modal-btn primary" onclick="doSelectiveClear()">delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom confirm modal -->
+<div class="modal-bg" id="confirmModal">
+  <div class="modal" style="max-width:340px">
+    <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
+      <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gist settings modal -->
+<div class="modal-bg" id="jsonbinModal">
+  <div class="modal" style="max-width:400px;gap:.65rem">
+    <h2>Gist sync settings</h2>
+    <p>Enter your GitHub token and Gist ID. Data is stored only in this browser.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Create a token at <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). You can find your gists at <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
+    <div class="jb-field">
+      <label>GitHub Token</label>
+      <input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label>Gist ID</label>
+      <input type="text" id="jbIdInput" placeholder="abc123def456… (empty = will be created)" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label>Device name</label>
+      <input type="text" id="jbDeviceInput" placeholder="e.g. work PC, phone…" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="modal-row" id="gistHistoryRow" style="display:none">
+      <button class="btn-io" onclick="openGistHistory()">⏱ version history</button>
+    </div>
+    <div class="modal-row" id="syncLinkRow" style="display:none">
+      <button class="btn-io" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="saveJsonBinSettings()">save</button>
+      <button class="modal-btn" onclick="closeModal('jsonbinModal')">cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
+   Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
+   Data lives in a single private gist (file vision-sync.json).
+   Base kolekce: library (LWW dle id) + archive (append-only union).
+   Add other collections at the spots marked // APP LOGIC. */
+(function(){
+  const GHTOKEN = 'vision-gist-token';      // GitHub token (scope gist)
+  const GISTID  = 'vision-gist-id';          // Gist ID (empty = sync will create it on the first push)
+  const ASKEY   = 'vision-autosync';
+  const GIST_API  = 'https://api.github.com/gists';
+  const GIST_FILE = 'vision-sync.json';      // file name inside the gist (data = JSON string)
+  const DEVICE = 'vision-device';           // name of this device (attached to the payload → visible in version history)
+  function defaultDeviceName() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'Android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iPhone/iPad';
+    if (/Windows/i.test(ua)) return 'PC (Windows)';
+    if (/Macintosh|Mac OS/i.test(ua)) return 'Mac';
+    if (/Linux/i.test(ua)) return 'PC (Linux)';
+    return 'device';
+  }
+  function getDeviceName() {
+    try { let n = localStorage.getItem(DEVICE); if (!n) { n = defaultDeviceName(); localStorage.setItem(DEVICE, n); } return n; }
+    catch(e) { return defaultDeviceName(); }
+  }
+  const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
+  let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
+  let applyingRemote = false;                 // true during a silent merge → suppresses the save-hook (no recursion)
+
+  // headers: reading (GET) does not need Content-Type, writing (POST/PATCH) does
+  function ghHeaders(token, write) {
+    const h = { 'Accept': 'application/vnd.github+json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    if (write) h['Content-Type'] = 'application/json';
+    return h;
+  }
+  function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
+  // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private
+  function gistWriteInit(token, creating, payload) {
+    const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
+    const body = creating ? { description: 'vision-sync', public: false, files } : { files };
+    return { method: creating ? 'POST' : 'PATCH', mode:'cors', credentials:'omit', headers: ghHeaders(token, true), body: JSON.stringify(body) };
+  }
+  function openJsonBinSettings() {
+    try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(GISTID)||''; } catch(e) {}
+    try { el('jbDeviceInput').value = getDeviceName(); } catch(e) {}
+    try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    el('jsonbinModal').classList.add('open');
+  }
+  function saveJsonBinSettings() {
+    let idChanged = false;
+    try {
+      const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      const dev = el('jbDeviceInput').value.trim();
+      if (dev) localStorage.setItem(DEVICE, dev); else localStorage.removeItem(DEVICE);
+      idChanged = id !== (localStorage.getItem(GISTID) || '');
+      if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
+      if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
+    } catch(e) {}
+    if (idChanged) {   // newly entered ID → download the cloud right away (otherwise only after reload)
+      try { sessionStorage.removeItem('vision-cloud-checked'); } catch(e) {}
+      try { checkCloudOnStartup(); } catch(e) {}
+    }
+    closeModal('jsonbinModal');
+  }
+  function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
+  // link for a new device: Gist ID (optionally token + autosync) in the URL hash —
+  // the hash is not sent to the server and the recipient removes it from the address and history right after load
+  async function copySyncLink() {
+    const gistId = localStorage.getItem(GISTID) || '';
+    if (!gistId) { showSyncTooltip('⚠ save a Gist ID first'); return; }
+    const token = localStorage.getItem(GHTOKEN) || '';
+    let withTok = false;
+    if (token) withTok = await customConfirm('Include the GitHub token in the link too? The link will then expose all data — only send it between your own devices. Without the token you will enter it manually on the new device.', 'include token');
+    const p = new URLSearchParams();
+    p.set('gid', gistId);
+    if (withTok) p.set('tok', token);
+    if (autosyncEnabled()) p.set('as', '1');
+    // APP LOGIC: adjust the fallback URL if the app folder is named differently from vision
+    const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/vision-app/';
+    const url = base + '#' + p.toString();
+    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 link copied — open it on the new device'); }
+    catch(e) {   // clipboard API missing (http / old browser) → hidden textarea, otherwise at least show the link
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch(e2) {}
+      document.body.removeChild(ta);
+      if (ok) showSyncTooltip('🔗 link copied — open it on the new device');
+      else await customAlert('Copy the link for the new device: ' + url);
+    }
+  }
+  function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
+  // GET the gist — returns the raw Response (the caller checks res.ok)
+  async function gistGet(gistId, token) {
+    return fetch(gistUrl(gistId), { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+  }
+  // extracts the stored data (GIST_FILE content) from the GET response as an object; null = cannot read
+  async function gistRecord(res) {
+    let json; try { json = await res.json(); } catch(e) { return null; }
+    const file = json && json.files && json.files[GIST_FILE];
+    if (!file) return null;
+    let content = file.content;
+    if (file.truncated && file.raw_url) {   // GitHub truncates content > ~1 MB → fetch it via raw_url
+      try { content = await (await fetch(file.raw_url, { mode:'cors', credentials:'omit' })).text(); } catch(e) {}
+    }
+    if (!content) return null;
+    try { return JSON.parse(content); } catch(e) { return null; }
+  }
+  function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
+  function hasToken() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // a token is enough → sync creates the gist itself
+
+  /* ── TOMBSTONES (propagation of deletions between devices) ── */
+  const TOMB_KEY  = 'vision-tombstones';    // { "<ns>:<id>": deletedAtTs }
+  const KNOWN_KEY = 'vision-syncknown';     // [ "<ns>:<id>", … ] state from the previous reconcile
+  const TOMB_TTL  = 90 * 864e5;               // drop tombstones older than 90 days
+  let tombstones = {};
+  let knownIds = null;                         // null = not tracked yet
+  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(TOMB_KEY) || '{}') || {}; } catch(e) { tombstones = {}; } }
+  function saveTombstones() { try { localStorage.setItem(TOMB_KEY, JSON.stringify(tombstones)); } catch(e) {} }
+  function loadKnownIds()   { try { const s = localStorage.getItem(KNOWN_KEY); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
+  function saveKnownIds()   { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...(knownIds || [])])); } catch(e) {} }
+  function isTombstoned(key) { return !!tombstones[key]; }
+  // set of "<ns>:<id>" of all currently existing items
+  function currentKeySet() {
+    const s = new Set();
+    library.forEach(e => { if (e && e.id != null) s.add('lib:' + e.id); });
+    archive.forEach(e => { if (e && e.id != null) s.add('arc:' + e.id); });
+    // APP LOGIC: add keys of other collections (e.g. wd:date, inb:id, bt:key)
+    return s;
+  }
+  function pruneTombstones() {
+    const cutoff = Date.now() - TOMB_TTL;
+    Object.keys(tombstones).forEach(k => { if (!(tombstones[k] > cutoff)) delete tombstones[k]; });
+  }
+  // diff the current state against the last known → deletions are recorded as tombstones
+  function reconcileTombstones() {
+    const cur = currentKeySet(), now = Date.now();
+    if (knownIds) knownIds.forEach(k => { if (!cur.has(k)) tombstones[k] = now; });
+    cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // exists ⇒ alive
+    knownIds = cur;
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+  }
+  function mergeCloudTombstones(cloudTomb) {
+    if (!cloudTomb || typeof cloudTomb !== 'object') return;
+    Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
+  }
+  // locally delete append-only collections that have a tombstone (LWW collections are handled by lwwMerge)
+  function applyTombstones() {
+    let removed = 0;
+    const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
+    archive = sweep('arc', x => x.id)(archive);
+    // APP LOGIC: delete other append-only collections here
+    return removed;
+  }
+  // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
+  function sigOf(items, arch, tomb) {
+    const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
+    const arcS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
+    const tS   = o => Object.keys(o || {}).sort().join(',');
+    // APP LOGIC: add other synced collections to the signature (always with mt!), otherwise their edits will not be pulled
+    return [idS(items), arcS(arch), tS(tomb)].join('||');
+  }
+  function localSig() { return sigOf(library, archive, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}); }
+
+  // the toolbar button is also a status indicator
+  function updateAutoSyncBtn() {
+    const b = el('autoSyncBtn'); if (!b) return;
+    const on = autosyncEnabled();
+    b.classList.toggle('on', on);
+    if (!b.classList.contains('syncing')) b.textContent = '☁';
+    b.title = on ? 'automatic sync enabled — click to disable'
+                 : 'enable automatic sync (Gist)';
+  }
+  function setSyncState(state) {
+    const b = el('autoSyncBtn'); if (!b) return;
+    clearTimeout(stateTimer);
+    b.classList.remove('syncing');
+    if (state === 'syncing')  { b.textContent = '↑'; b.classList.add('syncing'); }
+    else if (state === 'ok')  { b.textContent = '☁'; stateTimer = setTimeout(updateAutoSyncBtn, 3000); }
+    else if (state === 'err') { b.textContent = '⚠'; stateTimer = setTimeout(updateAutoSyncBtn, 5000); }
+    else updateAutoSyncBtn();
+  }
+  function toggleAutoSync() {
+    const on = !autosyncEnabled();
+    try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
+    updateAutoSyncBtn();
+    if (on && !hasToken()) { showStatusMsg('⚠ set a GitHub token via ⚙ first (the gist will be created automatically)', 4500); return; }
+    if (on) {
+      reconcileTombstones();   // tombstone baseline
+      // PULL → merge → push (via checkCloudOnStartup): a direct push on a new device would
+      // overwrite the gist with an empty local state before the cloud data is downloaded
+      try { sessionStorage.removeItem('vision-cloud-checked'); } catch(e) {}
+      checkCloudOnStartup();
+    }
+  }
+
+  // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
+  function buildAutoPayload() {
+    // APP LOGIC: add other synced collections (settings, days, inbox…)
+    return { v:1, items: library, archive: archive, tombstones: tombstones, device: getDeviceName() };
+  }
+  function scheduleAutoPush() {
+    if (!autosyncEnabled() || !hasToken()) return;
+    if (pushTimer) return;        // already scheduled → coalesce
+    const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs));
+    pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
+  }
+  async function doAutoPush() {
+    if (!autosyncEnabled() || !hasToken()) return;
+    if (pushing) { pushAgain = true; return; }
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) return;
+    let gistId = localStorage.getItem(GISTID);
+    let creating = !gistId;        // the gist does not exist yet → autosync creates it (POST)
+    pushing = true; setSyncState('syncing');
+    try {
+      const payload = buildAutoPayload();
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (creating) {
+        const json = await res.json().catch(() => null);
+        const newId = json && json.id;
+        if (newId) { try { localStorage.setItem(GISTID, newId); } catch(e) {} }
+      }
+      lastPushTs = Date.now(); setSyncState('ok');
+    } catch(e) {
+      console.warn('[autosync] push selhal:', (e && e.message) ? e.message : e);
+      setSyncState('err');
+    } finally {
+      pushing = false;
+      if (pushAgain) { pushAgain = false; scheduleAutoPush(); }
+    }
+  }
+
+  // LWW merge of a keyed array: the newer mt wins; a deletion wins only if it is newer
+  // than the last edit (an edit after deletion = resurrection). Returns a new array + counts.
+  function lwwMerge(localArr, cloudArr, ns, keyOf, normalize) {
+    const byKey = new Map();
+    (localArr || []).forEach(x => { if (x && keyOf(x) != null) byKey.set(String(keyOf(x)), x); });
+    let added = 0, updated = 0, removed = 0;
+    (cloudArr || []).forEach(c => {
+      if (!c || keyOf(c) == null) return;
+      const k = String(keyOf(c)), cmt = +c.mt || 0, ex = byKey.get(k);
+      if (ex) {
+        if (cmt > (+ex.mt || 0)) { byKey.set(k, normalize(c)); updated++; }
+      } else {
+        const tomb = tombstones[ns + ':' + k] || 0;
+        if (cmt >= tomb) { byKey.set(k, normalize(c)); added++; if (tomb && cmt > tomb) delete tombstones[ns + ':' + k]; }
+      }
+    });
+    for (const [k, x] of byKey) {
+      const tomb = tombstones[ns + ':' + k] || 0;
+      if (tomb && tomb >= (+x.mt || 0)) { byKey.delete(k); removed++; }
+      else if (tomb) delete tombstones[ns + ':' + k];   // local edit newer than the deletion → keep it, drop the tombstone
+    }
+    return { arr: [...byKey.values()], added, updated, removed };
+  }
+
+  // silent two-way merge cloud → local
+  function autoImportSilent(record) {
+    if (!record || typeof record !== 'object') return;
+    applyingRemote = true;
+    try {
+    mergeCloudTombstones(record.tombstones);
+    let removed = applyTombstones();           // append-only collections (archive)
+    let added = 0, updated = 0;
+    // library — LWW by id
+    const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
+    library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
+    // archive — only add missing (append-only)
+    const arcIds = new Set(archive.map(x => String(x.id)));
+    (record.archive || []).forEach(it => {
+      if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
+    });
+    // APP LOGIC: merge other collections here — arrays by id/data via lwwMerge(...), object-maps (blocks) with a custom merge
+
+    // if the merge changed the active vision (or it was deleted), refresh the live editor buffer,
+    // otherwise the next flush would overwrite the merged version with the stale form state
+    if (typeof applySessionData === 'function' && typeof getSessionData === 'function') {
+      let e = (activeLibId != null) ? library.find(x => String(x.id) === String(activeLibId)) : null;
+      if (!e && library.length) { activeLibId = library[0].id; e = library[0]; }   // active vision was deleted remotely
+      if (e && JSON.stringify(e.data) !== JSON.stringify(getSessionData())) {
+        applySessionData(e.data);
+        if (typeof previewId !== 'undefined' && previewId == null && typeof renderCompare === 'function') renderCompare(null);
+      }
+    }
+
+    if (added || updated || removed) {
+      saveLibrary(); saveArchive();
+      if (typeof renderLibrary === 'function') renderLibrary();
+      // APP LOGIC: re-render the other views
+      let msg;
+      if (added && !updated && !removed)      msg = '☁ +' + added + ' new items from sync';
+      else if (updated && !added && !removed) msg = '☁ ' + updated + ' items updated from sync';
+      else {
+        const parts = [];
+        if (added)   parts.push('+' + added);
+        if (updated) parts.push('~' + updated);
+        if (removed) parts.push('−' + removed);
+        msg = '☁ synced: ' + parts.join(' ');
+      }
+      if (removed) msg += ' — something was deleted (check / restore from history)';
+      showStatusMsg(msg, 4000);
+    }
+    // align the baseline to the new state and save tombstones
+    knownIds = currentKeySet();
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+    } finally { applyingRemote = false; }
+  }
+
+  // hook after each persistence of a synced collection: record deletions (tombstones) and schedule a push
+  function autoSyncOnSave() {
+    if (applyingRemote) return;      // changes from the merge must not trigger reconcile/push
+    if (!hasToken()) return;         // without a token there is nothing to track (sync creates the gist itself)
+    reconcileTombstones();
+    if (autosyncEnabled()) scheduleAutoPush();
+  }
+
+  // silent PULL (focus / visibilitychange / interval): download the cloud and merge if it differs — no spinner
+  let lastPullTs = 0;
+  const PULL_MIN_INTERVAL = 30000;            // max 1 pull / 30 s (focus + visibility fire together)
+  async function silentPull() {
+    if (Date.now() - lastPullTs < PULL_MIN_INTERVAL) return;
+    lastPullTs = Date.now();
+    const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(GISTID);
+    if (!token || !gistId) return;             // without a token and Gist ID there is nowhere to download from
+    if (pushing) return;                       // a push is in progress → let it finish
+    if (pulling) return;                       // a pull is already running → do not start a second
+    pulling = true;
+    const sBtn = el('syncDownBtn');
+    if (sBtn) { sBtn.disabled = true; sBtn.classList.add('syncing'); }
+    let changed = false;
+    try {
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) return;
+      if (localSig() !== cloudSig(record)) {
+        const before = localSig();
+        autoImportSilent(record);
+        changed = localSig() !== before;
+      }
+      if (autosyncEnabled()) scheduleAutoPush();
+    } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); }
+    finally {
+      pulling = false;
+      if (sBtn) {
+        sBtn.disabled = false;
+        sBtn.classList.remove('syncing');
+        if (changed) { sBtn.textContent = '✓'; setTimeout(() => { sBtn.textContent = '↓'; }, 1500); }
+        else sBtn.textContent = '↓';
+      }
+    }
+  }
+
+  async function doCloudUpload() {
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) { showSyncTooltip('⚠ missing GitHub token — open ⚙'); return; }
+    let gistId = localStorage.getItem(GISTID);
+    const items    = library.filter(e => exportSelected.has(e.id));
+    const archItems = archive.filter(e => exportArchSelected.has(e.id));
+    if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
+    const payload = {v:1, items, archive: archItems};
+    closeModal('exportModal');
+    showSyncTooltip('↑ uploading…');
+    try {
+      let creating = !gistId;
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      if (creating) { const json = await res.json().catch(() => null); const newId = json && json.id; if (newId) localStorage.setItem(GISTID, newId); }
+      const t = new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+      showSyncTooltip('↑ uploaded '+t+' ('+items.length+'i '+archItems.length+'a)');
+    } catch(e) {
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
+    }
+  }
+
+  async function syncDownload() {
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) { showSyncTooltip('⚠ missing Gist ID — open ⚙'); return; }
+    const btn = el('syncDownBtn'); btn.disabled = true;
+    showSyncTooltip('↓ stahuji…');
+    try {
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token);
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) throw new Error('Invalid data in the gist');
+      if (!record.items && !record.teas && !record.archive) throw new Error('The gist contains no items');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import z Gistu';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('↓ downloaded — check the selection and import');
+    } catch(e) {
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
+    } finally { btn.disabled = false; }
+  }
+
+  async function checkCloudOnStartup() {
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) {
+      // the gist does not exist yet → with autosync on and existing data, create it right away
+      if (autosyncEnabled() && hasToken() && (library.length || archive.length)) scheduleAutoPush();
+      return;
+    }
+    if (sessionStorage.getItem('vision-cloud-checked')) return;
+    sessionStorage.setItem('vision-cloud-checked','1');
+    const btn = el('syncDownBtn'); const origTitle = btn.title;
+    btn.disabled = true; btn.title = 'kontroluji cloud…';
+    try {
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) return;
+      // AUTOSYNC: silent two-way merge (incl. deletions and edits)
+      if (autosyncEnabled()) {
+        if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
+        return;
+      }
+      // otherwise (autosync off): offer a manual import if the data differs
+      const cloudItems = record.items || record.teas || [];
+      const cloudArch  = record.archive || [];
+      const idSig = arr => arr.map(x => String(x.id||'')).sort().join(',')+':'+arr.length;
+      if (idSig(library)+'|'+idSig(archive) === idSig(cloudItems)+'|'+idSig(cloudArch)) return;
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import z Gistu';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('☁ cloud has different data — check the selection');
+    } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
+  }
+
+  /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
+     Loads the gist history[], allows preview (via the import modal) and restore
+     (via the standard LWW merge autoImportSilent + push). */
+  let gistRevs = [];   // the last ≤20 revisions from openGistHistory (index = order in the list)
+  function historyGistId() { try { return localStorage.getItem(GISTID); } catch(e) { return null; } }
+  async function openGistHistory() {
+    const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
+    if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
+    closeModal('jsonbinModal');
+    gistRevs = [];
+    el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
+    el('gistHistoryModal').classList.add('open');
+    try {
+      const res = await gistGet(gistId, token);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      gistRevs = ((json && json.history) || []).slice(0, 100);
+      renderGistHistory();
+    } catch(e) {
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+    }
+  }
+  function renderGistHistory() {
+    if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">No history available</p>'; return; }
+    el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
+      const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
+      const tag = i === 0 ? '<span class="gh-rev-chg">newest</span>' : '';
+      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
+        + '<span class="gh-rev-dev" id="ghDev' + i + '"></span>' + tag + '</div>'
+        + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
+        + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">obnovit</button></div></div>';
+    }).join('');
+    loadHistoryDevices();
+  }
+  // fetches the device name (payload.device) for the top ≤20 revisions and adds it to the row — a few GET requests
+  function loadHistoryDevices() {
+    const N = Math.min(gistRevs.length, 20);
+    for (let i = 0; i < N; i++) {
+      const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+      fetchGistRevision(rev.version).then(rec => {
+        const span = el('ghDev' + i);
+        if (span && rec && rec.device) span.textContent = '· ' + rec.device;
+      }).catch(() => {});
+    }
+  }
+  // downloads the content of a specific revision → record (object) or null
+  async function fetchGistRevision(version) {
+    const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
+    const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const file = json && json.files && json.files[GIST_FILE];
+    if (!file || !file.content) return null;
+    return JSON.parse(file.content);
+  }
+  async function gistHistoryPreview(i) {
+    const rev = gistRevs[i]; if (!rev) return;
+    try {
+      const record = await fetchGistRevision(rev.version);
+      if (!record) throw new Error('empty revision');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Revision preview';
+      parseImportJson(JSON.stringify(record));
+      closeModal('gistHistoryModal');
+    } catch(e) {
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+    }
+  }
+  async function gistHistoryRestore(i) {
+    const rev = gistRevs[i]; if (!rev) return;
+    const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
+    if (!await customConfirm('Restore the version from ' + d + '? Current data stays — the older version will be merged via the standard merge.', 'restore')) return;
+    const winAtStart = (typeof activeWin !== 'undefined') ? activeWin : null;
+    try {
+      const record = await fetchGistRevision(rev.version);
+      if (!record) throw new Error('empty revision');
+      if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // the window switched → the data belongs to another window
+      autoImportSilent(record);
+      scheduleAutoPush();
+      showStatusMsg('↩ verze obnovena', 3000);
+      closeModal('gistHistoryModal');
+    } catch(e) {
+      showStatusMsg('⚠ restore failed', 3000);
+    }
+  }
+  window.openGistHistory      = openGistHistory;
+  window.gistHistoryPreview   = gistHistoryPreview;
+  window.gistHistoryRestore   = gistHistoryRestore;
+  window.openJsonBinSettings  = openJsonBinSettings;
+  window.saveJsonBinSettings  = saveJsonBinSettings;
+  window.doCloudUpload        = doCloudUpload;
+  window.syncDownload         = syncDownload;
+  window.checkCloudOnStartup  = checkCloudOnStartup;
+  window.toggleAutoSync       = toggleAutoSync;
+  window.copySyncLink         = copySyncLink;
+  window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
+  loadTombstones(); loadKnownIds();
+  // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
+  // APP LOGIC: add here the save functions of other synced collections (saveInbox, saveBlockTypes…)
+  ['saveLibrary','saveArchive'].forEach(fn => {
+    const orig = window[fn];
+    if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
+  });
+  // PULL ON FOCUS — returning to the tab/window immediately downloads changes from another device
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autosyncEnabled()) silentPull(); });
+  window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
+  // PULL every 5 minutes (only when the tab is visible)
+  setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
+  // ── SYNC LINK: one-time device setup from the URL hash (#gid=…&tok=…&as=1) ──
+  // Must run BEFORE checkCloudOnStartup so the first cloud check already uses the new ID.
+  (function importSyncLink() {
+    if ((location.hash || '').indexOf('gid=') === -1) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // delete the sensitive hash from the address and history
+    if (!gid) return;
+    try {
+      localStorage.setItem(GISTID, gid);
+      if (tok) localStorage.setItem(GHTOKEN, tok);
+      if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
+    } catch(e) {}
+    try { sessionStorage.removeItem('vision-cloud-checked'); } catch(e) {}
+    showSyncTooltip(tok ? '🔗 sync set up from link' : '🔗 Gist ID set — enter the token via ⚙');
+  })();
+  updateAutoSyncBtn();
+  checkCloudOnStartup();
+})();
+</script>
+<footer style="text-align:center; padding: 8px;">
+  <a href="https://lordkrabaty.github.io/webapps/" title="home page — all apps" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
+</footer>
+
+<!-- Gist history modal -->
+<div class="modal-bg" id="gistHistoryModal">
+  <div class="modal" style="max-width:460px;gap:.65rem">
+    <h2>Version history</h2>
+    <div class="modal-list" id="gistHistoryList"></div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
