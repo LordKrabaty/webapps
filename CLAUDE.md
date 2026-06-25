@@ -199,7 +199,7 @@ Stará data mají `mt = 0`. LWW při `0 vs 0` **nepřepisuje** (jen doplní chyb
 
 ### Dopředná kompatibilita (verze schématu) — POVINNÉ při změně tvaru dat
 
-Cíl: staré zařízení (stará cache appky), zapnuté po dlouhé době, **nesmí ztratit ani přepsat** novější data v cloudu. Dvě vrstvy, obě hotové v `todo-app` i `tea-app`:
+Cíl: staré zařízení (stará cache appky), zapnuté po dlouhé době, **nesmí ztratit ani přepsat** novější data v cloudu. Dvě vrstvy, hotové v `_template`, `todo-app` i `tea-app` (nová app je tedy zdědí):
 
 1. **Preserve-unknown v normalizérech.** Každý normalizér (`normItem`, `normLaterBucket`, `normRecur`, …) **nejdřív rozprostře původní objekt** (`{ ...it, …známá pole }`), takže pole, která přidala novější verze, **přežijí round-trip** přes starší klient místo aby je strhnul. Tím jsou *aditivní* změny (přidání pole) bezztrátové napříč verzemi. **Nikdy nepiš normalizér jako čistý whitelist** (`return { id:…, text:… }`) — to je přesně past, co zahodí cizí novější pole. *(tea-app slučuje identitou `c=>c` a archiv ukládá celé objekty → preserve-unknown splňuje automaticky.)*
 
@@ -207,7 +207,7 @@ Cíl: staré zařízení (stará cache appky), zapnuté po dlouhé době, **nesm
 
 **`APP_SCHEMA` zvyš** vždy, když uděláš změnu tvaru dat, kterou by starší klient neuměl plně reprezentovat (hlavně strukturální/breaking; čistě aditivní pole zvládne preserve-unknown samo). Guard chrání přechody **od verze, kde je nasazený, dál** — prastarou cache bez guardu zpětně neochrání.
 
-**Stav:** základ je v `_template/index.html` (LWW pro `library`, append-only pro `archive`, tombstones, `lwwMerge`, `autoImportSilent`, `sigOf`, `☁` tlačítko, bezpečný bootstrap pull→merge→push, 🔗 sync odkaz pro nové zařízení). Rozšiřovací body jsou označené `// APP LOGIC` — při přidání kolekce uprav: `currentKeySet()`, `buildAutoPayload()`, `autoImportSilent()`, `sigOf()`, `applyTombstones()` (jen append-only), seznam obalených save-funkcí a u object-map (bloky) přidej vlastní `mergeBlocksLww`. **Plný příklad se všemi typy kolekcí:** `todo-app/index.html` (dny, plány, šablony, inbox = LWW; bloky = LWW object-mapa; archiv = union).
+**Stav:** základ je v `_template/index.html` (LWW pro `library`, append-only pro `archive`, tombstones, `lwwMerge`, `autoImportSilent`, `sigOf`, `☁` tlačítko, bezpečný bootstrap pull→merge→push, 🔗 sync odkaz pro nové zařízení, **forward-compat guard** `APP_SCHEMA` + `checkCloudSchema` — viz výše). Rozšiřovací body jsou označené `// APP LOGIC` — při přidání kolekce uprav: `currentKeySet()`, `buildAutoPayload()`, `autoImportSilent()`, `sigOf()`, `applyTombstones()` (jen append-only), seznam obalených save-funkcí a u object-map (bloky) přidej vlastní `mergeBlocksLww`. **Plný příklad se všemi typy kolekcí:** `todo-app/index.html` (dny, plány, šablony, inbox = LWW; bloky = LWW object-mapa; archiv = union).
 
 ---
 

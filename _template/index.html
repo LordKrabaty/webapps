@@ -424,6 +424,14 @@ textarea::placeholder{color:var(--mid)}
 </div>
 
 <script>
+// ── SCHEMA VERSION (forward-compat guard) ─────────────────────────────────
+// Bump when the synced data shape changes in a way older clients can't fully
+// represent. A client that pulls a payload with a higher `schema` PAUSES its own
+// push (so it can't overwrite newer data) and warns the user to reload. The
+// merge keeps whole objects (identity normalize) → additive fields round-trip
+// losslessly; if you add a whitelisting normalizer, spread the original first
+// ({ ...it, …known }) so it never strips unknown/newer fields.
+const APP_SCHEMA = 1;
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'APP_NAME-v1-session';
 const LIBRARY_KEY = 'APP_NAME-v1-library';
@@ -799,7 +807,7 @@ function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
   if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-  const json = JSON.stringify({v:1, items, archive: archItems}, null, 2);
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
   let downloaded = false;
@@ -1000,6 +1008,22 @@ document.addEventListener('keydown', e => {
   const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
   let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
   let applyingRemote = false;                 // true during a silent merge → suppresses the save-hook (no recursion)
+  let cloudSchemaAhead = false;               // cloud written by a newer app version → pause our push so we can't overwrite it
+  let schemaWarnShown = false;                // the blocking warning is shown at most once per session
+  // Inspect a freshly fetched cloud record: is its schema newer than what this build understands?
+  function checkCloudSchema(record) {
+    const cs = +(record && record.schema) || 0;
+    cloudSchemaAhead = cs > APP_SCHEMA;
+    updateAutoSyncBtn();
+    if (cloudSchemaAhead) {
+      showStatusMsg('⚠ A newer version of the app is in use on another device — reload this page before editing (sync paused to protect your data)', 8000);
+      if (!schemaWarnShown) {
+        schemaWarnShown = true;
+        try { customAlert('A newer version of this app is in use on another device.\n\nReload this page (Ctrl+Shift+R) before editing here. Until you do, this older version will NOT upload its changes, so it cannot overwrite the newer data in the cloud.'); } catch(e) {}
+      }
+    }
+    return cloudSchemaAhead;
+  }
 
   // One-time migration from the old JSONBin sync → Gist slots (you can delete this in a newly created app).
   // NOTE: a JSONBin key ≠ GitHub token and a JSONBin Bin ID ≠ Gist ID — the values are only moved to
@@ -1158,6 +1182,11 @@ document.addEventListener('keydown', e => {
     const b = el('autoSyncBtn'); if (!b) return;
     const on = autosyncEnabled();
     b.classList.toggle('on', on);
+    if (cloudSchemaAhead) {   // outdated build — push is paused; make it visible
+      if (!b.classList.contains('syncing')) b.textContent = '⚠';
+      b.title = 'this app version is outdated — reload the page; uploads are paused so you cannot overwrite newer data';
+      return;
+    }
     if (!b.classList.contains('syncing')) b.textContent = '☁';
     b.title = on ? 'automatic sync enabled — click to disable'
                  : 'enable automatic sync (Gist)';
@@ -1188,7 +1217,7 @@ document.addEventListener('keydown', e => {
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
     // APP LOGIC: add other synced collections (settings, days, inbox…)
-    return { v:1, items: library, archive: archive, tombstones: tombstones, device: getDeviceName() };
+    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, tombstones: tombstones, device: getDeviceName() };
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
@@ -1198,6 +1227,7 @@ document.addEventListener('keydown', e => {
   }
   async function doAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
+    if (cloudSchemaAhead) { setSyncState('err'); showStatusMsg('⚠ sync paused — a newer app version is in the cloud. Reload to update.', 5000); return; }   // never let an older build overwrite newer data
     if (pushing) { pushAgain = true; return; }
     const token = localStorage.getItem(GHTOKEN);
     if (!token) return;
@@ -1322,6 +1352,7 @@ document.addEventListener('keydown', e => {
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       if (localSig() !== cloudSig(record)) {
         const before = localSig();
         autoImportSilent(record);
@@ -1347,7 +1378,7 @@ document.addEventListener('keydown', e => {
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-    const payload = {v:1, items, archive: archItems};
+    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
@@ -1404,6 +1435,7 @@ document.addEventListener('keydown', e => {
       const res = await gistGet(gistId, token); if (!res.ok) return;
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       // AUTOSYNC: silent two-way merge (incl. deletions and edits)
       if (autosyncEnabled()) {
         if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
