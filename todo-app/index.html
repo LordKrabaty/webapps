@@ -200,9 +200,14 @@ textarea::placeholder{color:var(--mid)}
 /* ── TIMELINE ── */
 .tl-container{display:flex;flex-direction:column;width:100%;border:1.5px solid var(--dark);border-radius:var(--r);overflow:hidden}
 /* Later overview: month mini-calendars marking days that have tasks (no times) */
-.tl-container.later-mode{border:none;gap:.8rem;overflow:visible}
+.tl-container.later-mode{border:none;gap:.45rem;overflow:visible}
+.tl-cal-yr-hdr{display:flex;align-items:center;gap:.35rem;font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:var(--black);cursor:pointer;padding:.3rem .1rem .1rem;border-top:1.5px solid var(--light);margin-top:.3rem;user-select:none}
+.tl-cal-yr-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
+.tl-cal-yr-hdr.overdue{color:var(--muted)}
+.tl-cal-yr-sum{margin-left:auto;font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace;font-weight:400}
+.tl-cal-caret{display:inline-block;width:.75rem;flex-shrink:0;font-size:.7rem;color:var(--muted);text-align:center}
 .tl-later-month{display:flex;flex-direction:column;gap:.3rem}
-.tl-later-mlabel{display:flex;align-items:baseline;gap:.4rem;font-size:.82rem;font-weight:500;color:var(--dark)}
+.tl-later-mlabel{display:flex;align-items:center;gap:.4rem;font-size:.82rem;font-weight:500;color:var(--dark);cursor:pointer;user-select:none;padding:.1rem 0}
 .tl-later-mlabel.overdue{color:var(--muted)}
 .tl-later-od{font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border:1px solid var(--light);border-radius:var(--r);padding:0 .25rem}
 .tl-later-msum{margin-left:auto;font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace}
@@ -1700,6 +1705,15 @@ function updateStats() {
 // with a count. No times — just "which concrete days have something". Clicking a day
 // jumps to that month in the Later list.
 const CAL_WD = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+// Collapse state for the overview calendar — in-memory map of explicit user toggles (resets on reload).
+// Default keeps the current + next month (and their years) expanded, everything else collapsed.
+let laterCalCollapse = {};       // ym → bool
+let laterCalYearCollapse = {};   // "YYYY" → bool
+function nextMonthYm() { const n = new Date(); const d = new Date(n.getFullYear(), n.getMonth() + 1, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function isLaterCalMonthCollapsed(ym, curYm, nextYm) { return (ym in laterCalCollapse) ? !!laterCalCollapse[ym] : !(ym === curYm || ym === nextYm); }
+function isLaterCalYearCollapsed(y, curYm, nextYm) { return (y in laterCalYearCollapse) ? !!laterCalYearCollapse[y] : !(y === curYm.slice(0, 4) || y === nextYm.slice(0, 4)); }
+function toggleLaterCalMonth(ym) { const c = curMonthYm(), n = nextMonthYm(); laterCalCollapse[ym] = !isLaterCalMonthCollapsed(ym, c, n); renderLaterTimeline(); }
+function toggleLaterCalYear(y) { const c = curMonthYm(), n = nextMonthYm(); laterCalYearCollapse[y] = !isLaterCalYearCollapsed(y, c, n); renderLaterTimeline(); }
 function renderLaterTimeline(container) {
   container = container || el('tl-container'); if (!container) return;
   const ymKey = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
@@ -1723,40 +1737,56 @@ function renderLaterTimeline(container) {
   if (!monthSet.size) { container.innerHTML = '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
   const now = new Date();
   const todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
-  const curYm = curMonthYm();
+  const curYm = curMonthYm(), nextYm = nextMonthYm(), curY = curYm.slice(0, 4);
   const tip = names => esc(names.map(x => '• ' + x).join('\n'));   // newline-separated → multiline native tooltip
-  container.innerHTML = [...monthSet].sort().map(ym => {
-    const [yy, mm] = ym.split('-').map(Number);
-    const dayNames = {};
-    spans.forEach(sp => {
-      for (const c = new Date(sp.s); c <= sp.e; c.setDate(c.getDate() + 1)) {
-        if (c.getFullYear() === yy && c.getMonth() === mm - 1) (dayNames[c.getDate()] = dayNames[c.getDate()] || []).push(sp.nm);
-      }
-    });
-    const undatedNames = undatedByYm[ym] || [];
-    const daysInMonth = new Date(yy, mm, 0).getDate();
-    const startWd = (new Date(yy, mm - 1, 1).getDay() + 6) % 7;   // Mon=0
-    let cells = '';
-    for (let i = 0; i < startWd; i++) cells += `<div class="tl-cal-day blank"></div>`;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const names = dayNames[d] || [];
-      const n = names.length;
-      const isToday = yy === todayY && mm - 1 === todayM && d === todayD;
-      const cls = ['tl-cal-day', n ? 'has' : '', isToday ? 'today' : ''].filter(Boolean).join(' ');
-      const click = n ? ` onclick="laterCalJump('${ym}')" title="${tip(names)}"` : '';
-      cells += `<div class="${cls}"${click}>${d}${n > 1 ? `<span class="tl-cal-cnt">${n}</span>` : ''}</div>`;
+  const months = [...monthSet].sort();
+  const yearItems = {};   // total bucket items per year (year-header summary)
+  Object.keys(itemCountByYm).forEach(ym => { const y = ym.slice(0, 4); yearItems[y] = (yearItems[y] || 0) + itemCountByYm[ym]; });
+  let html = '', lastYear = null, firstYear = true;
+  months.forEach(ym => {
+    const year = ym.slice(0, 4);
+    if (year !== lastYear) {   // collapsible year header (groups its months)
+      const yColl = isLaterCalYearCollapsed(year, curYm, nextYm);
+      const yt = yearItems[year] || 0;
+      html += `<div class="tl-cal-yr-hdr${firstYear ? ' first' : ''}${year < curY ? ' overdue' : ''}" onclick="toggleLaterCalYear('${year}')"><span class="tl-cal-caret">${yColl ? '▸' : '▾'}</span>${year}<span class="tl-cal-yr-sum">${yt} ${yt === 1 ? 'item' : 'items'}</span></div>`;
+      lastYear = year; firstYear = false;
     }
+    if (isLaterCalYearCollapsed(year, curYm, nextYm)) return;   // collapsed year hides its months
+    const [yy, mm] = ym.split('-').map(Number);
+    const undatedNames = undatedByYm[ym] || [];
     const od = ym < curYm;
     const total = itemCountByYm[ym] || 0;
+    const mColl = isLaterCalMonthCollapsed(ym, curYm, nextYm);
     const undatedBadge = undatedNames.length
-      ? `<span class="tl-later-undated" onclick="laterCalJump('${ym}')" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
+      ? `<span class="tl-later-undated" onclick="event.stopPropagation();laterCalJump('${ym}')" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
       : '';
     const sum = total ? `<span class="tl-later-msum">${total} ${total === 1 ? 'item' : 'items'}</span>` : '';
-    return `<div class="tl-later-month">
-      <div class="tl-later-mlabel${od ? ' overdue' : ''}">${monthLabel(ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}${sum}</div>
-      <div class="tl-cal-grid">${CAL_WD.map(w => `<div class="tl-cal-wd">${w}</div>`).join('')}${cells}</div>
-    </div>`;
-  }).join('');
+    html += `<div class="tl-later-month">
+      <div class="tl-later-mlabel${od ? ' overdue' : ''}" onclick="toggleLaterCalMonth('${ym}')"><span class="tl-cal-caret">${mColl ? '▸' : '▾'}</span>${monthLabel(ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}${sum}</div>`;
+    if (!mColl) {   // expanded → the day grid
+      const dayNames = {};
+      spans.forEach(sp => {
+        for (const c = new Date(sp.s); c <= sp.e; c.setDate(c.getDate() + 1)) {
+          if (c.getFullYear() === yy && c.getMonth() === mm - 1) (dayNames[c.getDate()] = dayNames[c.getDate()] || []).push(sp.nm);
+        }
+      });
+      const daysInMonth = new Date(yy, mm, 0).getDate();
+      const startWd = (new Date(yy, mm - 1, 1).getDay() + 6) % 7;   // Mon=0
+      let cells = '';
+      for (let i = 0; i < startWd; i++) cells += `<div class="tl-cal-day blank"></div>`;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const names = dayNames[d] || [];
+        const n = names.length;
+        const isToday = yy === todayY && mm - 1 === todayM && d === todayD;
+        const cls = ['tl-cal-day', n ? 'has' : '', isToday ? 'today' : ''].filter(Boolean).join(' ');
+        const click = n ? ` onclick="laterCalJump('${ym}')" title="${tip(names)}"` : '';
+        cells += `<div class="${cls}"${click}>${d}${n > 1 ? `<span class="tl-cal-cnt">${n}</span>` : ''}</div>`;
+      }
+      html += `<div class="tl-cal-grid">${CAL_WD.map(w => `<div class="tl-cal-wd">${w}</div>`).join('')}${cells}</div>`;
+    }
+    html += `</div>`;
+  });
+  container.innerHTML = html;
 }
 // jump from the calendar to the month in the Later list (expand + scroll into view)
 function laterCalJump(ym) {
