@@ -178,6 +178,8 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.expand-btn:hover{opacity:1;background:var(--off)}}
 .expand-btn svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .panel-expanded{position:fixed!important;inset:0!important;z-index:80;border-radius:0!important;overflow-y:auto;padding:1.1rem 1.3rem!important;background:var(--w)!important;border:none!important;display:flex;flex-direction:column}
+/* panel-main carries an inline overflow:visible (for normal mode) — force scroll when expanded so the Later calendar/timeline can scroll */
+.card.panel-expanded{overflow-y:auto!important}
 .notes-card.panel-expanded{overflow:hidden}
 .panel-expanded .expand-btn{opacity:1}
 .expand-esc{font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;margin-left:.4rem;letter-spacing:.04em}
@@ -201,6 +203,9 @@ textarea::placeholder{color:var(--mid)}
 .tl-container{display:flex;flex-direction:column;width:100%;border:1.5px solid var(--dark);border-radius:var(--r);overflow:hidden}
 /* Later overview: month mini-calendars marking days that have tasks (no times) */
 .tl-container.later-mode{border:none;gap:.45rem;overflow:visible}
+.tl-cal-toolbar{display:flex;justify-content:flex-end}
+.tl-cal-allbtn{font-family:'DM Sans',sans-serif;font-size:.66rem;color:var(--muted);background:none;border:1px solid var(--light);border-radius:var(--r);padding:.15rem .45rem;cursor:pointer;user-select:none}
+@media(hover:hover){.tl-cal-allbtn:hover{color:var(--black);border-color:var(--mid)}}
 .tl-cal-yr-hdr{display:flex;align-items:center;gap:.35rem;font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:var(--black);cursor:pointer;padding:.3rem .1rem .1rem;border-top:1.5px solid var(--light);margin-top:.3rem;user-select:none}
 .tl-cal-yr-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .tl-cal-yr-hdr.overdue{color:var(--muted)}
@@ -1714,6 +1719,16 @@ function isLaterCalMonthCollapsed(ym, curYm, nextYm) { return (ym in laterCalCol
 function isLaterCalYearCollapsed(y, curYm, nextYm) { return (y in laterCalYearCollapse) ? !!laterCalYearCollapse[y] : !(y === curYm.slice(0, 4) || y === nextYm.slice(0, 4)); }
 function toggleLaterCalMonth(ym) { const c = curMonthYm(), n = nextMonthYm(); laterCalCollapse[ym] = !isLaterCalMonthCollapsed(ym, c, n); renderLaterTimeline(); }
 function toggleLaterCalYear(y) { const c = curMonthYm(), n = nextMonthYm(); laterCalYearCollapse[y] = !isLaterCalYearCollapsed(y, c, n); renderLaterTimeline(); }
+let _laterCalMonths = [];   // last rendered month set (for expand/collapse-all)
+// expand / collapse all months + years in the overview calendar (mirrors the Later list's ⊟)
+function toggleAllLaterCal() {
+  const c = curMonthYm(), n = nextMonthYm();
+  const years = [...new Set(_laterCalMonths.map(m => m.slice(0, 4)))];
+  const anyExpanded = _laterCalMonths.some(ym => !isLaterCalMonthCollapsed(ym, c, n)) || years.some(y => !isLaterCalYearCollapsed(y, c, n));
+  _laterCalMonths.forEach(ym => { laterCalCollapse[ym] = anyExpanded; });   // something open → collapse all; else expand all
+  years.forEach(y => { laterCalYearCollapse[y] = anyExpanded; });
+  renderLaterTimeline();
+}
 function renderLaterTimeline(container) {
   container = container || el('tl-container'); if (!container) return;
   const ymKey = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
@@ -1734,15 +1749,19 @@ function renderLaterTimeline(container) {
   });
   // every month a span touches must be shown (a multi-day range can spill into a month with no bucket)
   spans.forEach(sp => { const c = new Date(sp.s.getFullYear(), sp.s.getMonth(), 1), end = new Date(sp.e.getFullYear(), sp.e.getMonth(), 1); while (c <= end) { monthSet.add(ymKey(c)); c.setMonth(c.getMonth() + 1); } });
-  if (!monthSet.size) { container.innerHTML = '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
+  if (!monthSet.size) { _laterCalMonths = []; container.innerHTML = '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
   const now = new Date();
   const todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
   const curYm = curMonthYm(), nextYm = nextMonthYm(), curY = curYm.slice(0, 4);
   const tip = names => esc(names.map(x => '• ' + x).join('\n'));   // newline-separated → multiline native tooltip
   const months = [...monthSet].sort();
+  _laterCalMonths = months;
+  // toolbar: expand / collapse all (mirrors the Later list's ⊟)
+  const anyOpen = months.some(ym => !isLaterCalMonthCollapsed(ym, curYm, nextYm)) || [...new Set(months.map(m => m.slice(0, 4)))].some(y => !isLaterCalYearCollapsed(y, curYm, nextYm));
+  let html0 = `<div class="tl-cal-toolbar"><button class="tl-cal-allbtn" onclick="toggleAllLaterCal()" title="${anyOpen ? 'collapse all' : 'expand all'}">${anyOpen ? '⊟ collapse all' : '⊞ expand all'}</button></div>`;
   const yearItems = {};   // total bucket items per year (year-header summary)
   Object.keys(itemCountByYm).forEach(ym => { const y = ym.slice(0, 4); yearItems[y] = (yearItems[y] || 0) + itemCountByYm[ym]; });
-  let html = '', lastYear = null, firstYear = true;
+  let html = html0, lastYear = null, firstYear = true;
   months.forEach(ym => {
     const year = ym.slice(0, 4);
     if (year !== lastYear) {   // collapsible year header (groups its months)
