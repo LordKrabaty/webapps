@@ -6718,11 +6718,15 @@ function init() {
     const date = rawSession.planDate;
     const existing = weekDays.find(d => d.date === date);
     if (existing) {
+      // The session and weekDays[date] are written together (schedSave), so a difference can only come
+      // from a sync merge → weekDays[date] is the newer, synced source. Never overwrite it with the
+      // stale session (doing so wiped other devices' edits and re-stamped a fresh mt that then clobbered
+      // the cloud on the next push). Only adopt the session when they already match (cosmetic window times).
       const changed = JSON.stringify(existing.items) !== JSON.stringify(rawSession.items);
-      existing.items = rawSession.items;
-      if (rawSession.windowStart) existing.windowStart = rawSession.windowStart;
-      if (rawSession.windowEnd)   existing.windowEnd   = rawSession.windowEnd;
-      if (changed) existing.mt = Date.now();
+      if (!changed) {
+        if (rawSession.windowStart) existing.windowStart = rawSession.windowStart;
+        if (rawSession.windowEnd)   existing.windowEnd   = rawSession.windowEnd;
+      }
     } else {
       weekDays.push({ id: Date.now(), date, items: rawSession.items,
         windowStart: rawSession.windowStart || '6:00',
@@ -6735,9 +6739,19 @@ function init() {
 
   // Load data for today
   if (rawSession) {
-    // Today session → restore
-    applySessionData(rawSession);
-    activeLibId = rawSession.activeLibId || null;
+    // Today session → restore. BUT if the synced weekDays[today] differs, a merge updated it without the
+    // session (they are otherwise written together) → prefer the synced source and re-sync the session.
+    // This heals sessions left stale by older builds; without it the active day kept showing the old
+    // version and the next edit clobbered the cloud (the reported "week tasks deleted" bug).
+    const todayEntry = weekDays.find(d => d.date === today);
+    if (todayEntry && JSON.stringify(todayEntry.items) !== JSON.stringify(rawSession.items || [])) {
+      applySessionData(todayEntry);
+      activeLibId = null;
+      saveSession();
+    } else {
+      applySessionData(rawSession);
+      activeLibId = rawSession.activeLibId || null;
+    }
   } else {
     // No today session → try weekDays, otherwise an empty start
     const todayEntry = weekDays.find(d => d.date === today);
@@ -6919,12 +6933,13 @@ window.addEventListener('resize', updateAppGrid);
   async function checkCloudOnStartup() {
     const gistId = localStorage.getItem(WK(GISTID));
     if (!gistId) {
-      // the window has no own gist → with autosync on and existing data, create it right away
+      // the window has no own gist → nothing to pull → allow pushes (the first one creates the gist)
+      initialPullDone.add(activeWin);
       if (autosyncEnabled() && hasApiKey() && typeof windowHasData === 'function' && windowHasData()) scheduleAutoPush();
       return;
     }
     const checkedKey = 'todo-app-cloud-checked::' + activeWin;
-    if (sessionStorage.getItem(checkedKey)) return;
+    if (sessionStorage.getItem(checkedKey)) { initialPullDone.add(activeWin); return; }   // already pulled this session
     sessionStorage.setItem(checkedKey, '1');
     const winAtStart = activeWin;              // the window we are checking the cloud for (activeWin may switch during fetch)
     const btn = el('syncDownBtn'); const origTitle = btn.title;
@@ -6956,13 +6971,23 @@ window.addEventListener('resize', updateAppGrid);
       el('importModal').querySelector('h2').textContent = 'Import from Gist';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('☁ cloud has different data — check the selection');
-    } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
+    } catch(e) {} finally {
+      btn.disabled = false; btn.title = origTitle;
+      initialPullDone.add(winAtStart);   // pull is done (merged or not) → uploads for this window are safe now
+      if (pushDeferred && autosyncEnabled() && hasApiKey()) { pushDeferred = false; scheduleAutoPush(); }   // flush a push held back by the gate
+    }
   }
 
   /* ── AUTOSYNC (silent two-way sync) ─── */
   const ASKEY = 'todo-app-autosync';
   const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
   let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
+  // PULL-BEFORE-PUSH gate: window ids whose initial cloud check has completed (merged) this session.
+  // Until a window is in here, doAutoPush() defers — a push before the first pull would PATCH the gist
+  // with a stale full-file snapshot and clobber newer cloud data (no server-side merge). Reset on every
+  // window switch / autosync-enable so each fresh cloud check pulls before any upload.
+  const initialPullDone = new Set();
+  let pushDeferred = false;     // a push was held back by the gate → flush it once the pull completes
   let applyingRemote = false;   // true during a silent merge → suppresses the save-hook (no recursion)
   let cloudSchemaAhead = false; // cloud written by a newer app version → pause our push so we can't overwrite it
   let schemaWarnShown = false;  // the blocking warning is shown at most once per session
@@ -7083,6 +7108,7 @@ window.addEventListener('resize', updateAppGrid);
       // PULL → merge → push via checkCloudOnStartup — a direct push on a new device would
       // overwrite the gist with an empty local state before the cloud data is downloaded
       try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+      initialPullDone.delete(activeWin);   // force a fresh pull before any upload
       checkCloudOnStartup();
     }
   }
@@ -7116,6 +7142,10 @@ window.addEventListener('resize', updateAppGrid);
     // before we return after the await to save the newly created Gist ID (otherwise it would end up on the wrong window)
     const idKey = WK(GISTID), winAtStart = activeWin;
     let gistId = localStorage.getItem(idKey);
+    // PULL-BEFORE-PUSH: this window has a gist (cloud data exists) but its initial cloud check hasn't merged
+    // yet this session → defer. Pushing now would overwrite the gist with a stale snapshot before we've seen
+    // the other devices' edits. checkCloudOnStartup() re-triggers this push once the pull completes.
+    if (gistId && !initialPullDone.has(winAtStart)) { pushDeferred = true; return; }
     let creating = !gistId;        // the window has no gist yet → autosync creates it (POST)
     pushing = true; setSyncState('syncing');
     try {
@@ -7274,7 +7304,15 @@ window.addEventListener('resize', updateAppGrid);
     // if the merge changed the currently shown day, refresh the live buffer — otherwise the next autoSavePlanDay() would overwrite it with the old version
     if (activePlanDate) {
       const curDay = weekDays.find(d => d.date === activePlanDate);
-      if (curDay && JSON.stringify(curDay) !== prevActiveSnap) applySessionData(curDay);
+      if (curDay && JSON.stringify(curDay) !== prevActiveSnap) {
+        applySessionData(curDay);
+        // CRITICAL: also persist the refreshed buffer into the session. SESSION_KEY is the ONLY source
+        // for the active day at startup (init() restores it and ignores weekDays for the current day).
+        // Without this, a later reload restores the STALE session, the merged-away changes from another
+        // device reappear as "deleted", and the next edit stamps that stale content with a fresh mt →
+        // it clobbers the newer cloud version on push. (inbox/later are immune — never sourced from the session.)
+        try { saveSession(); } catch(e) {}
+      }
     }
     if (added || updated || removed) {
       saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans(); saveRecur(); saveWeekNotes();
@@ -7512,6 +7550,7 @@ window.addEventListener('resize', updateAppGrid);
     lastPushTs = 0;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+    initialPullDone.delete(activeWin);   // switched into this window → pull its cloud before allowing uploads
     checkCloudOnStartup();
   };
   // best-effort push of the outgoing window to ITS gist (called BEFORE switching activeWin —
