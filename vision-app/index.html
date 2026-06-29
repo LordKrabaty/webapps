@@ -340,6 +340,22 @@ textarea::placeholder{color:var(--mid)}
 .guide-sec ul{list-style:none;display:flex;flex-direction:column;gap:.3rem}
 .guide-sec li{font-size:.8rem;line-height:1.5;color:var(--dark);padding-left:.75rem;position:relative}
 .guide-sec li::before{content:'·';position:absolute;left:.1rem;color:var(--mid);font-weight:700}
+/* guide — edit mode */
+.guide-edit-h{font-family:'Cormorant Garamond',serif;font-size:.98rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--black);width:100%;box-sizing:border-box;background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.15rem .1rem .2rem;outline:none}
+.guide-edit-h:focus{border-bottom-color:var(--black)}
+.guide-erow{display:flex;align-items:flex-start;gap:.3rem;margin-bottom:.25rem}
+.guide-erow textarea{flex:1 1 auto;min-width:0;min-height:0;font-size:.8rem;line-height:1.5;color:var(--dark);background:var(--w);border:var(--b);border-radius:var(--r);padding:.3rem .4rem;outline:none;resize:none;overflow:hidden;font-family:'DM Sans',sans-serif}
+.guide-erow textarea:focus{outline:2px solid var(--black);outline-offset:1px}
+.guide-ibtn{width:20px;height:20px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.5;font-size:.78rem;color:var(--black);line-height:1;padding:0;font-family:'DM Mono',monospace}
+@media(hover:hover){.guide-ibtn:hover{opacity:1;background:var(--off)}}
+.guide-sec-del{margin-left:auto}
+.guide-add{font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.22rem .5rem;cursor:pointer;margin-top:.15rem}
+@media(hover:hover){.guide-add:hover{background:var(--off)}}
+.guide-edit-btn{width:22px;height:22px;border:var(--bh);border-radius:3px;background:var(--w);color:var(--black);cursor:pointer;font-size:.8rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.guide-edit-btn:active{background:var(--off)}
+.guide-edit-btn.on{background:var(--black);color:var(--w)}
+@media(hover:hover){.guide-edit-btn:hover{background:var(--off)}}
+@media(hover:hover){.guide-edit-btn.on:hover{background:var(--black)}}
 
 /* snapshot preview */
 .snap-bar{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;padding:.5rem .6rem;border:var(--bh);border-radius:var(--r);margin-bottom:.85rem;background:var(--off)}
@@ -407,39 +423,11 @@ textarea::placeholder{color:var(--mid)}
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Guide</span></div>
-    <div style="overflow-y:auto;flex:1;min-height:0">
-      <div class="guide-sec">
-        <div class="guide-h">Why a vision</div>
-        <ul>
-          <li>It lets you see meaning and feel you can influence your life (agency).</li>
-          <li>Lower the ego, be a healthy donor — focus on sense, not recognition.</li>
-          <li>Problems give life meaning. Don't give up easily — stay on the bus long enough.</li>
-          <li>The universe doesn't care, so wanting to be just a little bit better is fully OK.</li>
-        </ul>
-      </div>
-      <div class="guide-sec">
-        <div class="guide-h">How to build it</div>
-        <ul>
-          <li>First, want the change. Then ask "how?" top→bottom and "why?" bottom→top.</li>
-          <li>Blend the Ikigai overlap: good at · love · the world needs · feeds you.</li>
-          <li>Describe the journey, not just the destination — real life is in the moment.</li>
-          <li>Keep the upper layers stable; stay creative in the lower layers.</li>
-          <li>Put it on paper. Start simple, then update it constantly for the better.</li>
-          <li>Strive for overlap, emotion and visualization. Use it to decide and to move.</li>
-        </ul>
-      </div>
-      <div class="guide-sec">
-        <div class="guide-h">From chaos to meaning</div>
-        <ul>
-          <li>Know your why and the how comes easily. Adaptability is the key skill today.</li>
-          <li>Money, status and recognition don't bring lasting contentment.</li>
-          <li>You can't fake meaning and nobody hands it to you — keep searching yourself.</li>
-          <li>Questions matter more than answers — keep returning to your Ikigai.</li>
-          <li>First find your strengths, then use them meaningfully → flow → better results.</li>
-        </ul>
-      </div>
+    <div class="card-title">
+      <span class="card-title-text" style="flex:0 1 auto">Guide</span>
+      <button class="guide-edit-btn" id="guideEditBtn" onclick="toggleGuideEdit()" title="edit the guide">✎</button>
     </div>
+    <div id="guideBody" style="overflow-y:auto;flex:1;min-height:0"></div>
   </div>
 </div>
 
@@ -540,6 +528,9 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-list" id="exportList"></div>
     <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Saved versions</p>
     <div class="modal-list" id="exportArchList"></div>
+    <label style="display:flex;align-items:center;gap:.5rem;margin-top:.7rem;font-size:.82rem;color:var(--black);cursor:pointer">
+      <input type="checkbox" id="exportGuideCb" checked onchange="exportGuide=this.checked"> Include the guide
+    </label>
     <div style="margin-top:.8rem">
       <label style="font-size:.78rem;color:var(--muted)">File name</label>
       <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
@@ -612,6 +603,11 @@ textarea::placeholder{color:var(--mid)}
       <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Items</p>
       <div class="modal-list" id="importList"></div>
     </div>
+    <div id="importGuideSection" style="display:none">
+      <label style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem;font-size:.82rem;color:var(--black);cursor:pointer">
+        <input type="checkbox" id="importGuideCb" checked> Import the guide <span style="color:var(--muted)">(replaces yours if newer)</span>
+      </label>
+    </div>
     <div class="modal-row" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
       <button class="modal-btn primary" onclick="doImport()">import selected</button>
@@ -630,11 +626,13 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 2;   // v2: archive (versions) is LWW-merged incl. name/note — older append-only clients would clobber version edits on push
+const APP_SCHEMA = 3;   // v3: editable guide synced as a single LWW object — older clients lack it and would drop it on push
+                        // v2: archive (versions) is LWW-merged incl. name/note — older append-only clients would clobber version edits on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'vision-v1-session';
 const LIBRARY_KEY = 'vision-v1-library';
 const ARCHIVE_KEY = 'vision-v1-archive';
+const GUIDE_KEY   = 'vision-v1-guide';
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let library = [], activeLibId = null;
@@ -644,6 +642,8 @@ let autoSave = false;
 const UNDO_MAX = 40;
 // ── VISION STATE (declared before init() runs to avoid TDZ) ──
 let blocks = [];                 // live blocks of the active vision: [{id, heading, text}]
+let guide = null;                // editable guide rail: { mt, sections:[{h, items:[...]}] }
+let guideEditing = false;
 let previewId = null;            // id of the snapshot currently previewed (null = editing)
 let _focusSnap = null, _pushedThisFocus = false;   // undo coalescing across a typing session
 
@@ -686,6 +686,85 @@ function loadLibrary() { try { library = JSON.parse(localStorage.getItem(LIBRARY
 function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
 function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch(e) { archive = []; } }
 function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
+
+// ── GUIDE (editable left-rail reference, LWW-synced as one object) ──────────
+function defaultGuide() {
+  return { mt: 0, sections: [   // mt:0 baseline → never overwrites real cloud data on first run
+    { h: 'Why a vision', items: [
+      'It lets you see meaning and feel you can influence your life (agency).',
+      'Lower the ego, be a healthy donor — focus on sense, not recognition.',
+      "Problems give life meaning. Don't give up easily — stay on the bus long enough.",
+      "The universe doesn't care, so wanting to be just a little bit better is fully OK." ] },
+    { h: 'How to build it', items: [
+      'First, want the change. Then ask "how?" top→bottom and "why?" bottom→top.',
+      'Blend the Ikigai overlap: good at · love · the world needs · feeds you.',
+      'Describe the journey, not just the destination — real life is in the moment.',
+      'Keep the upper layers stable; stay creative in the lower layers.',
+      'Put it on paper. Start simple, then update it constantly for the better.',
+      'Strive for overlap, emotion and visualization. Use it to decide and to move.' ] },
+    { h: 'From chaos to meaning', items: [
+      'Know your why and the how comes easily. Adaptability is the key skill today.',
+      "Money, status and recognition don't bring lasting contentment.",
+      "You can't fake meaning and nobody hands it to you — keep searching yourself.",
+      'Questions matter more than answers — keep returning to your Ikigai.',
+      'First find your strengths, then use them meaningfully → flow → better results.' ] }
+  ] };
+}
+function loadGuide() {
+  try { guide = JSON.parse(localStorage.getItem(GUIDE_KEY) || 'null'); } catch(e) { guide = null; }
+  if (!guide || !Array.isArray(guide.sections)) guide = defaultGuide();
+  guide.sections = guide.sections.map(s => ({ ...s, h: s.h || '', items: Array.isArray(s.items) ? s.items.slice() : [] }));   // preserve-unknown
+}
+function saveGuide() { try { localStorage.setItem(GUIDE_KEY, JSON.stringify(guide)); } catch(e) {} }   // wrapped → autoSyncOnSave
+function guideStamp() { if (guide) guide.mt = Date.now(); }   // stamp only when content actually changed
+let guideSaveT;
+function schedGuideSave() { clearTimeout(guideSaveT); guideSaveT = setTimeout(() => { saveGuide(); showSave(); }, 400); }
+function renderGuide() {
+  const wrap = el('guideBody'); if (!wrap || !guide) return;
+  if (guideEditing) {
+    wrap.innerHTML = guide.sections.map((s,i) => `
+      <div class="guide-sec">
+        <div class="guide-erow">
+          <input class="guide-edit-h" value="${esc(s.h)}" placeholder="Section heading…" oninput="onGuideHead(${i},this.value)">
+          <button class="guide-ibtn guide-sec-del" title="delete section" onclick="guideDelSection(${i})">✕</button>
+        </div>
+        ${s.items.map((it,j) => `
+          <div class="guide-erow">
+            <textarea class="guide-eitem" placeholder="Bullet text…" oninput="onGuideItem(${i},${j},this.value);autoGrow(this)">${esc(it)}</textarea>
+            <button class="guide-ibtn" title="delete bullet" onclick="guideDelItem(${i},${j})">✕</button>
+          </div>`).join('')}
+        <button class="guide-add" onclick="guideAddItem(${i})">+ bullet</button>
+      </div>`).join('')
+      + `<button class="guide-add" onclick="guideAddSection()">+ section</button>`;
+    wrap.querySelectorAll('textarea').forEach(autoGrow);
+  } else {
+    if (!guide.sections.length) { wrap.innerHTML = '<p class="lib-empty">Guide is empty — click ✎ to add content.</p>'; return; }
+    wrap.innerHTML = guide.sections.map(s => `
+      <div class="guide-sec">
+        ${s.h ? `<div class="guide-h">${esc(s.h)}</div>` : ''}
+        <ul>${s.items.filter(it => (it||'').trim()).map(it => `<li>${esc(it)}</li>`).join('')}</ul>
+      </div>`).join('');
+  }
+}
+function toggleGuideEdit() {
+  guideEditing = !guideEditing;
+  const b = el('guideEditBtn');
+  if (b) { b.classList.toggle('on', guideEditing); b.textContent = guideEditing ? '✓' : '✎'; b.title = guideEditing ? 'done editing' : 'edit the guide'; }
+  renderGuide();
+  if (!guideEditing) { clearTimeout(guideSaveT); saveGuide(); }   // flush on exit
+}
+function onGuideHead(i,v) { if (!guide.sections[i]) return; guide.sections[i].h = v; guideStamp(); schedGuideSave(); }
+function onGuideItem(i,j,v) { if (!guide.sections[i]) return; guide.sections[i].items[j] = v; guideStamp(); schedGuideSave(); }
+function guideAddItem(i) { if (!guide.sections[i]) return; guide.sections[i].items.push(''); guideStamp(); saveGuide(); renderGuide();
+  const rows = el('guideBody').querySelectorAll('.guide-sec')[i].querySelectorAll('textarea'); const last = rows[rows.length-1]; if (last) last.focus(); }
+function guideDelItem(i,j) { if (!guide.sections[i]) return; guide.sections[i].items.splice(j,1); guideStamp(); saveGuide(); renderGuide(); }
+function guideAddSection() { guide.sections.push({ h:'', items:[''] }); guideStamp(); saveGuide(); renderGuide();
+  const secs = el('guideBody').querySelectorAll('.guide-sec'); const last = secs[secs.length-1]; if (last) { const h = last.querySelector('input'); if (h) h.focus(); } }
+async function guideDelSection(i) {
+  const s = guide.sections[i]; if (!s) return;
+  if ((s.h || s.items.some(x => (x||'').trim())) && !await customConfirm('Delete this whole section?','delete')) return;
+  guide.sections.splice(i,1); guideStamp(); saveGuide(); renderGuide();
+}
 
 // ── SESSION ────────────────────────────────────────────────────────────────
 // APP LOGIC: applySessionData(d) must COPY the items — items = JSON.parse(JSON.stringify(d.items)) —
@@ -1005,10 +1084,12 @@ function toggleNewMenu(e) {
 function closeNewMenu() { const m = el('newMenu'); if (m) m.style.display = 'none'; }
 
 // ── EXPORT ────────────────────────────────────────────────────────────────
-let exportSelected = new Set(), exportArchSelected = new Set();
+let exportSelected = new Set(), exportArchSelected = new Set(), exportGuide = true;
 function openExportModal() {
   exportSelected = new Set(library.map(e => e.id));
   exportArchSelected = new Set(archive.map(e => e.id));
+  exportGuide = true;
+  const gcb = el('exportGuideCb'); if (gcb) gcb.checked = true;
   el('exportList').innerHTML = library.length
     ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
@@ -1042,7 +1123,7 @@ function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
   if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems}, null, 2);
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, ...(exportGuide ? { guide } : {})}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
   let downloaded = false;
@@ -1069,13 +1150,14 @@ function copyExportText() {
 }
 
 // ── IMPORT ────────────────────────────────────────────────────────────────
-let importData = [], importSelected = new Set(), importArchiveData = [];
+let importData = [], importSelected = new Set(), importArchiveData = [], importGuideData = null;
 function openImportModal() {
-  importData = []; importSelected = new Set();
+  importData = []; importSelected = new Set(); importGuideData = null;
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
   el('importFile').value = ''; el('importPaste').value = '';
   el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
+  el('importGuideSection').style.display = 'none';
   el('importActions').style.display = 'none';
   el('importCancel').style.display = 'flex';
   el('importModal').classList.add('open');
@@ -1087,6 +1169,7 @@ function parseImportJson(text) {
     if (!items.length) throw new Error('No items in the file');
     importData = items;
     importArchiveData = parsed.archive || [];   // saved versions travel with the import
+    importGuideData = (parsed.guide && Array.isArray(parsed.guide.sections)) ? parsed.guide : null;   // editable guide travels too
     importSelected = new Set(items.map(x => x.id));
     el('importList').innerHTML = items.map(x => `
       <label class="modal-item sel" id="ii-${x.id}">
@@ -1094,6 +1177,8 @@ function parseImportJson(text) {
         ${esc(x.name||String(x.id))}
       </label>`).join('');
     el('importItemSection').style.display = 'block';
+    const gSec = el('importGuideSection'), gCb = el('importGuideCb');
+    if (importGuideData) { gSec.style.display = 'block'; if (gCb) gCb.checked = true; } else { gSec.style.display = 'none'; }
     el('importActions').style.display = 'flex';
     el('importCancel').style.display = 'none';
   } catch(err) {
@@ -1128,13 +1213,21 @@ function doImport() {
     if (i >= 0) { archive[i] = a; } else { archive.push(a); arcAdded++; }
   });
   if (importArchiveData && importArchiveData.length) saveArchive();
+  // guide — LWW by mt (only adopt a strictly newer guide), if the user kept the checkbox on
+  const wantGuide = !el('importGuideCb') || el('importGuideCb').checked;
+  let guideImported = false;
+  if (wantGuide && importGuideData && (+importGuideData.mt || 0) > (+(guide && guide.mt) || 0)) {
+    guide = importGuideData;
+    guide.sections = (guide.sections || []).map(s => ({ ...s, h: s.h || '', items: Array.isArray(s.items) ? s.items.slice() : [] }));
+    saveGuide(); renderGuide(); guideImported = true;
+  }
   // if the active vision was overwritten by the import, refresh the live editor buffer
   const ae = library.find(e => String(e.id) === String(activeLibId));
   if (ae) applySessionData(ae.data);
   exitPreview();
   renderLibrary();
   closeModal('importModal');
-  showSave('↓ imported: ' + (added + updated) + ' vision' + ((added+updated)!==1?'s':'') + (updated ? ' (' + updated + ' updated)' : '') + (arcAdded ? ' + ' + arcAdded + ' versions' : ''));
+  showSave('↓ imported: ' + (added + updated) + ' vision' + ((added+updated)!==1?'s':'') + (updated ? ' (' + updated + ' updated)' : '') + (arcAdded ? ' + ' + arcAdded + ' versions' : '') + (guideImported ? ' + guide' : ''));
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
@@ -1145,6 +1238,7 @@ function init() {
   loadPanelFs();
   loadLibrary(); renderLibrary();
   loadArchive();
+  loadGuide(); renderGuide();
   const restored = loadSession();
   if (activeLibId) markSaved();
   updateUndoBtn();
@@ -1850,15 +1944,15 @@ function renderCompare(snap, cur, meta) {
     return removed;
   }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(items, arch, tomb) {
+  function sigOf(items, arch, tomb, gd) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
     // APP LOGIC: add other synced collections to the signature (always with mt!), otherwise their edits will not be pulled
-    // archive is LWW too (incl. mt) so version renames/notes propagate
-    return [idS(items), idS(arch), tS(tomb)].join('||');
+    // archive is LWW too (incl. mt) so version renames/notes propagate; guide is a single LWW object
+    return [idS(items), idS(arch), tS(tomb), 'g' + ((gd && gd.mt) || 0)].join('||');
   }
-  function localSig() { return sigOf(library, archive, tombstones); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}); }
+  function localSig() { return sigOf(library, archive, tombstones, guide); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}, r.guide); }
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn() {
@@ -1900,7 +1994,7 @@ function renderCompare(snap, cur, meta) {
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
     // APP LOGIC: add other synced collections (settings, days, inbox…)
-    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, tombstones: tombstones, device: getDeviceName() };
+    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, guide: guide, tombstones: tombstones, device: getDeviceName() };
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
@@ -1978,6 +2072,14 @@ function renderCompare(snap, cur, meta) {
     // archive — LWW by id (so version renames/notes sync; newer mt wins, deletions via tombstones)
     const arcR = lwwMerge(archive, (record.archive || []), 'arc', x => x.id, c => c);
     archive = arcR.arr; added += arcR.added; updated += arcR.updated; removed += arcR.removed;
+    // guide — single LWW object (newer mt wins); never clobber an in-progress local edit
+    let guideChanged = false;
+    if (record.guide && Array.isArray(record.guide.sections) && !guideEditing
+        && (+record.guide.mt || 0) > (+(guide && guide.mt) || 0)) {
+      guide = record.guide;
+      guide.sections = guide.sections.map(s => ({ ...s, h: s.h || '', items: Array.isArray(s.items) ? s.items.slice() : [] }));
+      guideChanged = true; updated++;
+    }
     // APP LOGIC: merge other collections here — arrays by id/data via lwwMerge(...), object-maps (blocks) with a custom merge
 
     // if the merge changed the active vision (or it was deleted), refresh the live editor buffer,
@@ -1993,6 +2095,7 @@ function renderCompare(snap, cur, meta) {
 
     if (added || updated || removed) {
       saveLibrary(); saveArchive();
+      if (guideChanged) { saveGuide(); renderGuide(); }
       if (typeof renderLibrary === 'function') renderLibrary();
       // APP LOGIC: re-render the other views
       let msg;
@@ -2067,7 +2170,7 @@ function renderCompare(snap, cur, meta) {
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems};
+    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, ...(exportGuide ? { guide } : {})};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
@@ -2243,7 +2346,7 @@ function renderCompare(snap, cur, meta) {
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
   // APP LOGIC: add here the save functions of other synced collections (saveInbox, saveBlockTypes…)
-  ['saveLibrary','saveArchive'].forEach(fn => {
+  ['saveLibrary','saveArchive','saveGuide'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
