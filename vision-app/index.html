@@ -882,7 +882,7 @@ function updateUndoBtn() {
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────
 function clearStorage() { el('clearStorageModal').classList.add('open'); }
 function toggleAllClear() {
-  const boxes = ['clr-session','clr-library','clr-archive','clr-appearance'].map(id => el(id));
+  const boxes = ['clr-session','clr-library','clr-archive','clr-guide','clr-appearance'].map(id => el(id));
   const anyUnchecked = boxes.some(b => !b.checked);
   boxes.forEach(b => b.checked = anyUnchecked);
 }
@@ -892,15 +892,19 @@ async function doSelectiveClear() {
   if (el('clr-library').checked)    toDelete.push('vision-v1-library');
   if (el('clr-archive').checked)    toDelete.push('vision-v1-archive');
   if (el('clr-appearance').checked) toDelete.push('vision-fs','vision-dark','vision-panel-fs');
+  const clearGuide = el('clr-guide').checked;
   // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
   // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
   if (el('clr-library').checked || el('clr-archive').checked) {
     toDelete.push('vision-syncknown');
     try { sessionStorage.removeItem('vision-cloud-checked'); } catch(e) {}
   }
-  if (!toDelete.length) { closeModal('clearStorageModal'); return; }
+  if (!toDelete.length && !clearGuide) { closeModal('clearStorageModal'); return; }
   closeModal('clearStorageModal');
   if (!await customConfirm('Really delete the selected data?','delete')) return;
+  // guide is a single LWW object: empty it with a fresh mt so the deletion wins and propagates,
+  // instead of just dropping the local key (the cloud would re-fill it on the next sync)
+  if (clearGuide) { guide = { mt: Date.now(), sections: [] }; saveGuide(); }
   try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
   location.reload();
 }
@@ -1719,6 +1723,7 @@ function renderCompare(snap, cur, meta) {
       <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>current session</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>visions</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>saved versions</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-guide"><span>guide (clears it everywhere)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings (font, dark mode)</span></label>
     </div>
     <div class="modal-row" style="margin-top:.25rem">
