@@ -146,6 +146,28 @@ toggleDark()                      // přepínač dark mode
 
 ---
 
+## Drag & drop (přeskládání) — VÝCHOZÍ způsob
+
+Když řeknu „přidej drag and drop" / „ať jdou … přetahovat", použij **tenhle** vzor (ne nativní HTML5 `draggable`/`dragstart` — na dotyku nefunguje, ani knihovny z CDN). Funguje na myši, dotyku i peru.
+
+**Princip (proč je plynulý):** během tažení se **NEpřeskupuje DOM** (žádný reflow při každém pohybu). Místo toho se na cílovém řádku ukáže jen **čára-indikátor** (kam položka spadne) a samotné přeřazení datového pole proběhne **až při puštění** → následuje jediný `render`.
+
+**Mechanika (Pointer Events):**
+- Jeden delegovaný `pointerdown` listener na kontejneru (přežije `innerHTML` re-render — kontejner se nemění). Init zavolej jednou, idempotentně (`if (container._dndInit) return;`).
+- Myš: drag začne až po překročení prahu pohybu (~5px). Dotyk/pero: buď **long-press hold** (~180 ms — když je tažný celý řádek), nebo **hned** (když se tahá za vyhrazený úchyt-grip).
+- Řádky mají `data-id`; přeskládává se **podle id**, ne podle indexu. Před změnou `pushUndo()`, po změně `schedSave()` + `render()`.
+- Během tažení: tažený řádek dostane `.dragging` (jen `opacity`), cílový `.drag-over-top`/`.drag-over-bottom` (čára přes `box-shadow`, **žádné CSS animace** kvůli e-inku).
+- `srcRow.style.pointerEvents='none'` během tažení → `elementFromPoint` vidí řádek pod prstem. Globální `touchmove` s `preventDefault` (`{passive:false}`) dokud `dndActive`, aby tažení nescrollovalo stránku. Úchyt-grip má `touch-action:none`.
+- `pointermove`/`pointerup`/`pointercancel` se věší na `document` (capture) při `pointerdown` a odvěšují v `end()`.
+
+**Úchyt vs. celý řádek:** je-li řádek plný editovatelných polí (textarea/input — např. bloky ve vision-app), přidej **vyhrazený grip** (`⠿`, 6-dot SVG) a drag spouštěj jen z něj (`e.target.closest('.grip')`); jinak (řádky bez editace — todo-app) může být tažný celý řádek a `pointerdown` ignoruje start na `button, input, textarea, select, a, [contenteditable]`.
+
+**Šipky ↑/↓ nech** jako spolehlivou alternativu (Boox e-ink: pomalý refresh, tah je nepřesný).
+
+**Referenční implementace:** `todo-app/index.html` → `initDnd()` + `applyDndReorder()` (tažný celý řádek, long-press na dotyku). `vision-app/index.html` → `initBlockDnd()` + `reorderBlocks()` (tažení za grip, dotyk startuje hned). `_template` zatím nemá — portovat na pokyn.
+
+---
+
 ## GitHub Gist sync — hotová infrastruktura
 
 Data jedou v jednom **privátním GitHub gistu** (soubor `APP_NAME-sync.json`, obsah = JSON string). Při kopírování šablony stačí:
