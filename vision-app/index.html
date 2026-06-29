@@ -128,17 +128,21 @@ header{
 @media(hover:hover){.lib-item:hover{background:var(--off);border-color:var(--mid)}}
 .lib-item.active{background:var(--black);border-color:var(--black)}
 .lib-item.active .lib-item-name{color:var(--w)}
-.lib-item-name{flex:1;font-size:.85rem;color:var(--black);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3}
+.lib-item-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:.1rem}
+.lib-item-name{font-size:.85rem;color:var(--black);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3}
+.lib-item-note{font-size:.72rem;color:var(--muted);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.35;white-space:pre-wrap}
+.lib-item.active .lib-item-note{color:var(--light)}
 .lib-item-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0}
 .lib-item.active .lib-item-del{opacity:.55}
 @media(hover:hover){.lib-item:hover .lib-item-del{opacity:.55}}
 @media(hover:hover){.lib-item-del:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
 .lib-item-del svg{width:10px;height:10px;stroke:var(--w);fill:none;stroke-width:2.5;stroke-linecap:round}
 .lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
-.lib-item-exp{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0;font-size:.95rem;line-height:1;color:var(--black);font-family:'DM Mono',monospace}
-.lib-item.active .lib-item-exp{opacity:.7;color:var(--w)}
-@media(hover:hover){.lib-item:hover .lib-item-exp{opacity:.7}}
-@media(hover:hover){.lib-item-exp:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+.lib-item-exp,.lib-item-edit{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0;font-size:.95rem;line-height:1;color:var(--black);font-family:'DM Mono',monospace}
+.lib-item-edit{font-size:.85rem}
+.lib-item.active .lib-item-exp,.lib-item.active .lib-item-edit{opacity:.7;color:var(--w)}
+@media(hover:hover){.lib-item:hover .lib-item-exp,.lib-item:hover .lib-item-edit{opacity:.7}}
+@media(hover:hover){.lib-item-exp:hover,.lib-item-edit:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
 .lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
 .lib-cat-header{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.55rem .55rem .1rem;margin-top:.1rem}
 .lib-cat-header:first-child{margin-top:0;padding-top:.1rem}
@@ -234,7 +238,7 @@ textarea::placeholder{color:var(--mid)}
 /* TOUCH DEVICE TWEAKS */
 @media(hover:none){
   .lib-item:not(.active) .lib-item-del{opacity:.45}
-  .lib-item:not(.active) .lib-item-exp{opacity:.55}
+  .lib-item:not(.active) .lib-item-exp,.lib-item:not(.active) .lib-item-edit{opacity:.55}
 }
 
 /* RESPONSIVE */
@@ -310,12 +314,15 @@ textarea::placeholder{color:var(--mid)}
 .ver-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:.08rem}
 .ver-date{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--black)}
 .ver-sum{font-size:.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ver-note{font-size:.72rem;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.35;white-space:pre-wrap}
+.ver-item.active .ver-note{color:var(--light)}
 .ver-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.4;font-size:.7rem;color:var(--black);line-height:1;padding:0}
 .ver-item.active .ver-del{color:var(--w);opacity:.6}
 @media(hover:hover){.ver-del:hover{opacity:1}}
-.ver-exp{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.5;font-size:.95rem;color:var(--black);line-height:1;padding:0;font-family:'DM Mono',monospace}
-.ver-item.active .ver-exp{color:var(--w);opacity:.7}
-@media(hover:hover){.ver-exp:hover{opacity:1}}
+.ver-exp,.ver-edit{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.5;font-size:.95rem;color:var(--black);line-height:1;padding:0;font-family:'DM Mono',monospace}
+.ver-edit{font-size:.82rem}
+.ver-item.active .ver-exp,.ver-item.active .ver-edit{color:var(--w);opacity:.7}
+@media(hover:hover){.ver-exp:hover,.ver-edit:hover{opacity:1}}
 
 /* compare */
 .cmp-sec{margin-bottom:1rem}
@@ -573,6 +580,26 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 
+<!-- Rename / note modal -->
+<div class="modal-bg" id="itemEditModal">
+  <div class="modal" style="max-width:420px">
+    <h2 id="itemEditTitle">Edit</h2>
+    <div class="field" style="display:flex;flex-direction:column;gap:.25rem">
+      <label for="itemEditName" style="font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Name</label>
+      <input type="text" id="itemEditName" placeholder="Name…" style="width:100%;box-sizing:border-box;padding:.45rem .55rem;font-size:.88rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none" />
+      <span id="itemEditNameHint" style="font-size:.68rem;color:var(--muted)"></span>
+    </div>
+    <div class="field" style="display:flex;flex-direction:column;gap:.25rem;margin-top:.5rem">
+      <label for="itemEditNote" style="font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Note</label>
+      <textarea id="itemEditNote" placeholder="Short note…" style="font-family:'DM Sans',sans-serif;font-size:.85rem;line-height:1.6;min-height:80px;background:var(--w);border:var(--b);border-radius:var(--r);padding:.45rem .55rem;outline:none;resize:vertical;width:100%;box-sizing:border-box;color:var(--black)"></textarea>
+    </div>
+    <div class="modal-row" style="margin-top:.2rem">
+      <button class="modal-btn" onclick="closeModal('itemEditModal')">cancel</button>
+      <button class="modal-btn primary" onclick="saveItemEdit()">save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Import modal -->
 <div class="modal-bg" id="importModal">
   <div class="modal" style="max-width:460px">
@@ -603,7 +630,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 1;
+const APP_SCHEMA = 2;   // v2: archive (versions) is LWW-merged incl. name/note — older append-only clients would clobber version edits on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'vision-v1-session';
 const LIBRARY_KEY = 'vision-v1-library';
@@ -674,7 +701,7 @@ function saveSession() {
     const e = library.find(x => String(x.id) === String(activeLibId));
     if (e && JSON.stringify(e.data) !== JSON.stringify(data)) {
       e.data = JSON.parse(JSON.stringify(data));
-      e.name = (data.title || '').trim() || 'Untitled vision';
+      if (!e.named) e.name = (data.title || '').trim() || 'Untitled vision';   // keep a manually-set name
       e.mt = Date.now();
       saveLibrary();            // wrapped → autoSyncOnSave (tombstones + push)
       renderVisions();          // keep the vision-list label in sync
@@ -1092,12 +1119,15 @@ function doImport() {
     if (i >= 0) { library[i] = t; updated++; } else { library.push(t); added++; }
   });
   saveLibrary();
-  // saved versions (archive) — append-only union by id
+  // saved versions (archive) — dedup by id, update in place; mt = now (import wins on sync)
   let arcAdded = 0;
   (importArchiveData || []).forEach(a => {
-    if (a && a.id != null && !archive.some(x => String(x.id) === String(a.id))) { archive.push(a); arcAdded++; }
+    if (!a || a.id == null) return;
+    a.mt = Date.now();
+    const i = archive.findIndex(x => String(x.id) === String(a.id));
+    if (i >= 0) { archive[i] = a; } else { archive.push(a); arcAdded++; }
   });
-  if (arcAdded) saveArchive();
+  if (importArchiveData && importArchiveData.length) saveArchive();
   // if the active vision was overwritten by the import, refresh the live editor buffer
   const ae = library.find(e => String(e.id) === String(activeLibId));
   if (ae) applySessionData(ae.data);
@@ -1272,8 +1302,13 @@ function renderVisions() {
   wrap.innerHTML = library.map(e => {
     const active = String(e.id) === String(activeLibId);
     const nm = e.name || (e.data && e.data.title) || 'Untitled vision';
+    const note = (e.note || '').trim();
     return `<div class="lib-item${active?' active':''}" onclick="selectVision('${e.id}')">
-      <span class="lib-item-name">${esc(nm)}</span>
+      <div class="lib-item-meta">
+        <span class="lib-item-name">${esc(nm)}</span>
+        ${note ? `<span class="lib-item-note">${esc(note)}</span>` : ''}
+      </div>
+      <button class="lib-item-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('vision','${e.id}')">✎</button>
       <button class="lib-item-exp" title="export as text" onclick="event.stopPropagation();exportVisionText('${e.id}')">↑</button>
       <button class="lib-item-del" title="delete vision" onclick="event.stopPropagation();deleteVision('${e.id}')"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8"/></svg></button>
     </div>`;
@@ -1317,6 +1352,45 @@ function exportVisionText(id) {
   el('visTextArea').value = visionToText(data, entry.name);
   el('visTextArea').dataset.fname = name;
   el('visTextModal').classList.add('open');
+}
+// ── rename / note a vision or a version ──
+let itemEditTarget = null;   // { kind:'vision'|'version', id }
+function openItemEdit(kind, id) {
+  const list = kind === 'version' ? archive : library;
+  const e = list.find(x => String(x.id) === String(id));
+  if (!e) return;
+  itemEditTarget = { kind, id };
+  const titleStr = (e.data && e.data.title || '').trim();
+  el('itemEditTitle').textContent = kind === 'version' ? 'Edit version' : 'Edit vision';
+  el('itemEditName').value = e.name || '';
+  el('itemEditNote').value = e.note || '';
+  el('itemEditNameHint').textContent = kind === 'vision'
+    ? (titleStr ? 'Leave empty to use the vision title: "' + titleStr + '"' : 'Leave empty to use the vision title.')
+    : '';
+  el('itemEditModal').classList.add('open');
+  setTimeout(() => { const n = el('itemEditName'); if (n) n.focus(); }, 0);
+}
+function saveItemEdit() {
+  if (!itemEditTarget) { closeModal('itemEditModal'); return; }
+  const { kind, id } = itemEditTarget;
+  const name = el('itemEditName').value.trim();
+  const note = el('itemEditNote').value.trim();
+  if (kind === 'version') {
+    const s = archive.find(x => String(x.id) === String(id));
+    if (s) { if (name) s.name = name; s.note = note; s.mt = Date.now(); saveArchive(); renderVersions(); }
+  } else {
+    const e = library.find(x => String(x.id) === String(id));
+    if (e) {
+      if (name) { e.name = name; e.named = true; }
+      else { e.named = false; e.name = (e.data && e.data.title || '').trim() || 'Untitled vision'; }   // empty → resume tracking the title
+      e.note = note;
+      e.mt = Date.now();
+      saveLibrary(); renderVisions();
+    }
+  }
+  closeModal('itemEditModal');
+  showSave('✎ saved');
+  itemEditTarget = null;
 }
 function exportVersionText(id) {
   const s = archive.find(x => String(x.id) === String(id));
@@ -1400,7 +1474,8 @@ function renderVersions() {
   wrap.innerHTML = vers.map(s => {
     const active = String(s.id) === String(previewId);
     return `<div class="ver-item${active?' active':''}" onclick="viewSnapshot('${s.id}')">
-      <div class="ver-meta"><span class="ver-date">${esc(s.name||'')}</span><span class="ver-sum">${esc(verSummary(s))}</span></div>
+      <div class="ver-meta"><span class="ver-date">${esc(s.name||'')}</span><span class="ver-sum">${esc(verSummary(s))}</span>${(s.note||'').trim() ? `<span class="ver-note">${esc((s.note||'').trim())}</span>` : ''}</div>
+      <button class="ver-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('version','${s.id}')">✎</button>
       <button class="ver-exp" title="export as text" onclick="event.stopPropagation();exportVersionText('${s.id}')">↑</button>
       <button class="ver-del" title="delete version" onclick="event.stopPropagation();deleteVersion('${s.id}')">✕</button>
     </div>`;
@@ -1606,7 +1681,7 @@ function renderCompare(snap, cur, meta) {
 /* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
    Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
    Data lives in a single private gist (file vision-sync.json).
-   Base kolekce: library (LWW dle id) + archive (append-only union).
+   Base kolekce: library (LWW dle id) + archive (LWW dle id — incl. name/note).
    Add other collections at the spots marked // APP LOGIC. */
 (function(){
   const GHTOKEN = 'vision-gist-token';      // GitHub token (scope gist)
@@ -1768,21 +1843,19 @@ function renderCompare(snap, cur, meta) {
     if (!cloudTomb || typeof cloudTomb !== 'object') return;
     Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
   }
-  // locally delete append-only collections that have a tombstone (LWW collections are handled by lwwMerge)
+  // locally delete append-only collections that have a tombstone (LWW collections — incl. archive — are handled by lwwMerge)
   function applyTombstones() {
     let removed = 0;
-    const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
-    archive = sweep('arc', x => x.id)(archive);
-    // APP LOGIC: delete other append-only collections here
+    // APP LOGIC: delete append-only collections here (none currently — library & archive are LWW)
     return removed;
   }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
   function sigOf(items, arch, tomb) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
-    const arcS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
     // APP LOGIC: add other synced collections to the signature (always with mt!), otherwise their edits will not be pulled
-    return [idS(items), arcS(arch), tS(tomb)].join('||');
+    // archive is LWW too (incl. mt) so version renames/notes propagate
+    return [idS(items), idS(arch), tS(tomb)].join('||');
   }
   function localSig() { return sigOf(library, archive, tombstones); }
   function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}); }
@@ -1897,16 +1970,14 @@ function renderCompare(snap, cur, meta) {
     applyingRemote = true;
     try {
     mergeCloudTombstones(record.tombstones);
-    let removed = applyTombstones();           // append-only collections (archive)
+    let removed = applyTombstones();           // append-only collections (none currently)
     let added = 0, updated = 0;
     // library — LWW by id
     const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
     library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
-    // archive — only add missing (append-only)
-    const arcIds = new Set(archive.map(x => String(x.id)));
-    (record.archive || []).forEach(it => {
-      if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
-    });
+    // archive — LWW by id (so version renames/notes sync; newer mt wins, deletions via tombstones)
+    const arcR = lwwMerge(archive, (record.archive || []), 'arc', x => x.id, c => c);
+    archive = arcR.arr; added += arcR.added; updated += arcR.updated; removed += arcR.removed;
     // APP LOGIC: merge other collections here — arrays by id/data via lwwMerge(...), object-maps (blocks) with a custom merge
 
     // if the merge changed the active vision (or it was deleted), refresh the live editor buffer,
