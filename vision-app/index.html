@@ -275,17 +275,17 @@ textarea::placeholder{color:var(--mid)}
 .vis-title-input::placeholder{color:var(--mid)}
 #blockList{display:flex;flex-direction:column;gap:.7rem;margin:.85rem 0 .6rem}
 .vis-block{border:var(--b);border-radius:var(--r);padding:.5rem .6rem .6rem;display:flex;flex-direction:column;gap:.35rem;background:var(--w)}
-.vis-block-head{display:flex;align-items:center;gap:.3rem}
-.vis-block-head input{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.92rem;color:var(--black);background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.22rem .1rem;outline:none;letter-spacing:.01em}
-.vis-block-head input:focus{border-bottom-color:var(--black)}
-.vis-block-head input::placeholder{color:var(--mid)}
+.vis-block-head{display:flex;align-items:flex-start;gap:.3rem}
+.vis-block-head textarea{flex:1 1 auto;min-width:0;min-height:0;resize:none;overflow:hidden;white-space:pre-wrap;line-height:1.4;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.92rem;color:var(--black);background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.22rem .1rem;outline:none;letter-spacing:.01em}
+.vis-block-head textarea:focus{border-bottom-color:var(--black)}
+.vis-block-head textarea::placeholder{color:var(--mid)}
 .vis-block-btn{width:24px;height:24px;border:var(--b);border-radius:3px;background:var(--w);color:var(--black);cursor:pointer;font-size:.8rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
 .vis-block-btn:active{background:var(--off)}
 @media(hover:hover){.vis-block-btn:hover{background:var(--off)}}
 .vis-block-btn:disabled{opacity:.3;cursor:default}
 .vis-block-btn.danger:active{background:var(--black);color:var(--w)}
 @media(hover:hover){.vis-block-btn.danger:hover{background:var(--black);color:var(--w)}}
-.vis-ta{font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.65;color:var(--black);background:var(--w);border:none;border-radius:var(--r);padding:.1rem;outline:none;resize:none;width:100%;min-height:2.6rem;overflow:hidden}
+.vis-ta{flex:0 0 auto;font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.65;color:var(--black);background:var(--w);border:none;border-radius:var(--r);padding:.1rem;outline:none;resize:none;width:100%;min-height:2.6rem;overflow:hidden}
 .vis-ta::placeholder{color:var(--mid)}
 
 /* strengths Q&A */
@@ -866,11 +866,16 @@ function expandPanel(panel) {
     btn && btn.parentNode.appendChild(hint);
   }
   document.addEventListener('keydown', onExpandEsc);
+  regrowBlocks();
+}
+function regrowBlocks() {
+  const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow);
 }
 function collapsePanel(panel) {
   panel.classList.remove('panel-expanded');
   expandedPanel = null;
   applyPanelFs(panel.id);
+  regrowBlocks();
   const btn = panel.querySelector('.expand-btn');
   if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
   const hint = panel.querySelector('.expand-esc'); if (hint) hint.remove();
@@ -1167,7 +1172,7 @@ function renderBlocks() {
   wrap.innerHTML = blocks.map((b,i) => `
     <div class="vis-block">
       <div class="vis-block-head">
-        <input type="text" class="vis-edit" value="${esc(b.heading)}" placeholder="Heading…" oninput="onBlockHead(${i},this.value)">
+        <textarea class="vis-head vis-edit" rows="1" placeholder="Heading…" oninput="onBlockHead(${i},this.value);autoGrow(this)">${esc(b.heading)}</textarea>
         <button class="vis-block-btn" onclick="moveBlock(${i},-1)" ${i===0?'disabled':''} title="move up">↑</button>
         <button class="vis-block-btn" onclick="moveBlock(${i},1)" ${i===blocks.length-1?'disabled':''} title="move down">↓</button>
         <button class="vis-block-btn danger" onclick="delBlock(${i})" title="delete block">✕</button>
@@ -1179,7 +1184,11 @@ function renderBlocks() {
 function autoGrow(ta) {
   if (!ta || ta.offsetParent === null) return;   // hidden → scrollHeight would be 0
   ta.style.height = 'auto';
-  ta.style.height = ta.scrollHeight + 'px';
+  // cap at a sensible portion of the viewport, then scroll (bigger when the panel is expanded)
+  const max = Math.max(320, Math.round(window.innerHeight * (isPanelExpanded('panel-main') ? 0.78 : 0.55)));
+  const h = ta.scrollHeight;
+  if (h > max) { ta.style.height = max + 'px'; ta.style.overflowY = 'auto'; }
+  else { ta.style.height = h + 'px'; ta.style.overflowY = 'hidden'; }
 }
 function coalesceUndo() {
   if (_pushedThisFocus) return;
@@ -1196,7 +1205,7 @@ function addBlock() {
   renderBlocks(); schedSave();
   const items = el('blockList').querySelectorAll('.vis-block');
   const last = items[items.length-1];
-  if (last) { const h = last.querySelector('input'); if (h) h.focus(); }
+  if (last) { const h = last.querySelector('textarea'); if (h) h.focus(); }
 }
 function moveBlock(i,dir) {
   const j = i + dir; if (j < 0 || j >= blocks.length) return;
