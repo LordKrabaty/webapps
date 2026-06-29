@@ -1496,12 +1496,14 @@ function renderVisions() {
 
 // ── export a single vision as plain text ──
 const STRENGTH_LABELS = ['1 · Strengths & unique skills', '2 · Meaningful use', '3 · Flow activities'];
-function visionToText(d, name) {
+function visionToText(d, name, note) {
   d = d || {};
   const title = (d.title || '').trim();
+  const nt = (note || '').trim();
   const lines = [];
   lines.push((name || title || 'Vision').toUpperCase());
   lines.push('='.repeat(40));
+  if (nt) { lines.push(''); lines.push('Note: ' + nt); }
   if (title && name && title !== name) { lines.push(''); lines.push(title); }
   (d.blocks || []).forEach(b => {
     const h = (b.heading || '').trim(), t = (b.text || '').trim();
@@ -1528,7 +1530,7 @@ function exportVisionText(id) {
   const data = String(id) === String(activeLibId) ? getSessionData() : entry.data;
   const name = entry.name || (data && data.title) || 'Vision';
   el('visTextTitle').textContent = name;
-  el('visTextArea').value = visionToText(data, entry.name);
+  el('visTextArea').value = visionToText(data, entry.name, entry.note);
   el('visTextArea').dataset.fname = name;
   el('visTextModal').classList.add('open');
 }
@@ -1577,7 +1579,7 @@ function exportVersionText(id) {
   const src = library.find(e => String(e.id) === String(s.srcId));
   const visName = (src && src.name) || (s.data && s.data.title) || 'Vision';
   el('visTextTitle').textContent = visName + ' — ' + (s.name || '');
-  el('visTextArea').value = visionToText(s.data, src && src.name);
+  el('visTextArea').value = visionToText(s.data, src && src.name, s.note);
   el('visTextArea').dataset.fname = visName + ' ' + (s.name || '');
   el('visTextModal').classList.add('open');
 }
