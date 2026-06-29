@@ -296,6 +296,15 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.vis-block-btn.danger:hover{background:var(--black);color:var(--w)}}
 .vis-ta{flex:0 0 auto;font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.65;color:var(--black);background:var(--w);border:none;border-radius:var(--r);padding:.1rem;outline:none;resize:none;width:100%;min-height:2.6rem;overflow:hidden}
 .vis-ta::placeholder{color:var(--mid)}
+/* drag & drop reorder (pointer events — mouse + touch/pen) */
+.vis-block-grip{display:flex;align-items:center;justify-content:center;width:22px;height:26px;flex-shrink:0;cursor:grab;opacity:.5;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.vis-block-grip:active{cursor:grabbing}
+@media(hover:hover){.vis-block-grip:hover{opacity:1}}
+@media(hover:none){.vis-block-grip{opacity:.6}}
+.vis-block-grip svg{width:11px;height:15px;fill:var(--mid);display:block}
+.vis-block.dragging{opacity:.5}
+.vis-block.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.vis-block.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
 
 /* strengths Q&A */
 .q-block{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.15rem}
@@ -1243,6 +1252,7 @@ function init() {
   loadLibrary(); renderLibrary();
   loadArchive();
   loadGuide(); renderGuide();
+  initBlockDnd();
   const restored = loadSession();
   if (activeLibId) markSaved();
   updateUndoBtn();
@@ -1320,8 +1330,9 @@ function renderBlocks() {
   const wrap = el('blockList'); if (!wrap) return;
   if (!blocks.length) { wrap.innerHTML = '<p class="lib-empty">No blocks yet — click "add block" to start.</p>'; return; }
   wrap.innerHTML = blocks.map((b,i) => `
-    <div class="vis-block">
+    <div class="vis-block" data-id="${esc(b.id)}">
       <div class="vis-block-head">
+        <span class="vis-block-grip" title="drag to reorder"><svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span>
         <textarea class="vis-head vis-edit" rows="1" placeholder="Heading…" oninput="onBlockHead(${i},this.value);autoGrow(this)">${esc(b.heading)}</textarea>
         <button class="vis-block-btn" onclick="moveBlock(${i},-1)" ${i===0?'disabled':''} title="move up">↑</button>
         <button class="vis-block-btn" onclick="moveBlock(${i},1)" ${i===blocks.length-1?'disabled':''} title="move down">↓</button>
@@ -1362,6 +1373,76 @@ function moveBlock(i,dir) {
   pushUndo();
   const t = blocks[i]; blocks[i] = blocks[j]; blocks[j] = t;
   renderBlocks(); schedSave();
+}
+// ── drag & drop reorder (pointer events, todo-app style: drop-indicator line, reorder on release) ──
+let _blockDndActive = false;
+document.addEventListener('touchmove', e => { if (_blockDndActive && e.cancelable) e.preventDefault(); }, { passive:false });
+function initBlockDnd() {
+  const container = el('blockList');
+  if (!container || container._dndInit) return;
+  container._dndInit = true;
+  let srcRow=null, srcId=null, pointerId=null, dragging=false, startX=0, startY=0;
+  const MOUSE_THRESHOLD = 5;
+  const clearInd = () => container.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(r => r.classList.remove('drag-over-top','drag-over-bottom'));
+  const rowAt = (x,y) => { const t = document.elementFromPoint(x,y); const r = t && t.closest('.vis-block'); return (r && container.contains(r)) ? r : null; };
+  const begin = () => { if (dragging || !srcRow) return; dragging=true; _blockDndActive=true; srcRow.classList.add('dragging'); srcRow.style.pointerEvents='none'; document.body.style.userSelect='none'; };
+  const end = () => {
+    clearInd();
+    if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents=''; }
+    document.body.style.userSelect='';
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onUp, true);
+    srcRow=null; srcId=null; pointerId=null; dragging=false; _blockDndActive=false;
+  };
+  const onMove = e => {
+    if (e.pointerId !== pointerId) return;
+    if (!dragging) {
+      if (Math.abs(e.clientX-startX) + Math.abs(e.clientY-startY) > MOUSE_THRESHOLD) begin(); else return;
+    }
+    if (e.cancelable) e.preventDefault();
+    clearInd();
+    const row = rowAt(e.clientX, e.clientY);
+    if (!row || row === srcRow) return;
+    const rect = row.getBoundingClientRect();
+    row.classList.add(e.clientY < rect.top + rect.height/2 ? 'drag-over-top' : 'drag-over-bottom');
+  };
+  const onUp = e => {
+    if (e.pointerId !== pointerId) return;
+    if (dragging) {
+      let dstRow=null, before=true;
+      container.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(r => { before = r.classList.contains('drag-over-top'); dstRow = r; });
+      const sId = srcId;
+      end();
+      if (dstRow && sId != null) { reorderBlocks(sId, dstRow.getAttribute('data-id'), before); return; }
+    }
+    end();
+  };
+  container.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;                      // primary button / touch only
+    const grip = e.target.closest('.vis-block-grip');
+    if (!grip) return;
+    const row = grip.closest('.vis-block'); if (!row) return;
+    srcRow=row; srcId=row.getAttribute('data-id'); startX=e.clientX; startY=e.clientY; pointerId=e.pointerId; dragging=false;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    if (e.pointerType !== 'mouse') begin();         // dedicated handle → start the drag at once on touch/pen
+    e.preventDefault();
+  });
+}
+function reorderBlocks(srcId, dstId, before) {
+  if (String(srcId) === String(dstId)) return;
+  const s = blocks.findIndex(b => String(b.id) === String(srcId));
+  const d = blocks.findIndex(b => String(b.id) === String(dstId));
+  if (s < 0 || d < 0) return;
+  const rawIdx = before ? d : d + 1;
+  let finalIdx = rawIdx; if (s < finalIdx) finalIdx--;
+  if (finalIdx === s) return;
+  pushUndo();
+  const [it] = blocks.splice(s, 1);
+  blocks.splice(finalIdx, 0, it);
+  schedSave(); renderBlocks();
 }
 async function delBlock(i) {
   if (!blocks[i]) return;
