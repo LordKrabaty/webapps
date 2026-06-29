@@ -2074,6 +2074,7 @@ function op_addBlockItem(ctx, blockType) {
       blockType, duration: task.duration || 30,
       isEvent: false, eventStart: null, eventEnd: null,
       isSubtask: true, done: false, urgent: false,
+      note: task.note || '',                 // preset description of the task
     });
   });
   ctx.save(); ctx.render();
@@ -2970,7 +2971,9 @@ function loadBlockTypes() {
   try {
     const saved = JSON.parse(localStorage.getItem(WK(BLOCKTYPES_KEY)) || '[]');
     saved.forEach(bt => {
-      if (bt.key) BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
+      if (!bt.key) return;
+      const { key, ...rest } = bt;   // preserve-unknown: keep fields a newer version may have added
+      BLOCK_TYPES[bt.key] = { ...rest, emoji: bt.emoji ?? '', label: bt.label || bt.key,
         defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
         eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], note: bt.note || '', mt: +bt.mt || 0 };
     });
@@ -3088,7 +3091,7 @@ function openBlockTypeEdit(key) {
 
   const tasksEl = el('blockEditTasks');
   tasksEl.innerHTML = '';
-  (bt.defaultTasks || []).forEach(t => addBlockEditTask(t.text, t.duration));
+  (bt.defaultTasks || []).forEach(t => addBlockEditTask(t.text, t.duration, t.note));
 
   el('blockEditModal').classList.add('open');
   autoGrowTextarea(el('blockEditNote'));
@@ -3101,14 +3104,19 @@ function toggleBlockEditEvent() {
   el('blockEditEventTimes').style.display = _blockEditIsEvent ? '' : 'none';
 }
 
-function addBlockEditTask(text, duration) {
+function addBlockEditTask(text, duration, note) {
   const row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:.3rem;align-items:center';
+  row.className = 'bet-row';
+  row.style.cssText = 'display:flex;flex-direction:column;gap:.25rem;border:var(--b);border-radius:var(--r);padding:.35rem .4rem;background:var(--off)';
   row.innerHTML = `
-    <input type="text" placeholder="Task name" value="${esc(text||'')}" style="flex:1;font-family:'DM Sans',sans-serif;font-size:.85rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none">
-    <input type="number" placeholder="min" value="${duration||''}" min="1" max="480" style="width:58px;font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.3rem .4rem;background:var(--w);color:var(--black);outline:none;text-align:right">
-    <button onclick="this.closest('div').remove()" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.85rem;display:flex;align-items:center;justify-content:center;border-radius:3px" title="delete">✕</button>`;
+    <div style="display:flex;gap:.3rem;align-items:center">
+      <input type="text" class="bet-text" placeholder="Task name" value="${esc(text||'')}" style="flex:1;font-family:'DM Sans',sans-serif;font-size:.85rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none">
+      <input type="number" class="bet-dur" placeholder="min" value="${duration||''}" min="1" max="480" style="width:58px;font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.3rem .4rem;background:var(--w);color:var(--black);outline:none;text-align:right">
+      <button onclick="this.closest('.bet-row').remove()" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.85rem;display:flex;align-items:center;justify-content:center;border-radius:3px" title="delete">✕</button>
+    </div>
+    <textarea class="bet-note" placeholder="Preset description for this task (optional)" rows="1" oninput="autoGrowTextarea(this)" style="font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;resize:none;overflow:hidden">${esc(note||'')}</textarea>`;
   el('blockEditTasks').appendChild(row);
+  autoGrowTextarea(row.querySelector('.bet-note'));
 }
 
 function saveBlockType() {
@@ -3118,11 +3126,11 @@ function saveBlockType() {
   if (!label) { showStatusMsg('Enter a block name', 2000); return; }
 
   const defaultTasks = [];
-  el('blockEditTasks').querySelectorAll('div').forEach(row => {
-    const inputs = row.querySelectorAll('input');
-    const text = inputs[0]?.value.trim();
-    const dur = parseInt(inputs[1]?.value) || 30;
-    if (text) defaultTasks.push({ text, duration: dur });
+  el('blockEditTasks').querySelectorAll('.bet-row').forEach(row => {
+    const text = row.querySelector('.bet-text')?.value.trim();
+    const dur = parseInt(row.querySelector('.bet-dur')?.value) || 30;
+    const tNote = row.querySelector('.bet-note')?.value.trim() || '';
+    if (text) { const t = { text, duration: dur }; if (tNote) t.note = tNote; defaultTasks.push(t); }
   });
 
   let isEvent = _blockEditIsEvent;
@@ -3796,7 +3804,7 @@ function toggleTaskMenu(e) {
       const btn = document.createElement('button');
       btn.className = 'block-menu-item';
       btn.innerHTML = `✒ ${esc(t.text)}<span style="margin-left:.5rem;font-family:'DM Mono',monospace;font-size:.78em;color:var(--muted)">${t.duration||15}m</span>`;
-      btn.addEventListener('click', () => addPredefinedTask(t.text, t.duration || 30));
+      btn.addEventListener('click', () => addPredefinedTask(t.text, t.duration || 30, t.note || ''));
       menu.appendChild(btn);
     });
   });
@@ -3814,14 +3822,14 @@ function toggleTaskMenu(e) {
   _openMenu(menu, null, e.currentTarget);
 }
 
-function op_addPredefinedTask(ctx, text, duration) {
+function op_addPredefinedTask(ctx, text, duration, note) {
   ctx.undo();
   ctx.list.push({ id: Date.now() + Math.random(), text, blockType: 'TASK', duration,
-    isEvent: false, eventStart: null, eventEnd: null, isSubtask: true, done: false, urgent: false });
+    isEvent: false, eventStart: null, eventEnd: null, isSubtask: true, done: false, urgent: false, note: note || '' });
   ctx.save(); ctx.render();
   closeBlockMenu();
 }
-function addPredefinedTask(text, duration) { op_addPredefinedTask(menuCtx(), text, duration); }
+function addPredefinedTask(text, duration, note) { op_addPredefinedTask(menuCtx(), text, duration, note); }
 
 function closeBlockMenu() { const m = el('blockMenu'); if (m) { m.style.display = 'none'; m._src = null; m._ctx = null; } }
 
@@ -4596,9 +4604,10 @@ function doImport() {
   if (addBlocks) {
     // add/update only the selected blocks (cherry-pick) — we only fill in order, deleted defaults are not handled here (autosync does that)
     selBlocks.forEach(bt => {
-      BLOCK_TYPES[bt.key] = { emoji: bt.emoji ?? '', label: bt.label || bt.key,
+      const { key, ...rest } = bt;   // preserve-unknown + carry block-level note through manual import/restore
+      BLOCK_TYPES[bt.key] = { ...rest, emoji: bt.emoji ?? '', label: bt.label || bt.key,
         defaultDuration: bt.defaultDuration || 15, isEvent: !!bt.isEvent,
-        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], mt: Date.now() };
+        eventStart: bt.eventStart || null, eventEnd: bt.eventEnd || null, defaultTasks: bt.defaultTasks || [], note: bt.note || '', mt: Date.now() };
       if (bt.key !== 'TASK' && !blockTypeOrder.includes(bt.key)) blockTypeOrder.push(bt.key);
     });
     saveBlockTypes(); renderBlockTypeList();
@@ -7222,9 +7231,10 @@ window.addEventListener('resize', updateAppGrid);
   // Tombstones apply only to custom (non-default) blocks — defaults cannot be deleted.
   function mergeBlocksLww(cloudBlocks) {
     let added = 0, updated = 0, removed = 0;
-    const norm = b => ({ emoji: b.emoji ?? '', label: b.label || b.key, defaultDuration: b.defaultDuration || 15,
+    const norm = b => { const { key, ...rest } = b;   // preserve-unknown: keep fields a newer version may have added
+      return { ...rest, emoji: b.emoji ?? '', label: b.label || b.key, defaultDuration: b.defaultDuration || 15,
       isEvent: !!b.isEvent, eventStart: b.eventStart || null, eventEnd: b.eventEnd || null,
-      defaultTasks: b.defaultTasks || [], note: b.note || '', mt: +b.mt || 0 });
+      defaultTasks: b.defaultTasks || [], note: b.note || '', mt: +b.mt || 0 }; };
     (cloudBlocks || []).forEach(b => {
       if (!b || !b.key || b.key === 'TASK') return;
       const key = b.key, cmt = +b.mt || 0, local = BLOCK_TYPES[key];
