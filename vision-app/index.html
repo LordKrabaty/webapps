@@ -1394,12 +1394,13 @@ function growStrengths() { ['q1','q2','q3'].forEach(id => { const t = el(id); if
 
 // ── project pool (per-vision) ──
 function projFind(id) { return projects.find(p => String(p.id) === String(id)); }
-const PROJ_GRIP = '<span class="proj-grip" title="drag to reorder"><svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span>';
+// hoisted (not a const) — projCardHTML runs during init() before a const at this line would be initialized → TDZ
+function projGrip() { return '<span class="proj-grip" title="drag to reorder"><svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span>'; }
 function projCardHTML(p) {
   const cur = p.status === 'current', col = collapsed.has(p.id);
   return `<div class="proj-card${col?' collapsed':''}" data-id="${esc(p.id)}">
     <div class="proj-head">
-      ${PROJ_GRIP}
+      ${projGrip()}
       <textarea class="proj-name vis-edit" rows="1" placeholder="Project name…" oninput="onProjField('${esc(p.id)}','name',this.value);autoGrow(this)">${esc(p.name)}</textarea>
       <button class="proj-btn" title="${col?'expand':'collapse'}" onclick="toggleCollapse('${esc(p.id)}')">${col?'▸':'▾'}</button>
       <button class="proj-btn${cur?' on':''}" title="${cur?'currently focused — click to return to pool':'mark as current'}" onclick="setProjStatus('${esc(p.id)}','${cur?'pool':'current'}')">★</button>
