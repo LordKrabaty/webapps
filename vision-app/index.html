@@ -314,6 +314,44 @@ textarea::placeholder{color:var(--mid)}
 .q-block textarea:focus{outline:2px solid var(--black);outline-offset:1px}
 .q-block textarea::placeholder{color:var(--mid)}
 
+/* project pool */
+.proj-sec-h{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin:.7rem 0 .45rem}
+#projCurrentSec>.proj-sec-h:first-child,#projPoolSec>.proj-sec-h:first-child{margin-top:0}
+.proj-card{border:var(--b);border-radius:var(--r);padding:.5rem .6rem .6rem;display:flex;flex-direction:column;gap:.3rem;background:var(--w);margin-bottom:.6rem}
+#projCurrentSec .proj-card{border-left:3px solid var(--black)}
+.proj-head{display:flex;align-items:flex-start;gap:.3rem}
+.proj-name{flex:1 1 auto;min-width:0;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.92rem;color:var(--black);background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.22rem .1rem;outline:none}
+.proj-name:focus{border-bottom-color:var(--black)}
+.proj-name::placeholder{color:var(--mid)}
+.proj-btn{width:24px;height:24px;border:var(--b);border-radius:3px;background:var(--w);color:var(--black);cursor:pointer;font-size:.8rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.proj-btn:active{background:var(--off)}
+@media(hover:hover){.proj-btn:hover{background:var(--off)}}
+.proj-btn.on{background:var(--black);color:var(--w);border-color:var(--black)}
+.proj-btn.danger:active{background:var(--black);color:var(--w)}
+@media(hover:hover){.proj-btn.danger:hover{background:var(--black);color:var(--w)}}
+.proj-lbl{font-size:.66rem;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-top:.15rem}
+.proj-ta{flex:0 0 auto;font-family:'DM Sans',sans-serif;font-size:.86rem;line-height:1.55;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.4rem .5rem;outline:none;resize:none;overflow:hidden;width:100%;min-height:2.2rem}
+.proj-ta:focus{outline:2px solid var(--black);outline-offset:1px}
+.proj-ta::placeholder{color:var(--mid)}
+.proj-grip{display:flex;align-items:center;justify-content:center;width:22px;height:26px;flex-shrink:0;cursor:grab;opacity:.5;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.proj-grip:active{cursor:grabbing}
+@media(hover:hover){.proj-grip:hover{opacity:1}}
+@media(hover:none){.proj-grip{opacity:.6}}
+.proj-grip svg{width:11px;height:15px;fill:var(--mid);display:block}
+.proj-card.dragging{opacity:.5}
+.proj-card.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.proj-card.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+.proj-card.done{padding:.4rem .6rem;margin-bottom:.35rem;background:var(--off)}
+.proj-card.done .proj-head{align-items:center}
+.proj-done-name{flex:1;min-width:0;font-size:.84rem;color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj-done-date{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0}
+/* current projects (read-only) on the Vision tab */
+.cur-proj{border:var(--b);border-radius:var(--r);padding:.5rem .65rem;margin-bottom:.85rem;background:var(--off);cursor:pointer}
+.cur-proj-h{font-size:.66rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem}
+.cur-proj-item{display:flex;flex-wrap:wrap;align-items:baseline;gap:.1rem .5rem;padding:.12rem 0;font-size:.85rem;color:var(--black)}
+.cur-proj-name{font-weight:600}
+.cur-proj-next{font-size:.78rem;color:var(--muted)}
+
 /* version list */
 .ver-item{display:flex;align-items:center;gap:.4rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0}
 .ver-item:active{background:var(--off);border-color:var(--mid)}
@@ -458,13 +496,24 @@ textarea::placeholder{color:var(--mid)}
       <div class="notes-tabs">
         <button class="notes-tab active" id="mtab-vision" onclick="switchMainTab('vision')">Vision</button>
         <button class="notes-tab" id="mtab-strengths" onclick="switchMainTab('strengths')">Strengths</button>
+        <button class="notes-tab" id="mtab-projects" onclick="switchMainTab('projects')">Projects</button>
       </div>
 
       <!-- VISION TAB -->
       <div class="notes-pane active" id="mpane-vision">
         <input type="text" class="vis-title-input vis-edit" id="visTitle" placeholder="Title — e.g. How would my ideal self act?" oninput="onTitleInput()">
+        <div id="currentProjects"></div>
         <div id="blockList"></div>
         <button class="btn-lib" onclick="addBlock()">+ add block</button>
+      </div>
+
+      <!-- PROJECTS TAB -->
+      <div class="notes-pane" id="mpane-projects">
+        <p class="q-hint" style="margin-bottom:.6rem">Pool of project ideas to consider for the next vision. Weigh each one, then mark it <b>current</b> (shows on the Vision tab) or <b>done</b>.</p>
+        <div id="projCurrentSec"></div>
+        <div id="projPoolSec"></div>
+        <button class="btn-lib" onclick="addProject()">+ add project</button>
+        <div id="projDoneSec"></div>
       </div>
 
       <!-- STRENGTHS TAB -->
@@ -635,7 +684,8 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 3;   // v3: editable guide synced as a single LWW object — older clients lack it and would drop it on push
+const APP_SCHEMA = 4;   // v4: vision data carries a per-vision project pool (data.projects) — older clients rebuild data without it and would drop it on push
+                        // v3: editable guide synced as a single LWW object — older clients lack it and would drop it on push
                         // v2: archive (versions) is LWW-merged incl. name/note — older append-only clients would clobber version edits on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'vision-v1-session';
@@ -651,6 +701,7 @@ let autoSave = false;
 const UNDO_MAX = 40;
 // ── VISION STATE (declared before init() runs to avoid TDZ) ──
 let blocks = [];                 // live blocks of the active vision: [{id, heading, text}]
+let projects = [];               // live project pool of the active vision: [{id, name, whyNow, whyPostpone, nextStep, status, doneAt}]
 let guide = null;                // editable guide rail: { mt, sections:[{h, items:[...]}] }
 let guideEditing = false;
 let previewId = null;            // id of the snapshot currently previewed (null = editing)
@@ -1012,6 +1063,7 @@ function expandPanel(panel) {
 function regrowBlocks() {
   const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow);
   if (typeof growStrengths === 'function') growStrengths();
+  if (typeof growProjects === 'function') growProjects();
 }
 function collapsePanel(panel) {
   panel.classList.remove('panel-expanded');
@@ -1310,23 +1362,173 @@ function getSessionData() {
       q2: el('q2') ? el('q2').value : '',
       q3: el('q3') ? el('q3').value : ''
     },
-    blocks: blocks.map(b => ({ id:b.id, heading:b.heading, text:b.text }))
+    blocks: blocks.map(b => ({ id:b.id, heading:b.heading, text:b.text })),
+    projects: projects.map(p => ({ ...p }))
   };
+}
+function normProject(p) {
+  p = p || {};
+  return { ...p, id:p.id || uid(), name:p.name || '', whyNow:p.whyNow || '', whyPostpone:p.whyPostpone || '',
+           nextStep:p.nextStep || '', status:(p.status==='current'||p.status==='done')?p.status:'pool', doneAt:p.doneAt || null };   // preserve-unknown
 }
 function applySessionData(d) {
   d = d || {};
   // deep copy — the live buffer must never share a reference with the stored record (sync change-detection)
   blocks = (d.blocks || []).map(b => ({ id:b.id || uid(), heading:b.heading || '', text:b.text || '' }));
+  projects = (d.projects || []).map(normProject);
   if (el('visTitle')) el('visTitle').value = d.title || '';
   const s = d.strengths || {};
   if (el('q1')) el('q1').value = s.q1 || '';
   if (el('q2')) el('q2').value = s.q2 || '';
   if (el('q3')) el('q3').value = s.q3 || '';
   renderBlocks();
+  renderProjects();
+  renderCurrentProjects();
   growStrengths();
   updateMainTitle();
 }
 function growStrengths() { ['q1','q2','q3'].forEach(id => { const t = el(id); if (t) autoGrow(t); }); }
+
+// ── project pool (per-vision) ──
+function projFind(id) { return projects.find(p => String(p.id) === String(id)); }
+const PROJ_GRIP = '<span class="proj-grip" title="drag to reorder"><svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span>';
+function projCardHTML(p) {
+  const cur = p.status === 'current';
+  return `<div class="proj-card" data-id="${esc(p.id)}">
+    <div class="proj-head">
+      ${PROJ_GRIP}
+      <input class="proj-name vis-edit" value="${esc(p.name)}" placeholder="Project name…" oninput="onProjField('${esc(p.id)}','name',this.value)">
+      <button class="proj-btn${cur?' on':''}" title="${cur?'currently focused — click to return to pool':'mark as current'}" onclick="setProjStatus('${esc(p.id)}','${cur?'pool':'current'}')">★</button>
+      <button class="proj-btn" title="mark as done" onclick="setProjStatus('${esc(p.id)}','done')">✓</button>
+      <button class="proj-btn danger" title="delete project" onclick="delProject('${esc(p.id)}')">✕</button>
+    </div>
+    <label class="proj-lbl">Why do it now?</label>
+    <textarea class="proj-ta vis-edit" placeholder="What makes it worth focusing on now…" oninput="onProjField('${esc(p.id)}','whyNow',this.value);autoGrow(this)">${esc(p.whyNow)}</textarea>
+    <label class="proj-lbl">Why it can wait</label>
+    <textarea class="proj-ta vis-edit" placeholder="What makes it OK to postpone…" oninput="onProjField('${esc(p.id)}','whyPostpone',this.value);autoGrow(this)">${esc(p.whyPostpone)}</textarea>
+    <label class="proj-lbl">Next step</label>
+    <textarea class="proj-ta proj-next vis-edit" placeholder="First concrete action…" oninput="onProjField('${esc(p.id)}','nextStep',this.value);autoGrow(this)">${esc(p.nextStep)}</textarea>
+  </div>`;
+}
+function projDoneHTML(p) {
+  const d = p.doneAt ? new Date(p.doneAt).toLocaleDateString('cs-CZ',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
+  return `<div class="proj-card done" data-id="${esc(p.id)}">
+    <div class="proj-head">
+      <span class="proj-done-name">${esc(p.name || 'Untitled project')}</span>
+      ${d ? `<span class="proj-done-date">${esc(d)}</span>` : ''}
+      <button class="proj-btn" title="reopen (back to pool)" onclick="setProjStatus('${esc(p.id)}','pool')">↩</button>
+      <button class="proj-btn danger" title="delete project" onclick="delProject('${esc(p.id)}')">✕</button>
+    </div>
+  </div>`;
+}
+function renderProjects() {
+  const curSec = el('projCurrentSec'), poolSec = el('projPoolSec'), doneSec = el('projDoneSec');
+  if (!curSec || !poolSec || !doneSec) return;
+  const cur = projects.filter(p => p.status === 'current');
+  const pool = projects.filter(p => p.status === 'pool');
+  const done = projects.filter(p => p.status === 'done');
+  curSec.innerHTML  = cur.length  ? `<div class="proj-sec-h">Current focus</div>` + cur.map(projCardHTML).join('') : '';
+  poolSec.innerHTML = pool.length ? `<div class="proj-sec-h">Pool</div>` + pool.map(projCardHTML).join('')
+                    : (projects.length ? '' : '<p class="lib-empty">No projects yet — click "add project" to start.</p>');
+  doneSec.innerHTML = done.length ? `<div class="proj-sec-h">Done</div>` + done.map(projDoneHTML).join('') : '';
+  growProjects();
+  initProjDnd(curSec); initProjDnd(poolSec);
+}
+function growProjects() { ['projCurrentSec','projPoolSec'].forEach(s => { const w = el(s); if (w) w.querySelectorAll('textarea').forEach(autoGrow); }); }
+function renderCurrentProjects() {
+  const wrap = el('currentProjects'); if (!wrap) return;
+  const cur = projects.filter(p => p.status === 'current');
+  if (!cur.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `<div class="cur-proj" onclick="switchMainTab('projects')" title="go to Projects">
+    <div class="cur-proj-h">Current projects</div>
+    ${cur.map(p => `<div class="cur-proj-item"><span class="cur-proj-name">${esc(p.name || 'Untitled project')}</span>${(p.nextStep||'').trim() ? `<span class="cur-proj-next">→ ${esc(p.nextStep.trim())}</span>` : ''}</div>`).join('')}
+  </div>`;
+}
+function onProjField(id, field, val) { const p = projFind(id); if (!p) return; coalesceUndo(); p[field] = val; schedSave(); if (field === 'name') renderCurrentProjects(); }
+function addProject() {
+  pushUndo();
+  const p = normProject({ id:uid(), status:'pool' });
+  projects.push(p);
+  renderProjects(); schedSave();
+  const card = el('projPoolSec').querySelector(`.proj-card[data-id="${p.id}"]`);
+  if (card) { const n = card.querySelector('input'); if (n) n.focus(); }
+}
+function setProjStatus(id, status) {
+  const p = projFind(id); if (!p) return;
+  pushUndo();
+  p.status = status;
+  p.doneAt = status === 'done' ? Date.now() : null;
+  schedSave(); renderProjects(); renderCurrentProjects();
+}
+async function delProject(id) {
+  const p = projFind(id); if (!p) return;
+  if ((p.name || p.whyNow || p.whyPostpone || p.nextStep) && !await customConfirm('Delete this project?','delete')) return;
+  pushUndo();
+  projects = projects.filter(x => String(x.id) !== String(id));
+  renderProjects(); renderCurrentProjects(); schedSave();
+}
+function reorderProjects(srcId, dstId, before) {
+  if (String(srcId) === String(dstId)) return;
+  const s = projects.findIndex(p => String(p.id) === String(srcId));
+  const d = projects.findIndex(p => String(p.id) === String(dstId));
+  if (s < 0 || d < 0) return;
+  const rawIdx = before ? d : d + 1;
+  let finalIdx = rawIdx; if (s < finalIdx) finalIdx--;
+  if (finalIdx === s) return;
+  pushUndo();
+  const [it] = projects.splice(s, 1);
+  projects.splice(finalIdx, 0, it);
+  schedSave(); renderProjects();
+}
+// DnD for project cards (same pattern as blocks: indicator line, reorder on release, drag from grip)
+function initProjDnd(container) {
+  if (!container || container._dndInit) return;
+  container._dndInit = true;
+  let srcRow=null, srcId=null, pointerId=null, dragging=false, startX=0, startY=0;
+  const clearInd = () => container.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(r => r.classList.remove('drag-over-top','drag-over-bottom'));
+  const rowAt = (x,y) => { const t = document.elementFromPoint(x,y); const r = t && t.closest('.proj-card'); return (r && container.contains(r)) ? r : null; };
+  const begin = () => { if (dragging || !srcRow) return; dragging=true; _blockDndActive=true; srcRow.classList.add('dragging'); srcRow.style.pointerEvents='none'; document.body.style.userSelect='none'; };
+  const end = () => {
+    clearInd();
+    if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents=''; }
+    document.body.style.userSelect='';
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onUp, true);
+    srcRow=null; srcId=null; pointerId=null; dragging=false; _blockDndActive=false;
+  };
+  const onMove = e => {
+    if (e.pointerId !== pointerId) return;
+    if (!dragging) { if (Math.abs(e.clientX-startX) + Math.abs(e.clientY-startY) > 5) begin(); else return; }
+    if (e.cancelable) e.preventDefault();
+    clearInd();
+    const row = rowAt(e.clientX, e.clientY);
+    if (!row || row === srcRow) return;
+    const rect = row.getBoundingClientRect();
+    row.classList.add(e.clientY < rect.top + rect.height/2 ? 'drag-over-top' : 'drag-over-bottom');
+  };
+  const onUp = e => {
+    if (e.pointerId !== pointerId) return;
+    if (dragging) {
+      let dst=null, before=true;
+      container.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(r => { before = r.classList.contains('drag-over-top'); dst = r; });
+      const sId = srcId; end();
+      if (dst && sId != null) { reorderProjects(sId, dst.getAttribute('data-id'), before); return; }
+    }
+    end();
+  };
+  container.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    const grip = e.target.closest('.proj-grip'); if (!grip) return;
+    const row = grip.closest('.proj-card'); if (!row) return;
+    srcRow=row; srcId=row.getAttribute('data-id'); startX=e.clientX; startY=e.clientY; pointerId=e.pointerId; dragging=false;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onUp, true);
+    if (e.pointerType !== 'mouse') begin();
+    e.preventDefault();
+  });
+}
 
 // ── block editor ──
 function renderBlocks() {
@@ -1462,13 +1664,14 @@ function updateMainTitle() {
 
 // ── tabs ──
 function switchMainTab(t) {
-  ['vision','strengths'].forEach(x => {
+  ['vision','strengths','projects'].forEach(x => {
     const tab = el('mtab-'+x), pane = el('mpane-'+x);
     if (tab) tab.classList.toggle('active', x===t);
     if (pane) pane.classList.toggle('active', x===t);
   });
   if (t === 'vision') { const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow); }
   if (t === 'strengths') growStrengths();
+  if (t === 'projects') growProjects();
 }
 function switchNotesTab(t) {
   ['library','compare'].forEach(x => {
@@ -1523,6 +1726,15 @@ function visionToText(d, name, note) {
     qs.forEach((q, i) => {
       if (!(q || '').trim()) return;
       lines.push(''); lines.push(STRENGTH_LABELS[i]); lines.push(q.trim());
+    });
+  }
+  const cur = (d.projects || []).filter(p => p && p.status === 'current');
+  if (cur.length) {
+    lines.push(''); lines.push('-'.repeat(40)); lines.push('CURRENT PROJECTS');
+    cur.forEach(p => {
+      lines.push(''); lines.push('# ' + (p.name || 'Untitled project').trim());
+      if ((p.whyNow || '').trim())   lines.push('Why now: ' + p.whyNow.trim());
+      if ((p.nextStep || '').trim()) lines.push('Next step: ' + p.nextStep.trim());
     });
   }
   return lines.join('\n');
