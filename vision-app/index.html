@@ -2114,6 +2114,7 @@ function renderCompare(snap, cur, meta) {
   }
   const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
   let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
+  let pushCooldownUntil = 0;                   // set when GitHub rate-limits us → don't push again until then (avoids hammering a secondary limit)
   let applyingRemote = false;                 // true during a silent merge → suppresses the save-hook (no recursion)
   let cloudSchemaAhead = false;               // cloud written by a newer app version → pause our push so we can't overwrite it
   let schemaWarnShown = false;                // the blocking warning is shown at most once per session
@@ -2314,13 +2315,14 @@ function renderCompare(snap, cur, meta) {
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
     if (pushTimer) return;        // already scheduled → coalesce
-    const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs));
+    const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs), pushCooldownUntil - Date.now());
     pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
   }
   async function doAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
     if (cloudSchemaAhead) { setSyncState('err'); showStatusMsg('⚠ sync paused — a newer app version is in the cloud. Reload to update.', 5000); return; }   // never let an older build overwrite newer data
     if (pushing) { pushAgain = true; return; }
+    if (Date.now() < pushCooldownUntil) { scheduleAutoPush(); return; }   // rate-limit cooldown still active → defer
     const token = localStorage.getItem(GHTOKEN);
     if (!token) return;
     let gistId = localStorage.getItem(GISTID);
@@ -2334,10 +2336,28 @@ function renderCompare(snap, cur, meta) {
         res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
       }
       if (!res.ok) {
-        let detail = '';
-        try { const b = await res.json(); if (b && b.message) detail = ' — ' + b.message; } catch(_) {}
+        let body = null;
+        try { body = await res.json(); } catch(_) {}
+        const detail = (body && body.message) ? ' — ' + body.message : '';
+        if (res.status === 403 || res.status === 429) {   // rate limited → back off instead of hammering (a secondary limit only clears if we stop)
+          const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+          const reset = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
+          const remaining = res.headers.get('x-ratelimit-remaining');
+          let waitMs = retryAfter ? retryAfter * 1000
+                     : (remaining === '0' && reset) ? (reset * 1000 - Date.now())
+                     : 60000;                              // secondary limit, no hint → wait a minute
+          waitMs = Math.min(Math.max(waitMs || 0, 10000), 3600000);
+          pushCooldownUntil = Date.now() + waitMs;
+          console.warn('[autosync] rate-limited, pausing ' + Math.ceil(waitMs/1000) + 's' + detail);
+          showStatusMsg('⚠ sync paused (GitHub rate limit) — auto-retry in ' + Math.ceil(waitMs/1000) + ' s', 6000);
+          setSyncState('err');
+          pushing = false; pushAgain = false;
+          clearTimeout(pushTimer); pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, waitMs + 100);
+          return;
+        }
         throw new Error('HTTP ' + res.status + detail);   // surface GitHub's reason (bad credentials / missing gist scope / …)
       }
+      pushCooldownUntil = 0;
       if (creating) {
         const json = await res.json().catch(() => null);
         const newId = json && json.id;
