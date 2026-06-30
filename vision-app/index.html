@@ -310,7 +310,7 @@ textarea::placeholder{color:var(--mid)}
 .q-block{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.15rem}
 .q-block label{font-size:.8rem;font-weight:600;color:var(--black);letter-spacing:.03em}
 .q-hint{font-size:.78rem;color:var(--muted);line-height:1.5;font-style:italic}
-.q-block textarea{font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.7;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.55rem .6rem;outline:none;resize:vertical;min-height:92px;width:100%}
+.q-block textarea{flex:0 0 auto;font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.7;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.55rem .6rem;outline:none;resize:none;overflow:hidden;min-height:92px;width:100%}
 .q-block textarea:focus{outline:2px solid var(--black);outline-offset:1px}
 .q-block textarea::placeholder{color:var(--mid)}
 
@@ -472,17 +472,17 @@ textarea::placeholder{color:var(--mid)}
         <div class="q-block">
           <label>1 · Strengths &amp; unique skills</label>
           <p class="q-hint">What are your strengths and unique skills? And which strengths do the people around you appreciate in you?</p>
-          <textarea class="vis-edit" id="q1" placeholder="Write here…" oninput="onStrengthInput()"></textarea>
+          <textarea class="vis-edit" id="q1" placeholder="Write here…" oninput="onStrengthInput();autoGrow(this)"></textarea>
         </div>
         <div class="q-block">
           <label>2 · Meaningful use</label>
           <p class="q-hint">How can you use your strengths for something meaningful? How can you make the world a slightly better place? And what could be the main mission of your work?</p>
-          <textarea class="vis-edit" id="q2" placeholder="Write here…" oninput="onStrengthInput()"></textarea>
+          <textarea class="vis-edit" id="q2" placeholder="Write here…" oninput="onStrengthInput();autoGrow(this)"></textarea>
         </div>
         <div class="q-block">
           <label>3 · Flow activities</label>
           <p class="q-hint">Which activities have historically energized you the most? During which activities do you get into a state of flow — absorbed so much you lose track of time?</p>
-          <textarea class="vis-edit" id="q3" placeholder="Write here…" oninput="onStrengthInput()"></textarea>
+          <textarea class="vis-edit" id="q3" placeholder="Write here…" oninput="onStrengthInput();autoGrow(this)"></textarea>
         </div>
       </div>
     </div>
@@ -1011,6 +1011,7 @@ function expandPanel(panel) {
 }
 function regrowBlocks() {
   const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow);
+  if (typeof growStrengths === 'function') growStrengths();
 }
 function collapsePanel(panel) {
   panel.classList.remove('panel-expanded');
@@ -1322,8 +1323,10 @@ function applySessionData(d) {
   if (el('q2')) el('q2').value = s.q2 || '';
   if (el('q3')) el('q3').value = s.q3 || '';
   renderBlocks();
+  growStrengths();
   updateMainTitle();
 }
+function growStrengths() { ['q1','q2','q3'].forEach(id => { const t = el(id); if (t) autoGrow(t); }); }
 
 // ── block editor ──
 function renderBlocks() {
@@ -1465,6 +1468,7 @@ function switchMainTab(t) {
     if (pane) pane.classList.toggle('active', x===t);
   });
   if (t === 'vision') { const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow); }
+  if (t === 'strengths') growStrengths();
 }
 function switchNotesTab(t) {
   ['library','compare'].forEach(x => {

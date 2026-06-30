@@ -168,6 +168,20 @@ Když řeknu „přidej drag and drop" / „ať jdou … přetahovat", použij *
 
 ---
 
+## Víceřádková textová pole — VÝCHOZÍ způsob (auto-grow)
+
+Víceřádkové `textarea` se **primárně dělají jako auto-rostoucí** — pole se roztáhne podle obsahu (do rozumného stropu, pak teprve scroll), **nikdy fixní výška se scrollbarem a `resize:vertical`** (na e-inku/mobilu vypadá ošklivě a špatně se čte).
+
+**Vzor (`autoGrow(ta)` ve vision-app):** `ta.style.height='auto'` → změř `scrollHeight` → nastav výšku; nad strop (`~55 % výšky okna`, víc v rozkliknutém panelu) zapni `overflowY:auto`, jinak `hidden`.
+
+**Pasti — NUTNÉ dodržet:**
+1. **`flex:0 0 auto` na textarea**, je-li uvnitř sloupcového flex kontejneru. Globální `textarea{flex:1}` jinak nastaví `flex-basis:0` a **inline výšku z autoGrow ignoruje** → pole zkolabuje na ~2 řádky. (Přesně tahle past byla u `.vis-ta` i `.q-block textarea`.) Dál `resize:none; overflow:hidden`.
+2. **`autoGrow(this)` volej z `oninput`** a navíc vždy, když se pole **zviditelní** (přepnutí záložky, expand panelu, po načtení dat) — skryté pole má `offsetParent === null` a autoGrow se na něm vyhodnotí na nulu, takže ho po zobrazení znovu „přerosti".
+
+**Referenční implementace:** `vision-app/index.html` → `autoGrow()`, bloky (`.vis-ta`) i Strengths (`.q-block textarea`, helper `growStrengths()`). `_template` zatím nemá — portovat na pokyn.
+
+---
+
 ## GitHub Gist sync — hotová infrastruktura
 
 Data jedou v jednom **privátním GitHub gistu** (soubor `APP_NAME-sync.json`, obsah = JSON string). Při kopírování šablony stačí:
