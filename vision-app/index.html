@@ -320,9 +320,11 @@ textarea::placeholder{color:var(--mid)}
 .proj-card{border:var(--b);border-radius:var(--r);padding:.5rem .6rem .6rem;display:flex;flex-direction:column;gap:.3rem;background:var(--w);margin-bottom:.6rem}
 #projCurrentSec .proj-card{border-left:3px solid var(--black)}
 .proj-head{display:flex;align-items:flex-start;gap:.3rem}
-.proj-name{flex:1 1 auto;min-width:0;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.92rem;color:var(--black);background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.22rem .1rem;outline:none}
+.proj-name{flex:1 1 auto;min-width:0;min-height:0;resize:none;overflow:hidden;white-space:pre-wrap;line-height:1.4;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.92rem;color:var(--black);background:var(--w);border:none;border-bottom:1.5px solid var(--light);border-radius:0;padding:.22rem .1rem;outline:none}
 .proj-name:focus{border-bottom-color:var(--black)}
 .proj-name::placeholder{color:var(--mid)}
+.proj-card.collapsed .proj-lbl,.proj-card.collapsed .proj-ta{display:none}
+.vis-block.collapsed .vis-ta{display:none}
 .proj-btn{width:24px;height:24px;border:var(--b);border-radius:3px;background:var(--w);color:var(--black);cursor:pointer;font-size:.8rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
 .proj-btn:active{background:var(--off)}
 @media(hover:hover){.proj-btn:hover{background:var(--off)}}
@@ -702,6 +704,7 @@ const UNDO_MAX = 40;
 // ── VISION STATE (declared before init() runs to avoid TDZ) ──
 let blocks = [];                 // live blocks of the active vision: [{id, heading, text}]
 let projects = [];               // live project pool of the active vision: [{id, name, whyNow, whyPostpone, nextStep, status, doneAt}]
+const collapsed = new Set();      // ids of blocks/projects collapsed to just their name (view-only, not persisted)
 let guide = null;                // editable guide rail: { mt, sections:[{h, items:[...]}] }
 let guideEditing = false;
 let previewId = null;            // id of the snapshot currently previewed (null = editing)
@@ -1393,11 +1396,12 @@ function growStrengths() { ['q1','q2','q3'].forEach(id => { const t = el(id); if
 function projFind(id) { return projects.find(p => String(p.id) === String(id)); }
 const PROJ_GRIP = '<span class="proj-grip" title="drag to reorder"><svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span>';
 function projCardHTML(p) {
-  const cur = p.status === 'current';
-  return `<div class="proj-card" data-id="${esc(p.id)}">
+  const cur = p.status === 'current', col = collapsed.has(p.id);
+  return `<div class="proj-card${col?' collapsed':''}" data-id="${esc(p.id)}">
     <div class="proj-head">
       ${PROJ_GRIP}
-      <input class="proj-name vis-edit" value="${esc(p.name)}" placeholder="Project name…" oninput="onProjField('${esc(p.id)}','name',this.value)">
+      <textarea class="proj-name vis-edit" rows="1" placeholder="Project name…" oninput="onProjField('${esc(p.id)}','name',this.value);autoGrow(this)">${esc(p.name)}</textarea>
+      <button class="proj-btn" title="${col?'expand':'collapse'}" onclick="toggleCollapse('${esc(p.id)}')">${col?'▸':'▾'}</button>
       <button class="proj-btn${cur?' on':''}" title="${cur?'currently focused — click to return to pool':'mark as current'}" onclick="setProjStatus('${esc(p.id)}','${cur?'pool':'current'}')">★</button>
       <button class="proj-btn" title="mark as done" onclick="setProjStatus('${esc(p.id)}','done')">✓</button>
       <button class="proj-btn danger" title="delete project" onclick="delProject('${esc(p.id)}')">✕</button>
@@ -1451,7 +1455,12 @@ function addProject() {
   projects.push(p);
   renderProjects(); schedSave();
   const card = el('projPoolSec').querySelector(`.proj-card[data-id="${p.id}"]`);
-  if (card) { const n = card.querySelector('input'); if (n) n.focus(); }
+  if (card) { const n = card.querySelector('.proj-name'); if (n) n.focus(); }
+}
+function toggleCollapse(id) {
+  if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
+  if (blocks.some(b => String(b.id) === String(id))) renderBlocks();
+  else renderProjects();
 }
 function setProjStatus(id, status) {
   const p = projFind(id); if (!p) return;
@@ -1534,17 +1543,18 @@ function initProjDnd(container) {
 function renderBlocks() {
   const wrap = el('blockList'); if (!wrap) return;
   if (!blocks.length) { wrap.innerHTML = '<p class="lib-empty">No blocks yet — click "add block" to start.</p>'; return; }
-  wrap.innerHTML = blocks.map((b,i) => `
-    <div class="vis-block" data-id="${esc(b.id)}">
+  wrap.innerHTML = blocks.map((b,i) => { const col = collapsed.has(b.id); return `
+    <div class="vis-block${col?' collapsed':''}" data-id="${esc(b.id)}">
       <div class="vis-block-head">
         <span class="vis-block-grip" title="drag to reorder"><svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span>
         <textarea class="vis-head vis-edit" rows="1" placeholder="Heading…" oninput="onBlockHead(${i},this.value);autoGrow(this)">${esc(b.heading)}</textarea>
+        <button class="vis-block-btn" title="${col?'expand':'collapse'}" onclick="toggleCollapse('${esc(b.id)}')">${col?'▸':'▾'}</button>
         <button class="vis-block-btn" onclick="moveBlock(${i},-1)" ${i===0?'disabled':''} title="move up">↑</button>
         <button class="vis-block-btn" onclick="moveBlock(${i},1)" ${i===blocks.length-1?'disabled':''} title="move down">↓</button>
         <button class="vis-block-btn danger" onclick="delBlock(${i})" title="delete block">✕</button>
       </div>
       <textarea class="vis-ta vis-edit" placeholder="Write here…" oninput="onBlockText(${i},this.value);autoGrow(this)">${esc(b.text)}</textarea>
-    </div>`).join('');
+    </div>`; }).join('');
   wrap.querySelectorAll('textarea').forEach(autoGrow);
 }
 function autoGrow(ta) {
