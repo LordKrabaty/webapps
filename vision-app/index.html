@@ -2333,7 +2333,11 @@ function renderCompare(snap, cur, meta) {
         creating = true; gistId = '';
         res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
       }
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) {
+        let detail = '';
+        try { const b = await res.json(); if (b && b.message) detail = ' — ' + b.message; } catch(_) {}
+        throw new Error('HTTP ' + res.status + detail);   // surface GitHub's reason (bad credentials / missing gist scope / …)
+      }
       if (creating) {
         const json = await res.json().catch(() => null);
         const newId = json && json.id;
@@ -2341,7 +2345,9 @@ function renderCompare(snap, cur, meta) {
       }
       lastPushTs = Date.now(); setSyncState('ok');
     } catch(e) {
-      console.warn('[autosync] push selhal:', (e && e.message) ? e.message : e);
+      const msg = (e && e.message) ? e.message : String(e);
+      console.warn('[autosync] push selhal:', msg);
+      if (/HTTP 40[13]/.test(msg)) showStatusMsg('⚠ sync: GitHub rejected the token (' + msg + ') — set a token with the "gist" scope via ⚙', 8000);
       setSyncState('err');
     } finally {
       pushing = false;
