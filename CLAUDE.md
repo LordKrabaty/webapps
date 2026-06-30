@@ -265,6 +265,8 @@ GitHub gist drží historii revizí (každý push = revize). Tlačítko „⏱ v
 
 Nikdy horizontální scroll. Tlačítko ☰ skryje `library-panel`.
 
+**Past — useknuté panely vpravo na mobilu (`min-width:0`):** panely jsou grid-items a ty mají defaultně `min-width:auto`, takže se **nezmenší pod šířku svého nejširšího nezalomitelného obsahu**. Jediný `white-space:nowrap` nadpis (např. dlouhý `card-title-text`) tak roztáhne panel nad šířku obrazovky a `overflow-x:clip` zbytek **uřízne vpravo** (na mobilu i při minimálním zoomu). **Proto musí mít `.library-panel`, `.main-panel`, `.notes-panel` (a flex-karty co je vyplňují, např. `.lib-card`) `min-width:0`** — pak se panel smrští na šířku sloupce a `card-title-text` se zkrátí tečkami (`text-overflow:ellipsis`). Stejné pravidlo platí pro každý nový flex/grid kontejner s nezalomitelným obsahem: dej dítěti `min-width:0`. (Opraveno v `_template`, `vision-app`.)
+
 ---
 
 ## Hardware uživatele

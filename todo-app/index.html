@@ -126,8 +126,8 @@ header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-i
 .card-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:var(--black);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.65rem;padding-bottom:.35rem;border-bottom:1.5px solid var(--black);display:flex;align-items:center;gap:.3rem;flex-wrap:nowrap}
 .card-title-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card-title svg{display:block;stroke:var(--black);width:17px;height:17px}
-.library-panel{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:.75rem}
-.lib-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1;position:relative}
+.library-panel{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:.75rem;min-width:0}
+.lib-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1;position:relative;min-width:0;overflow:hidden}
 .lib-item{display:flex;align-items:center;gap:.35rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0;overflow:hidden}
 .lib-item:active{background:var(--off);border-color:var(--mid)}
 @media(hover:hover){.lib-item:hover{background:var(--off);border-color:var(--mid)}}
@@ -147,14 +147,14 @@ header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-i
 .btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
 .btn-lib.primary:active{background:var(--dark)}
 @media(hover:hover){.btn-lib.primary:hover{background:var(--dark)}}
-.main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:1rem}
+.main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:1rem;min-width:0}
 .setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
 .field{display:flex;flex-direction:column;gap:.3rem;min-width:0}
 .field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
 .field input[type="text"],.field input[type="number"],.field input[type="date"],.field select,.field textarea{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none;width:100%}
 .field textarea{resize:vertical;min-height:3.2rem}
 .field input:focus,.field select:focus,.field textarea:focus{outline:2.5px solid var(--black);outline-offset:1px}
-.notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;min-width:0}
 .notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
 .card-controls{position:absolute;top:.4rem;right:.5rem;display:flex;align-items:center;gap:.15rem;z-index:2}
 textarea{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:1.8;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.7rem .75rem;outline:none;resize:none;min-height:60px}
