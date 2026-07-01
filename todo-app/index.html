@@ -7437,12 +7437,13 @@ window.addEventListener('resize', updateAppGrid);
   const gistRevCache = {};    // version → parsed record (avoids refetching on filter/re-render)
   const gistRevMeta = {};     // version → { device, summary, loaded } shown in the row
   let ghDevFilter = '';       // active device filter ('' = all devices)
+  let historyRateLimited = false;   // a 403/429 during history fetches → stop firing more
   function historyGistId() { try { return localStorage.getItem(WK(GISTID)); } catch(e) { return null; } }
   async function openGistHistory() {
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
     closeModal('jsonbinModal');
-    gistRevs = []; ghDevFilter = '';
+    gistRevs = []; ghDevFilter = ''; historyRateLimited = false;
     Object.keys(gistRevMeta).forEach(k => delete gistRevMeta[k]);
     const fsel = el('ghDevFilter'); if (fsel) { fsel.style.display = 'none'; fsel.value = ''; }
     el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
@@ -7494,9 +7495,11 @@ window.addEventListener('resize', updateAppGrid);
   async function loadHistoryMeta() {
     const devices = new Set();
     let idx = 0;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
     const next = async () => {
-      while (idx < gistRevs.length) {
+      while (idx < gistRevs.length && !historyRateLimited) {
         const i = idx++; const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+        const cached = !!gistRevCache[rev.version];
         try {
           const rec = await fetchGistRevision(rev.version);
           gistRevMeta[rev.version] = { device: (rec && rec.device) || '', summary: revSummary(rec), loaded: true };
@@ -7504,9 +7507,10 @@ window.addEventListener('resize', updateAppGrid);
         } catch(e) { gistRevMeta[rev.version] = { device: '', summary: '', loaded: true }; }
         updateDevFilter(devices);
         renderGistHistory();
+        if (!cached) await sleep(150);   // space requests so we don't trip GitHub's secondary rate limit
       }
     };
-    await Promise.all([next(), next(), next(), next(), next()]);   // 5 parallel workers
+    await Promise.all([next(), next()]);   // 2 gentle workers (was 5 — bursts can trip the secondary rate limit)
   }
   // (re)build the device filter dropdown — only shown once ≥2 distinct devices are known
   function updateDevFilter(devices) {
@@ -7524,6 +7528,7 @@ window.addEventListener('resize', updateAppGrid);
     if (gistRevCache[version]) return gistRevCache[version];
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+    if (res.status === 403 || res.status === 429) { historyRateLimited = true; throw new Error('HTTP ' + res.status); }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     const file = json && json.files && json.files[GIST_FILE];

@@ -251,9 +251,9 @@ Cíl: staré zařízení (stará cache appky), zapnuté po dlouhé době, **nesm
 
 GitHub gist drží historii revizí (každý push = revize). Tlačítko „⏱ version history" (řádek `gistHistoryRow` v ⚙ modalu) otevře seznam revizí a umožní obnovu.
 
-**UX (hotové v `todo-app` i `tea-app`):**
-- Seznam revizí ukazuje datum, **název zařízení** (z `payload.device`) a **souhrn obsahu** (počty kolekcí, `revSummary()`) u každé revize. Metadata se dotahují pro všechny zobrazené revize (≤ `HISTORY_MAX`, throttle 5 paralelních workerů, cache per `version` v `gistRevCache`).
-- **Filtr podle zařízení** (`ghDevFilter`) — dropdown se objeví až při ≥2 zařízeních.
+**UX (plná verze v `todo-app` i `tea-app`; základní prohlížení + filtr + šetrné dotahování i v `_template` a `vision-app`):**
+- Seznam revizí ukazuje datum, **název zařízení** (z `payload.device`) a v todo/tea i **souhrn obsahu** (počty kolekcí, `revSummary()`) u každé revize. Metadata se dotahují **šetrně** (viz „Rate limit" níže): **2 workery**, rozestup ~150 ms mezi requesty, **cache per `version`** v `gistRevCache` (reopen/filtr už nefetchuje), a **zastav při 403/429** (`historyRateLimited`).
+- **Filtr podle zařízení** (`ghDevFilter` / `ghFilterDev` + `#ghDevFilterRow`) — dropdown se objeví až při ≥2 zařízeních; vybere se zařízení a seznam se profiltruje (typicky „chci vidět verzi z druhého zařízení"). Seznam revizí (`history[]`) se tím nezkracuje — filtr jen skrývá řádky.
 - **preview** = otevře revizi v import modalu jako náhled; apply = běžný import (LWW / name-dedup), nedestruktivní.
 - **restore** = otevře stejný náhled se zaškrtáváním po kolekcích/položkách, ale ve **force režimu** (`importForceRestore = true`): vybrané položky **přepíšou** lokální záznam se stejným `id` i když jsou starší (skutečný rollback) a razítkují se `mt = Date.now()`, takže se vrácený stav prosadí i na ostatní zařízení přes sync.
 
@@ -264,7 +264,19 @@ GitHub gist drží historii revizí (každý push = revize). Tlačítko „⏱ v
 - Po přepisu obnov živý buffer aktivního záznamu (`refreshActiveFromLibrary()` / `applySessionData()`), jinak ho příští flush přepíše starou verzí.
 - Tombstony smazaných položek se po restore samy uvolní přes save-hook (`reconcileTombstones` je smaže, protože položky zase existují) → resurrection funguje.
 
-**Mapování force-overwrite je per-app:** `todo-app` přes společný `importRecordWins()`/`importStamp()` (ve force režimu vrací vždy `true` / `now`); `tea-app` přes vlastní `doRestoreImport()` (overwrite by id — jeho běžný import jinak jede přes name-dedup + merge akce, ne LWW). `_template` zatím nemá — portovat na pokyn.
+**Mapování force-overwrite je per-app:** `todo-app` přes společný `importRecordWins()`/`importStamp()` (ve force režimu vrací vždy `true` / `now`); `tea-app` přes vlastní `doRestoreImport()` (overwrite by id — jeho běžný import jinak jede přes name-dedup + merge akce, ne LWW). `_template` má prohlížení + preview + filtr, ale **force-restore mapování zatím ne** — portovat na pokyn.
+
+---
+
+## Rate limit (GitHub API) — šetrnost a backoff
+
+GitHub limit je **na celý účet/token**, sdílený všemi appkami i zařízeními. Dva druhy: **primární** 5000 req/hod (s tokenem; anonymně jen 60 → pozor, `api.github.com/rate_limit` v prohlížeči bez `Authorization` hlavičky ukazuje ten anonymní 60, ne tvůj), a **sekundární** (nárazová ochrana proti shluku zápisů) — vrací **403/429 i když primární kvóta zbývá**. Sekundární je ten, co se snadno klepne.
+
+**Dvě obrany (hotové, nerozbít):**
+1. **Autosync push backoff** (`pushCooldownUntil`): při 403/429 z pushe si appka přečte `Retry-After` / `X-RateLimit-Reset` (jinak 60 s) a **pozastaví push do té doby** — jediný naplánovaný pokus, `scheduleAutoPush()` cooldown respektuje. Úspěšný push cooldown vynuluje. **Bez tohohle appka retryem každé 4 s drží sekundární limit nahozený a sync se nikdy nechytne.**
+2. **Šetrné version-history dotahování** (viz výše): 2 workery + rozestup + cache + stop na 403/429. Původních 5 paralelních bez rozestupu = burst až `HISTORY_MAX` GETů → spolehlivě klepne sekundární limit (typicky po otevření historie během čilého editování).
+
+**Past:** nikdy nehamerij GitHub v retry-smyčce. Jakýkoli nový opakovaný fetch (pull, metadata, upload) musí na 403/429 **couvnout** (respektovat reset/Retry-After), ne zkoušet dál. Data se nikdy neztratí — limit se sám uvolní (primární do hodiny, sekundární do pár minut), jakmile appka přestane spamovat.
 
 ---
 

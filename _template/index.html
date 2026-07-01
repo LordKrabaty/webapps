@@ -1482,12 +1482,16 @@ document.addEventListener('keydown', e => {
      Loads the gist history[], allows preview (via the import modal) and restore
      (via the standard LWW merge autoImportSilent + push). */
   let gistRevs = [];   // the last ≤20 revisions from openGistHistory (index = order in the list)
+  const gistRevCache = {};        // version → record (cached so reopening / filtering never refetches)
+  let historyRateLimited = false; // a 403/429 during history fetches → stop firing more
+  let ghFilterDev = '';           // device filter ('' = all)
   function historyGistId() { try { return localStorage.getItem(GISTID); } catch(e) { return null; } }
   async function openGistHistory() {
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
     closeModal('jsonbinModal');
-    gistRevs = [];
+    gistRevs = []; historyRateLimited = false; ghFilterDev = '';
+    { const fr = el('ghDevFilterRow'); if (fr) fr.style.display = 'none'; }
     el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
     el('gistHistoryModal').classList.add('open');
     try {
@@ -1505,33 +1509,68 @@ document.addEventListener('keydown', e => {
     el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
       const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
       const tag = i === 0 ? '<span class="gh-rev-chg">newest</span>' : '';
-      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
-        + '<span class="gh-rev-dev" id="ghDev' + i + '"></span>' + tag + '</div>'
+      return '<div class="gh-rev" id="ghRev' + i + '" data-device="' + esc(rev._device || '') + '"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
+        + '<span class="gh-rev-dev" id="ghDev' + i + '">' + (rev._device ? '· ' + esc(rev._device) : '') + '</span>' + tag + '</div>'
         + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
         + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">obnovit</button></div></div>';
     }).join('');
+    updateDeviceFilter(); applyGhFilter();
     loadHistoryDevices();
   }
-  // fetches the device name (payload.device) for the top ≤20 revisions and adds it to the row — a few GET requests
+  // fetch the device name (payload.device) for the top ≤20 revisions — gently (2 workers, spaced, cached, stop on rate limit)
   function loadHistoryDevices() {
     const N = Math.min(gistRevs.length, 20);
-    for (let i = 0; i < N; i++) {
-      const rev = gistRevs[i]; if (!rev || !rev.version) continue;
-      fetchGistRevision(rev.version).then(rec => {
-        const span = el('ghDev' + i);
-        if (span && rec && rec.device) span.textContent = '· ' + rec.device;
-      }).catch(() => {});
-    }
+    let idx = 0;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const worker = async () => {
+      while (idx < N && !historyRateLimited) {
+        const i = idx++;
+        const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+        const cached = rev.version in gistRevCache;
+        try {
+          const rec = await fetchGistRevision(rev.version);
+          if (rec && rec.device) {
+            rev._device = rec.device;
+            const row = el('ghRev' + i); if (row) row.dataset.device = rec.device;
+            const span = el('ghDev' + i); if (span) span.textContent = '· ' + rec.device;
+            updateDeviceFilter(); if (ghFilterDev) applyGhFilter();
+          }
+        } catch(_) { /* rate limit / error → historyRateLimited stops the loop */ }
+        if (!cached) await sleep(150);   // space network requests so we don't trip the secondary rate limit
+      }
+    };
+    worker(); worker();   // 2 gentle parallel workers
   }
-  // downloads the content of a specific revision → record (object) or null
+  // distinct devices seen so far → populate the filter dropdown (only when ≥2 devices)
+  function updateDeviceFilter() {
+    const devs = [...new Set(gistRevs.map(r => r && r._device).filter(Boolean))].sort();
+    const row = el('ghDevFilterRow'), sel = el('ghDevFilter');
+    if (!row || !sel) return;
+    if (devs.length < 2) { row.style.display = 'none'; return; }
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">all devices</option>' + devs.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+    sel.value = devs.indexOf(cur) >= 0 ? cur : '';
+    row.style.display = '';
+  }
+  function onGhDevFilter() { ghFilterDev = el('ghDevFilter') ? el('ghDevFilter').value : ''; applyGhFilter(); }
+  function applyGhFilter() {
+    document.querySelectorAll('#gistHistoryList .gh-rev').forEach(row => {
+      const dev = row.dataset.device || '';
+      row.style.display = (!ghFilterDev || dev === ghFilterDev) ? '' : 'none';
+    });
+  }
+  // downloads the content of a specific revision → record (object) or null (cached per version)
   async function fetchGistRevision(version) {
+    if (version in gistRevCache) return gistRevCache[version];
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+    if (res.status === 403 || res.status === 429) { historyRateLimited = true; throw new Error('HTTP ' + res.status); }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     const file = json && json.files && json.files[GIST_FILE];
-    if (!file || !file.content) return null;
-    return JSON.parse(file.content);
+    const rec = (!file || !file.content) ? null : JSON.parse(file.content);
+    gistRevCache[version] = rec;
+    return rec;
   }
   async function gistHistoryPreview(i) {
     const rev = gistRevs[i]; if (!rev) return;
@@ -1567,6 +1606,7 @@ document.addEventListener('keydown', e => {
   window.openGistHistory      = openGistHistory;
   window.gistHistoryPreview   = gistHistoryPreview;
   window.gistHistoryRestore   = gistHistoryRestore;
+  window.onGhDevFilter        = onGhDevFilter;
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
   window.doCloudUpload        = doCloudUpload;
@@ -1615,6 +1655,10 @@ document.addEventListener('keydown', e => {
 <div class="modal-bg" id="gistHistoryModal">
   <div class="modal" style="max-width:460px;gap:.65rem">
     <h2>Version history</h2>
+    <div class="modal-row" id="ghDevFilterRow" style="display:none;align-items:center;gap:.5rem">
+      <label style="font-size:.72rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase">Device</label>
+      <select id="ghDevFilter" onchange="onGhDevFilter()" style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.82rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none"></select>
+    </div>
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
