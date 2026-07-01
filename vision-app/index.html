@@ -305,6 +305,10 @@ textarea::placeholder{color:var(--mid)}
 .vis-block.dragging{opacity:.5}
 .vis-block.drag-over-top{box-shadow:0 -2px 0 var(--black)}
 .vis-block.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+.collapse-bar{display:flex;justify-content:flex-end;margin:.1rem 0 .35rem}
+.collapse-all-btn{font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.22rem .55rem;cursor:pointer}
+.collapse-all-btn:active{background:var(--off)}
+@media(hover:hover){.collapse-all-btn:hover{background:var(--off)}}
 
 /* strengths Q&A */
 .q-block{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.15rem}
@@ -505,6 +509,7 @@ textarea::placeholder{color:var(--mid)}
       <div class="notes-pane active" id="mpane-vision">
         <input type="text" class="vis-title-input vis-edit" id="visTitle" placeholder="Title — e.g. How would my ideal self act?" oninput="onTitleInput()">
         <div id="currentProjects"></div>
+        <div class="collapse-bar"><button class="collapse-all-btn" id="collapseAllBlocks" onclick="toggleCollapseAll('blocks')" style="display:none">⊟ collapse all</button></div>
         <div id="blockList"></div>
         <button class="btn-lib" onclick="addBlock()">+ add block</button>
       </div>
@@ -512,6 +517,7 @@ textarea::placeholder{color:var(--mid)}
       <!-- PROJECTS TAB -->
       <div class="notes-pane" id="mpane-projects">
         <p class="q-hint" style="margin-bottom:.6rem">Pool of project ideas to consider for the next vision. Weigh each one, then mark it <b>current</b> (shows on the Vision tab) or <b>done</b>.</p>
+        <div class="collapse-bar"><button class="collapse-all-btn" id="collapseAllProjects" onclick="toggleCollapseAll('projects')" style="display:none">⊟ collapse all</button></div>
         <div id="projCurrentSec"></div>
         <div id="projPoolSec"></div>
         <button class="btn-lib" onclick="addProject()">+ add project</button>
@@ -1438,6 +1444,7 @@ function renderProjects() {
   doneSec.innerHTML = done.length ? `<div class="proj-sec-h">Done</div>` + done.map(projDoneHTML).join('') : '';
   growProjects();
   initProjDnd(curSec); initProjDnd(poolSec);
+  updateCollapseAllBtn('projects');
 }
 function growProjects() { ['projCurrentSec','projPoolSec'].forEach(s => { const w = el(s); if (w) w.querySelectorAll('textarea').forEach(autoGrow); }); }
 function renderCurrentProjects() {
@@ -1462,6 +1469,23 @@ function toggleCollapse(id) {
   if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
   if (blocks.some(b => String(b.id) === String(id))) renderBlocks();
   else renderProjects();
+}
+// collapsible items of a tab: all blocks / all projects that have a body (not done)
+function collapsibleIds(kind) {
+  return (kind === 'blocks' ? blocks : projects.filter(p => p.status !== 'done')).map(x => String(x.id));
+}
+function toggleCollapseAll(kind) {
+  const ids = collapsibleIds(kind); if (!ids.length) return;
+  const allCol = ids.every(id => collapsed.has(id));
+  ids.forEach(id => { if (allCol) collapsed.delete(id); else collapsed.add(id); });
+  if (kind === 'blocks') renderBlocks(); else renderProjects();
+}
+function updateCollapseAllBtn(kind) {
+  const btn = el(kind === 'blocks' ? 'collapseAllBlocks' : 'collapseAllProjects'); if (!btn) return;
+  const ids = collapsibleIds(kind);
+  btn.style.display = ids.length > 1 ? '' : 'none';   // pointless with 0–1 items
+  const allCol = ids.length && ids.every(id => collapsed.has(id));
+  btn.textContent = allCol ? '⊞ expand all' : '⊟ collapse all';
 }
 function setProjStatus(id, status) {
   const p = projFind(id); if (!p) return;
@@ -1557,6 +1581,7 @@ function renderBlocks() {
       <textarea class="vis-ta vis-edit" placeholder="Write here…" oninput="onBlockText(${i},this.value);autoGrow(this)">${esc(b.text)}</textarea>
     </div>`; }).join('');
   wrap.querySelectorAll('textarea').forEach(autoGrow);
+  updateCollapseAllBtn('blocks');
 }
 function autoGrow(ta) {
   if (!ta || ta.offsetParent === null) return;   // hidden → scrollHeight would be 0
