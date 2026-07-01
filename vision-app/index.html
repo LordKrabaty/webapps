@@ -700,6 +700,7 @@ const SESSION_KEY = 'vision-v1-session';
 const LIBRARY_KEY = 'vision-v1-library';
 const ARCHIVE_KEY = 'vision-v1-archive';
 const GUIDE_KEY   = 'vision-v1-guide';
+const COLLAPSED_KEY = 'vision-collapsed';   // ids collapsed to their name — per-device UI pref, not synced
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let library = [], activeLibId = null;
@@ -710,7 +711,9 @@ const UNDO_MAX = 40;
 // ── VISION STATE (declared before init() runs to avoid TDZ) ──
 let blocks = [];                 // live blocks of the active vision: [{id, heading, text}]
 let projects = [];               // live project pool of the active vision: [{id, name, whyNow, whyPostpone, nextStep, status, doneAt}]
-const collapsed = new Set();      // ids of blocks/projects collapsed to just their name (view-only, not persisted)
+const collapsed = new Set();      // ids of blocks/projects collapsed to just their name (per-device, persisted locally, not synced)
+function loadCollapsed() { try { (JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]') || []).forEach(x => collapsed.add(String(x))); } catch(e) {} }
+function saveCollapsed() { try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch(e) {} }
 let guide = null;                // editable guide rail: { mt, sections:[{h, items:[...]}] }
 let guideEditing = false;
 let previewId = null;            // id of the snapshot currently previewed (null = editing)
@@ -960,7 +963,7 @@ async function doSelectiveClear() {
   if (el('clr-session').checked)    toDelete.push('vision-v1-session');
   if (el('clr-library').checked)    toDelete.push('vision-v1-library');
   if (el('clr-archive').checked)    toDelete.push('vision-v1-archive');
-  if (el('clr-appearance').checked) toDelete.push('vision-fs','vision-dark','vision-panel-fs');
+  if (el('clr-appearance').checked) toDelete.push('vision-fs','vision-dark','vision-panel-fs','vision-collapsed');
   const clearGuide = el('clr-guide').checked;
   // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
   // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
@@ -1313,6 +1316,7 @@ function init() {
   loadPanelFs();
   loadLibrary(); renderLibrary();
   loadArchive();
+  loadCollapsed();
   loadGuide(); renderGuide();
   initBlockDnd();
   const restored = loadSession();
@@ -1467,6 +1471,7 @@ function addProject() {
 }
 function toggleCollapse(id) {
   if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
+  saveCollapsed();
   if (blocks.some(b => String(b.id) === String(id))) renderBlocks();
   else renderProjects();
 }
@@ -1478,6 +1483,7 @@ function toggleCollapseAll(kind) {
   const ids = collapsibleIds(kind); if (!ids.length) return;
   const allCol = ids.every(id => collapsed.has(id));
   ids.forEach(id => { if (allCol) collapsed.delete(id); else collapsed.add(id); });
+  saveCollapsed();
   if (kind === 'blocks') renderBlocks(); else renderProjects();
 }
 function updateCollapseAllBtn(kind) {
