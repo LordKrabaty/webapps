@@ -1904,7 +1904,10 @@ function verSummary(s) {
   const d = s.data || {};
   const nb = (d.blocks || []).filter(b => b.heading || b.text).length;
   const ns = ['q1','q2','q3'].filter(k => (d.strengths || {})[k]).length;
-  return nb + ' block' + (nb!==1?'s':'') + (ns ? ', ' + ns + ' answer' + (ns!==1?'s':'') : '');
+  const np = (d.projects || []).filter(p => p && (p.name || p.whyNow || p.whyPostpone || p.nextStep)).length;
+  return nb + ' block' + (nb!==1?'s':'')
+    + (ns ? ', ' + ns + ' answer' + (ns!==1?'s':'') : '')
+    + (np ? ', ' + np + ' project' + (np!==1?'s':'') : '');
 }
 function renderVersions() {
   const wrap = el('versionList'); if (!wrap) return;
