@@ -370,6 +370,13 @@ textarea::placeholder{color:var(--mid)}
 .cur-proj-next{font-size:.78rem;color:var(--muted)}
 
 /* version list */
+.ver-hdr-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--black);vertical-align:middle;margin-left:.15rem;animation:blink 1s step-end infinite}
+.ver-status{font-size:.72rem;line-height:1.35;padding:.3rem .55rem;border-radius:var(--r);margin-bottom:.25rem}
+.ver-status.dirty{color:var(--black);background:var(--off);border:var(--b);cursor:pointer;display:flex;align-items:center;gap:.4rem}
+.ver-status.dirty:active{background:var(--light)}
+@media(hover:hover){.ver-status.dirty:hover{background:var(--light)}}
+.ver-status.clean{color:var(--muted)}
+.ver-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--black);flex-shrink:0;animation:blink 1s step-end infinite}
 .ver-item{display:flex;align-items:center;gap:.4rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0}
 .ver-item:active{background:var(--off);border-color:var(--mid)}
 @media(hover:hover){.ver-item:hover{background:var(--off);border-color:var(--mid)}}
@@ -583,7 +590,8 @@ textarea::placeholder{color:var(--mid)}
       <div class="lib-cat-header">VISIONS</div>
       <div id="visionList"></div>
       <button class="btn-lib" onclick="newVision()" style="margin:.4rem 0 .2rem">+ new vision</button>
-      <div class="lib-cat-header">VERSIONS</div>
+      <div class="lib-cat-header">VERSIONS <span class="ver-hdr-dot" id="verHdrDot" style="display:none"></span></div>
+      <div id="versionStatus"></div>
       <div id="versionList"></div>
       <button class="btn-lib primary" onclick="saveVersion()" style="margin-top:.4rem">📸 save version</button>
     </div>
@@ -783,6 +791,7 @@ function schedSave() {
     // APP LOGIC: if the app continuously saves the edited record into a synced collection
     // (like todo-app days), flush it here and call window.autoSyncOnSave()
     saveSession(); showSave();
+    renderVersionStatus();   // refresh the "unsaved changes since last version" indicator
   }, 300);
 }
 
@@ -1999,7 +2008,38 @@ function verSummary(s) {
     + (ns ? ', ' + ns + ' answer' + (ns!==1?'s':'') : '')
     + (np ? ', ' + np + ' project' + (np!==1?'s':'') : '');
 }
+// unsaved-changes vs the most recent version of the active vision
+function versionDirtyState() {
+  const latest = versionsForActive()[0] || null;
+  const d = getSessionData();
+  if (!latest) {
+    const has = (d.title||'').trim() || (d.blocks||[]).some(b => b.heading || b.text)
+      || ['q1','q2','q3'].some(k => d.strengths && d.strengths[k])
+      || (d.projects||[]).some(p => p.name || p.whyNow || p.whyPostpone || p.nextStep || p.outcome);
+    return { dirty: !!has, latest: null, none: true };
+  }
+  return { dirty: visionDiff(latest.data, d).any, latest, none: false };   // dirty ⟺ the Compare view has something to show
+}
+function renderVersionStatus() {
+  const st = el('versionStatus'), dot = el('verHdrDot'); if (!st) return;
+  const { dirty, latest, none } = versionDirtyState();
+  if (dot) dot.style.display = dirty ? '' : 'none';
+  if (dirty) {
+    st.innerHTML = `<div class="ver-status dirty" onclick="showUnsavedDiff()" title="${none ? 'nothing saved as a version yet' : 'see what changed since the last version'}"><span class="ver-status-dot"></span>${none ? 'Not saved as a version yet' : 'Unsaved changes since last version'}</div>`;
+  } else if (latest) {
+    st.innerHTML = `<div class="ver-status clean">✓ All changes saved in a version</div>`;
+  } else {
+    st.innerHTML = '';
+  }
+}
+function showUnsavedDiff() {
+  const vers = versionsForActive();
+  if (!vers.length) { customAlert('Nothing saved as a version yet — click "📸 save version" to make the first checkpoint.'); return; }
+  renderCompare(vers[0].data, getSessionData(), vers[0]);   // changes since the newest version
+  switchNotesTab('compare');
+}
 function renderVersions() {
+  renderVersionStatus();
   const wrap = el('versionList'); if (!wrap) return;
   const vers = versionsForActive();
   if (!vers.length) { wrap.innerHTML = '<p class="lib-empty">No saved versions yet. Click "save version" to snapshot the current vision.</p>'; return; }
@@ -2020,9 +2060,10 @@ function saveVersion() {
     && !(data.blocks||[]).some(b => b.heading || b.text)
     && !['q1','q2','q3'].some(k => data.strengths && data.strengths[k]);
   if (empty) { customAlert('Nothing to save yet — write something first.'); return; }
-  const now = Date.now();
+  const maxTs = archive.reduce((m, s) => Math.max(m, s.ts || 0), 0);
+  const now = Math.max(Date.now(), maxTs + 1);   // strictly increasing → unique id + reliable newest-first ordering
   const label = new Date(now).toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  const snap = { id:'s'+now, mt:now, ts:now, srcId:activeLibId, name:label, note:'', data:JSON.parse(JSON.stringify(data)) };
+  const snap = { id:'s'+now+Math.random().toString(36).slice(2,5), mt:now, ts:now, srcId:activeLibId, name:label, note:'', data:JSON.parse(JSON.stringify(data)) };
   archive.push(snap); saveArchive(); renderVersions();
   showSave('📸 version saved');
 }
@@ -2081,36 +2122,46 @@ function renderSnapPreview(s) {
   p.innerHTML = html; p.style.display = '';
 }
 
-// ── version comparison (block-level diff: snapshot = old, current = new) ──
+// shared diff between two vision snapshots — drives both the Compare view and the unsaved-changes indicator
+function visionDiff(snap, cur) {
+  snap = snap || {}; cur = cur || {};
+  const sChanged = [];
+  ['q1','q2','q3'].forEach(k => { const a = ((snap.strengths||{})[k]||'').trim(), b = ((cur.strengths||{})[k]||'').trim(); if (a !== b) sChanged.push({ k, a, b }); });
+  const snapB = snap.blocks||[], curB = cur.blocks||[];
+  const sMap = new Map(snapB.map(x=>[String(x.id),x])), cMap = new Map(curB.map(x=>[String(x.id),x]));
+  const added=[], removed=[], changed=[];
+  curB.forEach(c => { const o = sMap.get(String(c.id)); if (!o) { if (c.heading||c.text) added.push(c); } else if ((o.heading||'')!==(c.heading||'')||(o.text||'')!==(c.text||'')) changed.push([o,c]); });
+  snapB.forEach(o => { if (!cMap.has(String(o.id)) && (o.heading||o.text)) removed.push(o); });
+  const titleChanged = (snap.title||'').trim() !== (cur.title||'').trim();
+  const projSig = p => JSON.stringify({ name:p.name||'', whyNow:p.whyNow||'', whyPostpone:p.whyPostpone||'', nextStep:p.nextStep||'', outcome:p.outcome||'', status:p.status||'pool' });
+  const projHas = p => p.name || p.whyNow || p.whyPostpone || p.nextStep || p.outcome;
+  const snapP = snap.projects||[], curP = cur.projects||[];
+  const spMap = new Map(snapP.map(x=>[String(x.id),x])), cpMap = new Map(curP.map(x=>[String(x.id),x]));
+  const pAdded=[], pRemoved=[], pChanged=[];
+  curP.forEach(c => { const o = spMap.get(String(c.id)); if (!o) { if (projHas(c)) pAdded.push(c); } else if (projSig(o)!==projSig(c)) pChanged.push([o,c]); });
+  snapP.forEach(o => { if (!cpMap.has(String(o.id)) && projHas(o)) pRemoved.push(o); });
+  const any = !!(sChanged.length||added.length||removed.length||changed.length||titleChanged||pAdded.length||pRemoved.length||pChanged.length);
+  return { sChanged, added, removed, changed, titleChanged, pAdded, pRemoved, pChanged, any };
+}
+// ── version comparison view (snapshot = old, current = new) ──
 function renderCompare(snap, cur, meta) {
   const out = el('compareOut'); if (!out) return;
   if (!snap) { out.innerHTML = '<p class="cmp-empty">Pick a saved version on the Versions tab to see what changed between it and your current vision.</p>'; return; }
   cur = cur || getSessionData();
   const sLabels = { q1:'Strengths & skills', q2:'Meaningful use', q3:'Flow activities' };
-  const sChanged = [];
-  ['q1','q2','q3'].forEach(k => {
-    const a = ((snap.strengths||{})[k]||'').trim(), b = ((cur.strengths||{})[k]||'').trim();
-    if (a !== b) sChanged.push({ k, a, b });
-  });
-  const snapB = snap.blocks || [], curB = cur.blocks || [];
-  const sMap = new Map(snapB.map(x => [String(x.id), x]));
-  const cMap = new Map(curB.map(x => [String(x.id), x]));
-  const added = [], removed = [], changed = [];
-  curB.forEach(c => {
-    const o = sMap.get(String(c.id));
-    if (!o) { if (c.heading || c.text) added.push(c); }
-    else if ((o.heading||'') !== (c.heading||'') || (o.text||'') !== (c.text||'')) changed.push([o,c]);
-  });
-  snapB.forEach(o => { if (!cMap.has(String(o.id)) && (o.heading || o.text)) removed.push(o); });
-
-  if (!sChanged.length && !added.length && !removed.length && !changed.length) {
+  const { sChanged, added, removed, changed, titleChanged, pAdded, pRemoved, pChanged, any } = visionDiff(snap, cur);
+  if (!any) {
     out.innerHTML = `<p class="cmp-empty">No differences — the version${meta?' from '+esc(meta.name):''} matches your current vision.</p>`;
     return;
   }
   const tag = t => `<span class="cmp-tag">${t}</span>`;
+  const pname = p => esc(p.name || '(untitled project)');
   let html = '';
+  const nAdded = added.length + pAdded.length, nRemoved = removed.length + pRemoved.length, nChanged = changed.length + sChanged.length + pChanged.length + (titleChanged?1:0);
   if (meta) html += `<div class="cmp-sec"><div class="cmp-h">Changes since ${esc(meta.name)}</div>`
-    + `<p style="font-size:.78rem;color:var(--muted);line-height:1.5">+${added.length} added · ~${changed.length+sChanged.length} changed · −${removed.length} removed</p></div>`;
+    + `<p style="font-size:.78rem;color:var(--muted);line-height:1.5">+${nAdded} added · ~${nChanged} changed · −${nRemoved} removed</p></div>`;
+  if (titleChanged) html += `<div class="cmp-sec"><div class="cmp-h">Title</div><div class="cmp-row">${tag('~')}`
+    + (snap.title ? `<div class="cmp-old">${esc(snap.title)}</div>` : '') + (cur.title ? `<div class="cmp-new">${esc(cur.title)}</div>` : '') + `</div></div>`;
   if (changed.length) {
     html += '<div class="cmp-sec"><div class="cmp-h">Changed</div>';
     changed.forEach(([o,c]) => {
@@ -2142,6 +2193,18 @@ function renderCompare(snap, cur, meta) {
       if (b) html += `<div class="cmp-new">${esc(b)}</div>`;
       html += '</div>';
     });
+    html += '</div>';
+  }
+  if (pChanged.length || pAdded.length || pRemoved.length) {
+    html += '<div class="cmp-sec"><div class="cmp-h">Projects</div>';
+    pChanged.forEach(([o,c]) => {
+      html += `<div class="cmp-row">${tag('~')}<span class="cmp-name">${pname(c)}</span>`;
+      if ((o.status||'pool') !== (c.status||'pool')) html += `<div class="cmp-new">status: ${esc(o.status||'pool')} → ${esc(c.status||'pool')}</div>`;
+      ['whyNow','whyPostpone','nextStep','outcome'].forEach(f => { if ((o[f]||'') !== (c[f]||'') && c[f]) html += `<div class="cmp-new">${esc(f)}: ${esc(c[f])}</div>`; });
+      html += '</div>';
+    });
+    pAdded.forEach(c => { html += `<div class="cmp-row">${tag('+')}<span class="cmp-name">${pname(c)}</span></div>`; });
+    pRemoved.forEach(o => { html += `<div class="cmp-row">${tag('−')}<span class="cmp-name">${pname(o)}</span></div>`; });
     html += '</div>';
   }
   out.innerHTML = html;
