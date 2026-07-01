@@ -1770,14 +1770,28 @@ function visionToText(d, name, note) {
       lines.push(''); lines.push(STRENGTH_LABELS[i]); lines.push(q.trim());
     });
   }
-  const cur = (d.projects || []).filter(p => p && p.status === 'current');
-  if (cur.length) {
-    lines.push(''); lines.push('-'.repeat(40)); lines.push('CURRENT PROJECTS');
-    cur.forEach(p => {
-      lines.push(''); lines.push('# ' + (p.name || 'Untitled project').trim());
-      if ((p.whyNow || '').trim())   lines.push('Why now: ' + p.whyNow.trim());
-      if ((p.nextStep || '').trim()) lines.push('Next step: ' + p.nextStep.trim());
-    });
+  const projs = (d.projects || []).filter(p => p && (p.name || p.whyNow || p.whyPostpone || p.nextStep));
+  const byStatus = st => projs.filter(p => (p.status || 'pool') === st);
+  const cur = byStatus('current'), pool = byStatus('pool'), done = byStatus('done');
+  if (cur.length || pool.length || done.length) {
+    lines.push(''); lines.push('-'.repeat(40)); lines.push('PROJECTS');
+    const section = (label, list) => {
+      if (!list.length) return;
+      lines.push(''); lines.push(label);
+      list.forEach(p => {
+        lines.push(''); lines.push('# ' + (p.name || 'Untitled project').trim());
+        if ((p.whyNow || '').trim())      lines.push('Why now: ' + p.whyNow.trim());
+        if ((p.whyPostpone || '').trim()) lines.push('Why it can wait: ' + p.whyPostpone.trim());
+        if ((p.nextStep || '').trim())    lines.push('Next step: ' + p.nextStep.trim());
+      });
+    };
+    section('CURRENT FOCUS', cur);
+    section('POOL', pool);
+    if (done.length) {
+      lines.push(''); lines.push('DONE');
+      done.forEach(p => lines.push('- ' + (p.name || 'Untitled project').trim()
+        + (p.doneAt ? ' (' + new Date(p.doneAt).toLocaleDateString('cs-CZ') + ')' : '')));
+    }
   }
   return lines.join('\n');
 }
