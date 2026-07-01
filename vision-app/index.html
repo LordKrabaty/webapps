@@ -347,10 +347,21 @@ textarea::placeholder{color:var(--mid)}
 .proj-card.dragging{opacity:.5}
 .proj-card.drag-over-top{box-shadow:0 -2px 0 var(--black)}
 .proj-card.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
-.proj-card.done{padding:.4rem .6rem;margin-bottom:.35rem;background:var(--off)}
+.proj-card.done{padding:.4rem .6rem;margin-bottom:.35rem;background:var(--off);cursor:pointer}
+.proj-card.done:active{background:var(--light)}
+@media(hover:hover){.proj-card.done:hover{background:var(--light)}}
 .proj-card.done .proj-head{align-items:center}
 .proj-done-name{flex:1;min-width:0;font-size:.84rem;color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .proj-done-date{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0}
+.proj-done-outcome{font-size:.76rem;color:var(--muted);line-height:1.4;margin-top:.3rem;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;white-space:pre-wrap}
+.proj-done-hint{font-size:.72rem;color:var(--mid);font-style:italic;margin-top:.25rem}
+/* project detail modal */
+.pd-field{display:flex;flex-direction:column;gap:.22rem}
+.pd-field label{font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+#pdName{width:100%;box-sizing:border-box;padding:.4rem .5rem;font-size:.9rem;font-weight:600;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none}
+.pd-ta{flex:0 0 auto;width:100%;box-sizing:border-box;font-family:'DM Sans',sans-serif;font-size:.86rem;line-height:1.55;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.4rem .5rem;outline:none;resize:none;overflow:hidden;min-height:2.2rem}
+.pd-ta:focus,#pdName:focus{outline:2px solid var(--black);outline-offset:1px}
+.pd-ta::placeholder,#pdName::placeholder{color:var(--mid)}
 /* current projects (read-only) on the Vision tab */
 .cur-proj{border:var(--b);border-radius:var(--r);padding:.5rem .65rem;margin-bottom:.85rem;background:var(--off);cursor:pointer}
 .cur-proj-h{font-size:.66rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem}
@@ -619,6 +630,28 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row">
       <button class="modal-btn primary" onclick="copyExportText()">📋 copy</button>
       <button class="modal-btn" onclick="closeModal('exportCopyModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Project detail / outcome modal (opened from a done project) -->
+<div class="modal-bg" id="projDetailModal">
+  <div class="modal" style="max-width:460px;max-height:88vh;overflow-y:auto;gap:.55rem">
+    <h2 id="pdTitle">Project</h2>
+    <div class="pd-field"><label>Name</label>
+      <input type="text" id="pdName" class="vis-edit" placeholder="Project name…" oninput="onProjDetailField('name',this.value)"></div>
+    <div class="pd-field"><label>Why do it now?</label>
+      <textarea id="pdWhyNow" class="pd-ta vis-edit" placeholder="…" oninput="onProjDetailField('whyNow',this.value);autoGrow(this)"></textarea></div>
+    <div class="pd-field"><label>Why it can wait</label>
+      <textarea id="pdWhyPostpone" class="pd-ta vis-edit" placeholder="…" oninput="onProjDetailField('whyPostpone',this.value);autoGrow(this)"></textarea></div>
+    <div class="pd-field"><label>Next step</label>
+      <textarea id="pdNextStep" class="pd-ta vis-edit" placeholder="…" oninput="onProjDetailField('nextStep',this.value);autoGrow(this)"></textarea></div>
+    <div class="pd-field"><label>Outcome</label>
+      <textarea id="pdOutcome" class="pd-ta vis-edit" placeholder="How did it end? Anything learned? Worth revisiting later?" oninput="onProjDetailField('outcome',this.value);autoGrow(this)"></textarea></div>
+    <div class="modal-row" style="flex-wrap:wrap">
+      <button class="modal-btn" onclick="reopenProjFromDetail()">↩ back to pool</button>
+      <button class="modal-btn danger" onclick="delProjFromDetail()">delete</button>
+      <button class="modal-btn primary" onclick="closeModal('projDetailModal')">done</button>
     </div>
   </div>
 </div>
@@ -1382,7 +1415,7 @@ function getSessionData() {
 function normProject(p) {
   p = p || {};
   return { ...p, id:p.id || uid(), name:p.name || '', whyNow:p.whyNow || '', whyPostpone:p.whyPostpone || '',
-           nextStep:p.nextStep || '', status:(p.status==='current'||p.status==='done')?p.status:'pool', doneAt:p.doneAt || null };   // preserve-unknown
+           nextStep:p.nextStep || '', outcome:p.outcome || '', status:(p.status==='current'||p.status==='done')?p.status:'pool', doneAt:p.doneAt || null };   // preserve-unknown
 }
 function applySessionData(d) {
   d = d || {};
@@ -1427,13 +1460,15 @@ function projCardHTML(p) {
 }
 function projDoneHTML(p) {
   const d = p.doneAt ? new Date(p.doneAt).toLocaleDateString('cs-CZ',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
-  return `<div class="proj-card done" data-id="${esc(p.id)}">
+  const outcome = (p.outcome || '').trim();
+  return `<div class="proj-card done" data-id="${esc(p.id)}" onclick="openProjDetail('${esc(p.id)}')" title="open details">
     <div class="proj-head">
       <span class="proj-done-name">${esc(p.name || 'Untitled project')}</span>
       ${d ? `<span class="proj-done-date">${esc(d)}</span>` : ''}
-      <button class="proj-btn" title="reopen (back to pool)" onclick="setProjStatus('${esc(p.id)}','pool')">↩</button>
-      <button class="proj-btn danger" title="delete project" onclick="delProject('${esc(p.id)}')">✕</button>
+      <button class="proj-btn" title="reopen (back to pool)" onclick="event.stopPropagation();setProjStatus('${esc(p.id)}','pool')">↩</button>
+      <button class="proj-btn danger" title="delete project" onclick="event.stopPropagation();delProject('${esc(p.id)}')">✕</button>
     </div>
+    ${outcome ? `<div class="proj-done-outcome">${esc(outcome)}</div>` : '<div class="proj-done-hint">+ add an outcome note</div>'}
   </div>`;
 }
 function renderProjects() {
@@ -1502,10 +1537,41 @@ function setProjStatus(id, status) {
 }
 async function delProject(id) {
   const p = projFind(id); if (!p) return;
-  if ((p.name || p.whyNow || p.whyPostpone || p.nextStep) && !await customConfirm('Delete this project?','delete')) return;
+  if ((p.name || p.whyNow || p.whyPostpone || p.nextStep || p.outcome) && !await customConfirm('Delete this project?','delete')) return;
   pushUndo();
   projects = projects.filter(x => String(x.id) !== String(id));
   renderProjects(); renderCurrentProjects(); schedSave();
+}
+// ── done-project detail modal (review details, add an Outcome note) ──
+let projDetailId = null;
+function openProjDetail(id) {
+  const p = projFind(id); if (!p) return;
+  projDetailId = id;
+  const d = p.doneAt ? new Date(p.doneAt).toLocaleDateString('cs-CZ',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
+  el('pdTitle').textContent = 'Project' + (d ? ' — done ' + d : '');
+  el('pdName').value = p.name || '';
+  el('pdWhyNow').value = p.whyNow || '';
+  el('pdWhyPostpone').value = p.whyPostpone || '';
+  el('pdNextStep').value = p.nextStep || '';
+  el('pdOutcome').value = p.outcome || '';
+  el('projDetailModal').classList.add('open');
+  setTimeout(() => {
+    ['pdWhyNow','pdWhyPostpone','pdNextStep','pdOutcome'].forEach(id2 => { const t = el(id2); if (t) autoGrow(t); });
+    const o = el('pdOutcome'); if (o) o.focus();
+  }, 0);
+}
+function onProjDetailField(field, val) {
+  const p = projFind(projDetailId); if (!p) return;
+  coalesceUndo(); p[field] = val; schedSave();
+  if (field === 'name' || field === 'outcome') renderProjects();   // refresh the done-row snippet
+}
+async function delProjFromDetail() {
+  const id = projDetailId; closeModal('projDetailModal'); projDetailId = null;
+  await delProject(id);
+}
+function reopenProjFromDetail() {
+  const id = projDetailId; closeModal('projDetailModal'); projDetailId = null;
+  setProjStatus(id, 'pool');
 }
 function reorderProjects(srcId, dstId, before) {
   if (String(srcId) === String(dstId)) return;
@@ -1770,7 +1836,7 @@ function visionToText(d, name, note) {
       lines.push(''); lines.push(STRENGTH_LABELS[i]); lines.push(q.trim());
     });
   }
-  const projs = (d.projects || []).filter(p => p && (p.name || p.whyNow || p.whyPostpone || p.nextStep));
+  const projs = (d.projects || []).filter(p => p && (p.name || p.whyNow || p.whyPostpone || p.nextStep || p.outcome));
   const byStatus = st => projs.filter(p => (p.status || 'pool') === st);
   const cur = byStatus('current'), pool = byStatus('pool'), done = byStatus('done');
   if (cur.length || pool.length || done.length) {
@@ -1789,8 +1855,10 @@ function visionToText(d, name, note) {
     section('POOL', pool);
     if (done.length) {
       lines.push(''); lines.push('DONE');
-      done.forEach(p => lines.push('- ' + (p.name || 'Untitled project').trim()
-        + (p.doneAt ? ' (' + new Date(p.doneAt).toLocaleDateString('cs-CZ') + ')' : '')));
+      done.forEach(p => {
+        lines.push('- ' + (p.name || 'Untitled project').trim() + (p.doneAt ? ' (' + new Date(p.doneAt).toLocaleDateString('cs-CZ') + ')' : ''));
+        if ((p.outcome || '').trim()) lines.push('  Outcome: ' + p.outcome.trim());
+      });
     }
   }
   return lines.join('\n');
