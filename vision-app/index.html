@@ -704,7 +704,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div id="importGuideSection" style="display:none">
       <label style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem;font-size:.82rem;color:var(--black);cursor:pointer">
-        <input type="checkbox" id="importGuideCb" checked> Import the guide <span style="color:var(--muted)">(replaces yours if newer)</span>
+        <input type="checkbox" id="importGuideCb" checked> Import the guide <span style="color:var(--muted)">(replaces yours)</span>
       </label>
     </div>
     <div class="modal-row" id="importActions" style="display:none">
@@ -840,7 +840,8 @@ function renderGuide() {
           </div>`).join('')}
         <button class="guide-add" onclick="guideAddItem(${i})">+ bullet</button>
       </div>`).join('')
-      + `<button class="guide-add" onclick="guideAddSection()">+ section</button>`;
+      + `<button class="guide-add" onclick="guideAddSection()">+ section</button>`
+      + `<button class="guide-add" onclick="restoreDefaultGuide()" style="margin-left:.4rem">↻ reset to default</button>`;
     wrap.querySelectorAll('textarea').forEach(autoGrow);
   } else {
     if (!guide.sections.length) { wrap.innerHTML = '<p class="lib-empty">Guide is empty — click ✎ to add content.</p>'; return; }
@@ -857,6 +858,12 @@ function toggleGuideEdit() {
   if (b) { b.classList.toggle('on', guideEditing); b.textContent = guideEditing ? '✓' : '✎'; b.title = guideEditing ? 'done editing' : 'edit the guide'; }
   renderGuide();
   if (!guideEditing) { clearTimeout(guideSaveT); saveGuide(); }   // flush on exit
+}
+async function restoreDefaultGuide() {
+  if (!await customConfirm('Reset the guide to the default text? Your current guide will be replaced (and the reset propagates to your other devices).','reset')) return;
+  guide = { mt: Date.now(), sections: defaultGuide().sections };   // stamp now so the reset wins & propagates
+  saveGuide(); renderGuide();
+  showSave('↻ default guide restored');
 }
 function onGuideHead(i,v) { if (!guide.sections[i]) return; guide.sections[i].h = v; guideStamp(); schedGuideSave(); }
 function onGuideItem(i,j,v) { if (!guide.sections[i]) return; guide.sections[i].items[j] = v; guideStamp(); schedGuideSave(); }
@@ -1324,12 +1331,13 @@ function doImport() {
     if (i >= 0) { archive[i] = a; } else { archive.push(a); arcAdded++; }
   });
   if (importArchiveData && importArchiveData.length) saveArchive();
-  // guide — LWW by mt (only adopt a strictly newer guide), if the user kept the checkbox on
+  // guide — a manual import wins (like items/versions): adopt it and stamp mt=now so it also propagates
   const wantGuide = !el('importGuideCb') || el('importGuideCb').checked;
   let guideImported = false;
-  if (wantGuide && importGuideData && (+importGuideData.mt || 0) > (+(guide && guide.mt) || 0)) {
+  if (wantGuide && importGuideData) {
     guide = importGuideData;
     guide.sections = (guide.sections || []).map(s => ({ ...s, h: s.h || '', items: Array.isArray(s.items) ? s.items.slice() : [] }));
+    guide.mt = Date.now();
     saveGuide(); renderGuide(); guideImported = true;
   }
   // if the active vision was overwritten by the import, refresh the live editor buffer
