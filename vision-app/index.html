@@ -309,6 +309,19 @@ textarea::placeholder{color:var(--mid)}
 .collapse-all-btn{font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.22rem .55rem;cursor:pointer}
 .collapse-all-btn:active{background:var(--off)}
 @media(hover:hover){.collapse-all-btn:hover{background:var(--off)}}
+/* memento mori — life in weeks */
+.mm-controls{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.35rem}
+.mm-birth-label{font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:.4rem}
+.mm-birth-label input{padding:.28rem .45rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);font-size:.82rem;font-family:'DM Mono',monospace}
+.mm-stat{font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.5rem;min-height:1em}
+.mm-grid{display:grid;grid-template-columns:repeat(52,1fr);gap:2px;width:100%}
+.mm-cell{width:100%;aspect-ratio:1/1;border:1px solid var(--light);border-radius:1px;background:var(--w);box-sizing:border-box}
+.mm-cell.lived{background:var(--mid);border-color:var(--mid)}
+.mm-cell.ver{background:var(--black);border-color:var(--black)}
+.mm-cell.now{outline:2px solid var(--black);outline-offset:0;background:var(--w)}
+.mm-legend{display:flex;gap:.9rem;flex-wrap:wrap;font-size:.72rem;color:var(--muted);margin-top:.6rem}
+.mm-legend span{display:inline-flex;align-items:center}
+.mm-legend i.mm-cell{display:inline-block;width:11px;height:11px;aspect-ratio:auto;margin-right:.28rem;flex-shrink:0}
 
 /* strengths Q&A */
 .q-block{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1.15rem}
@@ -521,6 +534,7 @@ textarea::placeholder{color:var(--mid)}
         <button class="notes-tab active" id="mtab-vision" onclick="switchMainTab('vision')">Vision</button>
         <button class="notes-tab" id="mtab-strengths" onclick="switchMainTab('strengths')">Strengths</button>
         <button class="notes-tab" id="mtab-projects" onclick="switchMainTab('projects')">Projects</button>
+        <button class="notes-tab" id="mtab-memento" onclick="switchMainTab('memento')">Life</button>
       </div>
 
       <!-- VISION TAB -->
@@ -558,6 +572,23 @@ textarea::placeholder{color:var(--mid)}
           <label>3 · Flow activities</label>
           <p class="q-hint">Which activities have historically energized you the most? During which activities do you get into a state of flow — absorbed so much you lose track of time?</p>
           <textarea class="vis-edit" id="q3" placeholder="Write here…" oninput="onStrengthInput();autoGrow(this)"></textarea>
+        </div>
+      </div>
+
+      <!-- LIFE / MEMENTO MORI TAB -->
+      <div class="notes-pane" id="mpane-memento">
+        <div class="card-title" style="border:none;padding:0;margin-bottom:.3rem"><span class="card-title-text" style="flex:0 1 auto">Memento mori</span></div>
+        <p class="q-hint" style="margin-bottom:.7rem">Each square is one week of a ~80-year life (52 per row). A daily reminder that time is precious and life is finite — it helps quiet the ego and focus on what matters. Not to stir anxiety, but to feel the value of the life you have.</p>
+        <div class="mm-controls">
+          <label class="mm-birth-label">Date of birth <input type="date" id="mmBirth" onchange="onBirthChange(this.value)"></label>
+        </div>
+        <div id="mmStat" class="mm-stat"></div>
+        <div id="mmGrid" class="mm-grid"></div>
+        <div class="mm-legend" id="mmLegend" style="display:none">
+          <span><i class="mm-cell lived"></i> lived</span>
+          <span><i class="mm-cell now"></i> this week</span>
+          <span><i class="mm-cell ver"></i> vision revision</span>
+          <span><i class="mm-cell"></i> ahead</span>
         </div>
       </div>
     </div>
@@ -757,6 +788,7 @@ function loadCollapsed() { try { (JSON.parse(localStorage.getItem(COLLAPSED_KEY)
 function saveCollapsed() { try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch(e) {} }
 let guide = null;                // editable guide rail: { mt, sections:[{h, items:[...]}] }
 let guideEditing = false;
+let mmBirth = '';                // memento-mori date of birth (YYYY-MM-DD) — per-device (localStorage), not synced
 let previewId = null;            // id of the snapshot currently previewed (null = editing)
 let _focusSnap = null, _pushedThisFocus = false;   // undo coalescing across a typing session
 
@@ -1367,6 +1399,7 @@ function init() {
   loadLibrary(); renderLibrary();
   loadArchive();
   loadCollapsed();
+  loadBirth();
   loadGuide(); renderGuide();
   initBlockDnd();
   const restored = loadSession();
@@ -1451,6 +1484,37 @@ function applySessionData(d) {
   updateMainTitle();
 }
 function growStrengths() { ['q1','q2','q3'].forEach(id => { const t = el(id); if (t) autoGrow(t); }); }
+
+// ── memento mori — life in weeks ──
+const MM_WEEK_MS = 7 * 24 * 3600 * 1000, MM_YEARS = 80, MM_WEEKS = 52;
+function loadBirth() { try { mmBirth = localStorage.getItem('vision-mm-birth') || ''; } catch(e) { mmBirth = ''; } }
+function onBirthChange(v) { mmBirth = (v || '').trim(); try { localStorage.setItem('vision-mm-birth', mmBirth); } catch(e) {} renderMemento(); }
+function renderMemento() {
+  const grid = el('mmGrid'), stat = el('mmStat'), legend = el('mmLegend'); if (!grid) return;
+  const inp = el('mmBirth'); if (inp && inp.value !== mmBirth) inp.value = mmBirth;
+  const birth = mmBirth ? new Date(mmBirth + 'T00:00:00') : null;
+  if (!birth || isNaN(birth.getTime())) {
+    grid.innerHTML = ''; if (legend) legend.style.display = 'none';
+    if (stat) stat.textContent = 'Enter your date of birth to see your life in weeks.';
+    return;
+  }
+  const bt = birth.getTime(), now = Date.now(), total = MM_YEARS * MM_WEEKS;
+  const weeksLived = Math.max(0, Math.floor((now - bt) / MM_WEEK_MS));
+  const verWeeks = new Set();
+  archive.forEach(s => { const t = s.ts || s.mt; if (!t) return; const w = Math.floor((t - bt) / MM_WEEK_MS); if (w >= 0 && w < total) verWeeks.add(w); });
+  let html = '';
+  for (let i = 0; i < total; i++) {
+    let cls = 'mm-cell';
+    if (verWeeks.has(i)) cls += ' ver'; else if (i < weeksLived) cls += ' lived';
+    if (i === weeksLived) cls += ' now';
+    html += `<div class="${cls}"${verWeeks.has(i) ? ' title="vision revision"' : ''}></div>`;
+  }
+  grid.innerHTML = html;
+  if (legend) legend.style.display = '';
+  const ageY = (now - bt) / (365.2425 * 24 * 3600 * 1000);
+  const pct = Math.min(100, weeksLived / total * 100);
+  if (stat) stat.textContent = `${Math.max(0, Math.floor(ageY))} years · ~${weeksLived.toLocaleString()} weeks lived · ${pct.toFixed(1)}% of ~${MM_YEARS} years` + (verWeeks.size ? ` · ${verWeeks.size} revision week${verWeeks.size!==1?'s':''}` : '');
+}
 
 // ── project pool (per-vision) ──
 function projFind(id) { return projects.find(p => String(p.id) === String(id)); }
@@ -1789,7 +1853,7 @@ function updateMainTitle() {
 
 // ── tabs ──
 function switchMainTab(t) {
-  ['vision','strengths','projects'].forEach(x => {
+  ['vision','strengths','projects','memento'].forEach(x => {
     const tab = el('mtab-'+x), pane = el('mpane-'+x);
     if (tab) tab.classList.toggle('active', x===t);
     if (pane) pane.classList.toggle('active', x===t);
@@ -1797,6 +1861,7 @@ function switchMainTab(t) {
   if (t === 'vision') { const w = el('blockList'); if (w) w.querySelectorAll('textarea').forEach(autoGrow); }
   if (t === 'strengths') growStrengths();
   if (t === 'projects') growProjects();
+  if (t === 'memento') renderMemento();
 }
 function switchNotesTab(t) {
   ['library','compare'].forEach(x => {
@@ -2065,6 +2130,7 @@ function saveVersion() {
   const label = new Date(now).toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   const snap = { id:'s'+now+Math.random().toString(36).slice(2,5), mt:now, ts:now, srcId:activeLibId, name:label, note:'', data:JSON.parse(JSON.stringify(data)) };
   archive.push(snap); saveArchive(); renderVersions();
+  const mp = el('mpane-memento'); if (mp && mp.classList.contains('active')) renderMemento();
   showSave('📸 version saved');
 }
 function viewSnapshot(id) {
