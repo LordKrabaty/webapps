@@ -395,14 +395,22 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 .tpl-empty{font-size:.78rem;color:var(--muted);font-style:italic;padding:.1rem}
 .arch-section-hd{cursor:pointer;user-select:none}
 @media(hover:hover){.arch-section-hd:hover{color:var(--black)}}
-.arch-item{cursor:default!important;opacity:.75}
+.arch-item{cursor:default!important;opacity:.75;flex-direction:column;align-items:stretch;gap:.2rem}
 @media(hover:hover){.arch-item:hover{opacity:1;background:var(--off);border-color:var(--mid)}}
+.arch-item-main{display:flex;align-items:center;gap:.35rem;min-width:0}
+.arch-note-preview{font-size:.72rem;color:var(--muted);line-height:1.35;cursor:pointer;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;word-break:break-word}
+@media(hover:hover){.arch-note-preview:hover{color:var(--dark)}}
+.log-flag{font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;white-space:nowrap}
+.lib-item.active .log-flag{color:var(--mid)}
 .arch-date{font-size:.65rem;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;white-space:nowrap;cursor:pointer;border-radius:2px;padding:.03rem .12rem}
 @media(hover:hover){.arch-date:hover{background:var(--light);color:var(--dark)}}
 .arch-btn{width:20px;height:20px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.3;flex-shrink:0;border-radius:2px;font-size:.8rem;color:var(--black)}
 @media(hover:hover){.arch-btn:hover{opacity:1;background:var(--light)}}
 .arch-item .lib-item-name{cursor:pointer}
 @media(hover:hover){.arch-item .lib-item-name:hover{text-decoration:underline}}
+.arch-controls{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;margin-bottom:.35rem}
+.arch-notes-ta{width:100%;box-sizing:border-box;flex:0 0 auto;min-height:70px;font-family:'DM Sans',sans-serif;font-size:.85rem;line-height:1.65;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.55rem .7rem;outline:none;resize:none;overflow-y:hidden}
+.arch-log-ta{width:100%;box-sizing:border-box;flex:0 0 auto;min-height:52px;font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.65;color:var(--black);background:var(--w);border:none;border-top:var(--b);outline:none;resize:none;overflow-y:hidden;padding:.45rem .65rem}
 /* template name modal */
 #tplNameModal .modal{max-width:340px}
 #tplNameInput{width:100%;font-family:'DM Sans',sans-serif;font-size:.95rem;padding:.45rem .65rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)}
@@ -558,6 +566,11 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
         <span>archive <span id="archiveCount" style="font-weight:400"></span></span>
         <span id="archiveToggleIcon" style="font-size:.65rem">▼</span>
       </div>
+      <div id="archiveControls" class="arch-controls" style="display:none">
+        <select id="archCatFilter" class="lib-seller-filter" onchange="onArchFilterChange()" title="filter by category"></select>
+        <select id="archSellerFilter" class="lib-seller-filter" onchange="onArchFilterChange()" title="filter by seller"></select>
+        <select id="archLocationFilter" class="lib-seller-filter" onchange="onArchFilterChange()" title="filter by location"></select>
+      </div>
       <div id="archiveList" style="display:none"></div>
     </div>
   </div>
@@ -656,18 +669,38 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <div class="modal-bg" id="archPreviewModal" onclick="if(event.target===this)closeModal('archPreviewModal')">
   <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;gap:.75rem">
     <div style="display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;justify-content:space-between">
-      <h2 id="apm-name"></h2>
-      <span id="apm-cat" style="font-size:.8rem;color:var(--muted);font-style:italic"></span>
+      <h2>Archived tea</h2>
+      <span id="apm-archived" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></span>
     </div>
-    <div id="apm-archived" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></div>
+    <div class="field">
+      <label>tea name</label>
+      <input type="text" id="apm-name-edit" placeholder="Tie Guan Yin, Pu-erh…" oninput="updateArchField('name',this.value)" />
+    </div>
+    <div class="setup-grid" style="gap:.6rem 1rem">
+      <div class="field">
+        <label>category</label>
+        <select id="apm-cat-edit" onchange="updateArchField('teaCategory',this.value)"></select>
+      </div>
+      <div class="field">
+        <label>seller</label>
+        <input type="text" id="apm-seller-edit" placeholder="Pu-erh shop, teahouse…" list="sellerOptions" autocomplete="off" oninput="updateArchField('seller',this.value)" />
+      </div>
+      <div class="field">
+        <label>location</label>
+        <input type="text" id="apm-location-edit" placeholder="home, work…" list="locationOptions" autocomplete="off" oninput="updateArchField('location',this.value)" />
+      </div>
+    </div>
     <div id="apm-setup" style="background:var(--off);border:var(--b);border-radius:var(--r);padding:.65rem .85rem;font-size:.8rem;line-height:1.75;white-space:pre-wrap;font-family:'DM Mono',monospace;color:var(--dark)"></div>
     <div id="apm-notes-wrap">
-      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem">Notes</div>
-      <div id="apm-notes" style="font-size:.83rem;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:var(--black)"></div>
+      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem">General notes</div>
+      <textarea id="apm-notes-edit" class="arch-notes-ta" placeholder="General notes about the tea — editable here in the archive…" oninput="updateArchNotes(this)"></textarea>
     </div>
     <div id="apm-logs-wrap">
-      <div style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.4rem">Log <span id="apm-log-count"></span></div>
-      <div id="apm-log-list" style="display:flex;flex-direction:column;gap:.4rem;max-height:260px;overflow-y:auto"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.4rem">
+        <span style="font-size:.68rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase">Log <span id="apm-log-count"></span></span>
+        <button class="btn-sm" onclick="exportArchLogText()" title="export this tea's log as plain text">↑ export</button>
+      </div>
+      <div id="apm-log-list" style="display:flex;flex-direction:column;gap:.4rem"></div>
     </div>
     <div class="modal-row" style="flex-wrap:wrap">
       <button class="modal-btn primary" id="apm-dup-btn">+ duplikovat do knihovny</button>
@@ -1045,7 +1078,7 @@ function normDec(v){return(v||'').toString().replace(',','.')}
 function normTag(s){return(s==null?'':String(s)).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
 const EMPTY_TAG='empty'; // sentinel for the "no value" filter (PUA char, does not collide with data)
 function tagsOf(raw,multi=true){return(multi?String(raw||'').split(','):[String(raw||'')]).map(s=>s.trim()).filter(Boolean)}
-function uniqueTagVals(dataKey,multi=true){const m=new Map();library.forEach(e=>tagsOf(e.data?.[dataKey],multi).forEach(p=>{const k=normTag(p);if(!m.has(k))m.set(k,p)}));return[...m.values()].sort((a,b)=>a.localeCompare(b,'en'))}
+function uniqueTagVals(dataKey,multi=true,src=library){const m=new Map();src.forEach(e=>tagsOf(e.data?.[dataKey],multi).forEach(p=>{const k=normTag(p);if(!m.has(k))m.set(k,p)}));return[...m.values()].sort((a,b)=>a.localeCompare(b,'en'))}
 function tagMatch(raw,filter){if(!filter)return true;const parts=tagsOf(raw,true);if(filter===EMPTY_TAG)return parts.length===0;const nf=normTag(filter);return parts.some(p=>normTag(p)===nf)}
 function tagsEq(a,b){const k=r=>tagsOf(r,true).map(normTag).sort().join('');return k(a)===k(b)} // equality of tag sets regardless of diacritics/case/order
 const CATEGORIES=['green','white','DJ FF','oolong','red / black','dark / pu-erh','herbal','other'];
@@ -1346,49 +1379,178 @@ async function deleteFromArchive(id){
   archive=archive.filter(e=>e.id!==id);
   saveArchive();renderArchive();
 }
+function archControlsVisible(){
+  // only worth showing the filter row when the archive actually has category/seller/location values to filter on
+  const c=el('archCatFilter'),s=el('archSellerFilter'),l=el('archLocationFilter');
+  return archiveOpen&&archive.length&&(c?.classList.contains('has-options')||s?.classList.contains('has-options')||l?.classList.contains('has-options'));
+}
+function updateArchControlsVisibility(){const ac=el('archiveControls');if(ac)ac.style.display=archControlsVisible()?'':'none';}
 function toggleArchiveSection(){
   archiveOpen=!archiveOpen;
   el('archiveList').style.display=archiveOpen?'':'none';
+  updateArchControlsVisibility();
   el('archiveToggleIcon').textContent=archiveOpen?'▲':'▼';
+}
+// per-device memory of archive filters (local keys — not synced), mirrors the library filters
+const FILTER_ARCH_CAT_KEY='cajovy-filter-arch-cat',FILTER_ARCH_SELLER_KEY='cajovy-filter-arch-seller',FILTER_ARCH_LOCATION_KEY='cajovy-filter-arch-location';
+// teaCategory is a single value from a fixed list → build the dropdown in the canonical CAT_ORDER (not alphabetically)
+function updateArchCatFilter(){
+  const sel=el('archCatFilter');if(!sel)return;
+  const present=new Set();let hasEmpty=false;
+  archive.forEach(e=>{const c=(e.data?.teaCategory||'').trim();if(c)present.add(c);else hasEmpty=true;});
+  const vals=[...CAT_ORDER.filter(c=>present.has(c)),...[...present].filter(c=>!CAT_ORDER.includes(c)).sort((a,b)=>a.localeCompare(b,'en'))];
+  const cur=sel.value;
+  let html='<option value="">— category</option>';
+  if(hasEmpty&&vals.length)html+=`<option value="${EMPTY_TAG}">— (no value)</option>`;
+  html+=vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  sel.innerHTML=html;
+  sel.value=cur;
+  if(sel.value!==cur)sel.value=vals.find(v=>normTag(v)===normTag(cur))||'';
+  sel.classList.toggle('has-options',vals.length>0);
+  sel.classList.toggle('active',!!sel.value);
+}
+function updateArchiveFilter(){
+  updateArchCatFilter();
+  updateDynamicFilter('archSellerFilter','seller','seller',true,archive);
+  updateDynamicFilter('archLocationFilter','location','location',true,archive);
+}
+function onArchFilterChange(){
+  try{
+    localStorage.setItem(FILTER_ARCH_CAT_KEY,el('archCatFilter')?.value||'');
+    localStorage.setItem(FILTER_ARCH_SELLER_KEY,el('archSellerFilter')?.value||'');
+    localStorage.setItem(FILTER_ARCH_LOCATION_KEY,el('archLocationFilter')?.value||'');
+  }catch(e){}
+  renderArchive();
+}
+function restoreArchFilters(){
+  updateArchiveFilter();   // fill options from the archive first — the select value can only be set afterwards
+  try{
+    const c=localStorage.getItem(FILTER_ARCH_CAT_KEY)||'',s=localStorage.getItem(FILTER_ARCH_SELLER_KEY)||'',l=localStorage.getItem(FILTER_ARCH_LOCATION_KEY)||'';
+    const cs=el('archCatFilter'),ss=el('archSellerFilter'),ls=el('archLocationFilter');
+    if(c&&cs)cs.value=c;
+    if(s&&ss)ss.value=s;
+    if(l&&ls)ls.value=l;
+  }catch(e){}
+}
+// live-refresh a single archive item's note preview without re-rendering (keeps modal focus intact)
+function updateArchNotePreview(id,notes){
+  const box=document.querySelector(`.arch-item[data-id="${id}"] .arch-note-preview`);
+  const t=(notes||'').trim();
+  if(box){box.textContent=t;box.style.display=t?'':'none';}
 }
 function renderArchive(){
   const count=archive.length;
   el('archiveCount').textContent=count?'('+count+')':'';
   const list=el('archiveList');
-  if(!count){list.innerHTML='<div class="tpl-empty">Archive is empty.</div>';return;}
-  list.innerHTML=archive.map(e=>`
-    <div class="lib-item arch-item">
-      <span class="lib-item-name" title="${esc(e.name)} — preview" onclick="openArchPreview(${e.id})">${esc(e.name)}</span>
-      <span class="arch-date" id="arch-date-${e.id}" onclick="startArchDateEdit(${e.id})" title="click to change archive date">${e.archivedAt||'—'}</span>
-      <button class="lib-item-del" style="opacity:.2" onclick="deleteFromArchive(${e.id})" title="permanently delete"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    </div>`).join('');
+  const ac=el('archiveControls');
+  if(!count){list.innerHTML='<div class="tpl-empty">Archive is empty.</div>';if(ac)ac.style.display='none';return;}
+  updateArchiveFilter();
+  updateArchControlsVisibility();
+  const catFilter=(el('archCatFilter')?.value||'');
+  const sellerFilter=(el('archSellerFilter')?.value||'');
+  const locationFilter=(el('archLocationFilter')?.value||'');
+  const items=archive.filter(e=>tagMatch(e.data?.teaCategory,catFilter)&&tagMatch(e.data?.seller,sellerFilter)&&tagMatch(e.data?.location,locationFilter));
+  if(!items.length){list.innerHTML='<div class="tpl-empty">No archived teas match the filter.</div>';return;}
+  list.innerHTML=items.map(e=>{
+    const notes=(e.data?.notes||'').trim();
+    const logN=(e.logs||[]).length;
+    return`
+    <div class="lib-item arch-item" data-id="${e.id}">
+      <div class="arch-item-main">
+        <span class="lib-item-name" title="${esc(e.name)} — open notes" onclick="openArchPreview(${e.id})">${esc(e.name)}</span>
+        ${logN?`<span class="log-flag" title="${logN} log ${logN===1?'entry':'entries'}">✎${logN}</span>`:''}
+        <span class="arch-date" id="arch-date-${e.id}" onclick="startArchDateEdit(${e.id})" title="click to change archive date">${e.archivedAt||'—'}</span>
+        <button class="lib-item-del" style="opacity:.2" onclick="deleteFromArchive(${e.id})" title="permanently delete"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="arch-note-preview" onclick="openArchPreview(${e.id})" title="edit notes"${notes?'':' style="display:none"'}>${esc(notes)}</div>
+    </div>`;}).join('');
 }
 
 let archPreviewId=null;
 function openArchPreview(id){
   const entry=archive.find(e=>e.id===id);if(!entry)return;
   archPreviewId=id;
-  el('apm-name').textContent=entry.name||'Untitled';
-  el('apm-cat').textContent=entry.data?.teaCategory||'';
   el('apm-archived').textContent=entry.archivedAt?'archived '+entry.archivedAt:'';
+  // editable identity fields — category options mirror the main form select (single source of truth)
+  const catSel=el('apm-cat-edit');
+  catSel.innerHTML=el('teaCategory').innerHTML;
+  const cat=normCat(entry.data?.teaCategory);
+  if(cat&&![...catSel.options].some(o=>o.value===cat))catSel.insertAdjacentHTML('beforeend',`<option value="${esc(cat)}">${esc(cat)}</option>`); // non-canonical legacy value — keep it selectable
+  el('apm-name-edit').value=entry.name||'';
+  catSel.value=cat;
+  el('apm-seller-edit').value=entry.data?.seller||'';
+  el('apm-location-edit').value=entry.data?.location||'';
   el('apm-setup').textContent=buildArchSetupText(entry.data);
-  const notes=(entry.data?.notes||'').trim();
-  el('apm-notes-wrap').style.display=notes?'':'none';
-  el('apm-notes').textContent=notes;
+  // General notes — editable directly in the archive (always shown so notes can be added, not just read)
+  const notesTa=el('apm-notes-edit');
+  notesTa.value=entry.data?.notes||'';
   const logs=entry.logs||[];
   el('apm-logs-wrap').style.display=logs.length?'':'none';
   el('apm-log-count').textContent=logs.length?'('+logs.length+')':'';
   el('apm-log-list').innerHTML=logs.map(l=>`
-    <div style="border:var(--b);border-radius:var(--r);overflow:hidden">
+    <div style="border:var(--b);border-radius:var(--r);overflow:hidden;flex-shrink:0">
       <div style="padding:.38rem .65rem;background:var(--off);border-bottom:var(--b);display:flex;gap:.55rem;align-items:baseline;flex-wrap:wrap">
         <span style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0">${esc(l.date||'')}</span>
         <span style="font-size:.72rem;color:var(--dark);white-space:pre-wrap;word-break:break-word">${esc(l.setup||'')}</span>
       </div>
-      ${l.text&&l.text.trim()?`<div style="padding:.45rem .65rem;font-size:.82rem;line-height:1.65;white-space:pre-wrap;word-break:break-word">${esc(l.text)}</div>`:''}</div>`).join('');
+      <textarea class="arch-log-ta" data-log-id="${l.id}" placeholder="tasting notes for this session…" oninput="updateArchLogText(${l.id},this)">${esc(l.text||'')}</textarea></div>`).join('');
   el('apm-dup-btn').onclick=()=>dupArchiveToLibrary(id);
   el('apm-restore-btn').onclick=()=>{closeModal('archPreviewModal');restoreFromArchive(id);};
   el('apm-asnew-btn').onclick=()=>{closeModal('archPreviewModal');useArchiveAsNew(id);};
   el('archPreviewModal').classList.add('open');
+  // grow the textareas once the modal is visible (a hidden textarea reports the wrong scrollHeight)
+  requestAnimationFrame(()=>{
+    autoResizeTA(el('apm-notes-edit'));
+    el('apm-log-list').querySelectorAll('.arch-log-ta').forEach(autoResizeTA);
+  });
+}
+// edit an archived tea's identity field (name / category / seller / location) in place
+function updateArchField(key,val){
+  const entry=archive.find(e=>e.id===archPreviewId);if(!entry)return;
+  if(key==='name'){
+    if(entry.name===val)return;
+    entry.name=val;
+    if(!entry.data)entry.data={};
+    entry.data.teaName=val;   // keep the form-field copy in sync, like the main form does — otherwise restore/load would revert the rename
+  }else{
+    if(!entry.data)entry.data={};
+    if((entry.data[key]||'')===val)return;
+    entry.data[key]=val;
+  }
+  entry.mt=Date.now();
+  saveArchive();
+  renderArchive();   // live-update the list name + filter options (focus stays in the modal, the list re-render doesn't touch it)
+}
+// edit the general notes of an archived tea in place (archive is local — union-synced, so edits stay on this device)
+function updateArchNotes(ta){
+  const entry=archive.find(e=>e.id===archPreviewId);if(!entry)return;
+  if(!entry.data)entry.data={};
+  if((entry.data.notes||'')===ta.value)return;
+  entry.data.notes=ta.value;entry.mt=Date.now();
+  saveArchive();
+  autoResizeTA(ta);
+  updateArchNotePreview(entry.id,ta.value);
+}
+// export an archived tea's log as plain text — same format as the library log export
+function exportArchLogText(){
+  const entry=archive.find(e=>e.id===archPreviewId);if(!entry)return;
+  const logs=entry.logs||[];
+  if(!logs.length){customAlert('No log entries to export.');return;}
+  const teaName=entry.name||'tea';
+  el('logExportTitle').textContent='Log — '+teaName;
+  el('logExportNote').textContent=logs.length+' entries · archived'+(entry.archivedAt?' '+entry.archivedAt:'');
+  el('logExportText').value=buildLogSection(teaName,entry.data?.notes,logs);
+  logExportFname=teaName;
+  el('logExportModal').classList.add('open');   // opens on top of the archive preview; closing it returns there
+}
+// edit a log entry's tasting notes of an archived tea in place
+function updateArchLogText(logId,ta){
+  const entry=archive.find(e=>e.id===archPreviewId);if(!entry)return;
+  const l=(entry.logs||[]).find(x=>x.id===logId);if(!l)return;
+  if((l.text||'')===ta.value)return;
+  l.text=ta.value;entry.mt=Date.now();
+  saveArchive();
+  autoResizeTA(ta);
 }
 function buildArchSetupText(d){
   if(!d)return'';
@@ -1448,7 +1610,8 @@ function toggleLibGroupCat(){
   renderLibrary();
 }
 function libItemHtml(e){
-  return`<div class="lib-item ${activeLibId===e.id?'active':''}" data-id="${e.id}" onclick="loadFromLibrary(${e.id})"><span class="lib-item-name" title="${esc(e.name)}">${esc(e.name)}</span><button class="lib-item-del" onclick="event.stopPropagation();deleteFromLibrary(${e.id})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
+  const logN=(e.logs||[]).length;
+  return`<div class="lib-item ${activeLibId===e.id?'active':''}" data-id="${e.id}" onclick="loadFromLibrary(${e.id})"><span class="lib-item-name" title="${esc(e.name)}">${esc(e.name)}</span>${logN?`<span class="log-flag" title="${logN} log ${logN===1?'entry':'entries'}">✎${logN}</span>`:''}<button class="lib-item-del" onclick="event.stopPropagation();deleteFromLibrary(${e.id})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
 }
 /* ── LONG-PRESS on a lib-item (touch) → delete/archive ─── */
 let _lpTimer=null,_lpFired=false,_lpStartY=0;
@@ -1485,10 +1648,10 @@ function initLibLongPress(){
     if(_lpFired){e.preventDefault();e.stopPropagation();_lpFired=false;}
   },true);
 }
-function updateDynamicFilter(selId,dataKey,placeholder,multi=false){
+function updateDynamicFilter(selId,dataKey,placeholder,multi=false,src=library){
   const sel=el(selId);if(!sel)return;
-  const vals=uniqueTagVals(dataKey,multi);
-  const hasEmpty=library.some(e=>!tagsOf(e.data?.[dataKey],multi).length);
+  const vals=uniqueTagVals(dataKey,multi,src);
+  const hasEmpty=src.some(e=>!tagsOf(e.data?.[dataKey],multi).length);
   const cur=sel.value;
   let html=`<option value="">— ${placeholder}</option>`;
   if(hasEmpty&&vals.length)html+=`<option value="${EMPTY_TAG}">— (no value)</option>`;
@@ -1880,7 +2043,7 @@ async function doSelectiveClear(){
   if(el('clr-library').checked) toDelete.push('cajovy-v3-library');
   if(el('clr-templates').checked) toDelete.push('cajovy-v3-templates');
   if(el('clr-archive').checked) toDelete.push('cajovy-v3-archive');
-  if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs','cajovy-filter-seller','cajovy-filter-location','cajovy-lib-group-cat');
+  if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs','cajovy-filter-seller','cajovy-filter-location','cajovy-filter-arch-cat','cajovy-filter-arch-seller','cajovy-filter-arch-location','cajovy-lib-group-cat');
   if(!toDelete.length){closeModal('clearStorageModal');return;}
   // If a synced collection is cleared, also reset the autosync baseline + tombstones — otherwise a local
   // reset would generate tombstones and silently delete data on other devices too. After reload the content
@@ -2834,30 +2997,35 @@ function renderTemplates(){
 }
 
 /* ── LOG TEXT EXPORT ─── */
+// shared plain-text builder for one tea's log (general notes + entries) — used by single, multi and archive export
+function buildLogSection(name,generalNotes,logs,w=40){
+  const lines=[];
+  lines.push('LOG — '+(name||'tea').toUpperCase());
+  lines.push('='.repeat(w));
+  const gn=(generalNotes||'').trim();
+  if(gn){lines.push('');lines.push(gn);lines.push('-'.repeat(w));}
+  (logs||[]).forEach((e,i)=>{
+    lines.push('');
+    lines.push('['+e.date+']');
+    lines.push(e.setup||'');
+    if(e.text&&e.text.trim()){
+      lines.push('---');
+      lines.push(e.text.trim());
+    }
+    if(i<logs.length-1)lines.push('-'.repeat(w));
+  });
+  return lines.join('\n');
+}
+let logExportFname='log';   // filename stem for the download button — set by whichever export opened the modal
 function exportLogText(){
   const logs=getActiveLogs();
   if(logs===null){customAlert('Select a tea from the library to export its log.');return;}
   if(!logs.length){customAlert('No log entries to export.');return;}
   const teaName=el('teaName').value.trim()||'tea';
-  const lines=[];
-  lines.push('LOG — '+teaName.toUpperCase());
-  lines.push('='.repeat(40));
-  const generalNotes=(el('notes').value||'').trim();
-  if(generalNotes){lines.push('');lines.push(generalNotes);lines.push('-'.repeat(40));}
-  logs.forEach((e,i)=>{
-    lines.push('');
-    lines.push('['+e.date+']');
-    lines.push(e.setup);
-    if(e.text&&e.text.trim()){
-      lines.push('---');
-      lines.push(e.text.trim());
-    }
-    if(i<logs.length-1)lines.push('-'.repeat(40));
-  });
-  const text=lines.join('\n');
   el('logExportTitle').textContent='Log — '+teaName;
   el('logExportNote').textContent=logs.length+' entries';
-  el('logExportText').value=text;
+  el('logExportText').value=buildLogSection(teaName,el('notes').value,logs);
+  logExportFname=teaName;
   el('logExportModal').classList.add('open');
 }
 function copyLogText(){
@@ -2870,8 +3038,8 @@ function copyLogText(){
 }
 function downloadLogText(){
   const text=el('logExportText').value;
-  const teaName=(el('teaName').value.trim()||'log').replace(/[^a-z0-9\s._-]/gi,'_').slice(0,50);
-  const fname=teaName+'-log-'+new Date().toISOString().slice(0,10)+'.txt';
+  const stem=(logExportFname.trim()||'log').replace(/[^a-z0-9\s._-]/gi,'_').slice(0,50);
+  const fname=stem+'-log-'+new Date().toISOString().slice(0,10)+'.txt';
   try{
     const uri='data:text/plain;charset=utf-8,'+encodeURIComponent(text);
     const a=document.createElement('a');a.href=uri;a.download=fname;
@@ -2916,32 +3084,14 @@ function selectAllMultiLog(){
 function generateMultiLog(){
   const entries=library.filter(e=>multiLogSelected.has(e.id)&&e.logs&&e.logs.length);
   if(!entries.length){customAlert('Nothing is selected.');return;}
-  const sections=[];
-  entries.forEach(tea=>{
-    const lines=[];
-    lines.push('LOG — '+tea.name.toUpperCase());
-    lines.push('='.repeat(42));
-    const gn=(tea.data?.notes||'').trim();
-    if(gn){lines.push('');lines.push(gn);lines.push('-'.repeat(42));}
-    tea.logs.forEach((log,i)=>{
-      lines.push('');
-      lines.push('['+log.date+']');
-      lines.push(log.setup||'');
-      if(log.text&&log.text.trim()){
-        lines.push('---');
-        lines.push(log.text.trim());
-      }
-      if(i<tea.logs.length-1)lines.push('-'.repeat(42));
-    });
-    sections.push(lines.join('\n'));
-  });
-  const text=sections.join('\n\n'+'#'.repeat(42)+'\n\n');
+  const text=entries.map(tea=>buildLogSection(tea.name,tea.data?.notes,tea.logs,42)).join('\n\n'+'#'.repeat(42)+'\n\n');
   // reuse the single log export modal for display
   closeModal('multiLogModal');
   const title=entries.length===1?'Log — '+entries[0].name:'Log — '+entries.length+' teas';
   el('logExportTitle').textContent=title;
   el('logExportNote').textContent=entries.map(e=>e.name).join(', ');
   el('logExportText').value=text;
+  logExportFname=entries.length===1?entries[0].name:entries.length+'-teas';
   el('logExportModal').classList.add('open');
 }
 /* ── SESSION LOG — bound to a library record ─── */
@@ -2969,7 +3119,7 @@ function logSession(){
   if(logs===null){customAlert('Save the tea to the library first — log entries are tied to a specific record.');return;}
   const entry={id:Date.now(),date:fmtDate(new Date()),setup:buildSetupSnapshot(),data:getTemplateData(),text:''};
   logs.unshift(entry);
-  saveLog();renderLog();
+  saveLog();renderLog();renderLibrary();   // renderLibrary → refresh the ✎N log-count flag
   switchTab('log');
   setTimeout(()=>{const ta=el('log-text-'+entry.id);if(ta)ta.focus();},50);
 }
@@ -2979,7 +3129,7 @@ async function deleteLogEntry(id){
   if(!await customConfirm('Delete this entry?','delete'))return;
   const idx=logs.findIndex(e=>e.id===id);
   if(idx>-1)logs.splice(idx,1);
-  saveLog();renderLog();
+  saveLog();renderLog();renderLibrary();   // renderLibrary → refresh the ✎N log-count flag
 }
 
 function autoResizeTA(ta){if(!ta||ta.offsetParent===null)return;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';} // hidden (inactive tab) → scrollHeight is wrong; resize when the pane is shown
@@ -3293,7 +3443,7 @@ function init(){
   loadPanelFs();
   loadTemplates();renderTemplates();
   loadLibrary();restoreLibFilters();renderLibrary();
-  loadArchive();renderArchive();
+  loadArchive();restoreArchFilters();renderArchive();
   initLibLongPress();
   const restored=loadSession();
   if(!restored)defaultSteeps.forEach(s=>addSteep(s,'',true));
