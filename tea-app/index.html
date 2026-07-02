@@ -816,7 +816,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       <div class="field">
         <label>vessel</label>
         <div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap">
-          <input class="le-inp" type="text" id="le-vtype" style="width:90px;font-family:'DM Sans',sans-serif;text-align:left" />
+          <input class="le-inp" type="text" id="le-vtype" list="vesselOptions" autocomplete="off" style="width:90px;font-family:'DM Sans',sans-serif;text-align:left" />
           <input class="le-inp" type="number" id="le-vml" min="10" max="2000" step="10" style="width:58px" />
           <span class="le-unit">ml</span>
         </div>
@@ -907,7 +907,8 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       <div class="field" style="grid-column:1/-1">
         <label>vessel</label>
         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-          <input type="text" id="vesselType" value="gaiwan" placeholder="gaiwan" style="max-width:110px" />
+          <input type="text" id="vesselType" value="gaiwan" placeholder="gaiwan" list="vesselOptions" autocomplete="off" style="max-width:110px" />
+          <datalist id="vesselOptions"></datalist>
           <input type="number" id="vesselMl" value="50" min="10" max="2000" step="10" style="max-width:65px" oninput="updatePer100()" />
           <span style="font-size:.8rem;color:var(--muted);font-weight:500">ml</span>
           <span id="per100note" style="font-size:.75rem;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap"></span>
@@ -924,9 +925,10 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
         </div>
         <div class="pour-chips" id="pourControl">
           <span style="font-size:.73rem;color:var(--muted)">pours:</span>
-          <button class="pour-chip" onclick="setCoolPours(0)">kettle</button>
-          <button class="pour-chip" onclick="setCoolPours(1)">1× pitcher</button>
-          <button class="pour-chip" onclick="setCoolPours(2)">2× vessel</button>
+          <button class="pour-chip" data-pour="0" onclick="setCoolPours(0)">kettle</button>
+          <button class="pour-chip" data-pour="1" onclick="setCoolPours(1)">1× pitcher</button>
+          <button class="pour-chip" data-pour="2" onclick="setCoolPours(2)">2× vessel</button>
+          <button class="pour-chip" onclick="openCoolCal()" title="calibrate the cooling curves for your kettle">⚙</button>
         </div>
       </div>
     </div>
@@ -1017,10 +1019,24 @@ let coolPours=0;
 const COOL_CURVE=[{sec:0,temp:100},{sec:60,temp:95},{sec:180,temp:90},{sec:360,temp:85},{sec:540,temp:80},{sec:780,temp:75},{sec:1020,temp:70},{sec:1320,temp:65},{sec:1740,temp:60}];
 const COOL_CURVE_1=[{sec:0,temp:95},{sec:60,temp:90},{sec:105,temp:85},{sec:180,temp:80},{sec:300,temp:75},{sec:420,temp:70},{sec:540,temp:65},{sec:720,temp:60}];
 const COOL_CURVE_2=[{sec:0,temp:85},{sec:45,temp:80},{sec:120,temp:75},{sec:210,temp:70},{sec:330,temp:65},{sec:480,temp:60}];
-function coolWaitSecCurve(targetTemp,curve){
+const COOL_DEFAULTS=[COOL_CURVE,COOL_CURVE_1,COOL_CURVE_2];
+// user-calibrated cooling curves — per-device (calibration describes THIS kettle + room, so it is deliberately not synced)
+const COOL_CURVES_KEY='cajovy-cool-curves';
+let customCoolCurves={c0:null,c1:null,c2:null,delta:5};
+function loadCoolCurves(){
+  try{
+    const o=JSON.parse(localStorage.getItem(COOL_CURVES_KEY)||'{}');
+    ['c0','c1','c2'].forEach(k=>{if(Array.isArray(o[k])&&o[k].length>=2)customCoolCurves[k]=o[k].map(p=>({sec:p.sec|0,temp:+p.temp}));});
+    if(typeof o.delta==='number'&&isFinite(o.delta))customCoolCurves.delta=o.delta;
+  }catch(e){}
+}
+function saveCoolCurves(){try{localStorage.setItem(COOL_CURVES_KEY,JSON.stringify(customCoolCurves));}catch(e){}}
+function coolCurveFor(p){return customCoolCurves['c'+p]||COOL_DEFAULTS[p];}
+function coolCurveIsCustom(p){return !!customCoolCurves['c'+p];}
+function coolWaitSecCurve(targetTemp,curve,isKettle){
   const raw=parseInt(targetTemp);
   if(isNaN(raw)||raw<=0)return null;
-  if(raw>curve[0].temp)return curve===COOL_CURVE?0:null;
+  if(raw>curve[0].temp)return isKettle?0:null;   // hotter than the curve start: kettle = ready now, poured = unreachable
   if(raw>=curve[0].temp)return 0;
   if(raw<curve[curve.length-1].temp)return -1;
   for(let i=0;i<curve.length-1;i++){
@@ -1029,29 +1045,28 @@ function coolWaitSecCurve(targetTemp,curve){
   }
   return 0;
 }
-function coolWaitSec(t){return coolWaitSecCurve(t,COOL_CURVE);}
-function coolWaitSecPoured(t,p){return coolWaitSecCurve(t,p===2?COOL_CURVE_2:p===1?COOL_CURVE_1:COOL_CURVE);}
+function coolWaitSec(t){return coolWaitSecCurve(t,coolCurveFor(0),true);}
+function coolWaitSecPoured(t,p){return coolWaitSecCurve(t,coolCurveFor(p),p===0);}
 function updateCoolGuide(){
   const noTherm=!el('chkThermometer').classList.contains('checked');
   const guide=el('coolGuide');const pc=el('pourControl');
   if(!guide)return;
   if(!noTherm){guide.style.display='none';if(pc)pc.classList.remove('visible');return;}
   const temp=el('tempRange').value;
-  const fmtG=s=>{if(s<0)return'>30 min';if(s===0)return'ihned';return s<60?s+'s':Math.round(s/60)+' min';};
+  const fmtG=(s,p)=>{if(s<0){const c=coolCurveFor(p);return'>'+Math.ceil(c[c.length-1].sec/60)+' min';}if(s===0)return'now';return s<60?s+'s':Math.round(s/60)+' min';};
   const s0=coolWaitSec(temp);
   if(s0===null){guide.style.display='';guide.textContent='⚠ invalid temperature';guide.style.color='#c0392b';if(pc)pc.classList.remove('visible');return;}
   guide.style.color='';guide.style.display='';
-  const s1=coolWaitSecCurve(temp,COOL_CURVE_1);
-  const s2=coolWaitSecCurve(temp,COOL_CURVE_2);
-  const parts=['→ '+fmtG(s0)];
-  if(s1!==null)parts.push('1× '+fmtG(s1));
-  if(s2!==null)parts.push('2× '+fmtG(s2));
+  const s1=coolWaitSecPoured(temp,1);
+  const s2=coolWaitSecPoured(temp,2);
+  const parts=['→ '+fmtG(s0,0)];
+  if(s1!==null)parts.push('1× '+fmtG(s1,1));
+  if(s2!==null)parts.push('2× '+fmtG(s2,2));
   guide.textContent=parts.join(' · ');
   if(pc){
     pc.classList.add('visible');
-    const chips=pc.querySelectorAll('.pour-chip');
-    const curves=[COOL_CURVE,COOL_CURVE_1,COOL_CURVE_2];
-    if(coolPours>0&&coolWaitSecCurve(temp,curves[coolPours])===null){
+    const chips=pc.querySelectorAll('.pour-chip[data-pour]');
+    if(coolPours>0&&coolWaitSecPoured(temp,coolPours)===null){
       coolPours=0;
       if(coolTimer){clearInterval(coolTimer);coolTimer=null;}
       const r0=coolWaitSecPoured(temp,0);
@@ -1059,7 +1074,7 @@ function updateCoolGuide(){
     }
     chips.forEach((btn,i)=>{
       btn.classList.toggle('active',i===coolPours);
-      const ok=i===0||coolWaitSecCurve(temp,curves[i])!==null;
+      const ok=i===0||coolWaitSecPoured(temp,i)!==null;
       btn.disabled=!ok;
     });
   }
@@ -1662,9 +1677,9 @@ function updateDynamicFilter(selId,dataKey,placeholder,multi=false,src=library){
   sel.classList.toggle('has-options',vals.length>0);
   sel.classList.toggle('active',!!sel.value);
 }
-function fillDatalist(id,dataKey){
+function fillDatalist(id,dataKey,multi=true){
   const dl=el(id);if(!dl)return;
-  const html=uniqueTagVals(dataKey,true).map(v=>`<option value="${esc(v)}"></option>`).join('');
+  const html=uniqueTagVals(dataKey,multi).map(v=>`<option value="${esc(v)}"></option>`).join('');
   if(dl.innerHTML===html)return;   // skip a no-op rewrite so the native popup isn't disturbed while typing
   dl.innerHTML=html;
 }
@@ -1673,6 +1688,7 @@ function updateSellerFilter(){
   updateDynamicFilter('libLocationFilter','location','location',true);
   fillDatalist('sellerOptions','seller');
   fillDatalist('locationOptions','location');
+  fillDatalist('vesselOptions','vesselType',false);   // vessel names are single values — don't split on commas
 }
 
 // ── Rename a seller/location tag across the whole library (sync-aware: stamps mt only on real changes) ──
@@ -1962,6 +1978,137 @@ function toggleCoolTimer(){
     if(w)w.classList.add('visible');
     if(coolState.remaining<=0){clearInterval(coolTimer);coolTimer=null;coolState.state='done';coolState.remaining=0;renderSteeps();playBeep();}
   },1000);
+}
+
+/* ── COOLING CALIBRATION (per-device, see COOL_CURVES_KEY) ─── */
+const CAL_NAMES=['kettle','1× pitcher','2× vessel'];
+const CAL_HINTS=[
+  'Cooling inside the kettle. Don’t risk a burn measuring in the kettle — pour a small sample into a cup, measure it there and enable the +Δ correction (right after the boil: Δ = 100 − reading). Start the stopwatch at the boil, then record readings as it cools.',
+  'Start the stopwatch the moment you pour boiling water into the pitcher, then record readings there as it cools.',
+  'Start the stopwatch right after the second pour (pitcher → vessel), then record readings as it cools.'
+];
+let calMode=0,calWork=null,calSwT0=null,calSwTimer=null;
+const mmss=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+function parseMS(v){
+  v=String(v).trim();
+  let m=v.match(/^(\d+):([0-5]?\d)$/);if(m)return(+m[1])*60+(+m[2]);
+  m=v.match(/^(\d+)\s*s$/i);if(m)return +m[1];
+  const n=parseInt(v);return isNaN(n)?null:n*60;   // bare number = minutes
+}
+function openCoolCal(){
+  calWork={
+    c0:(customCoolCurves.c0||[]).map(p=>({...p})),
+    c1:(customCoolCurves.c1||[]).map(p=>({...p})),
+    c2:(customCoolCurves.c2||[]).map(p=>({...p}))
+  };
+  el('calDelta').value=customCoolCurves.delta;
+  el('calDeltaOn').checked=false;
+  calMode=coolPours||0;
+  calSwReset();
+  calRender();
+  el('coolCalModal').classList.add('open');
+}
+function closeCoolCal(){calSwReset();closeModal('coolCalModal');}
+function calSelectMode(m){calMode=m;calRender();}
+function calCur(){return calWork['c'+calMode];}
+function calRender(){
+  [0,1,2].forEach(i=>{
+    const chip=el('calChip'+i);
+    chip.classList.toggle('active',i===calMode);
+    chip.textContent=CAL_NAMES[i]+(calWork['c'+i].length?' •':'');   // • marks a mode with custom points
+  });
+  el('calDeltaRow').style.display=calMode===0?'flex':'none';
+  el('calHint').textContent=CAL_HINTS[calMode];
+  const pts=calCur();
+  el('calStatus').textContent=pts.length?'custom: '+pts.length+' point'+(pts.length===1?'':'s'):'using built-in curve — record points to calibrate';
+  el('calPoints').innerHTML=pts.map((p,i)=>`
+    <div style="display:flex;align-items:center;gap:.4rem">
+      <input class="le-inp" style="width:64px" type="text" inputmode="numeric" value="${mmss(p.sec)}" title="m:ss (or a bare number = minutes, “90s” = seconds)" onchange="calEditRow(${i},'sec',this)" />
+      <span class="le-unit">min</span>
+      <input class="le-inp" type="number" min="10" max="100" step="0.1" value="${p.temp}" onchange="calEditRow(${i},'temp',this)" />
+      <span class="le-unit">°C</span>
+      <button class="le-steep-del" onclick="calDelRow(${i})">✕</button>
+    </div>`).join('');
+}
+function calSwToggle(){
+  if(calSwTimer){calSwReset();return;}
+  calSwT0=Date.now();
+  el('calSwBtn').textContent='■ stop';
+  el('calSwTime').textContent='0:00';
+  calSwTimer=setInterval(()=>{el('calSwTime').textContent=mmss(Math.round((Date.now()-calSwT0)/1000));},500);
+}
+function calSwReset(){
+  if(calSwTimer){clearInterval(calSwTimer);calSwTimer=null;}
+  calSwT0=null;
+  const b=el('calSwBtn');if(b)b.textContent='▶ start stopwatch';
+  const t=el('calSwTime');if(t)t.textContent='0:00';
+}
+function calRecord(){
+  const inp=el('calReading');
+  const t=parseFloat(String(inp.value).replace(',','.'));
+  if(isNaN(t)||t<10||t>100){showStatusMsg('enter a reading 10–100 °C',2000);return;}
+  if(calSwT0===null){showStatusMsg('start the stopwatch first',2000);return;}
+  const sec=Math.round((Date.now()-calSwT0)/1000);
+  let temp=t;
+  if(calMode===0&&el('calDeltaOn').checked){
+    const d=parseFloat(String(el('calDelta').value).replace(',','.'))||0;
+    temp=Math.min(100,t+d);
+  }
+  calCur().push({sec,temp:Math.round(temp*10)/10});
+  inp.value='';
+  calRender();
+}
+function calDeltaFromReading(){
+  const t=parseFloat(String(el('calReading').value).replace(',','.'));
+  if(isNaN(t)||t<50||t>100){showStatusMsg('type the just-boiled sample reading first',2200);return;}
+  el('calDelta').value=Math.round((100-t)*10)/10;
+  el('calDeltaOn').checked=true;
+  el('calReading').value='';
+  showStatusMsg('Δ set to '+el('calDelta').value+' °C',2000);
+}
+function calAddRow(){
+  const pts=calCur();
+  const last=pts[pts.length-1];
+  pts.push(last?{sec:last.sec+60,temp:Math.max(10,last.temp-5)}:{sec:0,temp:calMode===0?100:calMode===1?95:85});
+  calRender();
+}
+function calEditRow(i,field,inp){
+  const p=calCur()[i];if(!p)return;
+  if(field==='sec'){
+    const s=parseMS(inp.value);
+    if(s===null||s<0||s>7200){inp.value=mmss(p.sec);return;}
+    p.sec=s;inp.value=mmss(s);
+  }else{
+    const t=parseFloat(String(inp.value).replace(',','.'));
+    if(isNaN(t)||t<10||t>100){inp.value=p.temp;return;}
+    p.temp=Math.round(t*10)/10;
+  }
+  el('calStatus').textContent='custom: '+calCur().length+' point'+(calCur().length===1?'':'s');
+}
+function calDelRow(i){calCur().splice(i,1);calRender();}
+function calUseDefault(){calWork['c'+calMode]=[];calRender();}
+async function calSave(){
+  const out={};
+  for(let m=0;m<3;m++){
+    const k='c'+m;
+    const pts=calWork[k].map(p=>({sec:p.sec|0,temp:+p.temp})).filter(p=>isFinite(p.temp)&&p.temp>0);
+    if(!pts.length){out[k]=null;continue;}
+    if(pts.length<2){await customAlert('Mode “'+CAL_NAMES[m]+'” has only 1 point — record at least 2, or remove it to keep the default.');return;}
+    pts.sort((a,b)=>a.sec-b.sec);
+    for(let i=1;i<pts.length;i++){
+      if(pts[i].sec===pts[i-1].sec){await customAlert('Mode “'+CAL_NAMES[m]+'” has two points at the same time ('+mmss(pts[i].sec)+').');return;}
+      if(pts[i].temp>=pts[i-1].temp){await customAlert('Mode “'+CAL_NAMES[m]+'”: temperature must decrease over time ('+mmss(pts[i].sec)+' → '+pts[i].temp+' °C is not below '+pts[i-1].temp+' °C).');return;}
+    }
+    out[k]=pts;
+  }
+  customCoolCurves.c0=out.c0;customCoolCurves.c1=out.c1;customCoolCurves.c2=out.c2;
+  const d=parseFloat(String(el('calDelta').value).replace(',','.'));
+  if(!isNaN(d)&&d>=0&&d<=30)customCoolCurves.delta=d;
+  saveCoolCurves();
+  if(coolState.state==='idle'){const r0=coolWaitSecPoured(el('tempRange').value,coolPours);coolState.remaining=(r0!==null&&r0>0)?r0:0;}
+  updateCoolGuide();renderSteeps();
+  closeCoolCal();
+  showSave('✓ calibration saved');
 }
 
 function toggleTimer(id){
@@ -3441,6 +3588,7 @@ function init(){
   initFs();
   initDark();
   loadPanelFs();
+  loadCoolCurves();
   loadTemplates();renderTemplates();
   loadLibrary();restoreLibFilters();renderLibrary();
   loadArchive();restoreArchFilters();renderArchive();
@@ -3553,6 +3701,43 @@ document.addEventListener('keydown',e=>{
       <button class="modal-btn primary" onclick="copyLogText()">📋 copy</button>
       <button class="modal-btn" onclick="downloadLogText()">↓ download .txt</button>
       <button class="modal-btn" onclick="closeModal('logExportModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cooling calibration modal -->
+<div class="modal-bg" id="coolCalModal" onclick="if(event.target===this)closeCoolCal()">
+  <div class="modal" style="max-width:460px;max-height:85vh;overflow-y:auto">
+    <h2>Cooling calibration</h2>
+    <p>Measure how water actually cools with your kettle and room, and the countdown will match your conditions. Modes without measurements keep the built-in estimate.</p>
+    <div class="pour-chips visible" style="margin-top:0">
+      <button class="pour-chip" id="calChip0" onclick="calSelectMode(0)">kettle</button>
+      <button class="pour-chip" id="calChip1" onclick="calSelectMode(1)">1× pitcher</button>
+      <button class="pour-chip" id="calChip2" onclick="calSelectMode(2)">2× vessel</button>
+    </div>
+    <div id="calHint" style="font-size:.76rem;color:var(--muted);line-height:1.5"></div>
+    <div id="calDeltaRow" style="display:none;align-items:center;gap:.45rem;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.78rem;color:var(--dark)">
+        <input type="checkbox" id="calDeltaOn" style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" />
+        sample-pour correction +Δ
+      </label>
+      <input class="le-inp" id="calDelta" type="number" min="0" max="30" step="0.5" style="width:52px" />
+      <span class="le-unit">°C</span>
+      <button class="btn-sm" onclick="calDeltaFromReading()" title="right after the boil: pour a sample into a cup, type its reading below — Δ = 100 − reading">Δ from reading</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap">
+      <button class="btn-sm" id="calSwBtn" onclick="calSwToggle()">▶ start stopwatch</button>
+      <span id="calSwTime" style="font-family:'DM Mono',monospace;font-size:.9rem;min-width:44px">0:00</span>
+      <input class="le-inp" id="calReading" type="number" min="10" max="100" step="0.5" placeholder="°C" onkeydown="if(event.key==='Enter')calRecord()" />
+      <button class="btn-sm" onclick="calRecord()">+ record</button>
+    </div>
+    <div id="calStatus" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></div>
+    <div id="calPoints" style="display:flex;flex-direction:column;gap:.3rem"></div>
+    <button class="btn-sm" onclick="calAddRow()" style="align-self:flex-start">+ add point manually</button>
+    <div class="modal-row" style="flex-wrap:wrap">
+      <button class="modal-btn" onclick="calUseDefault()">use default</button>
+      <button class="modal-btn" onclick="closeCoolCal()">cancel</button>
+      <button class="modal-btn primary" onclick="calSave()">save</button>
     </div>
   </div>
 </div>
