@@ -764,7 +764,8 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 4;   // v4: vision data carries a per-vision project pool (data.projects) — older clients rebuild data without it and would drop it on push
+const APP_SCHEMA = 5;   // v5: date of birth (mmbirth) synced as a single LWW object — older clients lack it and would drop it on push
+                        // v4: vision data carries a per-vision project pool (data.projects) — older clients rebuild data without it and would drop it on push
                         // v3: editable guide synced as a single LWW object — older clients lack it and would drop it on push
                         // v2: archive (versions) is LWW-merged incl. name/note — older append-only clients would clobber version edits on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
@@ -773,6 +774,7 @@ const LIBRARY_KEY = 'vision-v1-library';
 const ARCHIVE_KEY = 'vision-v1-archive';
 const GUIDE_KEY   = 'vision-v1-guide';
 const COLLAPSED_KEY = 'vision-collapsed';   // ids collapsed to their name — per-device UI pref, not synced
+const MMBIRTH_KEY = 'vision-v1-mmbirth';    // date of birth (synced LWW object { mt, birth })
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let library = [], activeLibId = null;
@@ -788,7 +790,7 @@ function loadCollapsed() { try { (JSON.parse(localStorage.getItem(COLLAPSED_KEY)
 function saveCollapsed() { try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch(e) {} }
 let guide = null;                // editable guide rail: { mt, sections:[{h, items:[...]}] }
 let guideEditing = false;
-let mmBirth = '';                // memento-mori date of birth (YYYY-MM-DD) — per-device (localStorage), not synced
+let mmBirth = '', mmBirthMt = 0; // memento-mori date of birth (YYYY-MM-DD) — synced as a single LWW object { mt, birth }
 let previewId = null;            // id of the snapshot currently previewed (null = editing)
 let _focusSnap = null, _pushedThisFocus = false;   // undo coalescing across a typing session
 
@@ -1282,7 +1284,7 @@ function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
   if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, ...(exportGuide ? { guide } : {})}, null, 2);
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, ...(exportGuide ? { guide } : {}), mmbirth: { mt: mmBirthMt, birth: mmBirth }}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
   let downloaded = false;
@@ -1309,9 +1311,9 @@ function copyExportText() {
 }
 
 // ── IMPORT ────────────────────────────────────────────────────────────────
-let importData = [], importSelected = new Set(), importArchiveData = [], importGuideData = null;
+let importData = [], importSelected = new Set(), importArchiveData = [], importGuideData = null, importMmbirth = null;
 function openImportModal() {
-  importData = []; importSelected = new Set(); importGuideData = null;
+  importData = []; importSelected = new Set(); importGuideData = null; importMmbirth = null;
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
   el('importFile').value = ''; el('importPaste').value = '';
@@ -1329,6 +1331,7 @@ function parseImportJson(text) {
     importData = items;
     importArchiveData = parsed.archive || [];   // saved versions travel with the import
     importGuideData = (parsed.guide && Array.isArray(parsed.guide.sections)) ? parsed.guide : null;   // editable guide travels too
+    importMmbirth = (parsed.mmbirth && typeof parsed.mmbirth === 'object') ? parsed.mmbirth : null;   // date of birth travels too
     importSelected = new Set(items.map(x => x.id));
     el('importList').innerHTML = items.map(x => `
       <label class="modal-item sel" id="ii-${x.id}">
@@ -1380,6 +1383,11 @@ function doImport() {
     guide.sections = (guide.sections || []).map(s => ({ ...s, h: s.h || '', items: Array.isArray(s.items) ? s.items.slice() : [] }));
     guide.mt = Date.now();
     saveGuide(); renderGuide(); guideImported = true;
+  }
+  // date of birth — adopt only if the imported one is newer (LWW; it rarely changes)
+  if (importMmbirth && (+importMmbirth.mt || 0) > (+mmBirthMt || 0)) {
+    mmBirth = importMmbirth.birth || ''; mmBirthMt = +importMmbirth.mt || 0;
+    saveBirth(); renderMemento();
   }
   // if the active vision was overwritten by the import, refresh the live editor buffer
   const ae = library.find(e => String(e.id) === String(activeLibId));
@@ -1487,8 +1495,21 @@ function growStrengths() { ['q1','q2','q3'].forEach(id => { const t = el(id); if
 
 // ── memento mori — life in weeks ──
 const MM_WEEK_MS = 7 * 24 * 3600 * 1000, MM_YEARS = 80, MM_WEEKS = 52;
-function loadBirth() { try { mmBirth = localStorage.getItem('vision-mm-birth') || ''; } catch(e) { mmBirth = ''; } }
-function onBirthChange(v) { mmBirth = (v || '').trim(); try { localStorage.setItem('vision-mm-birth', mmBirth); } catch(e) {} renderMemento(); }
+function loadBirth() {
+  try {
+    const o = JSON.parse(localStorage.getItem(MMBIRTH_KEY) || 'null');
+    if (o && typeof o === 'object') { mmBirth = o.birth || ''; mmBirthMt = +o.mt || 0; return; }
+  } catch(e) {}
+  // migrate the old per-device value → stamp now so it propagates to other devices
+  try { const old = localStorage.getItem('vision-mm-birth'); if (old) { mmBirth = old; mmBirthMt = Date.now(); saveBirth(); localStorage.removeItem('vision-mm-birth'); } } catch(e) {}
+}
+function saveBirth() { try { localStorage.setItem(MMBIRTH_KEY, JSON.stringify({ mt: mmBirthMt, birth: mmBirth })); } catch(e) {} }   // wrapped → autoSyncOnSave
+function onBirthChange(v) {
+  const nv = (v || '').trim();
+  if (nv === mmBirth) return;
+  mmBirth = nv; mmBirthMt = Date.now();   // stamp only on a real change
+  saveBirth(); renderMemento();
+}
 function renderMemento() {
   const grid = el('mmGrid'), stat = el('mmStat'), legend = el('mmLegend'); if (!grid) return;
   const inp = el('mmBirth'); if (inp && inp.value !== mmBirth) inp.value = mmBirth;
@@ -2513,15 +2534,15 @@ function renderCompare(snap, cur, meta) {
     return removed;
   }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(items, arch, tomb, gd) {
+  function sigOf(items, arch, tomb, gd, bMt) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
     // APP LOGIC: add other synced collections to the signature (always with mt!), otherwise their edits will not be pulled
-    // archive is LWW too (incl. mt) so version renames/notes propagate; guide is a single LWW object
-    return [idS(items), idS(arch), tS(tomb), 'g' + ((gd && gd.mt) || 0)].join('||');
+    // archive is LWW too (incl. mt) so version renames/notes propagate; guide + date-of-birth are single LWW objects
+    return [idS(items), idS(arch), tS(tomb), 'g' + ((gd && gd.mt) || 0), 'b' + (bMt || 0)].join('||');
   }
-  function localSig() { return sigOf(library, archive, tombstones, guide); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}, r.guide); }
+  function localSig() { return sigOf(library, archive, tombstones, guide, mmBirthMt); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.tombstones || {}, r.guide, r.mmbirth && r.mmbirth.mt); }
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn() {
@@ -2563,7 +2584,7 @@ function renderCompare(snap, cur, meta) {
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
     // APP LOGIC: add other synced collections (settings, days, inbox…)
-    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, guide: guide, tombstones: tombstones, device: getDeviceName() };
+    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, guide: guide, mmbirth: { mt: mmBirthMt, birth: mmBirth }, tombstones: tombstones, device: getDeviceName() };
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
@@ -2674,6 +2695,12 @@ function renderCompare(snap, cur, meta) {
       guide.sections = guide.sections.map(s => ({ ...s, h: s.h || '', items: Array.isArray(s.items) ? s.items.slice() : [] }));
       guideChanged = true; updated++;
     }
+    // date of birth — single LWW object (newer mt wins)
+    let birthChanged = false;
+    if (record.mmbirth && (+record.mmbirth.mt || 0) > (+mmBirthMt || 0)) {
+      mmBirth = record.mmbirth.birth || ''; mmBirthMt = +record.mmbirth.mt || 0;
+      birthChanged = true; updated++;
+    }
     // APP LOGIC: merge other collections here — arrays by id/data via lwwMerge(...), object-maps (blocks) with a custom merge
 
     // if the merge changed the active vision (or it was deleted), refresh the live editor buffer,
@@ -2690,6 +2717,7 @@ function renderCompare(snap, cur, meta) {
     if (added || updated || removed) {
       saveLibrary(); saveArchive();
       if (guideChanged) { saveGuide(); renderGuide(); }
+      if (birthChanged) { saveBirth(); renderMemento(); }
       if (typeof renderLibrary === 'function') renderLibrary();
       // APP LOGIC: re-render the other views
       let msg;
@@ -2764,7 +2792,7 @@ function renderCompare(snap, cur, meta) {
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, ...(exportGuide ? { guide } : {})};
+    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, ...(exportGuide ? { guide } : {}), mmbirth: { mt: mmBirthMt, birth: mmBirth }};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
@@ -2980,7 +3008,7 @@ function renderCompare(snap, cur, meta) {
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
   // APP LOGIC: add here the save functions of other synced collections (saveInbox, saveBlockTypes…)
-  ['saveLibrary','saveArchive','saveGuide'].forEach(fn => {
+  ['saveLibrary','saveArchive','saveGuide','saveBirth'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
