@@ -413,8 +413,8 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 .arch-log-ta{width:100%;box-sizing:border-box;flex:0 0 auto;min-height:52px;font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.65;color:var(--black);background:var(--w);border:none;border-top:var(--b);outline:none;resize:none;overflow-y:hidden;padding:.45rem .65rem}
 /* template name modal */
 #tplNameModal .modal{max-width:340px}
-#tplNameInput{width:100%;font-family:'DM Sans',sans-serif;font-size:.95rem;padding:.45rem .65rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w)}
-#tplNameInput:focus{outline:2px solid var(--black);outline-offset:1px}
+#tplNameInput,#cpnInput{width:100%;font-family:'DM Sans',sans-serif;font-size:.95rem;padding:.45rem .65rem;border:var(--bh);border-radius:var(--r);outline:none;color:var(--black);background:var(--w);box-sizing:border-box}
+#tplNameInput:focus,#cpnInput:focus{outline:2px solid var(--black);outline-offset:1px}
 /* template apply / rename modals */
 .tpl-field-row{display:flex;align-items:center;gap:.45rem;padding:.28rem .4rem;border-radius:3px;cursor:pointer;user-select:none}
 @media(hover:hover){.tpl-field-row:hover{background:var(--off)}}
@@ -840,9 +840,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       </div>
       <div id="le-cool-row" style="display:none;gap:.28rem;align-items:center;flex-wrap:wrap">
         <span style="font-size:.78rem;color:var(--muted);min-width:48px">cooling</span>
-        <button class="pour-chip" onclick="setLeCoolPours(0)">kettle</button>
-        <button class="pour-chip" onclick="setLeCoolPours(1)">1× pitcher</button>
-        <button class="pour-chip" onclick="setLeCoolPours(2)">2× vessel</button>
+        <span id="leCoolChipsDyn" style="display:contents"></span>
       </div>
       <div class="field">
         <label>steeps</label>
@@ -925,10 +923,9 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
         </div>
         <div class="pour-chips" id="pourControl">
           <span style="font-size:.73rem;color:var(--muted)">pours:</span>
-          <button class="pour-chip" data-pour="0" onclick="setCoolPours(0)">kettle</button>
-          <button class="pour-chip" data-pour="1" onclick="setCoolPours(1)">1× pitcher</button>
-          <button class="pour-chip" data-pour="2" onclick="setCoolPours(2)">2× vessel</button>
+          <span id="pourChipsDyn" style="display:contents"></span>
           <button class="pour-chip" onclick="openCoolCal()" title="calibrate the cooling curves for your kettle">⚙</button>
+          <select id="coolProfileChip" class="lib-seller-filter" onchange="setActiveCoolProfile(+this.value)" title="cooling profile"></select>
         </div>
       </div>
     </div>
@@ -1007,7 +1004,8 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 // clients can't fully represent. A client that pulls a payload with a higher `schema` PAUSES its
 // own push (so it can't overwrite newer data) and warns the user to reload. tea-app keeps whole
 // objects on merge/import (identity normalize), so additive fields already round-trip losslessly.
-const APP_SCHEMA=1;
+// 2: coolProfiles collection added to the payload (older builds rebuild the payload from scratch and would strip it)
+const APP_SCHEMA=2;
 const SESSION_KEY='cajovy-v3-session';
 const LIBRARY_KEY='cajovy-v3-library';
 const ARCHIVE_KEY='cajovy-v3-archive';
@@ -1021,19 +1019,63 @@ const COOL_CURVE_1=[{sec:0,temp:95},{sec:60,temp:90},{sec:105,temp:85},{sec:180,
 const COOL_CURVE_2=[{sec:0,temp:85},{sec:45,temp:80},{sec:120,temp:75},{sec:210,temp:70},{sec:330,temp:65},{sec:480,temp:60}];
 const COOL_DEFAULTS=[COOL_CURVE,COOL_CURVE_1,COOL_CURVE_2];
 // user-calibrated cooling curves — per-device (calibration describes THIS kettle + room, so it is deliberately not synced)
+// named profiles (e.g. "home kettle" / "work kettle"); customCoolCurves always points at the ACTIVE profile object.
+// A profile holds an ordered list of STAGES: index 0 = in the kettle, index N = after N pours. Each stage has a
+// user-editable name and an optional measured curve; stages 0-2 fall back to the built-in curves, added stages
+// (3+ pours) have no built-in fallback and only work once measured.
 const COOL_CURVES_KEY='cajovy-cool-curves';
-let customCoolCurves={c0:null,c1:null,c2:null,delta:5};
+let coolProfiles=[],activeCoolProfileId=null,customCoolCurves=null;
+function defaultStageName(i){return i===0?'kettle':i===1?'1× pitcher':i===2?'2× vessel':i+'× vessel';}
+function normCoolProfile(p){
+  // preserve-unknown: spread the original objects first so fields added by a newer app version survive a round-trip through this client
+  const arr=a=>Array.isArray(a)&&a.length>=2?a.map(q=>({...q,sec:q.sec|0,temp:+q.temp})):null;
+  let stages;
+  if(Array.isArray(p.stages)&&p.stages.length)stages=p.stages.map((s,i)=>({...s,name:String(s.name||defaultStageName(i)),curve:arr(s.curve)}));
+  else stages=[{name:defaultStageName(0),curve:arr(p.c0)},{name:defaultStageName(1),curve:arr(p.c1)},{name:defaultStageName(2),curve:arr(p.c2)}];   // migrate the pre-stage shape
+  return{...p,id:p.id||Date.now(),name:String(p.name||'profile'),delta:(typeof p.delta==='number'&&isFinite(p.delta))?p.delta:5,stages,mt:+p.mt||0,c0:undefined,c1:undefined,c2:undefined};
+}
 function loadCoolCurves(){
   try{
     const o=JSON.parse(localStorage.getItem(COOL_CURVES_KEY)||'{}');
-    ['c0','c1','c2'].forEach(k=>{if(Array.isArray(o[k])&&o[k].length>=2)customCoolCurves[k]=o[k].map(p=>({sec:p.sec|0,temp:+p.temp}));});
-    if(typeof o.delta==='number'&&isFinite(o.delta))customCoolCurves.delta=o.delta;
-  }catch(e){}
+    if(Array.isArray(o.profiles)&&o.profiles.length)coolProfiles=o.profiles.map(normCoolProfile);
+    else coolProfiles=[normCoolProfile({id:1,name:'default',c0:o.c0,c1:o.c1,c2:o.c2,delta:o.delta})];   // migrate the pre-profile shape
+    activeCoolProfileId=(o.activeId&&coolProfiles.some(p=>p.id===o.activeId))?o.activeId:coolProfiles[0].id;
+  }catch(e){coolProfiles=[normCoolProfile({id:1,name:'default'})];activeCoolProfileId=1;}
+  customCoolCurves=coolProfiles.find(p=>p.id===activeCoolProfileId);
+  renderCoolProfileChip();
+  renderPourChips();
 }
-function saveCoolCurves(){try{localStorage.setItem(COOL_CURVES_KEY,JSON.stringify(customCoolCurves));}catch(e){}}
-function coolCurveFor(p){return customCoolCurves['c'+p]||COOL_DEFAULTS[p];}
-function coolCurveIsCustom(p){return !!customCoolCurves['c'+p];}
+function persistCoolCurves(){try{localStorage.setItem(COOL_CURVES_KEY,JSON.stringify({profiles:coolProfiles,activeId:activeCoolProfileId}));}catch(e){}}
+// saveCoolCurves is wrapped by the autosync layer (reconcile tombstones + push) — call it for CONTENT changes;
+// persistCoolCurves is the raw write — use it for the local-only active-profile switch (must not trigger a push)
+function saveCoolCurves(){persistCoolCurves();}
+function coolStages(){return customCoolCurves?customCoolCurves.stages:[{name:defaultStageName(0)},{name:defaultStageName(1)},{name:defaultStageName(2)}];}
+function coolStageName(i){const s=coolStages()[i];return s?s.name:defaultStageName(i);}
+function coolCurveFor(p){const s=coolStages()[p];return(s&&s.curve)||COOL_DEFAULTS[p]||null;}
+function setActiveCoolProfile(id){
+  const p=coolProfiles.find(x=>x.id===id);if(!p)return;
+  activeCoolProfileId=id;customCoolCurves=p;
+  persistCoolCurves();   // which profile is active stays per-device (home vs work) — no sync push
+  if(coolPours>=p.stages.length)coolPours=0;   // the new profile may have fewer stages
+  if(coolState.state==='idle'){const r0=coolWaitSecPoured(el('tempRange').value,coolPours);coolState.remaining=(r0!==null&&r0>0)?r0:0;}
+  renderPourChips();
+  updateCoolGuide();renderSteeps();
+  renderCoolProfileChip();
+}
+// compact profile switcher in the "pours:" row — only shown once a second profile exists
+function renderCoolProfileChip(){
+  const sel=el('coolProfileChip');if(!sel)return;
+  sel.innerHTML=coolProfiles.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  sel.value=String(activeCoolProfileId);
+  sel.classList.toggle('has-options',coolProfiles.length>1);
+}
+// the pour chips mirror the active profile's stages (names + count are user-defined)
+function renderPourChips(){
+  const c=el('pourChipsDyn');if(!c)return;
+  c.innerHTML=coolStages().map((s,i)=>`<button class="pour-chip" data-pour="${i}" onclick="setCoolPours(${i})" title="${esc(s.name)}">${esc(s.name)}</button>`).join('');
+}
 function coolWaitSecCurve(targetTemp,curve,isKettle){
+  if(!curve)return null;   // stage without a measured curve and no built-in fallback (added 3+ pour stages)
   const raw=parseInt(targetTemp);
   if(isNaN(raw)||raw<=0)return null;
   if(raw>curve[0].temp)return isKettle?0:null;   // hotter than the curve start: kettle = ready now, poured = unreachable
@@ -1057,16 +1099,17 @@ function updateCoolGuide(){
   const s0=coolWaitSec(temp);
   if(s0===null){guide.style.display='';guide.textContent='⚠ invalid temperature';guide.style.color='#c0392b';if(pc)pc.classList.remove('visible');return;}
   guide.style.color='';guide.style.display='';
-  const s1=coolWaitSecPoured(temp,1);
-  const s2=coolWaitSecPoured(temp,2);
+  const stageCount=coolStages().length;
   const parts=['→ '+fmtG(s0,0)];
-  if(s1!==null)parts.push('1× '+fmtG(s1,1));
-  if(s2!==null)parts.push('2× '+fmtG(s2,2));
+  for(let i=1;i<stageCount;i++){
+    const si=coolWaitSecPoured(temp,i);
+    if(si!==null)parts.push(i+'× '+fmtG(si,i));
+  }
   guide.textContent=parts.join(' · ');
   if(pc){
     pc.classList.add('visible');
     const chips=pc.querySelectorAll('.pour-chip[data-pour]');
-    if(coolPours>0&&coolWaitSecPoured(temp,coolPours)===null){
+    if(coolPours>0&&(coolPours>=stageCount||coolWaitSecPoured(temp,coolPours)===null)){
       coolPours=0;
       if(coolTimer){clearInterval(coolTimer);coolTimer=null;}
       const r0=coolWaitSecPoured(temp,0);
@@ -1852,10 +1895,9 @@ function renderSteeps(){
     if(coolState.state==='idle')coolState.remaining=csec;
     const isDisabled=!csec;
     const pct=(!isDisabled&&coolState.state!=='idle')?Math.round((1-coolState.remaining/csec)*100):0;
-    const fmtSec=s=>{if(s===null)return'—';if(s<0)return'>30 min';if(s===0)return'ihned';return s<60?s+'s':Math.round(s/60)+' min';};
+    const fmtSec=s=>{if(s===null)return'—';if(s<0)return'>30 min';if(s===0)return'now';return s<60?s+'s':Math.round(s/60)+' min';};
     const timeLabel=fmtSec(csecRaw);
-    const pourNames=['kettle','pitcher','2nd vessel'];
-    const rowLabel=csecRaw===null?'⚠ unreachable':'cooling · '+pourNames[coolPours];
+    const rowLabel=csecRaw===null?'⚠ unreachable':'cooling · '+esc(coolStageName(coolPours));
     const rowColor=csecRaw===null?'color:#c0392b':'';
     const icon=coolState.state==='running'
       ?`<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
@@ -1981,12 +2023,11 @@ function toggleCoolTimer(){
 }
 
 /* ── COOLING CALIBRATION (per-device, see COOL_CURVES_KEY) ─── */
-const CAL_NAMES=['kettle','1× pitcher','2× vessel'];
-const CAL_HINTS=[
-  'Cooling inside the kettle. Don’t risk a burn measuring in the kettle — pour a small sample into a cup, measure it there and enable the +Δ correction (right after the boil: Δ = 100 − reading). Start the stopwatch at the boil, then record readings as it cools.',
-  'Start the stopwatch the moment you pour boiling water into the pitcher, then record readings there as it cools.',
-  'Start the stopwatch right after the second pour (pitcher → vessel), then record readings as it cools.'
-];
+function calHint(i){
+  if(i===0)return'Cooling inside the kettle. Don’t risk a burn measuring in the kettle — pour a small sample into a cup, measure it there and enable the +Δ correction (right after the boil: Δ = 100 − reading). Start the stopwatch at the boil, then record readings as it cools.';
+  if(i===1)return'Start the stopwatch the moment you pour boiling water into this vessel, then record readings there as it cools.';
+  return'Start the stopwatch right after pour #'+i+' into this vessel, then record readings as it cools.';
+}
 let calMode=0,calWork=null,calSwT0=null,calSwTimer=null;
 const mmss=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
 function parseMS(v){
@@ -1995,32 +2036,110 @@ function parseMS(v){
   m=v.match(/^(\d+)\s*s$/i);if(m)return +m[1];
   const n=parseInt(v);return isNaN(n)?null:n*60;   // bare number = minutes
 }
-function openCoolCal(){
-  calWork={
-    c0:(customCoolCurves.c0||[]).map(p=>({...p})),
-    c1:(customCoolCurves.c1||[]).map(p=>({...p})),
-    c2:(customCoolCurves.c2||[]).map(p=>({...p}))
-  };
+function calLoadWork(){
+  calWork={stages:customCoolCurves.stages.map(s=>({name:s.name,curve:(s.curve||[]).map(p=>({...p}))}))};
+  if(calMode>=calWork.stages.length)calMode=0;
   el('calDelta').value=customCoolCurves.delta;
   el('calDeltaOn').checked=false;
-  calMode=coolPours||0;
+}
+function calSnapOf(stages){return JSON.stringify(stages.map(s=>({name:s.name,curve:s.curve||[]})));}
+function calDirty(){
+  if(!calWork)return false;
+  return calSnapOf(calWork.stages)!==calSnapOf(customCoolCurves.stages);
+}
+function openCoolCal(){
+  calLoadWork();
+  calMode=coolPours<calWork.stages.length?coolPours:0;
   calSwReset();
   calRender();
   el('coolCalModal').classList.add('open');
 }
 function closeCoolCal(){calSwReset();closeModal('coolCalModal');}
 function calSelectMode(m){calMode=m;calRender();}
-function calCur(){return calWork['c'+calMode];}
+function calCur(){return calWork.stages[calMode].curve;}
+function calStageRename(v){
+  const name=(v||'').trim();
+  if(!name){el('calStageName').value=calWork.stages[calMode].name;return;}
+  calWork.stages[calMode].name=name;
+  calRender();
+}
+function calAddStage(){
+  calWork.stages.push({name:defaultStageName(calWork.stages.length),curve:[]});
+  calMode=calWork.stages.length-1;
+  calRender();
+}
+async function calRemoveStage(){
+  if(calMode===0||calMode!==calWork.stages.length-1)return;   // only the last stage, never the kettle
+  if(calCur().length&&!await customConfirm('Remove stage "'+calWork.stages[calMode].name+'" including its measured points?','remove'))return;
+  calWork.stages.pop();
+  calMode=calWork.stages.length-1;
+  calRender();
+}
+/* — profiles (new / rename / delete / switch) — */
+async function calSwitchProfile(id){
+  id=+id;
+  if(id===activeCoolProfileId)return;
+  if(calDirty()&&!await customConfirm('Discard unsaved calibration changes?','discard')){el('calProfileSel').value=String(activeCoolProfileId);return;}
+  setActiveCoolProfile(id);
+  calLoadWork();
+  calRender();
+}
+let cpnMode='new';
+async function calNewProfile(){
+  if(calDirty()&&!await customConfirm('Discard unsaved calibration changes?','discard'))return;
+  cpnMode='new';
+  el('cpnTitle').textContent='New cooling profile';
+  el('cpnInput').value='';
+  el('coolProfileNameModal').classList.add('open');
+  setTimeout(()=>el('cpnInput').focus(),60);
+}
+function calRenameProfile(){
+  cpnMode='rename';
+  el('cpnTitle').textContent='Rename profile';
+  el('cpnInput').value=customCoolCurves.name||'';
+  el('coolProfileNameModal').classList.add('open');
+  setTimeout(()=>el('cpnInput').select(),60);
+}
+function cpnSave(){
+  const name=el('cpnInput').value.trim();
+  if(!name){showStatusMsg('name cannot be empty',1800);return;}
+  if(cpnMode==='new'){
+    const p=normCoolProfile({id:Date.now(),name,delta:customCoolCurves.delta,mt:Date.now()});   // starts with the 3 default stages, no measured points = built-in curves
+    coolProfiles.push(p);
+    setActiveCoolProfile(p.id);
+    calLoadWork();
+  }else{
+    if(customCoolCurves.name!==name){customCoolCurves.name=name;customCoolCurves.mt=Date.now();}   // stamp mt only on a real change
+    renderCoolProfileChip();
+  }
+  saveCoolCurves();   // wrapped → syncs the new/renamed profile to other devices
+  calRender();
+  closeModal('coolProfileNameModal');
+}
+async function calDeleteProfile(){
+  if(coolProfiles.length<=1){showStatusMsg('cannot delete the last profile',2200);return;}
+  if(!await customConfirm('Delete profile "'+(customCoolCurves.name||'')+'" including its measured curves? (on all synced devices)','delete'))return;
+  coolProfiles=coolProfiles.filter(p=>p.id!==activeCoolProfileId);
+  setActiveCoolProfile(coolProfiles[0].id);
+  saveCoolCurves();   // wrapped → the reconcile records a tombstone and the deletion propagates
+  calLoadWork();
+  calRender();
+}
 function calRender(){
-  [0,1,2].forEach(i=>{
-    const chip=el('calChip'+i);
-    chip.classList.toggle('active',i===calMode);
-    chip.textContent=CAL_NAMES[i]+(calWork['c'+i].length?' •':'');   // • marks a mode with custom points
-  });
+  const psel=el('calProfileSel');
+  psel.innerHTML=coolProfiles.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  psel.value=String(activeCoolProfileId);
+  el('calChips').innerHTML=calWork.stages.map((s,i)=>
+    `<button class="pour-chip ${i===calMode?'active':''}" onclick="calSelectMode(${i})">${esc(s.name)}${s.curve.length?' •':''}</button>`   // • marks a stage with custom points
+  ).join('')+`<button class="pour-chip" onclick="calAddStage()" title="add another pour stage (needs its own measurement — no built-in estimate)">+ stage</button>`;
+  el('calStageName').value=calWork.stages[calMode].name;
+  el('calStageDelBtn').style.display=(calMode>0&&calMode===calWork.stages.length-1)?'':'none';
   el('calDeltaRow').style.display=calMode===0?'flex':'none';
-  el('calHint').textContent=CAL_HINTS[calMode];
+  el('calHint').textContent=calHint(calMode);
   const pts=calCur();
-  el('calStatus').textContent=pts.length?'custom: '+pts.length+' point'+(pts.length===1?'':'s'):'using built-in curve — record points to calibrate';
+  el('calStatus').textContent=pts.length?'custom: '+pts.length+' point'+(pts.length===1?'':'s')
+    :calMode<3?'using built-in curve — record points to calibrate'
+    :'no built-in curve for this stage — record at least 2 points or it stays disabled';
   el('calPoints').innerHTML=pts.map((p,i)=>`
     <div style="display:flex;align-items:center;gap:.4rem">
       <input class="le-inp" style="width:64px" type="text" inputmode="numeric" value="${mmss(p.sec)}" title="m:ss (or a bare number = minutes, “90s” = seconds)" onchange="calEditRow(${i},'sec',this)" />
@@ -2069,7 +2188,8 @@ function calDeltaFromReading(){
 function calAddRow(){
   const pts=calCur();
   const last=pts[pts.length-1];
-  pts.push(last?{sec:last.sec+60,temp:Math.max(10,last.temp-5)}:{sec:0,temp:calMode===0?100:calMode===1?95:85});
+  const startTemp=calMode===0?100:calMode===1?95:85;   // stages 3+ start around the 2-pour temp too — just a starter value to edit
+  pts.push(last?{sec:last.sec+60,temp:Math.max(10,last.temp-5)}:{sec:0,temp:startTemp});
   calRender();
 }
 function calEditRow(i,field,inp){
@@ -2086,26 +2206,30 @@ function calEditRow(i,field,inp){
   el('calStatus').textContent='custom: '+calCur().length+' point'+(calCur().length===1?'':'s');
 }
 function calDelRow(i){calCur().splice(i,1);calRender();}
-function calUseDefault(){calWork['c'+calMode]=[];calRender();}
+function calUseDefault(){calWork.stages[calMode].curve=[];calRender();}
 async function calSave(){
-  const out={};
-  for(let m=0;m<3;m++){
-    const k='c'+m;
-    const pts=calWork[k].map(p=>({sec:p.sec|0,temp:+p.temp})).filter(p=>isFinite(p.temp)&&p.temp>0);
-    if(!pts.length){out[k]=null;continue;}
-    if(pts.length<2){await customAlert('Mode “'+CAL_NAMES[m]+'” has only 1 point — record at least 2, or remove it to keep the default.');return;}
+  const outStages=[];
+  for(let m=0;m<calWork.stages.length;m++){
+    const st=calWork.stages[m];
+    const name=(st.name||'').trim()||defaultStageName(m);
+    const pts=st.curve.map(p=>({sec:p.sec|0,temp:+p.temp})).filter(p=>isFinite(p.temp)&&p.temp>0);
+    if(pts.length===1){await customAlert('Stage “'+name+'” has only 1 point — record at least 2, or remove it to keep the default.');return;}
     pts.sort((a,b)=>a.sec-b.sec);
     for(let i=1;i<pts.length;i++){
-      if(pts[i].sec===pts[i-1].sec){await customAlert('Mode “'+CAL_NAMES[m]+'” has two points at the same time ('+mmss(pts[i].sec)+').');return;}
-      if(pts[i].temp>=pts[i-1].temp){await customAlert('Mode “'+CAL_NAMES[m]+'”: temperature must decrease over time ('+mmss(pts[i].sec)+' → '+pts[i].temp+' °C is not below '+pts[i-1].temp+' °C).');return;}
+      if(pts[i].sec===pts[i-1].sec){await customAlert('Stage “'+name+'” has two points at the same time ('+mmss(pts[i].sec)+').');return;}
+      if(pts[i].temp>=pts[i-1].temp){await customAlert('Stage “'+name+'”: temperature must decrease over time ('+mmss(pts[i].sec)+' → '+pts[i].temp+' °C is not below '+pts[i-1].temp+' °C).');return;}
     }
-    out[k]=pts;
+    outStages.push({name,curve:pts.length?pts:null});
   }
-  customCoolCurves.c0=out.c0;customCoolCurves.c1=out.c1;customCoolCurves.c2=out.c2;
+  let changed=calSnapOf(outStages)!==calSnapOf(customCoolCurves.stages);
+  customCoolCurves.stages=outStages;
   const d=parseFloat(String(el('calDelta').value).replace(',','.'));
-  if(!isNaN(d)&&d>=0&&d<=30)customCoolCurves.delta=d;
+  if(!isNaN(d)&&d>=0&&d<=30&&customCoolCurves.delta!==d){customCoolCurves.delta=d;changed=true;}
+  if(changed)customCoolCurves.mt=Date.now();   // stamp mt only on a real content change (blind stamping would beat newer versions from other devices)
   saveCoolCurves();
+  if(coolPours>=outStages.length)coolPours=0;   // the session may sit on a stage that was just removed
   if(coolState.state==='idle'){const r0=coolWaitSecPoured(el('tempRange').value,coolPours);coolState.remaining=(r0!==null&&r0>0)?r0:0;}
+  renderPourChips();
   updateCoolGuide();renderSteeps();
   closeCoolCal();
   showSave('✓ calibration saved');
@@ -2399,7 +2523,7 @@ function doExport(){
   const tpls=templates.filter(t=>exportTplSelected.has(t.id));
   const archItems=archive.filter(e=>exportArchSelected.has(e.id));
   if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
-  const json=JSON.stringify({v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems},null,2);
+  const json=JSON.stringify({v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems,coolProfiles:coolProfiles},null,2);
   const rawName=(el('exportFilename').value.trim()||'export');
   const fname=rawName.endsWith('.json')?rawName:rawName+'.json';
 
@@ -3327,7 +3451,7 @@ function updateLeCoolRow(){
   const noTherm=!el('le-chkThermometer').checked;
   const row=el('le-cool-row');if(!row)return;
   row.style.display=noTherm?'flex':'none';
-  if(noTherm)row.querySelectorAll('.pour-chip').forEach((btn,i)=>btn.classList.toggle('active',i===leEditCoolPours));
+  if(noTherm)el('leCoolChipsDyn').innerHTML=coolStages().map((s,i)=>`<button class="pour-chip ${i===leEditCoolPours?'active':''}" onclick="setLeCoolPours(${i})">${esc(s.name)}</button>`).join('');
 }
 function setLeCoolPours(n){leEditCoolPours=n;updateLeCoolRow();}
 
@@ -3474,7 +3598,7 @@ function buildSetupFromData(d,name){
   lines.push('temperature: '+temp+' °C');
   lines.push(checkLine);
   if(checks.chkRinse){lines.push('  rinse: '+(d.rinseSec||'15')+' s'+(d.rinseTemp?' / '+d.rinseTemp+' °C':''));}
-  if(!checks.chkThermometer&&d.coolPours>0){const pourNames=['kettle','pitcher','2nd vessel'];lines.push('  cooling: '+pourNames[d.coolPours]);}
+  if(!checks.chkThermometer&&d.coolPours>0)lines.push('  cooling: '+coolStageName(d.coolPours));
   (d.steeps||[]).forEach((s,i)=>lines.push((i+1)+'. steep: '+s.sec+'s'+(s.temp?' / '+s.temp+'°C':'')));
   return lines.join('\n');
 }
@@ -3710,10 +3834,18 @@ document.addEventListener('keydown',e=>{
   <div class="modal" style="max-width:460px;max-height:85vh;overflow-y:auto">
     <h2>Cooling calibration</h2>
     <p>Measure how water actually cools with your kettle and room, and the countdown will match your conditions. Modes without measurements keep the built-in estimate.</p>
-    <div class="pour-chips visible" style="margin-top:0">
-      <button class="pour-chip" id="calChip0" onclick="calSelectMode(0)">kettle</button>
-      <button class="pour-chip" id="calChip1" onclick="calSelectMode(1)">1× pitcher</button>
-      <button class="pour-chip" id="calChip2" onclick="calSelectMode(2)">2× vessel</button>
+    <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
+      <span class="le-unit">profile</span>
+      <select id="calProfileSel" class="lib-seller-filter has-options" onchange="calSwitchProfile(this.value)"></select>
+      <button class="btn-sm" onclick="calNewProfile()" title="new profile (e.g. work kettle)">+ new</button>
+      <button class="btn-sm" onclick="calRenameProfile()" title="rename profile">✎</button>
+      <button class="btn-sm" onclick="calDeleteProfile()" title="delete profile">✕</button>
+    </div>
+    <div class="pour-chips visible" style="margin-top:0" id="calChips"></div>
+    <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
+      <span class="le-unit">stage name</span>
+      <input class="le-inp" id="calStageName" type="text" maxlength="30" style="width:130px;font-family:'DM Sans',sans-serif;text-align:left" onchange="calStageRename(this.value)" />
+      <button class="btn-sm" id="calStageDelBtn" onclick="calRemoveStage()" title="remove the last stage">✕ stage</button>
     </div>
     <div id="calHint" style="font-size:.76rem;color:var(--muted);line-height:1.5"></div>
     <div id="calDeltaRow" style="display:none;align-items:center;gap:.45rem;flex-wrap:wrap">
@@ -3738,6 +3870,19 @@ document.addEventListener('keydown',e=>{
       <button class="modal-btn" onclick="calUseDefault()">use default</button>
       <button class="modal-btn" onclick="closeCoolCal()">cancel</button>
       <button class="modal-btn primary" onclick="calSave()">save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cooling profile name modal (new / rename) -->
+<div class="modal-bg" id="coolProfileNameModal" style="z-index:110">
+  <div class="modal" style="max-width:340px">
+    <h2 id="cpnTitle">New cooling profile</h2>
+    <input id="cpnInput" type="text" maxlength="40" placeholder="e.g. work kettle"
+      onkeydown="if(event.key==='Enter')cpnSave()" />
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('coolProfileNameModal')">cancel</button>
+      <button class="modal-btn primary" onclick="cpnSave()">save</button>
     </div>
   </div>
 </div>
@@ -3791,7 +3936,8 @@ document.addEventListener('keydown',e=>{
 /* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
    Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
    Data lives in a single private gist (file cajovy-sync.json).
-   Collections: teas (library) + templates = LWW by id; archive = union (append-only). */
+   Collections: teas (library) + templates + coolProfiles = LWW by id; archive = union (append-only).
+   coolProfiles sync their CONTENT only — which profile is active stays per-device. */
 (function(){
   const GHTOKEN='cajovy-gist-token';        // GitHub token (scope gist)
   const GISTID='cajovy-gist-id';            // Gist ID (empty = sync will create it on the first push)
@@ -3861,6 +4007,7 @@ document.addEventListener('keydown',e=>{
     library.forEach(e=>{if(e&&e.id!=null)s.add('lib:'+e.id);});
     templates.forEach(t=>{if(t&&t.id!=null)s.add('tpl:'+t.id);});
     archive.forEach(e=>{if(e&&e.id!=null)s.add('arc:'+e.id);});
+    coolProfiles.forEach(p=>{if(p&&p.id!=null)s.add('cp:'+p.id);});
     return s;
   }
   function pruneTombstones(){
@@ -3887,14 +4034,14 @@ document.addEventListener('keydown',e=>{
     return removed;
   }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(teas,tpls,arch,tomb){
+  function sigOf(teas,tpls,arch,tomb,profs){
     const idS=arr=>arr.map(x=>String((x&&x.id)||'')+'@'+((x&&x.mt)||0)).sort().join(',')+':'+arr.length;
     const arcS=arr=>arr.map(x=>String((x&&x.id)||'')).sort().join(',')+':'+arr.length;
     const tS=o=>Object.keys(o||{}).sort().join(',');
-    return [idS(teas),idS(tpls),arcS(arch),tS(tomb)].join('||');
+    return [idS(teas),idS(tpls),arcS(arch),tS(tomb),idS(profs||[])].join('||');
   }
-  function localStateSig(){return sigOf(library,templates,archive,tombstones);}
-  function cloudStateSig(r){return sigOf(r.teas||r.items||[],r.templates||[],r.archive||[],r.tombstones||{});}
+  function localStateSig(){return sigOf(library,templates,archive,tombstones,coolProfiles);}
+  function cloudStateSig(r){return sigOf(r.teas||r.items||[],r.templates||[],r.archive||[],r.tombstones||{},r.coolProfiles||[]);}
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn(){
@@ -3934,7 +4081,7 @@ document.addEventListener('keydown',e=>{
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload(){
-    return {v:1,schema:APP_SCHEMA,teas:library,templates:templates,archive:archive,tombstones:tombstones,device:getDeviceName()};
+    return {v:1,schema:APP_SCHEMA,teas:library,templates:templates,archive:archive,coolProfiles:coolProfiles,tombstones:tombstones,device:getDeviceName()};
   }
   function scheduleAutoPush(){
     if(!autosyncEnabled()||!hasToken())return;
@@ -4033,6 +4180,22 @@ document.addEventListener('keydown',e=>{
       (record.archive||[]).forEach(it=>{
         if(it&&it.id!=null&&!arcIds.has(String(it.id))&&!isTombstoned('arc:'+it.id)){archive.push(it);arcIds.add(String(it.id));added++;}
       });
+      // cooling calibration profiles — LWW by id (which profile is ACTIVE stays per-device)
+      const cpR=lwwMerge(coolProfiles,(record.coolProfiles||[]),'cp',x=>x.id,normCoolProfile);
+      const cpChanged=(cpR.added+cpR.updated+cpR.removed)>0;
+      coolProfiles=cpR.arr;
+      if(!coolProfiles.length)coolProfiles=[normCoolProfile({id:Date.now(),name:'default'})];   // never leave the app without a profile (fresh id so an old tombstone can't re-kill it)
+      // the array instance was replaced → always re-point the active reference; fall back to the first profile if the active one was deleted
+      customCoolCurves=coolProfiles.find(p=>p.id===activeCoolProfileId)||coolProfiles[0];
+      activeCoolProfileId=customCoolCurves.id;
+      if(cpChanged){
+        persistCoolCurves();
+        if(coolPours>=customCoolCurves.stages.length)coolPours=0;
+        renderCoolProfileChip();renderPourChips();
+        if(typeof updateCoolGuide==='function')updateCoolGuide();
+        if(typeof renderSteeps==='function')renderSteeps();
+        added+=cpR.added;updated+=cpR.updated;removed+=cpR.removed;
+      }
 
       if(added||updated||removed){
         saveLibrary();saveTemplates();saveArchive();
@@ -4207,7 +4370,8 @@ document.addEventListener('keydown',e=>{
     const tpls=templates.filter(t=>exportTplSelected.has(t.id));
     const archItems=archive.filter(e=>exportArchSelected.has(e.id));
     if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
-    const payload={v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems};
+    // cooling profiles always ride along complete — the upload REPLACES the gist file, omitting them would wipe them from the cloud
+    const payload={v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems,coolProfiles:coolProfiles};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try{
@@ -4349,6 +4513,7 @@ document.addEventListener('keydown',e=>{
     const t=(rec.teas||rec.items||[]).length;  if(t)parts.push(t+' teas');
     const tp=(rec.templates||[]).length;       if(tp)parts.push(tp+' tpl');
     const ar=(rec.archive||[]).length;          if(ar)parts.push(ar+' arch');
+    const cp=(rec.coolProfiles||[]).length;     if(cp)parts.push(cp+' cal');
     return parts.join(' · ');
   }
   function renderGistHistory(){
@@ -4465,7 +4630,7 @@ document.addEventListener('keydown',e=>{
   window.autoSyncOnSave=autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones();loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
-  ['saveLibrary','saveTemplates','saveArchive'].forEach(fn=>{
+  ['saveLibrary','saveTemplates','saveArchive','saveCoolCurves'].forEach(fn=>{
     const orig=window[fn];
     if(typeof orig==='function')window[fn]=function(){const r=orig.apply(this,arguments);try{autoSyncOnSave();}catch(e){}return r;};
   });
