@@ -457,6 +457,20 @@ textarea::placeholder{color:var(--mid)}
 .week-day-row{display:flex;align-items:center;gap:.35rem;padding:.35rem .45rem;border:1px solid var(--light);border-radius:var(--r);user-select:none}
 .week-day-date{flex:1;font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .week-day-meta{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
+/* inline preview (Done tab) — expands under the row in place of the old preview modal.
+   No inner scroll on .preview-item-list on purpose: the Done list (#week-list) is the only
+   scrollable ancestor, same as #item-list on Week/Next — a nested scroller here made touch
+   drag-reorder fight two scrollable containers at once. */
+.week-row-wrap{display:flex;flex-direction:column;gap:0}
+.inline-preview{margin:.3rem 0 .5rem;padding:.4rem .5rem .5rem;border:1px dashed var(--mid);border-radius:var(--r);background:var(--w)}
+/* multi-row mini timeline: one row = 4h, so long days wrap instead of squeezing into one bar */
+.inline-tl{display:flex;flex-direction:column;width:100%;border:1.5px solid var(--dark);border-radius:var(--r);overflow:hidden;margin-bottom:.35rem;flex-shrink:0;background:var(--w)}
+.inline-tl-row{display:flex;align-items:stretch;height:26px;border-bottom:1px solid var(--light)}
+.inline-tl-row:last-child{border-bottom:none}
+.inline-tl-time{width:34px;flex-shrink:0;font-family:'DM Mono',monospace;font-size:.55rem;line-height:1;color:var(--muted);padding:2px 3px 0;text-align:right;border-right:1.5px solid var(--dark)}
+.inline-tl-track{flex:1;position:relative;min-width:0}
+.inline-tl-tick{position:absolute;top:0;bottom:0;width:1px;background:var(--light);pointer-events:none}
+.inline-tl-overflow{position:absolute;top:0;bottom:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,transparent 0,transparent 4px,var(--light) 4px,var(--light) 5px)}
 /* ── DRAG AND DROP ── */
 /* draggable rows: on touch, long-press must not trigger text selection / iOS callout */
 [draggable="true"]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -787,6 +801,7 @@ textarea::placeholder{color:var(--mid)}
       <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>archive</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-week" checked><span>saved week days (Reality)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-weekplans" checked><span>week plan (Plan)</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-blocktypes"><span>block types</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings</span></label>
     </div>
     <p style="font-size:.78rem;color:var(--muted);margin:.1rem 0 0">Individual task buckets</p>
@@ -1940,9 +1955,10 @@ function op_addQuickItems(ctx, forceType) {
     const targetList = toLater ? laterBucket(route.ym).items : ctx.list;
     if (toLater) line = route.rest;
 
-    // Blocks / subblocks / abbreviations / leading emoji only when adding on a DAY (Week/Next).
+    // Blocks / subblocks / abbreviations / leading emoji only when adding on a DAY (Week/Next)
+    // or in the Done inline preview ('done' = an archived day, same structure).
     // Routing into Later and the Inbox/Month cards = flat single-line items (no blocks).
-    const onDay = !toLater && ctx.kind === 'day';
+    const onDay = !toLater && (ctx.kind === 'day' || ctx.kind === 'done');
 
     // (1) leading emoji (non-block) → custom row icon (Day only)
     let icon = null;
@@ -3386,6 +3402,10 @@ function doLoadWeekTemplate() {
 }
 
 // ── PREVIEW ──────────────────────────────────────────────────────────────────
+// Modal preview: templates only (library day / week-template day). A template is a draft,
+// not a committed record, so an explicit "save changes"/"apply" step makes sense here.
+// Done-tab days/plans (already-saved records) use the inline preview instead — see
+// toggleInlinePreview() below — since edits there should persist immediately, like Week/Next.
 function openPreview(type, id, dayKey) {
   let src;
   if (type === 'lib') {
@@ -3394,12 +3414,6 @@ function openPreview(type, id, dayKey) {
     src = { type, id, name: entry.name,
       items: JSON.parse(JSON.stringify(entry.data.items)),
       windowStart: entry.data.windowStart, windowEnd: entry.data.windowEnd };
-  } else if (type === 'weekDay') {
-    const d = weekDays.find(d => d.id === id);
-    if (!d) return;
-    src = { type, id, name: formatDateCz(d.date),
-      items: JSON.parse(JSON.stringify(d.items)),
-      windowStart: d.windowStart, windowEnd: d.windowEnd };
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
@@ -3408,12 +3422,6 @@ function openPreview(type, id, dayKey) {
     src = { type, id, dayKey, name: entry.name + ' · ' + dayKey,
       items: JSON.parse(JSON.stringify(data.items)),
       windowStart: data.windowStart, windowEnd: data.windowEnd };
-  } else if (type === 'weekPlan') {
-    const p = weekPlans.find(p => p.id === id);
-    if (!p) return;
-    src = { type, id, name: formatDateCz(p.date) + ' · plan',
-      items: JSON.parse(JSON.stringify(p.items)),
-      windowStart: p.windowStart, windowEnd: p.windowEnd };
   }
   if (!src) return;
   _previewSource = src;
@@ -3681,13 +3689,6 @@ function doPreviewSave() {
     entry.data.windowStart = wS; entry.data.windowEnd = wE;
     entry.mt = Date.now();
     saveLibrary(); renderLibrary();
-  } else if (type === 'weekDay') {
-    const d = weekDays.find(d => d.id === id);
-    if (!d) return;
-    d.items = snapshot;
-    d.windowStart = wS; d.windowEnd = wE;
-    d.mt = Date.now();
-    saveWeek(); renderWeekTab(); renderDayButtons();
   } else if (type === 'weekTplDay') {
     const entry = library.find(e => e.id === id);
     if (!entry || entry.type !== 'week') return;
@@ -3695,13 +3696,6 @@ function doPreviewSave() {
     entry.weekData[dayKey].windowStart = wS; entry.weekData[dayKey].windowEnd = wE;
     entry.mt = Date.now();
     saveLibrary(); renderLibrary();   // recompute the total time of a multi-day template in its name
-  } else if (type === 'weekPlan') {
-    const p = weekPlans.find(p => p.id === id);
-    if (!p) return;
-    p.items = snapshot;
-    p.windowStart = wS; p.windowEnd = wE;
-    p.mt = Date.now();
-    saveWeekPlans(); renderWeekTab();
   }
   closeModal('previewModal');
   showSave('✓ changes saved');
@@ -3979,7 +3973,7 @@ function schedSave() {
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────────
 function clearStorage() { el('clearStorageModal').classList.add('open'); }
 function toggleAllClear() {
-  const boxes = ['clr-session','clr-library','clr-archive','clr-week','clr-weekplans','clr-appearance',
+  const boxes = ['clr-session','clr-library','clr-archive','clr-week','clr-weekplans','clr-blocktypes','clr-appearance',
                  'clr-thisweek','clr-nextweek','clr-later','clr-inbox'].map(id => el(id));
   const anyUnchecked = boxes.some(b => !b.checked);
   boxes.forEach(b => b.checked = anyUnchecked);
@@ -3991,6 +3985,7 @@ async function doSelectiveClear() {
   if (el('clr-archive').checked)    toDelete.push(WK(ARCHIVE_KEY));
   if (el('clr-week').checked)       toDelete.push(WK(WEEK_KEY), WK(WEEKNOTES_KEY));
   if (el('clr-weekplans').checked)  toDelete.push(WK(WEEKPLANS_KEY));
+  if (el('clr-blocktypes').checked) toDelete.push(WK(BLOCKTYPES_KEY), WK(BLOCKTYPES_ORDER_KEY), WK(BLOCKTYPES_DELETED_KEY));
   if (el('clr-appearance').checked) toDelete.push('todo-app-fs','todo-app-dark','todo-app-panel-fs',WK(WORKDAYS_KEY));
   // granular buckets: in-memory mutation + save — the wrapped save functions write tombstones and schedule sync
   const clrThis = el('clr-thisweek').checked, clrNext = el('clr-nextweek').checked;
@@ -5480,8 +5475,8 @@ function sendItemToField(ctx, idx) {
     const prefix = x.isSubtask ? '✒ ' : '';
     let suffix = '';
     if (x.isEvent && x.eventStart) suffix = ' ' + x.eventStart + '-' + (x.eventEnd || x.eventStart);
-    // carry the task length only from a day — Later/Inbox do not carry times (nothing is pre-filled on the target card)
-    else if (ctx.kind === 'day' && x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // for a block, the length is carried by the subtask
+    // carry the task length only from a day (incl. an archived one in Done) — Later/Inbox do not carry times
+    else if ((ctx.kind === 'day' || ctx.kind === 'done') && x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // for a block, the length is carried by the subtask
     if (x.note) _sendNotes[x.text || ''] = x.note;                                         // carry the note keyed by the plain text
     lines.push(prefix + emoji + (x.text || '') + suffix);
   }
@@ -5489,6 +5484,13 @@ function sendItemToField(ctx, idx) {
   if (ctx.kind === 'day')        _sendSources.push({ kind: 'day',   date: activePlanDate, ids });
   else if (ctx.kind === 'month') _sendSources.push({ kind: 'month', ym: ctx.ym,            ids });
   else if (ctx.kind === 'inbox') _sendSources.push({ kind: 'inbox',                         ids });
+  // Done inline preview: an archived Reality day is deletable by date via the day branch of
+  // deleteSentSources (live buffer if it IS the active day, its weekDays record otherwise);
+  // a plan record has no branch there → copy only (".del" won't remove it)
+  else if (ctx.kind === 'done' && ctx.type === 'weekDay') {
+    const rec = weekDays.find(d => d.id === ctx.id);
+    if (rec) _sendSources.push({ kind: 'day', date: rec.date, ids });
+  }
   const txt = lines.join('\n');
   const ta = el('quickInput');
   if (ta) { ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' + txt : txt; ta.focus(); }
@@ -5998,6 +6000,7 @@ async function togglePlanSnapshot() {
 async function deleteWeekPlanDay(id) {
   if (!await customConfirm('Delete the plan for this day?', 'delete')) return;
   weekPlans = weekPlans.filter(p => p.id !== id);
+  if (inlinePreviewKey === 'weekPlan:' + id) inlinePreviewKey = null;
   saveWeekPlans();
   renderWeekTab();
 }
@@ -6139,6 +6142,7 @@ function switchNotesTab(name) {
 async function deleteWeekDay(id) {
   if (!await customConfirm('Delete this day from Reality?', 'delete')) return;
   weekDays = weekDays.filter(d => d.id !== id);
+  if (inlinePreviewKey === 'weekDay:' + id) inlinePreviewKey = null;
   saveWeek(); renderWeekTab(); renderDayButtons();
 }
 
@@ -6182,22 +6186,28 @@ function groupPlansByWeek() {
 function renderPlanRow(p) {
   const blockCount = p.items.filter(i => !i.isSubtask).length || p.items.length;
   const totalDur = p.items.filter(i => !i.isSubtask).reduce((s, i) => s + (i.duration || 0), 0);
-  return `<div class="plan-day-row">
-    <span class="week-day-date">${formatDateCz(p.date)}</span>
-    <span class="week-day-meta">${blockCount}p${totalDur ? ' · ' + formatDur(totalDur) : ''}</span>
-    <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="openPreview('weekPlan',${p.id})" title="preview">preview</button>
-    <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekPlanDay(${p.id})" title="delete">✕</button>
+  const isOpen = inlinePreviewKey === 'weekPlan:' + p.id;
+  return `<div class="week-row-wrap" id="wrap-weekPlan-${p.id}">
+    <div class="plan-day-row">
+      <span class="week-day-date">${formatDateCz(p.date)}</span>
+      <span class="week-day-meta">${blockCount}p${totalDur ? ' · ' + formatDur(totalDur) : ''}</span>
+      <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="toggleInlinePreview('weekPlan',${p.id})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
+      <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekPlanDay(${p.id})" title="delete">✕</button>
+    </div>${isOpen ? `<div class="inline-preview">${renderInlinePreviewBody('weekPlan', p.id)}</div>` : ''}
   </div>`;
 }
 
 function renderDayRow(d) {
   const { done, total } = dayTimeSplit(d.items);
   const hol = getHoliday(d.date);
-  return `<div class="week-day-row" style="cursor:default">
-    <span class="week-day-date">${formatDateCz(d.date)}${hol ? ` <span class="holiday-name">· ${esc(hol)}</span>` : ''}</span>
-    <span class="week-day-meta">${done ? formatDur(done) : '0'} / ${formatDur(total)}</span>
-    <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="openPreview('weekDay',${d.id})" title="preview">preview</button>
-    <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${d.id})" title="delete from Reality">✕</button>
+  const isOpen = inlinePreviewKey === 'weekDay:' + d.id;
+  return `<div class="week-row-wrap" id="wrap-weekDay-${d.id}">
+    <div class="week-day-row" style="cursor:default">
+      <span class="week-day-date">${formatDateCz(d.date)}${hol ? ` <span class="holiday-name">· ${esc(hol)}</span>` : ''}</span>
+      <span class="week-day-meta">${done ? formatDur(done) : '0'} / ${formatDur(total)}</span>
+      <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="toggleInlinePreview('weekDay',${d.id})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
+      <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${d.id})" title="delete from Reality">✕</button>
+    </div>${isOpen ? `<div class="inline-preview">${renderInlinePreviewBody('weekDay', d.id)}</div>` : ''}
   </div>`;
 }
 
@@ -6222,6 +6232,7 @@ function renderWeekTab() {
     allKeys.forEach(key => { if (!recent.has(canonOf(key))) hotovoCollapsed.add(key); });
   }
 
+  const prevScroll = list.scrollTop;   // rebuilding innerHTML resets scroll → restore it (an open inline preview may be scrolled deep in the list)
   list.innerHTML = allKeys.map((key, gi) => {
     const pg = planMap.get(key);
     const rg = realMap.get(key);
@@ -6249,7 +6260,211 @@ function renderWeekTab() {
   }).join('');
   // size multi-line notes to fit (visible sections only — collapsed ones have no layout height)
   list.querySelectorAll('.week-note').forEach(ta => { if (ta.value && ta.offsetParent) autoGrowTextarea(ta); });
+  list.scrollTop = prevScroll;
+  // an open inline preview lost its dnd binding when innerHTML was rebuilt above → rewire it
+  if (inlinePreviewKey) {
+    const sep = inlinePreviewKey.indexOf(':');
+    initInlinePreviewDnd(inlinePreviewKey.slice(0, sep), Number(inlinePreviewKey.slice(sep + 1)));
+  }
 }
+
+// ── INLINE PREVIEW (Done tab) ─────────────────────────────────────────────────
+// Replaces the old previewModal for already-saved Done-tab records (weekDay/weekPlan):
+// expands the row in place, editing the live weekDays/weekPlans record directly (auto-saved,
+// like Week/Next) instead of a copy that needs an explicit "save changes". Only one row open
+// at a time. Template drafts (library day / week-template day) still use the modal — see openPreview().
+let inlinePreviewKey = null;   // "type:id" of the currently expanded Done row, or null
+
+function getInlinePreviewRecord(type, id) {
+  if (type === 'weekDay') return weekDays.find(d => d.id === id);
+  if (type === 'weekPlan') return weekPlans.find(p => p.id === id);
+  return null;
+}
+
+function toggleInlinePreview(type, id) {
+  const key = type + ':' + id;
+  inlinePreviewKey = (inlinePreviewKey === key) ? null : key;
+  renderWeekTab();
+}
+
+// Stamps mt (LWW) + persists — call after any content mutation of the record.
+function persistInlineRecord(type, id) {
+  const rec = getInlinePreviewRecord(type, id);
+  if (!rec) return;
+  rec.mt = Date.now();
+  if (type === 'weekDay') { saveWeek(); renderDayButtons(); } else saveWeekPlans();
+}
+
+function commitInlineChange(type, id) {
+  persistInlineRecord(type, id);
+  refreshInlineWrap(type, id);
+}
+
+// Re-renders just this row+preview (keeps the rest of the Done list, and its scroll position, untouched).
+function refreshInlineWrap(type, id) {
+  const wrap = el('wrap-' + type + '-' + id);
+  const rec = getInlinePreviewRecord(type, id);
+  if (!wrap || !rec) return;
+  wrap.outerHTML = type === 'weekDay' ? renderDayRow(rec) : renderPlanRow(rec);
+  initInlinePreviewDnd(type, id);
+}
+
+function initInlinePreviewDnd(type, id) {
+  const container = el('inlItems-' + type + '-' + id);
+  if (!container) return;
+  initDnd(container, (s, f, raw) => applyDndReorder(DNCTX(type, id), s, raw));
+}
+
+// Compact read-only mini timeline — same row principle as the live Timeline card (fixed minutes
+// per row, blocks split across row boundaries with ↩), just 4h rows at 26px so it stays small.
+// Multi-row means nothing ever gets squeezed off the right edge: whatever lands before
+// windowStart / after windowEnd simply extends the grid, with the out-of-window part hatched.
+function renderInlineTlStrip(arr, times, wStartStr, wEndStr) {
+  const top = arr.map((it, i) => ({ it, i })).filter(o => !o.it.isSubtask && times[o.i]);
+  if (!top.length) return '';
+  const ROW = 240;   // minutes per row
+  const wStart = timeToMin(wStartStr || '8:00');
+  const wEnd = timeToMin(wEndStr || '16:00');
+  let minStart = wStart, maxEnd = wEnd;
+  top.forEach(({ i }) => { minStart = Math.min(minStart, times[i].startMin); maxEnd = Math.max(maxEnd, times[i].endMin); });
+  let gridStart = wStart - Math.ceil(Math.max(0, wStart - minStart) / ROW) * ROW;
+  if (gridStart < 0) gridStart = 0;
+  const numRows = Math.ceil((Math.max(wEnd, maxEnd) - gridStart) / ROW);
+  const rows = [];
+  for (let r = 0; r < numRows; r++) {
+    const rowStart = gridStart + r * ROW, rowEnd = rowStart + ROW;
+    const parts = [];
+    // hour ticks
+    for (let t = 60; t < ROW; t += 60) parts.push(`<div class="inline-tl-tick" style="left:${t / ROW * 100}%"></div>`);
+    // hatch the out-of-window part of the row (before windowStart / after windowEnd)
+    if (rowStart < wStart) {
+      const w = (Math.min(wStart, rowEnd) - rowStart) / ROW * 100;
+      parts.push(`<div class="inline-tl-overflow" style="left:0;width:${w}%" title="before the day window (${esc(minToTime(wStart))})"></div>`);
+    }
+    if (rowEnd > wEnd) {
+      const l = Math.max(0, (wEnd - rowStart) / ROW * 100);
+      parts.push(`<div class="inline-tl-overflow" style="left:${l}%;width:${100 - l}%" title="after the day window (${esc(minToTime(wEnd))})"></div>`);
+    }
+    top.forEach(({ it, i }) => {
+      const t = times[i];
+      const bS = Math.max(t.startMin, rowStart), bE = Math.min(t.endMin, rowEnd);
+      if (bS >= rowEnd || bE <= rowStart) return;
+      const cls = ['tl-block-h', 'tl-' + (it.blockType || 'TASK'),
+        it.isEvent ? 'tl-is-event' : '', it.urgent ? 'tl-urgent' : '', it.done ? 'tl-done' : ''].filter(Boolean).join(' ');
+      let label = (itemIcon(it) ? itemIcon(it) + ' ' : '') + stripBlockEmoji(it.text, BLOCK_TYPES[it.blockType] || BLOCK_TYPES.TASK);
+      if (t.startMin < rowStart) label = '↩ ' + label;
+      parts.push(`<div class="${cls}" style="left:${(bS - rowStart) / ROW * 100}%;width:calc(${(bE - bS) / ROW * 100}% - 1px)" title="${esc(minToTime(t.startMin) + '–' + minToTime(t.endMin) + ' ' + it.text)}"><span class="tl-label">${esc(label)}</span></div>`);
+    });
+    rows.push(`<div class="inline-tl-row"><span class="inline-tl-time">${minToTime(rowStart)}</span><div class="inline-tl-track">${parts.join('')}</div></div>`);
+  }
+  return `<div class="inline-tl">${rows.join('')}</div>`;
+}
+
+// The item list is rendered by the SAME rowsHtml as the Week/Next day card (identical look:
+// ☐/✒ toggles, block emoji, dur badges, ↑↓ → ✕ buttons, cursor), driven through DNCTX below.
+function renderInlinePreviewBody(type, id) {
+  const rec = getInlinePreviewRecord(type, id);
+  if (!rec) return '';
+  const arr = rec.items || [];
+  const times = computeScheduleTimes(arr, rec.windowStart);
+  const tl = renderInlineTlStrip(arr, times, rec.windowStart, rec.windowEnd);
+  const itemsHtml = arr.length ? rowsHtml(DNCTX(type, id))
+    : '<div style="color:var(--muted);font-size:.8rem;font-style:italic;padding:.3rem 0">No items.</div>';
+  // clickable block-abbreviation chips under the field — same as #abbrevHint on the day cards
+  const abbrevChips = presentBlockAbbrevs(arr).blocks.map(b =>
+    `<span class="ab" role="button" onclick="dnAddUnderBlock('${type}',${id},'${b.id}')" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)}"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
+  ).join('');
+  return `<div class="preview-win" style="margin-bottom:.35rem">
+      <span>window</span>
+      <input type="text" value="${esc(rec.windowStart || '')}" placeholder="6:00" onchange="inlineSetWindow('${type}',${id},'windowStart',this.value)">
+      <span>–</span>
+      <input type="text" value="${esc(rec.windowEnd || '')}" placeholder="14:00" onchange="inlineSetWindow('${type}',${id},'windowEnd',this.value)">
+    </div>${tl}<div class="preview-item-list" id="inlItems-${type}-${id}" style="display:flex;flex-direction:column;gap:.1rem">${itemsHtml}</div>
+    <div class="notes-add" style="margin-top:.4rem">
+      <textarea id="inlAddText" placeholder="task 20m  ·  9:30-10:00 standup  ·  -D text (under block)  ·  text -d" rows="2"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inlineAddQuick();}"></textarea>
+      ${abbrevChips ? `<div class="abbrev-hint">${abbrevChips}</div>` : ''}
+      <div class="input-btns">
+        <button class="btn-add" onclick="inlineOpenMenu(event,'task')">+ Task ▾</button>
+        <button class="btn-add" onclick="inlineOpenMenu(event,'block')">+ Block ▾</button>
+        <button class="btn-add" onclick="inlineOpenMenu(event,'event')">+ Event ▾</button>
+        <button class="btn-add" onclick="inlineSaveAsTemplate('${type}',${id})" title="save these items as a reusable template">+ template</button>
+      </div>
+    </div>`;
+}
+
+// ctx for the Done inline preview — same contract as DAYCTX/MCTX, handlers carry (type,id).
+// kind 'done': quick-add/abbrev routing treats it like a day (see op_addQuickItems), but the
+// item-edit modal's delete/revert and sendItemToField must NOT take the 'day' recurrence
+// shortcuts (skipGhostOccurrence / activePlanDate work on the global live day, not this record).
+function DNCTX(type, id) {
+  return {
+    kind: 'done', type, id,
+    h: { toggle:'dnToggleDone', edit:'dnStartEdit', ev:'dnStartEventEdit', dur:'dnStartDurEdit', move:'dnMoveItem', del:'dnDeleteItem', send:'dnSendToField', icon:'dnStartIconEdit', btime:'dnStartBlockTimeEdit' },
+    get list() { return getInlinePreviewRecord(type, id)?.items || []; },
+    rowsEl() { return el('inlItems-' + type + '-' + id)?.querySelectorAll('.item-row'); },
+    input: 'inlAddText',
+    winStart() { return getInlinePreviewRecord(type, id)?.windowStart || '8:00'; },
+    undo() {},
+    save() { persistInlineRecord(type, id); },
+    render() { refreshInlineWrap(type, id); },
+    call(name, idx, extra) { return name + "('" + type + "'," + id + ',' + idx + (extra != null ? ',' + extra : '') + ')'; },
+  };
+}
+// row-handler wrappers (referenced from rowsHtml via DNCTX.h) — all delegate to the shared op_* logic
+function dnToggleDone(t, id, i)         { op_toggleDone(DNCTX(t, id), i); }
+function dnStartEdit(t, id, i)          { openItemEdit(DNCTX(t, id), i); }
+function dnStartEventEdit(t, id, i)     { op_startEventEdit(DNCTX(t, id), i); }
+function dnStartDurEdit(t, id, i)       { op_startDurEdit(DNCTX(t, id), i); }
+function dnMoveItem(t, id, i, dir)      { op_moveItem(DNCTX(t, id), i, dir); }
+function dnDeleteItem(t, id, i)         { op_deleteItem(DNCTX(t, id), i); }
+function dnSendToField(t, id, i)        { sendItemToField(DNCTX(t, id), i); }
+function dnStartIconEdit(t, id, i)      { op_startIconEdit(DNCTX(t, id), i); }
+function dnStartBlockTimeEdit(t, id, i) { op_startBlockTimeEdit(DNCTX(t, id), i); }
+function dnAddUnderBlock(t, id, bid)    { op_addUnderBlock(DNCTX(t, id), bid); }
+
+function inlineCtx() {
+  if (!inlinePreviewKey) return null;
+  const sep = inlinePreviewKey.indexOf(':');
+  return DNCTX(inlinePreviewKey.slice(0, sep), Number(inlinePreviewKey.slice(sep + 1)));
+}
+
+function inlineAddQuick() {
+  const ctx = inlineCtx();
+  if (!ctx) return;
+  op_addQuickItems(ctx, 'TASK');
+  el('inlAddText')?.focus();   // op_addQuickItems' render() rebuilt the row → refocus the fresh textarea
+}
+
+function inlineOpenMenu(e, which) {
+  const ctx = inlineCtx();
+  if (!ctx) return;
+  _previewMenuCtx = ctx;
+  if (which === 'task') toggleTaskMenu(e);
+  else if (which === 'block') toggleBlockMenu(e);
+  else toggleEventMenu(e);
+}
+
+function inlineSetWindow(type, id, key, val) {
+  const rec = getInlinePreviewRecord(type, id); if (!rec) return;
+  val = val.trim();
+  if (!val || val === rec[key]) { refreshInlineWrap(type, id); return; }
+  rec[key] = val;
+  commitInlineChange(type, id);
+}
+
+async function inlineSaveAsTemplate(type, id) {
+  const rec = getInlinePreviewRecord(type, id); if (!rec) return;
+  const baseName = type === 'weekDay' ? formatDateCz(rec.date) : formatDateCz(rec.date) + ' · plan';
+  const name = await customPrompt('Template name:', baseName);
+  if (!name) return;
+  const entry = { id: Date.now(), name, type: 'day', mt: Date.now(),
+    data: { items: stripDone(JSON.parse(JSON.stringify(rec.items))), windowStart: rec.windowStart, windowEnd: rec.windowEnd } };
+  library.push(entry);
+  saveLibrary(); renderLibrary();
+  showSave('✓ saved to templates');
+}
+
 function toggleHotovoWeek(key) {
   if (!hotovoCollapsed) hotovoCollapsed = new Set();
   if (hotovoCollapsed.has(key)) hotovoCollapsed.delete(key); else hotovoCollapsed.add(key);
