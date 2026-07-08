@@ -729,7 +729,7 @@ textarea::placeholder{color:var(--mid)}
       <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
     </div>
     <div class="modal-row" style="margin-top:.5rem">
-      <button class="modal-btn" onclick="selectAllExport()">select all</button>
+      <button class="modal-btn" onclick="toggleAllExport()">select/deselect all</button>
       <button class="modal-btn" onclick="closeModal('exportModal')">cancel</button>
       <button class="modal-btn" onclick="doCloudUpload()">↑ upload to Gist</button>
       <button class="modal-btn primary" onclick="doExport()">download JSON</button>
@@ -815,7 +815,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" onclick="closeModal('clearStorageModal')">cancel</button>
-      <button class="modal-btn" onclick="toggleAllClear()">select all</button>
+      <button class="modal-btn" onclick="toggleAllClear()">select/deselect all</button>
       <button class="modal-btn primary" onclick="doSelectiveClear()">delete</button>
     </div>
   </div>
@@ -4279,9 +4279,10 @@ function selTreeGroup(prefix, gkey, on) {
   syncSelTreeGroups(prefix);
   if (t.after) t.after();
 }
-function selTreeSelectAll(prefix) {
+function selTreeSetAll(prefix, on) {
   const t = selTrees[prefix]; if (!t) return;
-  t.groups.forEach(g => g.leaves.forEach(lf => t.sel.add(lf.key)));
+  if (on) t.groups.forEach(g => g.leaves.forEach(lf => t.sel.add(lf.key)));
+  else t.sel.clear();
   buildSelTree(t.listId, prefix, t.groups, t.sel, t.after, t.collapsed);
 }
 // prepares a section (label + container) and renders the tree; an empty array → hides it
@@ -4383,13 +4384,20 @@ function updateExportFilename() {
 }
 function toggleExportSel(id, on) { on ? exportSelected.add(id) : exportSelected.delete(id); el('ei-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
 function toggleExportArchSel(id, on) { on ? exportArchSelected.add(id) : exportArchSelected.delete(id); el('eai-'+id)?.classList.toggle('sel', on); updateExportFilename(); }
-function selectAllExport() {
-  library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
-  archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
-  ['exDay','exPlan','exLat'].forEach(p => { if (selTrees[p]) selTreeSelectAll(p); });
-  exportableBlocks().forEach((b, i) => { exportBlockSel.add(b.key); const el2 = el('ebk-'+i); el2?.classList.add('sel'); const cb = el2?.querySelector('input'); if (cb) cb.checked = true; });
+function toggleAllExport() {
+  // anything unchecked → select all, otherwise deselect all
+  const treeUn = p => { const t = selTrees[p]; return t && t.groups.some(g => g.leaves.some(lf => !t.sel.has(lf.key))); };
   const st = el('expSettings'), ib = el('expInbox'), rc = el('expRecur');
-  if (st) st.checked = true; if (ib) ib.checked = true; if (rc) rc.checked = true;
+  const on = library.some(e => !exportSelected.has(e.id))
+    || archive.some(e => !exportArchSelected.has(e.id))
+    || ['exDay','exPlan','exLat'].some(treeUn)
+    || exportableBlocks().some(b => !exportBlockSel.has(b.key))
+    || (st && !st.checked) || (ib && !ib.checked) || (rc && !rc.checked);
+  library.forEach(e => { on ? exportSelected.add(e.id) : exportSelected.delete(e.id); const el2=el('ei-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  archive.forEach(e => { on ? exportArchSelected.add(e.id) : exportArchSelected.delete(e.id); const el2=el('eai-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  ['exDay','exPlan','exLat'].forEach(p => selTreeSetAll(p, on));
+  exportableBlocks().forEach((b, i) => { on ? exportBlockSel.add(b.key) : exportBlockSel.delete(b.key); const el2 = el('ebk-'+i); el2?.classList.toggle('sel', on); const cb = el2?.querySelector('input'); if (cb) cb.checked = on; });
+  if (st) st.checked = on; if (ib) ib.checked = on; if (rc) rc.checked = on;
   updateExportFilename();
 }
 function buildSettingsExport() {

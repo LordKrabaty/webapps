@@ -381,7 +381,7 @@ textarea::placeholder{color:var(--mid)}
       <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
     </div>
     <div class="modal-row" style="margin-top:.5rem">
-      <button class="modal-btn" onclick="selectAllExport()">select all</button>
+      <button class="modal-btn" onclick="toggleAllExport()">select/deselect all</button>
       <button class="modal-btn" onclick="closeModal('exportModal')">cancel</button>
       <button class="modal-btn" onclick="doCloudUpload()">↑ upload to Gist</button>
       <button class="modal-btn primary" onclick="doExport()">download JSON</button>
@@ -815,9 +815,11 @@ function toggleExportArchSel(id, on) {
   el('eai-'+id)?.classList.toggle('sel', on);
   updateExportFilename();
 }
-function selectAllExport() {
-  library.forEach(e => { exportSelected.add(e.id); const el2=el('ei-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
-  archive.forEach(e => { exportArchSelected.add(e.id); const el2=el('eai-'+e.id); el2?.classList.add('sel'); const cb=el2?.querySelector('input'); if(cb)cb.checked=true; });
+function toggleAllExport() {
+  // anything unchecked → select all, otherwise deselect all
+  const on = library.some(e => !exportSelected.has(e.id)) || archive.some(e => !exportArchSelected.has(e.id));
+  library.forEach(e => { on ? exportSelected.add(e.id) : exportSelected.delete(e.id); const el2=el('ei-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  archive.forEach(e => { on ? exportArchSelected.add(e.id) : exportArchSelected.delete(e.id); const el2=el('eai-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
   updateExportFilename();
 }
 function doExport() {
