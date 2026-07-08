@@ -221,6 +221,7 @@ textarea::placeholder{color:var(--mid)}
 .tl-cal-wd{font-size:.55rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:center;padding:.05rem 0}
 .tl-cal-day{position:relative;min-height:1.95rem;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--mid);border:1px solid var(--light);border-radius:var(--r);font-family:'DM Mono',monospace}
 .tl-cal-day.blank{border:none}
+.tl-cal-day.hol{background:var(--off);font-style:italic}   /* public holiday — subtle tint + italic number (black task fill overrides the tint below) */
 .tl-cal-day.today{outline:2px solid var(--dark);outline-offset:-2px;color:var(--dark)}
 .tl-cal-day.has{background:var(--black);color:var(--w);border-color:var(--black);font-weight:500;cursor:pointer}
 .tl-cal-day.has.today{outline:2px solid var(--w);outline-offset:-5px;color:var(--w)}   /* today ring on a filled (task) cell — inverted and inset so the fill shows on both sides of it */
@@ -1844,8 +1845,10 @@ function renderLaterTimeline(container) {
         });
         const singleCount = singleSpans.filter(sp => sp.s.getTime() === cellT).length;
         const hasRange = covering.length > 0, hasSingle = singleCount > 0;
-        const cls = ['tl-cal-day', hasRange ? 'has-range' : (hasSingle ? 'has' : ''), isToday ? 'today' : ''].filter(Boolean).join(' ');
-        const click = n ? ` onclick="laterCalJump('${ym}')" title="${tip(names)}"` : '';
+        const hol = getHoliday(ym + '-' + String(d).padStart(2, '0'));
+        const cls = ['tl-cal-day', hasRange ? 'has-range' : (hasSingle ? 'has' : ''), isToday ? 'today' : '', hol ? 'hol' : ''].filter(Boolean).join(' ');
+        const tipTxt = (hol ? esc(hol) + (n ? '\n' : '') : '') + (n ? tip(names) : '');
+        const click = n ? ` onclick="laterCalJump('${ym}')" title="${tipTxt}"` : (hol ? ` title="${esc(hol)}"` : '');
         const dot = (hasRange && hasSingle) ? '<span class="tl-cal-dot"></span>' : '';   // a point task that day, on top of a range
         const cnt = (!hasRange && singleCount > 1) ? `<span class="tl-cal-cnt">${singleCount}</span>` : '';
         cells += `<div class="${cls}"${click}>${bands}${dot}<span class="tl-cal-num">${d}</span>${cnt}</div>`;
@@ -4824,7 +4827,7 @@ async function loadHolidays() {
   if (!holidays.size) return;                       // nothing loaded → do not change the UI
   renderDayButtons();                               // day buttons are always visible
   if (el('pane-hotovo')?.classList.contains('active'))  renderWeekTab();
-  if (el('pane-pozdeji')?.classList.contains('active')) renderLater();
+  if (el('pane-pozdeji')?.classList.contains('active')) { renderLater(); renderTimeline(); }   // renderTimeline = the Later overview calendar (holiday cells)
 }
 
 function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WK(WEEK_KEY)) || '[]'); } catch(e) { weekDays = []; } }
