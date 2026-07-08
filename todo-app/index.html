@@ -1523,9 +1523,9 @@ function renderTimeline() {
             topEls.push(te);
           }
         });
-        div.title = item.text + '\n• ' + subs.map(s => s.text).join('\n• ');
+        div.title = minToTime(startMin) + '–' + minToTime(endMin) + ' ' + item.text + '\n• ' + subs.map(s => s.text).join('\n• ');
       } else {
-        div.title = item.text;
+        div.title = minToTime(startMin) + '–' + minToTime(endMin) + ' ' + item.text;
         // Done block without subtasks → cross-hatch the whole visible block
         if (item.done) {
           const hatch = document.createElement('div');
