@@ -223,6 +223,7 @@ textarea::placeholder{color:var(--mid)}
 .tl-cal-day.blank{border:none}
 .tl-cal-day.today{outline:2px solid var(--dark);outline-offset:-2px;color:var(--dark)}
 .tl-cal-day.has{background:var(--black);color:var(--w);border-color:var(--black);font-weight:500;cursor:pointer}
+.tl-cal-day.has.today{outline:2px solid var(--w);outline-offset:-5px;color:var(--w)}   /* today ring on a filled (task) cell — inverted and inset so the fill shows on both sides of it */
 /* multi-day range = a connecting bar (distinct from a solid single-day fill) */
 .tl-cal-day.has-range{color:var(--dark);border-color:var(--mid);font-weight:500;cursor:pointer}
 .tl-cal-band{position:absolute;height:4px;background:var(--black);z-index:0}
