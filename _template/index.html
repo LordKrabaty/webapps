@@ -45,6 +45,7 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 .btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
 @media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
 #statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
+#statusToast{display:none;position:fixed;top:.7rem;left:50%;transform:translateX(-50%);z-index:300;background:var(--w);color:var(--black);border:var(--bh);border-radius:var(--r);padding:.45rem .85rem;font-size:.78rem;font-family:'DM Mono',monospace;letter-spacing:.03em;max-width:min(480px,92vw);text-align:center;pointer-events:none}
 .jb-field{display:flex;flex-direction:column;gap:.3rem}
 .jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
 .jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
@@ -395,11 +396,12 @@ textarea::placeholder{color:var(--mid)}
     <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Download failed. Copy the content below and save it as a .json file.</p>
     <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
     <div class="modal-row">
-      <button class="modal-btn primary" onclick="copyExportText()">📋 copy</button>
+      <button class="modal-btn primary" id="exportCopyBtn" onclick="copyExportText()">📋 copy</button>
       <button class="modal-btn" onclick="closeModal('exportCopyModal')">close</button>
     </div>
   </div>
 </div>
+<div id="statusToast"></div>
 
 <!-- Import modal -->
 <div class="modal-bg" id="importModal">
@@ -467,8 +469,23 @@ function showStatusMsg(msg, duration=2200) {
     e.style.opacity = '0';
     e._hide = setTimeout(() => { e.style.display = 'none'; }, 400);
   }, duration);
+  // an open modal overlay (z-index 100) covers the header — mirror the message into a toast above it
+  const t = el('statusToast');
+  if (t && document.querySelector('.modal-bg.open')) {
+    clearTimeout(t._to);
+    t.textContent = msg; t.style.display = 'block';
+    t._to = setTimeout(() => { t.style.display = 'none'; }, duration);
+  }
 }
 function showSave(msg='✓ saved') { showStatusMsg(msg, 2200); }
+// temporary label swap on a button — feedback right where the user clicked
+function flashBtn(id, label, ms=1600) {
+  const btn = el(id);
+  if (!btn) return;
+  if (btn._flashTo) clearTimeout(btn._flashTo); else btn._flashOrig = btn.textContent;
+  btn.textContent = label;
+  btn._flashTo = setTimeout(() => { btn.textContent = btn._flashOrig; btn._flashTo = null; }, ms);
+}
 function schedSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
@@ -827,10 +844,13 @@ function doExport() {
 }
 function copyExportText() {
   const ta = el('exportCopyText');
+  const done = () => { showSave('✓ copied'); flashBtn('exportCopyBtn', '✓ copied'); };
+  const legacy = () => { ta.select(); document.execCommand('copy'); done(); };
   try {
-    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(ta.value).then(() => showSave('✓ copied')); }
-    else { ta.select(); document.execCommand('copy'); showSave('✓ copied'); }
-  } catch(e) { ta.select(); }
+    // writeText can reject (permissions / non-secure context) — fall back to execCommand so feedback always comes
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done).catch(legacy);
+    else legacy();
+  } catch(e) { ta.select(); showStatusMsg('⚠ copy failed — press Ctrl+C', 3000); }
 }
 
 // ── IMPORT ────────────────────────────────────────────────────────────────
@@ -970,7 +990,7 @@ document.addEventListener('keydown', e => {
       <button class="btn-io" onclick="openGistHistory()">⏱ version history</button>
     </div>
     <div class="modal-row" id="syncLinkRow" style="display:none">
-      <button class="btn-io" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
+      <button class="btn-io" id="syncLinkBtn" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="saveJsonBinSettings()">save</button>
@@ -1092,14 +1112,14 @@ document.addEventListener('keydown', e => {
     // APP LOGIC: adjust the fallback URL if the app folder is named differently from APP_NAME
     const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/APP_NAME/';
     const url = base + '#' + p.toString();
-    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 link copied — open it on the new device'); }
+    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 link copied — open it on the new device'); flashBtn('syncLinkBtn', '✓ link copied'); }
     catch(e) {   // clipboard API missing (http / old browser) → hidden textarea, otherwise at least show the link
       const ta = document.createElement('textarea');
       ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
       let ok = false; try { ok = document.execCommand('copy'); } catch(e2) {}
       document.body.removeChild(ta);
-      if (ok) showSyncTooltip('🔗 link copied — open it on the new device');
+      if (ok) { showSyncTooltip('🔗 link copied — open it on the new device'); flashBtn('syncLinkBtn', '✓ link copied'); }
       else await customAlert('Copy the link for the new device: ' + url);
     }
   }
