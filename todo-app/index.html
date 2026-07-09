@@ -842,6 +842,7 @@ textarea::placeholder{color:var(--mid)}
       <span id="wexpDefState" style="font-size:.72rem;color:var(--muted)"></span>
     </div>
     <div class="modal-row" style="margin-top:.65rem">
+      <button class="modal-btn" onclick="toggleAllWeekExport()">select/deselect all</button>
       <button class="modal-btn" onclick="closeModal('weekExportModal')">cancel</button>
       <button class="modal-btn primary" onclick="doExportWeekText()">export as text</button>
     </div>
@@ -6643,6 +6644,13 @@ function renderWeekExportList() {
     if (cb) { const selN = g.days.filter(d => weekExportSelected.has(d.id)).length; cb.indeterminate = selN > 0 && selN < g.days.length; }
   });
 }
+function toggleAllWeekExport() {
+  // anything unchecked → select all, otherwise deselect all
+  const on = weekDays.some(d => !weekExportSelected.has(d.id));
+  weekExportSelected = on ? new Set(weekDays.map(d => d.id)) : new Set();
+  renderWeekExportList();
+}
+
 function toggleWeekExportCollapse(key) {
   if (_weekExportCollapsed.has(key)) _weekExportCollapsed.delete(key); else _weekExportCollapsed.add(key);
   const isColl = _weekExportCollapsed.has(key);
