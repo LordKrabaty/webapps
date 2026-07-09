@@ -288,8 +288,14 @@ textarea::placeholder{color:var(--mid)}
 .ex-head{display:flex;align-items:center;gap:.45rem;min-width:0}
 .ex-code{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;width:5.5em;flex-shrink:0;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.15rem 0}
 .ex-name{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.92rem;font-weight:500;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.15rem 0}
-.ex-code:focus,.ex-name:focus,.ex-note-in:focus{border-bottom:1px solid var(--black)}
-.ex-note-in{width:100%;font-size:.74rem;color:var(--muted);border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.1rem 0}
+.ex-code:focus,.ex-name:focus{border-bottom:1px solid var(--black)}
+.ex-note-in:focus{outline:none;border-bottom:1px solid var(--black)}
+/* auto-grow note textareas — flex:0 0 auto + min-height:0 override the global textarea{flex:1;min-height:220px},
+   otherwise the inline height from autoResizeTA is ignored and the field collapses */
+.ex-note-in,.ex-snote-in{width:100%;border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.1rem 0;flex:0 0 auto;min-height:0;resize:none;overflow:hidden;line-height:1.45;font-family:'DM Sans',sans-serif}
+.ex-note-in{font-size:.74rem;color:var(--muted)}
+.ex-snote-in{font-size:.74rem;font-style:italic;color:var(--dark)}
+.ex-snote-in:focus{outline:none;border-bottom:1px solid var(--black)}
 .ex-sets{display:flex;flex-direction:column;gap:.3rem}
 .set-row{display:flex;align-items:center;gap:.4rem;min-width:0}
 .set-row.done{opacity:.55}
@@ -307,6 +313,7 @@ textarea::placeholder{color:var(--mid)}
 .wx-item:last-child{border-bottom:none;padding-bottom:0}
 .wx-code{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;width:5.5em;flex-shrink:0;color:var(--black)}
 .wx-name{flex:1;min-width:0;font-size:.85rem;color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wx-cue{font-size:.72rem;color:var(--muted);line-height:1.4;word-break:break-word}
 .wk-addrow{display:flex;gap:.5rem;margin-top:.2rem}
 .wk-addrow .btn-lib{width:auto;flex:1}
 .set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
@@ -327,7 +334,12 @@ textarea::placeholder{color:var(--mid)}
 .log-total{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
 .log-ex{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--dark);padding-left:.2rem;line-height:1.5}
 .log-code{font-weight:500;color:var(--black)}
-.log-note{font-size:.76rem;color:var(--muted);font-style:italic;margin-top:.25rem}
+.log-note-in{width:100%;font-size:.72rem;font-style:italic;color:var(--muted);border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.08rem .2rem;flex:0 0 auto;min-height:0;resize:none;overflow:hidden;line-height:1.5;font-family:'DM Sans',sans-serif}
+.log-note-in:focus{outline:none;border-bottom:1px solid var(--black);color:var(--black)}
+.log-note-wk{margin-top:.2rem;border-top:1px solid var(--off);padding-top:.2rem}
+.log-set-note{display:flex;gap:.3rem;align-items:flex-start;padding-left:.4rem}
+.log-rn{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-top:.16rem;flex-shrink:0}
+.log-tools{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.1rem}
 
 /* BODY (Tanita measurements) */
 .body-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem;margin-bottom:.55rem}
@@ -522,7 +534,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 1;
+const APP_SCHEMA = 2;   // 2: archive (workout log) merged via LWW (mt on entries, editable log notes)
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1025,11 +1037,14 @@ function doImport() {
     if (i >= 0) { library[i] = t; updated++; } else { library.push(t); added++; }
   });
   if (toAdd.length) { saveLibrary(); renderLibrary(); }
-  // workout log: append missing entries by id (append-only union)
+  // workout log: overwrite/add by id; mt = now (import wins on sync)
   let logAdded = 0;
-  const arcIds = new Set(archive.map(x => String(x.id)));
   (rec.archive || []).forEach(a => {
-    if (a && a.id != null && !arcIds.has(String(a.id))) { archive.push(a); arcIds.add(String(a.id)); logAdded++; }
+    if (!a || a.id == null) return;
+    a.mt = Date.now();
+    const i = archive.findIndex(x => String(x.id) === String(a.id));
+    if (i >= 0) archive[i] = a; else archive.push(a);
+    logAdded++;
   });
   if (logAdded) { saveArchive(); renderLog(); }
   // body measurements: overwrite/add by id; mt = now (import wins on sync)
@@ -1060,6 +1075,8 @@ function init() {
   updateUndoBtn();
   if (restored) showSave('↓ restored');
   setInterval(tick, 500);
+  // web fonts change line metrics → re-grow the note fields once fonts are ready
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => document.querySelectorAll('.ex-note-in,.ex-snote-in,.log-note-in').forEach(autoResizeTA));
 }
 // init() is called at the very end of this script — the app state (let wk/body) must be initialized first
 window.addEventListener('resize', updateAppGrid);
@@ -1076,10 +1093,11 @@ document.addEventListener('keydown', e => {
 
 // ── WORKOUT DATA MODEL ──────────────────────────────────────────────────────
 // wk (live workout) = {name, type:'strength'|'cardio', pauseSec, prepSec, note,
-//   exercises:[{code, name, note, sets:[{reps, weight, durSec, done}]}],
+//   exercises:[{code, name, note (technique cues, template), snote (segment note, cardio → log),
+//     sets:[{reps, weight, durSec, done, snote (per-round note → log)}]}],
 //   run:{startedAt, phase:'work'|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft} | null}
 // library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
-// archive entry = logged workout (append-only union on sync)
+// archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable)
 // body entry    = {id, date:'yyyy-mm-dd', weight, fat, water, muscle, visceral, note, mt} (LWW)
 const BODY_KEY = 'workout-v1-body';
 let body = [];
@@ -1092,6 +1110,8 @@ let wk = blankWorkout();
 function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
 function mmss(s) { s = Math.max(0, Math.floor(+s || 0)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
 function fmtDate(d) { const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3]+'.'+m[2]+'.'+m[1].slice(2) : String(d || ''); }
+// auto-grow note textareas (tea-app pattern); hidden (inactive tab) → wrong scrollHeight, resize again when shown
+function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 
 // template snapshot of the live workout — structure only (run/done state excluded).
 // durSec = the PLANNED exercise time (filled by hand, editable) — it belongs to the template.
@@ -1116,8 +1136,8 @@ function loadFromLibrary(id) {
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
   wk = {name: e.name, type: d.type || 'strength', pauseSec: +d.pauseSec || 105, prepSec: d.prepSec != null ? +d.prepSec : 120, note: d.note || '',
-    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '',
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false}))})),
+    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '',
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: ''}))})),
     run: null};
   prefillFromLast(id);
   activeLibId = e.id; markSaved();
@@ -1189,6 +1209,7 @@ function renderMain() {
     </div>`;
   }
   c.innerHTML = html;
+  c.querySelectorAll('.ex-note-in,.ex-snote-in').forEach(autoResizeTA);
   updateRunUi();
 }
 function roundsHtml() {
@@ -1206,7 +1227,8 @@ function roundsHtml() {
   }
   return html;
 }
-// one exercise inside a round — full editable header in round 1, plain label in later rounds
+// one exercise inside a round — full editable header in round 1; later rounds mirror the
+// technique cues read-only. Each round has its OWN independent session note (per set).
 function wxItemHtml(ex, ei, si) {
   const head = si === 0
     ? `<div class="ex-head">
@@ -1214,9 +1236,13 @@ function wxItemHtml(ex, ei, si) {
         <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
         <button class="ex-del" onclick="removeExercise(${ei})" title="remove exercise">✕</button>
       </div>
-      <input class="ex-note-in" value="${esc(ex.note || '')}" oninput="wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">`
-    : `<div class="ex-head"><span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`;
-  return `<div class="wx-item">${head}${dataRowHtml(ex.sets[si], ei, si, false)}</div>`;
+      <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>`
+    : `<div class="ex-head"><span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`
+      + (ex.note ? `<div class="wx-cue">${esc(ex.note)}</div>` : '');
+  const s = ex.sets[si];
+  return `<div class="wx-item">${head}${dataRowHtml(s, ei, si, false)}
+    <textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].snote=this.value;schedSave()" placeholder="· note (round ${si + 1}) → log">${esc(s.snote || '')}</textarea>
+  </div>`;
 }
 function exBlockHtml(ex, ei) {
   const setRows = (ex.sets || []).map((s, si) => dataRowHtml(s, ei, si, true)).join('');
@@ -1227,7 +1253,8 @@ function exBlockHtml(ex, ei) {
       <button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>
       <button class="ex-del" onclick="removeExercise(${ei})" title="remove segment">✕</button>
     </div>
-    <input class="ex-note-in" value="${esc(ex.note || '')}" oninput="wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">
+    <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
+    <textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].snote=this.value;schedSave()" placeholder="note for this workout → log">${esc(ex.snote || '')}</textarea>
     <div class="ex-sets">${setRows}</div>
   </div>`;
 }
@@ -1263,6 +1290,7 @@ function renderNotes() { const t = el('wkNote'); if (t) t.value = wk.note || '';
 function switchTab(name, btn) {
   document.querySelectorAll('.notes-tab').forEach(b => b.classList.toggle('active', b === btn));
   document.querySelectorAll('.notes-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+  document.querySelectorAll('.notes-pane.active .log-note-in').forEach(autoResizeTA);   // grow after becoming visible
 }
 
 // ── STRUCTURE EDITS ─────────────────────────────────────────────────────────
@@ -1271,7 +1299,7 @@ function addExercise() {
   // strength: a new exercise joins every existing round; cardio: starts with one interval
   const n = (wk.type !== 'cardio' && wk.exercises.length)
     ? Math.max(1, ...wk.exercises.map(ex => (ex.sets || []).length)) : 1;
-  wk.exercises.push({code:'', name:'', note:'', sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false}))});
+  wk.exercises.push({code:'', name:'', note:'', snote:'', sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:''}))});
   schedSave(); renderMain();
 }
 function addRound() {
@@ -1279,7 +1307,7 @@ function addRound() {
   pushUndo();
   wk.exercises.forEach(ex => {
     const p = ex.sets[ex.sets.length - 1];
-    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false});
+    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: ''});
   });
   schedSave(); renderMain();
 }
@@ -1301,7 +1329,7 @@ function addSet(ei) {
   const ex = wk.exercises[ei]; if (!ex) return;
   pushUndo();
   const prev = ex.sets[ex.sets.length - 1];
-  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false});
+  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: ''});
   schedSave(); renderMain();
 }
 function removeSet(ei, si) {
@@ -1484,47 +1512,128 @@ async function finishWorkout() {
   const entry = {
     id: Date.now(), date: Date.now(), tplId: activeLibId,
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
-    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name,
-      sets: ex.sets.filter(s => anyDone ? s.done : true).map(s => ({reps: s.reps, weight: s.weight, durSec: s.durSec, done: !!s.done}))}))
+    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name, note: (ex.snote || '').trim(),
+      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, done: !!s.done, rd: si + 1, note: (s.snote || '').trim()}))
+        .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
-    note: wk.note || ''
+    note: wk.note || '',
+    mt: Date.now()   // log entries sync via LWW — notes stay editable afterwards
   };
   archive.push(entry); saveArchive();
   wk.run = null; wk.note = '';
-  wk.exercises.forEach(ex => ex.sets.forEach(s => { s.done = false; }));   // planned times (durSec) stay for next time
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.snote = ''; }); });   // planned times (durSec) stay for next time
   schedSave(); renderMain(); renderNotes(); renderLog();
   showSave('✓ workout logged (' + mmss(totalSec) + ')');
 }
 
 // ── LOG (notes panel) ───────────────────────────────────────────────────────
+// one exercise line: "10/10/9 @ 20kg · 3.8 s/rep" — shared by the log view and the text export
+function exStatText(e) {
+  const sets = e.sets || [];
+  const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
+  const w = [...new Set(sets.map(s => s.weight).filter(Boolean))].join(', ');
+  const durs = sets.filter(s => s.durSec != null);
+  let sp = '';
+  if (durs.length) {
+    const totD = durs.reduce((t,s) => t + s.durSec, 0);
+    const totR = durs.reduce((t,s) => t + (parseFloat(String(s.reps).replace(',','.')) || 0), 0);
+    sp = totR > 0 ? ' · ' + (totD / totR).toFixed(1) + ' s/rep' : ' · ' + mmss(totD);
+  }
+  return reps + (w ? ' @ ' + w : '') + sp;
+}
+function logDateStr(a, longYear) {
+  const d = new Date(a.date || a.id);
+  return d.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year: longYear ? 'numeric' : '2-digit'})
+    + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+}
 function renderLog() {
   const c = el('logList'); if (!c) return;
   if (!archive.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
   const items = [...archive].sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0));
-  c.innerHTML = items.map(a => {
-    const d = new Date(a.date || a.id);
-    const ds = d.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'2-digit'}) + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-    const lines = (a.entries || []).map(e => {
-      const sets = e.sets || [];
-      if (!sets.length) return '';
-      const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
-      const w = [...new Set(sets.map(s => s.weight).filter(Boolean))].join(', ');
-      const durs = sets.filter(s => s.durSec != null);
-      let sp = '';
-      if (durs.length) {
-        const totD = durs.reduce((t,s) => t + s.durSec, 0);
-        const totR = durs.reduce((t,s) => t + (parseFloat(String(s.reps).replace(',','.')) || 0), 0);
-        sp = totR > 0 ? ' · ' + (totD / totR).toFixed(1) + ' s/rep' : ' · ' + mmss(totD);
-      }
-      return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(reps)}${w ? ' @ ' + esc(w) : ''}${sp}</div>`;
+  c.innerHTML = `<div class="log-tools"><button class="btn-io" onclick="copyLogText()" title="copy the whole log to the clipboard as plain text">⧉ copy log as text</button></div>`
+    + items.map(a => {
+    const lines = (a.entries || []).map((e, idx) => {
+      if (!(e.sets || []).length) return '';
+      // per-round notes (editable) — rendered only for sets that have one
+      const setNotes = e.sets.map((s, sIdx) => s.note
+        ? `<div class="log-set-note"><span class="log-rn">r${s.rd || sIdx + 1}</span>
+           <textarea class="log-note-in" rows="1" title="round note — editable" oninput="autoResizeTA(this)" onchange="updateLogSetNote(${jsArg(a.id)},${idx},${sIdx},this.value)">${esc(s.note)}</textarea></div>`
+        : '').join('');
+      return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(exStatText(e))}</div>
+        ${setNotes}
+        <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
     }).join('');
     return `<div class="log-item">
-      <div class="log-head"><span class="log-date">${esc(ds)}</span><span class="log-name">${esc(a.name)}</span>
+      <div class="log-head"><span class="log-date">${esc(logDateStr(a))}</span><span class="log-name">${esc(a.name)}</span>
         <span class="log-total">${mmss(a.totalSec || 0)}</span>
+        <button class="log-del" onclick="copyLogText(${jsArg(a.id)})" title="copy this entry as text">⧉</button>
         <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
-      ${lines}${a.note ? `<div class="log-note">${esc(a.note)}</div>` : ''}
+      ${lines}
+      <textarea class="log-note-in log-note-wk" rows="1" placeholder="· workout note" title="note for the whole workout — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>
     </div>`;
   }).join('');
+  c.querySelectorAll('.log-note-in').forEach(autoResizeTA);   // hidden pane → resized again on tab switch
+}
+// edit a note directly in the log — stamps mt so the change wins LWW and syncs
+function updateLogNote(id, exIdx, val) {
+  const a = archive.find(x => String(x.id) === String(id)); if (!a) return;
+  val = String(val || '').trim();
+  if (exIdx == null) {
+    if ((a.note || '') === val) return;
+    a.note = val;
+  } else {
+    const e = (a.entries || [])[exIdx];
+    if (!e || (e.note || '') === val) return;
+    e.note = val;
+  }
+  a.mt = Date.now();
+  saveArchive();
+  showSave('✓ log note saved');
+}
+function updateLogSetNote(id, exIdx, setIdx, val) {
+  const a = archive.find(x => String(x.id) === String(id)); if (!a) return;
+  const s = ((a.entries || [])[exIdx] || {}).sets?.[setIdx];
+  val = String(val || '').trim();
+  if (!s || (s.note || '') === val) return;
+  s.note = val;
+  a.mt = Date.now();
+  saveArchive();
+  showSave('✓ log note saved');
+}
+// ── LOG TEXT EXPORT ─────────────────────────────────────────────────────────
+function logEntryText(a) {
+  const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)];
+  (a.entries || []).forEach(e => {
+    if (!(e.sets || []).length) return;
+    lines.push('  ' + (e.code || e.name) + ' ' + exStatText(e) + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
+    (e.sets || []).forEach((s, i) => {
+      if (s.note) lines.push('    r' + (s.rd || i + 1) + ': ' + s.note.replace(/\n+/g, ' · '));
+    });
+  });
+  if (a.note) lines.push('  note: ' + a.note.replace(/\n/g, '\n  '));
+  return lines.join('\n');
+}
+function copyLogText(id) {
+  const items = id != null
+    ? archive.filter(a => String(a.id) === String(id))
+    : [...archive].sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0));
+  if (!items.length) { showStatusMsg('⚠ log is empty'); return; }
+  copyText(items.map(logEntryText).join('\n\n'), id != null ? '✓ entry copied as text' : '✓ log copied as text');
+}
+function copyText(txt, okMsg) {
+  const done = () => showSave(okMsg || '✓ copied');
+  const legacy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+    if (ok) done(); else customAlert(txt);   // clipboard unavailable → at least show the text to copy by hand
+  };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(legacy);
+    else legacy();
+  } catch(e) { legacy(); }
 }
 async function deleteLogEntry(id) {
   if (!await customConfirm('Delete this log entry?','delete')) return;
@@ -1861,20 +1970,14 @@ init();
     if (!cloudTomb || typeof cloudTomb !== 'object') return;
     Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
   }
-  // locally delete append-only collections that have a tombstone (LWW collections are handled by lwwMerge)
-  function applyTombstones() {
-    let removed = 0;
-    const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
-    archive = sweep('arc', x => x.id)(archive);
-    // APP LOGIC: delete other append-only collections here
-    return removed;
-  }
+  // no append-only collections left — all three (library, archive, body) merge via lwwMerge,
+  // which applies tombstones itself; kept as a no-op extension point
+  function applyTombstones() { return 0; }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
   function sigOf(items, arch, bod, tomb) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
-    const arcS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
-    return [idS(items), arcS(arch), idS(bod), tS(tomb)].join('||');
+    return [idS(items), idS(arch), idS(bod), tS(tomb)].join('||');   // archive with mt — log note edits must sync
   }
   function localSig() { return sigOf(library, archive, body, tombstones); }
   function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.tombstones || {}); }
@@ -2016,11 +2119,9 @@ init();
     // library — LWW by id
     const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
     library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
-    // archive — only add missing (append-only)
-    const arcIds = new Set(archive.map(x => String(x.id)));
-    (record.archive || []).forEach(it => {
-      if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
-    });
+    // archive (workout log) — LWW by id: log notes are editable afterwards, edits must propagate
+    const arcR = lwwMerge(archive, record.archive || [], 'arc', x => x.id, c => c);
+    archive = arcR.arr; added += arcR.added; updated += arcR.updated; removed += arcR.removed;
     // body measurements — LWW by id (identity normalize → unknown/newer fields survive)
     const bodR = lwwMerge(body, record.body || [], 'bod', x => x.id, c => c);
     body = bodR.arr; added += bodR.added; updated += bodR.updated; removed += bodR.removed;
