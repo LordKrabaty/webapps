@@ -836,6 +836,11 @@ textarea::placeholder{color:var(--mid)}
     <h2>Week export</h2>
     <p style="font-size:.8rem;color:var(--muted)">Select weeks or individual days to export.</p>
     <div class="modal-list" id="weekExportList" style="max-height:320px"></div>
+    <div style="display:flex;align-items:center;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+      <button class="btn-sm" style="font-size:.72rem;padding:.2rem .5rem" onclick="saveWeekExportDefault()" title="Pre-check the currently checked days (weekday + week relative to today) whenever this dialog opens — saved per window">☆ set as default</button>
+      <button class="btn-sm" id="wexpDefClearBtn" style="font-size:.72rem;padding:.2rem .5rem;display:none" onclick="clearWeekExportDefault()" title="Remove the saved default — recent weeks will be pre-checked again">✕ clear</button>
+      <span id="wexpDefState" style="font-size:.72rem;color:var(--muted)"></span>
+    </div>
     <div class="modal-row" style="margin-top:.65rem">
       <button class="modal-btn" onclick="closeModal('weekExportModal')">cancel</button>
       <button class="modal-btn primary" onclick="doExportWeekText()">export as text</button>
@@ -6548,17 +6553,66 @@ let weekExportSelected = new Set();
 let _weekGroups = new Map();
 let _weekExportCollapsed = new Set();
 
+// Default pre-checked days: pattern of "weekOffset:weekdayShort" strings (relative to the
+// current week), saved per window via WK(). Device-local preference — not synced.
+const WEXP_DEFAULT_KEY = 'todo-app-v1-wexp-default';
+
+function weekOffsetOf(dateStr) {
+  const m = new Date(dateStr + 'T12:00:00');
+  const dow = m.getDay();
+  m.setDate(m.getDate() - (dow === 0 ? 6 : dow - 1));
+  m.setHours(0, 0, 0, 0);
+  return Math.round((m - new Date(getMondayIso(0) + 'T00:00:00')) / (7 * 86400000));
+}
+function wexpPatKey(dateStr) { return weekOffsetOf(dateStr) + ':' + PLAN_DAY_SHORT[new Date(dateStr + 'T12:00:00').getDay()]; }
+function loadWexpDefault() {
+  try { const p = JSON.parse(localStorage.getItem(WK(WEXP_DEFAULT_KEY)) || 'null'); return Array.isArray(p) && p.length ? p : null; } catch (e) { return null; }
+}
+function saveWeekExportDefault() {
+  const sel = weekDays.filter(d => weekExportSelected.has(d.id));
+  if (!sel.length) { customAlert('Nothing is checked — check the days you want pre-selected first.'); return; }
+  const pat = [...new Set(sel.map(d => wexpPatKey(d.date)))];
+  try { localStorage.setItem(WK(WEXP_DEFAULT_KEY), JSON.stringify(pat)); } catch (e) {}
+  updateWexpDefaultRow();
+  showSave('✓ default selection saved');
+}
+function clearWeekExportDefault() {
+  try { localStorage.removeItem(WK(WEXP_DEFAULT_KEY)); } catch (e) {}
+  updateWexpDefaultRow();
+  showSave('default selection cleared');
+}
+function wexpPatLabel(pat) {
+  const by = new Map();
+  pat.forEach(s => { const i = s.indexOf(':'), o = +s.slice(0, i), d = s.slice(i + 1); if (!by.has(o)) by.set(o, []); by.get(o).push(d); });
+  return 'default: ' + [...by.keys()].sort((a, b) => a - b).map(o => {
+    const nm = o === -1 ? 'prev' : o === 0 ? 'this' : o === 1 ? 'next' : 'wk' + (o > 0 ? '+' : '') + o;
+    return nm + ' ' + DAY_ORDER.filter(d => by.get(o).includes(d)).join(' ');
+  }).join(' · ');
+}
+function updateWexpDefaultRow() {
+  const pat = loadWexpDefault();
+  const btn = el('wexpDefClearBtn'), st = el('wexpDefState');
+  if (btn) btn.style.display = pat ? '' : 'none';
+  if (st) st.textContent = pat ? wexpPatLabel(pat) : '';
+}
+
 function exportWeekAsText() {
   if (!weekDays.length) { customAlert('No saved days to export.'); return; }
   _weekGroups = new Map(groupByWeek());
-  // by default select only primary weeks (previous+current+next), collapse older; nothing primary → fallback to all
+  // pre-check: per-window saved default pattern (weekday + week offset) when any day matches it;
+  // otherwise primary weeks (previous+current+next), collapse older; nothing primary → fallback to all
+  const pat = loadWexpDefault();
+  const patSet = pat ? new Set(pat) : null;
+  const defDays = patSet ? weekDays.filter(d => patSet.has(wexpPatKey(d.date))) : [];
   const recentDays = weekDays.filter(d => isRecentWeekDate(d.date));
-  weekExportSelected = new Set((recentDays.length ? recentDays : weekDays).map(d => d.id));
+  const preDays = defDays.length ? defDays : (recentDays.length ? recentDays : weekDays);
+  weekExportSelected = new Set(preDays.map(d => d.id));
   _weekExportCollapsed = new Set();
-  if (recentDays.length) {
-    const recent = recentWeekKeySet();
-    _weekGroups.forEach((g, key) => { if (!recent.has(g.year + '-' + String(g.week).padStart(2, '0'))) _weekExportCollapsed.add(key); });
-  }
+  const openKeys = defDays.length
+    ? new Set(defDays.map(d => isoWeekKey(d.date)))
+    : (recentDays.length ? recentWeekKeySet() : null);
+  if (openKeys) _weekGroups.forEach((g, key) => { if (!openKeys.has(g.year + '-' + String(g.week).padStart(2, '0'))) _weekExportCollapsed.add(key); });
+  updateWexpDefaultRow();
   renderWeekExportList();
   el('weekExportModal').classList.add('open');
 }
