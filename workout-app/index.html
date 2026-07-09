@@ -1,0 +1,2371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>workout</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --w:#ffffff;--off:#f2f2f2;--light:#e0e0e0;--mid:#aaaaaa;
+  --muted:#777777;--dark:#333333;--black:#000000;
+  --b:1.5px solid #aaaaaa;--bh:1.5px solid #000000;--r:4px;
+  --fs:1;
+}
+html{font-size:calc(16px * var(--fs))}
+html.dark{
+  --w:#000000;--off:#111111;--light:#222222;--mid:#555555;
+  --muted:#888888;--dark:#cccccc;--black:#ffffff;
+  --b:1.5px solid #555555;--bh:1.5px solid #ffffff;
+}
+html.dark body{background:var(--w);color:var(--black)}
+html.dark .lib-item.active{background:var(--black);border-color:var(--black)}
+html.dark .lib-item.active .lib-item-name{color:var(--w)}
+html.dark .lib-item.active .lib-item-del svg{stroke:var(--mid)}
+html.dark .lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){html.dark .btn-lib.primary:hover{background:var(--dark)}}
+@media(hover:hover){html.dark .btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+
+/* dark mode toggle */
+#darkToggle{font-size:1rem;width:34px;height:34px;border:var(--bh);border-radius:50%;background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
+@media(hover:hover){#darkToggle:hover{background:var(--light)}}
+
+/* Gist sync */
+.sync-group{display:flex;align-items:center;gap:.15rem}
+.btn-sync{font-size:.85rem;width:32px;height:32px;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s;font-family:'DM Mono',monospace}
+@media(hover:hover){.btn-sync:hover{background:var(--light)}}
+.btn-sync:active{background:var(--light)}
+.btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync.on{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.btn-sync.on:hover{background:var(--dark)}}
+.btn-sync.syncing{animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:.3}}
+.btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
+@media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
+#statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
+#statusToast{display:none;position:fixed;top:.7rem;left:50%;transform:translateX(-50%);z-index:300;background:var(--w);color:var(--black);border:var(--bh);border-radius:var(--r);padding:.45rem .85rem;font-size:.78rem;font-family:'DM Mono',monospace;letter-spacing:.03em;max-width:min(480px,92vw);text-align:center;pointer-events:none}
+.jb-field{display:flex;flex-direction:column;gap:.3rem}
+.jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
+.jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
+#importModal.from-cloud .jb-import-hide{display:none!important}
+
+/* export/import buttons */
+.lib-io{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.1rem}
+.btn-io{flex:1;font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .4rem;cursor:pointer;text-align:center;white-space:nowrap}
+.btn-io:active{background:var(--off);border-color:var(--dark)}
+@media(hover:hover){.btn-io:hover{background:var(--off);border-color:var(--dark)}}
+
+/* modal overlay */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
+html.dark .modal-bg{background:rgba(255,255,255,.25)}
+.modal-bg.open{display:flex}
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
+.modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+.gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
+.gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
+.gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
+.gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
+.gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
+.modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
+@media(hover:hover){.modal-item:hover{background:var(--off)}}
+.modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
+.modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
+@media(hover:hover){.modal-btn:hover{background:var(--light)}}
+.modal-btn.primary{background:var(--black);color:var(--w)}
+@media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
+.modal-btn.danger{border-color:#c0392b;color:#c0392b}
+@media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
+html{-webkit-text-size-adjust:100%;overflow-x:clip}
+body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
+
+.app{
+  padding:1.25rem 1.25rem 1.5rem;
+  display:grid;grid-template-columns:210px minmax(0,1fr) 440px;
+  gap:1.25rem;
+  overflow-x:clip;
+  max-width:1480px;
+  margin:0 auto;
+}
+
+/* HEADER */
+header{
+  position:sticky;top:0;z-index:50;background:var(--w);
+  display:flex;align-items:baseline;
+  justify-content:space-between;
+  padding:.9rem 1.25rem .85rem;
+  border-bottom:2.5px solid var(--black);flex-wrap:wrap;gap:.5rem;
+}
+.brand{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.brand h1{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:600;color:var(--black);letter-spacing:-.02em;line-height:1}
+.header-sep{font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:var(--mid);display:none}
+.header-sub{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:500;color:var(--dark);font-style:italic;display:none;letter-spacing:-.01em}
+.header-right{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+
+.btn-sm{font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.38rem .8rem;cursor:pointer;transition:background .08s;letter-spacing:.02em}
+.btn-sm:active{background:var(--light)}
+@media(hover:hover){.btn-sm:hover{background:var(--light)}}
+.btn-sm.danger:active{background:var(--black);color:var(--w)}
+@media(hover:hover){.btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+
+/* CARDS */
+.card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1rem 1.15rem;overflow:hidden;position:relative}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:var(--black);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.7rem;padding-bottom:.4rem;border-bottom:1.5px solid var(--black)}
+.card-title-text svg{display:block;stroke:var(--black);width:17px;height:17px}
+
+/* LIBRARY */
+.library-panel{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:.75rem;min-width:0}
+.lib-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.32rem;flex:1;position:relative;min-width:0;overflow:hidden}
+.lib-item{display:flex;align-items:center;gap:.35rem;padding:.42rem .55rem;border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0;overflow:hidden}
+.lib-item:active{background:var(--off);border-color:var(--mid)}
+@media(hover:hover){.lib-item:hover{background:var(--off);border-color:var(--mid)}}
+.lib-item.active{background:var(--black);border-color:var(--black)}
+.lib-item.active .lib-item-name{color:var(--w)}
+.lib-item-name{flex:1;font-size:.85rem;color:var(--black);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3}
+.lib-item-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0}
+.lib-item.active .lib-item-del{opacity:.55}
+@media(hover:hover){.lib-item:hover .lib-item-del{opacity:.55}}
+@media(hover:hover){.lib-item-del:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+.lib-item-del svg{width:10px;height:10px;stroke:var(--w);fill:none;stroke-width:2.5;stroke-linecap:round}
+.lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+.lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
+.lib-cat-header{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.55rem .55rem .1rem;margin-top:.1rem}
+.lib-cat-header:first-child{margin-top:0;padding-top:.1rem}
+.btn-lib{width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.42rem .6rem;cursor:pointer;text-align:center;letter-spacing:.02em}
+.btn-lib:active{background:var(--light)}
+@media(hover:hover){.btn-lib:hover{background:var(--light)}}
+.btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+.btn-lib.primary:active{background:var(--dark)}
+@media(hover:hover){.btn-lib.primary:hover{background:var(--dark)}}
+
+/* MAIN */
+.main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:1rem;min-width:0}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1.5rem}
+.field{display:flex;flex-direction:column;gap:.3rem}
+.field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.field input[type="text"],.field input[type="number"],.field input[type="date"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none}
+.field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.field select{cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .6rem center;padding-right:1.8rem}
+input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--black);border-radius:1px;outline:none;cursor:pointer;margin:.35rem 0}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--w);border:2.5px solid var(--black);cursor:pointer}
+html.dark input[type="range"]::-webkit-slider-thumb{background:var(--w)}
+
+/* CHECKS */
+.checks-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.check-item{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;padding:.42rem .72rem .42rem .5rem;border-radius:var(--r);border:var(--bh);background:var(--w);font-size:.85rem;color:var(--dark)}
+.check-item:active{background:var(--off)}
+@media(hover:hover){.check-item:hover{background:var(--off)}}
+.check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+.check-box{width:17px;height:17px;border:2px solid var(--mid);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--w)}
+.check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+html.dark .check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+html.dark .check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+.check-mark{width:9px;height:6px;border-left:2px solid var(--black);border-bottom:2px solid var(--black);transform:rotate(-45deg) translateY(-1px);opacity:0}
+.check-item.checked .check-mark{opacity:1}
+html.dark .check-item.checked .check-mark{border-color:var(--black)}
+
+/* NOTES */
+.notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;min-width:0}
+.notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.card-controls{position:absolute;top:.4rem;right:.5rem;display:flex;align-items:center;gap:.15rem;z-index:2}
+textarea{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:1.8;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.7rem .75rem;outline:none;resize:none;flex:1;min-height:220px}
+textarea:focus{outline:2px solid var(--black);outline-offset:1px}
+textarea::placeholder{color:var(--mid)}
+
+/* dirty / undo */
+.btn-lib.dirty{background:var(--w);color:var(--black);border:var(--bh);font-weight:600}
+.btn-lib.dirty::before{content:'! ';color:var(--black)}
+.btn-sm.dirty{font-weight:700}
+.btn-sm.dirty::before{content:'! '}
+.btn-sm.saved{color:var(--muted);border-color:var(--light);pointer-events:none}
+#undoBtn,#redoBtn{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.33rem .65rem;cursor:pointer;transition:all .1s;letter-spacing:.02em}
+@media(hover:hover){#undoBtn:not(:disabled):hover,#redoBtn:not(:disabled):hover{background:var(--light);color:var(--black);border-color:var(--dark)}}
+#undoBtn:disabled,#redoBtn:disabled{opacity:.3;cursor:default}
+
+/* FONT SIZE CONTROL */
+.fs-ctrl{display:flex;align-items:center;border:var(--bh);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.fs-btn{width:28px;height:28px;border:none;background:var(--w);color:var(--black);cursor:pointer;font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fs-btn:active{background:var(--light)}
+@media(hover:hover){.fs-btn:hover{background:var(--light)}}
+.fs-val{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);padding:0 .3rem;border-left:var(--b);border-right:var(--b);line-height:28px;white-space:nowrap;min-width:36px;text-align:center}
+
+/* EXPAND / FULLSCREEN PANEL */
+.card-title{display:flex;align-items:center;gap:.3rem;flex-wrap:nowrap}
+.expand-btn{width:18px;height:18px;border:var(--b);border-radius:2px;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45;transition:opacity .15s;margin-left:.2rem}
+.expand-btn:active{opacity:1;background:var(--off)}
+@media(hover:hover){.expand-btn:hover{opacity:1;background:var(--off)}}
+.expand-btn svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel-expanded{position:fixed!important;inset:0!important;z-index:80;border-radius:0!important;overflow-y:auto;padding:1.1rem 1.3rem!important;background:var(--w)!important;border:none!important;display:flex;flex-direction:column}
+.notes-card.panel-expanded{overflow:hidden}
+.panel-expanded .expand-btn{opacity:1}
+.expand-esc{font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;margin-left:.4rem;letter-spacing:.04em}
+
+/* PER-PANEL FONT SIZE */
+.pfs-ctrl{display:flex;align-items:center;gap:0;margin-left:.3rem;flex-shrink:0}
+.pfs-btn{width:15px;height:15px;border:var(--b);background:none;color:var(--black);cursor:pointer;font-size:.68rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45}
+.pfs-btn:first-child{border-radius:2px 0 0 2px}
+.pfs-btn:last-child{border-radius:0 2px 2px 0;border-left:none}
+.pfs-btn:active{background:var(--off);opacity:1}
+@media(hover:hover){.pfs-btn:hover{background:var(--off);opacity:1}}
+.pfs-val{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted);padding:0 .12rem;border-top:var(--b);border-bottom:var(--b);line-height:17px;min-width:22px;text-align:center;white-space:nowrap}
+.card-title-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* MOBILE LIB TOGGLE */
+#libToggleBtn{display:inline-flex;align-items:center;font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.35rem .7rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;white-space:nowrap}
+.library-panel.lib-hidden{display:none!important}
+
+/* NEW MENU DROPDOWN */
+.new-menu{position:fixed;background:var(--w);border:var(--bh);border-radius:var(--r);z-index:200;min-width:160px;flex-direction:column;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.new-menu-item{background:none;border:none;padding:.38rem .72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.8rem;text-align:left;color:var(--black);white-space:nowrap;width:100%;border-radius:0}
+@media(hover:hover){.new-menu-item:hover{background:var(--off)}}
+.new-menu-sep{height:1px;background:var(--light);margin:.2rem 0}
+
+/* TOUCH DEVICE TWEAKS */
+@media(hover:none){
+  .lib-item:not(.active) .lib-item-del{opacity:.45}
+}
+
+/* RESPONSIVE */
+@media(max-width:1020px){
+  .app{grid-template-columns:185px 1fr;padding:1rem 1rem 1.5rem}
+  .notes-panel{grid-column:1/-1;grid-row:2}
+}
+@media(max-width:820px){
+  .app{grid-template-columns:1fr;padding:1rem .85rem;gap:.85rem}
+  .library-panel,.main-panel,.notes-panel{grid-column:1!important;grid-row:auto!important}
+  .setup-grid{grid-template-columns:1fr 1fr}
+  header{flex-direction:column;align-items:flex-start;gap:.35rem;padding:.65rem .85rem .65rem}
+  .brand h1{font-size:1.5rem}
+  .header-sub,.header-sep{font-size:1.15rem}
+  .header-right{gap:.4rem}
+  #libList{display:flex;flex-direction:column;gap:.15rem}
+  textarea{min-height:100px}
+}
+@media(max-width:820px){
+  header{flex-wrap:wrap;row-gap:.5rem;padding-bottom:.85rem}
+  .header-right{flex-wrap:wrap;gap:.35rem}
+}
+@media(max-width:400px){
+  .app{padding:.75rem .65rem;gap:.7rem}
+  .setup-grid{grid-template-columns:1fr}
+  .checks-row{gap:.35rem}
+}
+
+/* NOTES TABS (optional — keep for multi-pane notes) */
+.notes-tabs{display:flex;border-bottom:var(--bh);margin-bottom:.75rem;gap:0}
+.notes-tab{font-family:'DM Sans',sans-serif;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:.4rem .85rem;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .1s}
+.notes-tab.active{color:var(--black);border-bottom-color:var(--black)}
+@media(hover:hover){.notes-tab:hover:not(.active){color:var(--dark)}}
+.notes-pane{display:none;flex-direction:column;flex:1;min-height:0;gap:.55rem}
+.notes-pane.active{display:flex}
+
+/* FIELD placeholder state */
+.field input:placeholder-shown:not(:focus){background:var(--off);border-color:var(--light)}
+
+/* WORKOUT — setup + run bar */
+.wk-setup{display:flex;gap:.6rem .9rem;flex-wrap:wrap;margin-bottom:.75rem}
+.wk-runbar{display:flex;align-items:center;gap:.7rem;margin-bottom:.75rem;flex-wrap:wrap}
+.wk-elapsed{font-family:'DM Mono',monospace;font-size:1.55rem;line-height:1;color:var(--black);min-width:4ch}
+.rest-bar{display:flex;align-items:center;gap:.8rem;border:var(--bh);border-radius:var(--r);padding:.5rem .9rem;margin-bottom:.75rem;flex-wrap:wrap}
+.rest-bar.over{background:var(--black)}
+.rest-bar.over .rest-time,.rest-bar.over .rest-label{color:var(--w)}
+.rest-label{font-size:.72rem;font-weight:600;letter-spacing:.09em;color:var(--muted);text-transform:uppercase;font-family:'DM Mono',monospace;max-width:7em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rest-time{font-family:'DM Mono',monospace;font-size:2.4rem;line-height:1;color:var(--black)}
+.now-ex{flex:1;min-width:8ch;font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rest-bar.over .now-ex{color:var(--w)}
+.set-row.current{box-shadow:0 0 0 2px var(--black);border-radius:var(--r)}
+
+/* WORKOUT — exercise blocks + set rows */
+.ex-block{border:var(--b);border-radius:var(--r);padding:.55rem .7rem;display:flex;flex-direction:column;gap:.4rem;margin-bottom:.6rem;min-width:0}
+.ex-head{display:flex;align-items:center;gap:.45rem;min-width:0}
+.ex-code{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;width:5.5em;flex-shrink:0;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.15rem 0}
+.ex-name{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.92rem;font-weight:500;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.15rem 0}
+.ex-code:focus,.ex-name:focus,.ex-note-in:focus{border-bottom:1px solid var(--black)}
+.ex-note-in{width:100%;font-size:.74rem;color:var(--muted);border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.1rem 0}
+.ex-sets{display:flex;flex-direction:column;gap:.3rem}
+.set-row{display:flex;align-items:center;gap:.4rem;min-width:0}
+.set-row.done{opacity:.55}
+.set-num{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--muted);width:1.2em;text-align:right;flex-shrink:0}
+.set-in{width:3.2em;font-family:'DM Mono',monospace;font-size:.85rem;text-align:center;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.28rem .2rem;outline:none;min-width:0;flex-shrink:0}
+.set-w{width:4.8em}
+.set-in:focus{outline:2px solid var(--black);outline-offset:1px}
+.set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
+.set-t{width:4.5em}
+.set-dur{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* rounds view (strength: one round = each exercise once) */
+.round-head{display:flex;align-items:center;gap:.4rem;border-bottom:1px solid var(--light);padding-bottom:.25rem;margin-bottom:.15rem}
+.round-title{flex:1;font-size:.7rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.wx-item{display:flex;flex-direction:column;gap:.15rem;padding:.25rem 0;border-bottom:1px solid var(--off);min-width:0}
+.wx-item:last-child{border-bottom:none;padding-bottom:0}
+.wx-code{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;width:5.5em;flex-shrink:0;color:var(--black)}
+.wx-name{flex:1;min-width:0;font-size:.85rem;color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-addrow{display:flex;gap:.5rem;margin-top:.2rem}
+.wk-addrow .btn-lib{width:auto;flex:1}
+.set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
+.set-done.on{background:var(--black);border-color:var(--black);color:var(--w)}
+.set-del,.log-del{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;opacity:.4;flex-shrink:0;padding:0;line-height:1}
+@media(hover:hover){.set-del:hover,.log-del:hover{opacity:1}}
+.btn-add{width:22px;height:22px;border:var(--b);border-radius:3px;background:none;color:var(--black);cursor:pointer;font-size:.85rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+@media(hover:hover){.btn-add:hover{background:var(--off)}}
+.ex-del{font-size:.7rem;color:var(--muted);opacity:.4;border:none;background:none;cursor:pointer;width:20px;height:20px;flex-shrink:0;padding:0}
+@media(hover:hover){.ex-del:hover{opacity:1}}
+
+/* LOG */
+.log-list{display:flex;flex-direction:column;gap:.55rem;overflow-y:auto;flex:1;min-height:0}
+.log-item{border:var(--b);border-radius:var(--r);padding:.5rem .65rem;flex-shrink:0}
+.log-head{display:flex;align-items:baseline;gap:.5rem;min-width:0;flex-wrap:wrap}
+.log-date{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0}
+.log-name{font-size:.85rem;font-weight:500;color:var(--black);flex:1;min-width:0}
+.log-total{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
+.log-ex{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--dark);padding-left:.2rem;line-height:1.5}
+.log-code{font-weight:500;color:var(--black)}
+.log-note{font-size:.76rem;color:var(--muted);font-style:italic;margin-top:.25rem}
+
+/* BODY (Tanita measurements) */
+.body-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem;margin-bottom:.55rem}
+.body-list{display:flex;flex-direction:column;gap:.1rem;overflow-y:auto;flex:1;min-height:0;margin-top:.6rem}
+.body-row{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(5,minmax(0,1fr)) 20px;gap:.25rem;align-items:center;font-family:'DM Mono',monospace;font-size:.76rem;color:var(--black);padding:.22rem .2rem;border-bottom:1px solid var(--light);flex-shrink:0}
+.body-row.body-head{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1.5px solid var(--black)}
+.body-note{font-size:.72rem;color:var(--muted);font-style:italic;padding:.05rem .2rem .25rem;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>workout</h1>
+    <span class="header-sep" id="headerSep">—</span>
+    <span class="header-sub" id="headerSub"></span>
+  </div>
+  <div class="header-right">
+    <span id="statusMsg"></span>
+    <div class="sync-group">
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / upload to cloud (Gist)">↑</button>
+      <button class="btn-sync" onclick="openImportModal()" title="import from JSON file">⇩</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="download data from cloud (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="enable automatic sync (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="Gist sync settings">⚙</button>
+    </div>
+    <div class="fs-ctrl" title="font size">
+      <button class="fs-btn" onclick="changeFs(-1)" title="decrease font">−</button>
+      <span class="fs-val" id="fsVal">100%</span>
+      <button class="fs-btn" onclick="changeFs(1)" title="increase font">+</button>
+    </div>
+    <button id="darkToggle" onclick="toggleDark()" title="toggle dark/light mode">☀</button>
+    <button id="libToggleBtn" onclick="toggleLibPanel()" title="library">☰</button>
+    <button id="undoBtn" onclick="undo()" disabled title="undo (Ctrl+Z)">↩</button>
+    <button id="redoBtn" onclick="redo()" disabled title="redo (Ctrl+Y)">↪</button>
+    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automatically save changes">
+      <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
+      ⟳
+    </label>
+    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="save changes">✓</button>
+    <div style="position:relative;display:inline-flex">
+      <button class="btn-sm" onclick="toggleNewMenu(event)" title="new / save as">+</button>
+      <div id="newMenu" class="new-menu" style="display:none">
+        <button class="new-menu-item" onclick="newSession();closeNewMenu()">new</button>
+        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">+ save as new</button>
+      </div>
+    </div>
+    <button class="btn-sm danger" onclick="clearStorage()" title="delete">✕</button>
+  </div>
+</header>
+
+<div class="app">
+
+<div class="library-panel">
+  <div class="lib-card" id="panel-library">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-library">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-library')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text" title="workouts"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5v11"/><path d="M17.5 6.5v11"/><path d="M3 9v6"/><path d="M21 9v6"/><line x1="6.5" y1="12" x2="17.5" y2="12"/></svg></span></div>
+    <div id="libList" style="display:flex;flex-direction:column;gap:.15rem;flex:1;overflow-y:auto;min-height:0"></div>
+  </div>
+</div>
+
+<div class="main-panel">
+  <div class="card" id="panel-main">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-main">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-main')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">workout</span></div>
+    <div id="wkMain"></div>
+  </div>
+</div>
+
+<div class="notes-panel">
+  <div class="notes-card" id="panel-notes">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-notes">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-notes')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">log &amp; body</span></div>
+    <div class="notes-tabs">
+      <button class="notes-tab active" onclick="switchTab('log',this)">log</button>
+      <button class="notes-tab" onclick="switchTab('body',this)">body</button>
+      <button class="notes-tab" onclick="switchTab('note',this)">notes</button>
+    </div>
+    <div class="notes-pane active" id="pane-log">
+      <div id="logList" class="log-list"></div>
+    </div>
+    <div class="notes-pane" id="pane-body">
+      <div class="body-form">
+        <div class="field"><label>date</label><input type="date" id="bodyDate"></div>
+        <div class="field"><label>weight kg</label><input type="text" inputmode="decimal" id="bodyWeight" placeholder="–"></div>
+        <div class="field"><label>fat %</label><input type="text" inputmode="decimal" id="bodyFat" placeholder="–"></div>
+        <div class="field"><label>water %</label><input type="text" inputmode="decimal" id="bodyWater" placeholder="–"></div>
+        <div class="field"><label>muscle kg</label><input type="text" inputmode="decimal" id="bodyMuscle" placeholder="–"></div>
+        <div class="field"><label>visceral</label><input type="text" inputmode="decimal" id="bodyVisc" placeholder="–"></div>
+        <div class="field" style="grid-column:1/-1"><label>note</label><input type="text" id="bodyNote" placeholder="optional"></div>
+      </div>
+      <button class="btn-lib primary" onclick="addBodyEntry()">+ add measurement</button>
+      <div id="bodyList" class="body-list"></div>
+    </div>
+    <div class="notes-pane" id="pane-note">
+      <textarea id="wkNote" placeholder="workout notes — HR, feel, adjustments… (saved with the logged workout)" oninput="wk.note=this.value;schedSave()"></textarea>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- Export modal -->
+<div class="modal-bg" id="exportModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Export</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Workouts from the library (body measurements are always included)</p>
+    <div class="modal-list" id="exportList"></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archived</p>
+    <div class="modal-list" id="exportArchList"></div>
+    <div style="margin-top:.8rem">
+      <label style="font-size:.78rem;color:var(--muted)">File name</label>
+      <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
+    </div>
+    <div class="modal-row" style="margin-top:.5rem">
+      <button class="modal-btn" onclick="toggleAllExport()">select/deselect all</button>
+      <button class="modal-btn" onclick="closeModal('exportModal')">cancel</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ upload to Gist</button>
+      <button class="modal-btn primary" onclick="doExport()">download JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export copy fallback modal -->
+<div class="modal-bg" id="exportCopyModal">
+  <div class="modal" style="max-width:520px">
+    <h2>Copy JSON</h2>
+    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Download failed. Copy the content below and save it as a .json file.</p>
+    <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
+    <div class="modal-row">
+      <button class="modal-btn primary" id="exportCopyBtn" onclick="copyExportText()">📋 copy</button>
+      <button class="modal-btn" onclick="closeModal('exportCopyModal')">close</button>
+    </div>
+  </div>
+</div>
+<div id="statusToast"></div>
+
+<!-- Import modal -->
+<div class="modal-bg" id="importModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Import</h2>
+    <p class="jb-import-hide">Select a JSON file exported from this app.</p>
+    <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
+    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">or paste JSON content:</p>
+    <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"items":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
+    <div id="importItemSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Items</p>
+      <div class="modal-list" id="importList"></div>
+    </div>
+    <div class="modal-row" id="importActions" style="display:none">
+      <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
+      <button class="modal-btn primary" onclick="doImport()">import selected</button>
+    </div>
+    <div class="modal-row" id="importCancel">
+      <button class="modal-btn" onclick="closeModal('importModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── SCHEMA VERSION (forward-compat guard) ─────────────────────────────────
+// Bump when the synced data shape changes in a way older clients can't fully
+// represent. A client that pulls a payload with a higher `schema` PAUSES its own
+// push (so it can't overwrite newer data) and warns the user to reload. The
+// merge keeps whole objects (identity normalize) → additive fields round-trip
+// losslessly; if you add a whitelisting normalizer, spread the original first
+// ({ ...it, …known }) so it never strips unknown/newer fields.
+const APP_SCHEMA = 1;
+// ── STORAGE KEYS ──────────────────────────────────────────────────────────
+const SESSION_KEY = 'workout-v1-session';
+const LIBRARY_KEY = 'workout-v1-library';
+const ARCHIVE_KEY = 'workout-v1-archive';
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let library = [], activeLibId = null;
+let archive = [];
+let undoStack = [], redoStack = [], savedSnapshot = null;
+let autoSave = false;
+const UNDO_MAX = 40;
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function parseNum(v) { return parseFloat(String(v).replace(',','.')); }
+function normDec(v) { return (v || '').toString().replace(',','.'); }
+
+document.addEventListener('input', function(e) {
+  const inp = e.target; if (inp.inputMode !== 'decimal') return;
+  const v = inp.value; if (!v.includes(',')) return;
+  const s = inp.selectionStart; inp.value = v.replace(',','.'); inp.setSelectionRange(s,s);
+}, true);
+
+// ── STATUS / SAVE ─────────────────────────────────────────────────────────
+let saveT;
+function showStatusMsg(msg, duration=2200) {
+  const e = el('statusMsg');
+  clearTimeout(e._to); clearTimeout(e._hide);
+  e.style.display = 'inline'; e.textContent = msg;
+  requestAnimationFrame(() => { e.style.opacity = '1'; });
+  e._to = setTimeout(() => {
+    e.style.opacity = '0';
+    e._hide = setTimeout(() => { e.style.display = 'none'; }, 400);
+  }, duration);
+  // an open modal overlay (z-index 100) covers the header — mirror the message into a toast above it
+  const t = el('statusToast');
+  if (t && document.querySelector('.modal-bg.open')) {
+    clearTimeout(t._to);
+    t.textContent = msg; t.style.display = 'block';
+    t._to = setTimeout(() => { t.style.display = 'none'; }, duration);
+  }
+}
+function showSave(msg='✓ saved') { showStatusMsg(msg, 2200); }
+// temporary label swap on a button — feedback right where the user clicked
+function flashBtn(id, label, ms=1600) {
+  const btn = el(id);
+  if (!btn) return;
+  if (btn._flashTo) clearTimeout(btn._flashTo); else btn._flashOrig = btn.textContent;
+  btn.textContent = label;
+  btn._flashTo = setTimeout(() => { btn.textContent = btn._flashOrig; btn._flashTo = null; }, ms);
+}
+function schedSave() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    saveSession(); showSave();
+    if (autoSave && activeLibId && isDirty()) updateLibraryEntry();
+    updateHeaderDirty();
+  }, 300);
+}
+
+// ── LIBRARY / ARCHIVE ─────────────────────────────────────────────────────
+function loadLibrary() { try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch(e) { library = []; } }
+function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
+function loadArchive() { try { archive = JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch(e) { archive = []; } }
+function saveArchive() { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch(e) {} }
+
+// ── SESSION ────────────────────────────────────────────────────────────────
+// APP LOGIC: applySessionData(d) must COPY the items — items = JSON.parse(JSON.stringify(d.items)) —
+// never share a reference with the stored record, otherwise change detection (mt) for auto-sync breaks.
+function sessionSnap() { return JSON.stringify(wk); }
+function saveSession() { try { localStorage.setItem(SESSION_KEY, JSON.stringify({wk, activeLibId})); } catch(e) {} }
+function loadSession() {
+  try {
+    const s = localStorage.getItem(SESSION_KEY); if (!s) return false;
+    const d = JSON.parse(s);
+    if (d && d.wk && d.wk.exercises) { activeLibId = d.activeLibId ?? null; applySessionData(d.wk); return true; }
+  } catch(e) {}
+  return false;
+}
+// dirty = structural change vs the library template (run state / timed durations excluded)
+function markSaved() { savedSnapshot = JSON.stringify(tplFromWk()); }
+function isDirty() {
+  if (!activeLibId || savedSnapshot == null) return false;
+  return JSON.stringify(tplFromWk()) !== savedSnapshot;
+}
+
+// ── LIBRARY OPERATIONS ────────────────────────────────────────────────────
+function saveToLibrary() {
+  const name = (wk.name || '').trim() || 'workout ' + new Date().toLocaleDateString('en-GB');
+  const entry = {id: Date.now(), name, data: tplFromWk(), mt: Date.now()};
+  library.push(entry); saveLibrary();
+  activeLibId = entry.id; markSaved(); renderLibrary(); updateHeaderDirty();
+  showSave('✓ saved to library');
+}
+function updateLibraryEntry() {
+  const e = library.find(x => String(x.id) === String(activeLibId)); if (!e) return;
+  const data = tplFromWk();
+  const name = (wk.name || '').trim() || e.name;
+  // stamp mt only on a real content change — a blind re-save would win LWW over a newer version from another device
+  if (JSON.stringify(e.data) !== JSON.stringify(data) || name !== e.name) {
+    e.data = data; e.name = name; e.mt = Date.now();
+    saveLibrary();
+  }
+  markSaved(); renderLibrary(); updateHeaderDirty();
+  showSave('✓ changes saved');
+}
+function renderLibrary() {
+  const list = el('libList'); if (!list) return;
+  if (!library.length) { list.innerHTML = '<p class="lib-empty">No workouts yet.</p>'; }
+  else {
+    const typeOf = e => ((e.data && e.data.type) === 'cardio') ? 'cardio' : 'strength';
+    const row = e => `<div class="lib-item ${String(e.id) === String(activeLibId) ? 'active' : ''}" onclick="loadFromLibrary(${jsArg(e.id)})">
+      <span class="lib-item-name">${esc(e.name)}</span>
+      <button class="lib-item-del" onclick="event.stopPropagation();deleteLibraryEntry(${jsArg(e.id)})" title="delete"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
+    </div>`;
+    let html = '';
+    [['strength','strength'],['cardio','cardio']].forEach(([t, label]) => {
+      const items = library.filter(e => typeOf(e) === t).sort((a,b) => String(a.name).localeCompare(String(b.name)));
+      if (items.length) html += `<div class="lib-cat-header">${label}</div>` + items.map(row).join('');
+    });
+    list.innerHTML = html;
+  }
+  updateHeaderDirty();
+}
+function updateHeaderDirty() {
+  const hSave = el('headerSaveBtn');
+  if (hSave) { hSave.style.display = activeLibId ? '' : 'none'; hSave.classList.toggle('dirty', isDirty()); }
+  const lbl = el('autoSaveLbl'); if (lbl) lbl.style.display = activeLibId ? 'flex' : 'none';
+}
+async function newSession() {
+  if (!await customConfirm('Open a blank workout?','open')) return;
+  activeLibId = null; savedSnapshot = null;
+  undoStack = []; redoStack = []; updateUndoBtn();
+  wk = blankWorkout();
+  renderMain(); renderNotes();
+  renderLibrary(); schedSave();
+  showSave('new workout');
+}
+
+// ── AUTO-SAVE ─────────────────────────────────────────────────────────────
+function initAutoSave() {
+  try { autoSave = !!localStorage.getItem('workout-autosave'); } catch(e) {}
+  const chk = el('autoSaveChk'); if (chk) chk.checked = autoSave;
+}
+function toggleAutoSave(on) {
+  autoSave = on;
+  try { if (on) localStorage.setItem('workout-autosave','1'); else localStorage.removeItem('workout-autosave'); } catch(e) {}
+  if (on && activeLibId && isDirty()) updateLibraryEntry();
+}
+
+// ── UNDO ──────────────────────────────────────────────────────────────────
+function pushUndo() {
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = [];
+  updateUndoBtn();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(sessionSnap());
+  const prev = JSON.parse(undoStack.pop());
+  applySessionData(prev);
+  schedSave(); updateUndoBtn(); renderLibrary();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  const next = JSON.parse(redoStack.pop());
+  applySessionData(next);
+  schedSave(); updateUndoBtn(); renderLibrary();
+}
+function updateUndoBtn() {
+  const u = el('undoBtn');
+  if (u) { u.disabled = undoStack.length === 0; u.title = undoStack.length ? 'undo '+undoStack.length+' (Ctrl+Z)' : 'nothing to undo'; }
+  const r = el('redoBtn');
+  if (r) { r.disabled = redoStack.length === 0; r.title = redoStack.length ? 'redo '+redoStack.length+' (Ctrl+Y)' : 'nothing to redo'; }
+}
+
+// ── CLEAR STORAGE ─────────────────────────────────────────────────────────
+function clearStorage() { el('clearStorageModal').classList.add('open'); }
+function toggleAllClear() {
+  const boxes = ['clr-session','clr-library','clr-archive','clr-body','clr-appearance'].map(id => el(id));
+  const anyUnchecked = boxes.some(b => !b.checked);
+  boxes.forEach(b => b.checked = anyUnchecked);
+}
+async function doSelectiveClear() {
+  const toDelete = [];
+  if (el('clr-session').checked)    toDelete.push('workout-v1-session');
+  if (el('clr-library').checked)    toDelete.push('workout-v1-library','workout-v1-seeded');   // clearing the library also restores the default templates on reload
+  if (el('clr-archive').checked)    toDelete.push('workout-v1-archive');
+  if (el('clr-body').checked)       toDelete.push('workout-v1-body');
+  if (el('clr-appearance').checked) toDelete.push('workout-fs','workout-dark','workout-panel-fs');
+  // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
+  // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
+  if (el('clr-library').checked || el('clr-archive').checked || el('clr-body').checked) {
+    toDelete.push('workout-syncknown');
+    try { sessionStorage.removeItem('workout-cloud-checked'); } catch(e) {}
+  }
+  if (!toDelete.length) { closeModal('clearStorageModal'); return; }
+  closeModal('clearStorageModal');
+  if (!await customConfirm('Really delete the selected data?','delete')) return;
+  try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
+  location.reload();
+}
+
+// ── FONT SIZE ─────────────────────────────────────────────────────────────
+const FS_STEPS = [0.75,0.85,0.9,1,1.1,1.2,1.35,1.5,1.7,2.0];
+let fsIdx = 3;
+function applyFs() {
+  const v = FS_STEPS[fsIdx];
+  document.documentElement.style.setProperty('--fs', v);
+  el('fsVal').textContent = Math.round(v*100)+'%';
+  try { localStorage.setItem('workout-fs', fsIdx); } catch(e) {}
+}
+function changeFs(dir) {
+  fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, fsIdx+dir));
+  applyFs();
+}
+function initFs() {
+  try { const s = localStorage.getItem('workout-fs'); if (s !== null) { const p = parseInt(s); if (!isNaN(p)) fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, p)); } } catch(e) {}
+  applyFs();
+}
+
+// ── DARK MODE ─────────────────────────────────────────────────────────────
+function toggleDark() {
+  const on = document.documentElement.classList.toggle('dark');
+  el('darkToggle').textContent = on ? '☾' : '☀';
+  try { localStorage.setItem('workout-dark', on ? '1' : '0'); } catch(e) {}
+}
+function initDark() {
+  try { if (localStorage.getItem('workout-dark') === '1') { document.documentElement.classList.add('dark'); el('darkToggle').textContent = '☾'; } } catch(e) {}
+}
+
+// ── PER-PANEL FONT SIZE ───────────────────────────────────────────────────
+const PFS_STEPS = [0.7,0.8,0.9,1.0,1.1,1.2,1.35,1.5,1.7,2.0];
+const PFS_DEFAULT = 3;
+const PFS_ALL = ['panel-library','panel-main','panel-notes'];
+let panelFs = {};
+
+function loadPanelFs() {
+  try { const s = localStorage.getItem('workout-panel-fs'); if (s) panelFs = JSON.parse(s); } catch(e) {}
+  PFS_ALL.forEach(pid => {
+    if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+    applyPanelFs(pid);
+  });
+}
+function savePanelFs() { try { localStorage.setItem('workout-panel-fs', JSON.stringify(panelFs)); } catch(e) {} }
+function isPanelExpanded(pid) { return expandedPanel && expandedPanel === el(pid); }
+function applyPanelFs(pid) {
+  const panel = el(pid); if (!panel) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  panel.style.zoom = PFS_STEPS[idx];
+  updatePfsVal(pid);
+}
+function updatePfsVal(pid) {
+  const valEl = el('pfs-'+pid); if (!valEl) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  const ni = (panelFs[pid] || {}).n ?? PFS_DEFAULT;
+  const ei = (panelFs[pid] || {}).e ?? PFS_DEFAULT;
+  const marker = isPanelExpanded(pid) && ni !== ei ? '*' : '';
+  valEl.textContent = Math.round(PFS_STEPS[idx]*100)+'%'+marker;
+  valEl.title = isPanelExpanded(pid)
+    ? 'size in expanded view (normal: '+Math.round(PFS_STEPS[ni]*100)+'%)'
+    : 'size in normal view (expanded: '+Math.round(PFS_STEPS[ei]*100)+'%)';
+}
+function changePanelFs(pid, dir) {
+  if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  panelFs[pid][mode] = Math.max(0, Math.min(PFS_STEPS.length-1, (panelFs[pid][mode] ?? PFS_DEFAULT)+dir));
+  applyPanelFs(pid); savePanelFs();
+}
+
+// ── EXPAND PANEL ──────────────────────────────────────────────────────────
+let expandedPanel = null;
+function toggleExpand(id) {
+  const panel = el(id); if (!panel) return;
+  if (expandedPanel && expandedPanel !== panel) collapsePanel(expandedPanel);
+  if (panel.classList.contains('panel-expanded')) collapsePanel(panel);
+  else expandPanel(panel);
+}
+function expandPanel(panel) {
+  panel.classList.add('panel-expanded');
+  expandedPanel = panel;
+  applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
+  if (!panel.querySelector('.expand-esc')) {
+    const hint = document.createElement('span');
+    hint.className = 'expand-esc'; hint.textContent = 'Esc';
+    btn && btn.parentNode.appendChild(hint);
+  }
+  document.addEventListener('keydown', onExpandEsc);
+}
+function collapsePanel(panel) {
+  panel.classList.remove('panel-expanded');
+  expandedPanel = null;
+  applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+  const hint = panel.querySelector('.expand-esc'); if (hint) hint.remove();
+  document.removeEventListener('keydown', onExpandEsc);
+}
+function onExpandEsc(e) { if (e.key === 'Escape' && expandedPanel) collapsePanel(expandedPanel); }
+
+// ── CUSTOM CONFIRM / ALERT ────────────────────────────────────────────────
+let _confirmResolve = null;
+function customConfirm(msg, okLabel='confirm') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmCancelBtn').style.display = '';
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); _confirmResolve = null; resolve(val); };
+  });
+}
+function customAlert(msg, okLabel='ok') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmCancelBtn').style.display = 'none';
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); el('confirmCancelBtn').style.display = ''; _confirmResolve = null; resolve(val); };
+  });
+}
+
+// ── MODALS ────────────────────────────────────────────────────────────────
+function closeModal(id) { el(id).classList.remove('open'); }
+document.addEventListener('click', e => {
+  closeNewMenu();
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal'].forEach(id => {
+    const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
+  });
+  const cm = el('confirmModal');
+  if (cm && cm.classList.contains('open') && e.target === cm && _confirmResolve) _confirmResolve(false);
+});
+
+// ── LIBRARY PANEL TOGGLE ──────────────────────────────────────────────────
+function toggleLibPanel() {
+  const lp = document.querySelector('.library-panel'); if (!lp) return;
+  const hidden = lp.classList.toggle('lib-hidden');
+  el('libToggleBtn').textContent = hidden ? '☰' : '«';
+  updateAppGrid();
+}
+function updateAppGrid() {
+  const lp = document.querySelector('.library-panel');
+  const app = document.querySelector('.app');
+  if (!app || !lp) return;
+  const hidden = lp.classList.contains('lib-hidden');
+  const w = window.innerWidth;
+  if (w <= 820) { app.style.gridTemplateColumns = ''; }
+  else if (w <= 1020) { app.style.gridTemplateColumns = hidden ? '0 1fr' : '185px 1fr'; }
+  else { app.style.gridTemplateColumns = hidden ? '0 1fr 440px' : '210px 1fr 440px'; }
+}
+
+// ── NEW MENU ──────────────────────────────────────────────────────────────
+function toggleNewMenu(e) {
+  e.stopPropagation();
+  const m = el('newMenu');
+  if (m.style.display === 'flex') { m.style.display = 'none'; return; }
+  m.style.display = 'flex';
+  const btn = e.currentTarget;
+  const br = btn.getBoundingClientRect();
+  m.style.top = (br.bottom+4+window.scrollY)+'px';
+  m.style.left = ''; m.style.right = '';
+  requestAnimationFrame(() => {
+    const mw = m.offsetWidth, vw = window.innerWidth;
+    let left = br.right - mw;
+    if (left < 8) left = 8;
+    if (left+mw > vw-8) left = vw-mw-8;
+    m.style.left = left+'px';
+  });
+}
+function closeNewMenu() { const m = el('newMenu'); if (m) m.style.display = 'none'; }
+
+// ── EXPORT ────────────────────────────────────────────────────────────────
+let exportSelected = new Set(), exportArchSelected = new Set();
+function openExportModal() {
+  exportSelected = new Set(library.map(e => e.id));
+  exportArchSelected = new Set(archive.map(e => e.id));
+  el('exportList').innerHTML = library.length
+    ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
+  el('exportArchList').innerHTML = archive.length
+    ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
+  updateExportFilename();
+  el('exportModal').classList.add('open');
+}
+function updateExportFilename() {
+  const d = new Date();
+  const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  el('exportFilename').value = 'workout_'+yymmdd+'_I'+exportSelected.size+'A'+exportArchSelected.size+'.json';
+}
+function toggleExportSel(id, on) {
+  on ? exportSelected.add(id) : exportSelected.delete(id);
+  el('ei-'+id)?.classList.toggle('sel', on);
+  updateExportFilename();
+}
+function toggleExportArchSel(id, on) {
+  on ? exportArchSelected.add(id) : exportArchSelected.delete(id);
+  el('eai-'+id)?.classList.toggle('sel', on);
+  updateExportFilename();
+}
+function toggleAllExport() {
+  // anything unchecked → select all, otherwise deselect all
+  const on = library.some(e => !exportSelected.has(e.id)) || archive.some(e => !exportArchSelected.has(e.id));
+  library.forEach(e => { on ? exportSelected.add(e.id) : exportSelected.delete(e.id); const el2=el('ei-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  archive.forEach(e => { on ? exportArchSelected.add(e.id) : exportArchSelected.delete(e.id); const el2=el('eai-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  updateExportFilename();
+}
+function doExport() {
+  const items = library.filter(e => exportSelected.has(e.id));
+  const archItems = archive.filter(e => exportArchSelected.has(e.id));
+  if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body}, null, 2);
+  const rawName = (el('exportFilename').value.trim() || 'export');
+  const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
+  let downloaded = false;
+  try {
+    const dataUri = 'data:application/json;charset=utf-8,'+encodeURIComponent(json);
+    const a = document.createElement('a'); a.href = dataUri; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    downloaded = true;
+  } catch(e) { downloaded = false; }
+  closeModal('exportModal');
+  el('exportCopyText').value = json;
+  el('exportCopyNote').textContent = downloaded
+    ? 'The file should be downloaded as "'+fname+'". If not, copy the content below.'
+    : 'Download failed — copy the content below and save it as a .json file.';
+  el('exportCopyModal').classList.add('open');
+  showSave('↑ exported');
+}
+function copyExportText() {
+  const ta = el('exportCopyText');
+  const done = () => { showSave('✓ copied'); flashBtn('exportCopyBtn', '✓ copied'); };
+  const legacy = () => { ta.select(); document.execCommand('copy'); done(); };
+  try {
+    // writeText can reject (permissions / non-secure context) — fall back to execCommand so feedback always comes
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done).catch(legacy);
+    else legacy();
+  } catch(e) { ta.select(); showStatusMsg('⚠ copy failed — press Ctrl+C', 3000); }
+}
+
+// ── IMPORT ────────────────────────────────────────────────────────────────
+let importData = [], importSelected = new Set(), importRecord = null;
+function openImportModal() {
+  importData = []; importSelected = new Set(); importRecord = null;
+  el('importModal').classList.remove('from-cloud');
+  el('importModal').querySelector('h2').textContent = 'Import';
+  el('importFile').value = ''; el('importPaste').value = '';
+  el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
+  el('importActions').style.display = 'none';
+  el('importCancel').style.display = 'flex';
+  el('importModal').classList.add('open');
+}
+function parseImportJson(text) {
+  try {
+    const parsed = JSON.parse(text);
+    importRecord = parsed;
+    const items = parsed.items || parsed.teas || [];
+    if (!items.length && !(parsed.archive || []).length && !(parsed.body || []).length) throw new Error('No items in the file');
+    importData = items;
+    importSelected = new Set(items.map(x => x.id));
+    el('importList').innerHTML = items.map(x => `
+      <label class="modal-item sel" id="ii-${x.id}">
+        <input type="checkbox" checked onchange="toggleImportSel(${jsArg(x.id)},this.checked)" />
+        ${esc(x.name||String(x.id))}
+      </label>`).join('');
+    el('importItemSection').style.display = 'block';
+    el('importActions').style.display = 'flex';
+    el('importCancel').style.display = 'none';
+  } catch(err) {
+    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Chyba: '+err.message+'</p>';
+    el('importItemSection').style.display = 'block';
+  }
+}
+function previewImportPaste() { const text = el('importPaste').value.trim(); if (!text) return; parseImportJson(text); }
+function previewImport() {
+  const file = el('importFile').files[0]; if (!file) return;
+  el('importPaste').value = '';
+  const r = new FileReader(); r.onload = ev => parseImportJson(ev.target.result); r.readAsText(file);
+}
+function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
+function doImport() {
+  const rec = importRecord || {};
+  const toAdd = importData.filter(x => importSelected.has(x.id));
+  const hasExtra = (rec.archive || []).length || (rec.body || []).length;
+  if (!toAdd.length && !hasExtra) { customAlert('Nothing is selected.'); return; }
+  // dedup by id — update an existing item in place, do not duplicate; mt = now (import wins on sync)
+  let added = 0, updated = 0;
+  toAdd.forEach(t => {
+    t.mt = Date.now();
+    const i = library.findIndex(e => String(e.id) === String(t.id));
+    if (i >= 0) { library[i] = t; updated++; } else { library.push(t); added++; }
+  });
+  if (toAdd.length) { saveLibrary(); renderLibrary(); }
+  // workout log: append missing entries by id (append-only union)
+  let logAdded = 0;
+  const arcIds = new Set(archive.map(x => String(x.id)));
+  (rec.archive || []).forEach(a => {
+    if (a && a.id != null && !arcIds.has(String(a.id))) { archive.push(a); arcIds.add(String(a.id)); logAdded++; }
+  });
+  if (logAdded) { saveArchive(); renderLog(); }
+  // body measurements: overwrite/add by id; mt = now (import wins on sync)
+  let bodyAdded = 0;
+  (rec.body || []).forEach(b => {
+    if (!b || b.id == null) return;
+    b.mt = Date.now();
+    const i = body.findIndex(x => String(x.id) === String(b.id));
+    if (i >= 0) body[i] = b; else body.push(b);
+    bodyAdded++;
+  });
+  if (bodyAdded) { saveBody(); renderBody(); }
+  closeModal('importModal');
+  showSave('↓ imported: ' + (added + updated) + ' workouts' + (logAdded ? ' +' + logAdded + ' log' : '') + (bodyAdded ? ' +' + bodyAdded + ' body' : ''));
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+function init() {
+  initAutoSave();
+  initFs();
+  initDark();
+  loadPanelFs();
+  loadLibrary(); loadArchive(); loadBody();
+  seedLibrary();
+  const restored = loadSession();
+  if (activeLibId) markSaved();
+  renderLibrary(); renderMain(); renderNotes(); renderLog(); renderBody();
+  updateUndoBtn();
+  if (restored) showSave('↓ restored');
+  setInterval(tick, 500);
+}
+// init() is called at the very end of this script — the app state (let wk/body) must be initialized first
+window.addEventListener('resize', updateAppGrid);
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
+  }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); undo(); }
+  }
+});
+
+// ── WORKOUT DATA MODEL ──────────────────────────────────────────────────────
+// wk (live workout) = {name, type:'strength'|'cardio', pauseSec, prepSec, note,
+//   exercises:[{code, name, note, sets:[{reps, weight, durSec, done}]}],
+//   run:{startedAt, phase:'work'|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft} | null}
+// library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
+// archive entry = logged workout (append-only union on sync)
+// body entry    = {id, date:'yyyy-mm-dd', weight, fat, water, muscle, visceral, note, mt} (LWW)
+const BODY_KEY = 'workout-v1-body';
+let body = [];
+function loadBody() { try { body = JSON.parse(localStorage.getItem(BODY_KEY) || '[]'); } catch(e) { body = []; } }
+function saveBody() { try { localStorage.setItem(BODY_KEY, JSON.stringify(body)); } catch(e) {} }
+
+function blankWorkout() { return {name:'', type:'strength', pauseSec:105, prepSec:120, note:'', exercises:[], run:null}; }
+let wk = blankWorkout();
+
+function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
+function mmss(s) { s = Math.max(0, Math.floor(+s || 0)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+function fmtDate(d) { const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3]+'.'+m[2]+'.'+m[1].slice(2) : String(d || ''); }
+
+// template snapshot of the live workout — structure only (run/done state excluded).
+// durSec = the PLANNED exercise time (filled by hand, editable) — it belongs to the template.
+function tplFromWk() {
+  return {
+    type: wk.type, pauseSec: wk.pauseSec, prepSec: wk.prepSec ?? 120, note: wk.note || '',
+    exercises: (wk.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '',
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null}))}))
+  };
+}
+function applySessionData(d) {
+  wk = JSON.parse(JSON.stringify(d || {}));   // deep copy — never share a reference with a stored record
+  if (!wk.exercises) wk = blankWorkout();
+  if (wk.prepSec == null) wk.prepSec = 120;   // sessions saved before the preparation phase existed
+  renderMain(); renderNotes();
+}
+
+// ── LIBRARY (workout templates) ─────────────────────────────────────────────
+function loadFromLibrary(id) {
+  const e = library.find(x => String(x.id) === String(id)); if (!e) return;
+  if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
+  pushUndo();
+  const d = JSON.parse(JSON.stringify(e.data || {}));
+  wk = {name: e.name, type: d.type || 'strength', pauseSec: +d.pauseSec || 105, prepSec: d.prepSec != null ? +d.prepSec : 120, note: d.note || '',
+    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '',
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false}))})),
+    run: null};
+  prefillFromLast(id);
+  activeLibId = e.id; markSaved();
+  renderMain(); renderNotes(); renderLibrary(); schedSave();
+}
+// progression: prefill reps/weight from the most recent logged session of this template
+function prefillFromLast(tplId) {
+  const last = archive.filter(a => String(a.tplId) === String(tplId)).sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0))[0];
+  if (!last) return;
+  wk.exercises.forEach(ex => {
+    const le = (last.entries || []).find(x => x.code === ex.code); if (!le) return;
+    ex.sets.forEach((s, i) => {
+      const ls = (le.sets || [])[i]; if (!ls) return;
+      if (ls.reps != null && ls.reps !== '') s.reps = ls.reps;
+      if (ls.weight) s.weight = ls.weight;
+      if (ls.durSec != null) s.durSec = ls.durSec;
+    });
+  });
+}
+async function deleteLibraryEntry(id) {
+  const e = library.find(x => String(x.id) === String(id)); if (!e) return;
+  if (!await customConfirm('Delete "' + (e.name || id) + '" from the library?','delete')) return;
+  library = library.filter(x => String(x.id) !== String(id));
+  if (String(activeLibId) === String(id)) { activeLibId = null; savedSnapshot = null; }
+  saveLibrary(); renderLibrary(); schedSave();
+  showSave('✕ deleted');
+}
+
+// ── MAIN PANEL RENDER ───────────────────────────────────────────────────────
+function renderMain() {
+  const c = el('wkMain'); if (!c) return;
+  let html = `
+  <div class="wk-setup">
+    <div class="field" style="flex:1;min-width:150px"><label>workout name</label>
+      <input type="text" value="${esc(wk.name)}" oninput="wk.name=this.value;schedSave()" placeholder="e.g. Strength A"></div>
+    <div class="field"><label>type</label>
+      <select onchange="wk.type=this.value;schedSave();renderLibrary()">
+        <option value="strength"${wk.type !== 'cardio' ? ' selected' : ''}>strength</option>
+        <option value="cardio"${wk.type === 'cardio' ? ' selected' : ''}>cardio</option>
+      </select></div>
+    <div class="field" style="width:5.5em"><label>rest (s)</label>
+      <input type="number" value="${esc(wk.pauseSec)}" min="0" oninput="wk.pauseSec=parseInt(this.value)||0;schedSave()"></div>
+    <div class="field" style="width:5.5em"><label>prep (s)</label>
+      <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()"></div>
+  </div>
+  <div class="wk-runbar">
+    <button class="btn-sm" id="wkStartBtn" onclick="startWorkout()">▶ start workout</button>
+    <span class="wk-elapsed" id="wkElapsed">0:00</span>
+    <button class="btn-sm" id="wkFinishBtn" onclick="finishWorkout()" style="display:none">■ finish &amp; log</button>
+  </div>
+  <div class="rest-bar" id="nowBar" style="display:none">
+    <span class="rest-label" id="nowLabel">rest</span>
+    <span class="rest-time" id="nowTime">0:00</span>
+    <span class="now-ex" id="nowEx"></span>
+    <button class="btn-sm" id="pauseBtn" onclick="pauseResume()" title="pause / resume the sequence">⏸</button>
+    <button class="btn-sm" onclick="addPhase(30)" title="add 30 s to the current phase">+30s</button>
+    <button class="btn-sm" onclick="skipPhase()" title="skip to the next phase">skip</button>
+  </div>`;
+  if (wk.type === 'cardio') {
+    // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
+    html += (wk.exercises || []).map((ex, ei) => exBlockHtml(ex, ei)).join('');
+    html += `<button class="btn-lib" onclick="addExercise()" style="margin-top:.2rem">+ add segment</button>`;
+  } else {
+    // strength = rounds: one round runs through every exercise once, then repeats
+    html += roundsHtml();
+    html += `<div class="wk-addrow">
+      <button class="btn-lib" onclick="addExercise()">+ add exercise</button>
+      <button class="btn-lib" onclick="addRound()">+ add round</button>
+    </div>`;
+  }
+  c.innerHTML = html;
+  updateRunUi();
+}
+function roundsHtml() {
+  const exs = wk.exercises || [];
+  if (!exs.length) return '';
+  const n = Math.max(...exs.map(ex => (ex.sets || []).length));
+  let html = '';
+  for (let si = 0; si < n; si++) {
+    const rows = exs.map((ex, ei) => (ex.sets || [])[si] != null ? wxItemHtml(ex, ei, si) : '').join('');
+    html += `<div class="ex-block">
+      <div class="round-head"><span class="round-title">round ${si + 1}</span>
+        <button class="ex-del" onclick="removeRound(${si})" title="remove round ${si + 1}">✕</button></div>
+      ${rows}
+    </div>`;
+  }
+  return html;
+}
+// one exercise inside a round — full editable header in round 1, plain label in later rounds
+function wxItemHtml(ex, ei, si) {
+  const head = si === 0
+    ? `<div class="ex-head">
+        <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
+        <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
+        <button class="ex-del" onclick="removeExercise(${ei})" title="remove exercise">✕</button>
+      </div>
+      <input class="ex-note-in" value="${esc(ex.note || '')}" oninput="wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">`
+    : `<div class="ex-head"><span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`;
+  return `<div class="wx-item">${head}${dataRowHtml(ex.sets[si], ei, si, false)}</div>`;
+}
+function exBlockHtml(ex, ei) {
+  const setRows = (ex.sets || []).map((s, si) => dataRowHtml(s, ei, si, true)).join('');
+  return `<div class="ex-block">
+    <div class="ex-head">
+      <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="segment code">
+      <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="segment name">
+      <button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>
+      <button class="ex-del" onclick="removeExercise(${ei})" title="remove segment">✕</button>
+    </div>
+    <input class="ex-note-in" value="${esc(ex.note || '')}" oninput="wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">
+    <div class="ex-sets">${setRows}</div>
+  </div>`;
+}
+// reps × weight, editable planned/actual time (m:ss or seconds), live s/rep, done ✓ (starts the rest timer)
+function dataRowHtml(s, ei, si, numbered) {
+  const r = parseFloat(String(s.reps ?? '').replace(',','.'));
+  const sr = (s.durSec != null && r > 0) ? (s.durSec / r).toFixed(1) + ' s/rep' : '';
+  const run = wk.run;
+  const cur = !!(run && run.ei === ei && run.si === si && (run.phase === 'work' || run.phase === 'manual'));
+  return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
+    ${numbered ? `<span class="set-num">${si + 1}</span>` : ''}
+    <input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="wk.exercises[${ei}].sets[${si}].reps=this.value;schedSave();renderMain()" title="reps" placeholder="–">
+    <span class="set-x">×</span>
+    <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].weight=this.value;schedSave()" title="weight" placeholder="–">
+    <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="exercise time — m:ss or seconds, editable any time" placeholder="m:ss">
+    <span class="set-dur">${sr}</span>
+    <button class="set-done${s.done ? ' on' : ''}" onclick="toggleSetDone(${ei},${si})" title="done → starts the rest timer">✓</button>
+    ${numbered ? `<button class="set-del" onclick="removeSet(${ei},${si})" title="remove interval">✕</button>` : ''}
+  </div>`;
+}
+function parseDur(v) {
+  v = String(v || '').trim(); if (!v) return null;
+  const m = v.match(/^(\d+):(\d{1,2})$/); if (m) return (+m[1]) * 60 + (+m[2]);
+  const n = parseFloat(v.replace(',','.')); return isNaN(n) ? null : Math.max(0, Math.round(n));
+}
+function setDurInput(ei, si, inp) {
+  wk.exercises[ei].sets[si].durSec = parseDur(inp.value);
+  const r = wk.run;
+  if (r && r.phase === 'manual' && r.ei === ei && r.si === si) startNextWork();   // time filled for the waiting step → its countdown starts right away
+  schedSave(); renderMain();
+}
+function renderNotes() { const t = el('wkNote'); if (t) t.value = wk.note || ''; }
+function switchTab(name, btn) {
+  document.querySelectorAll('.notes-tab').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.notes-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+}
+
+// ── STRUCTURE EDITS ─────────────────────────────────────────────────────────
+function addExercise() {
+  pushUndo();
+  // strength: a new exercise joins every existing round; cardio: starts with one interval
+  const n = (wk.type !== 'cardio' && wk.exercises.length)
+    ? Math.max(1, ...wk.exercises.map(ex => (ex.sets || []).length)) : 1;
+  wk.exercises.push({code:'', name:'', note:'', sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false}))});
+  schedSave(); renderMain();
+}
+function addRound() {
+  if (!wk.exercises.length) { showStatusMsg('⚠ add an exercise first'); return; }
+  pushUndo();
+  wk.exercises.forEach(ex => {
+    const p = ex.sets[ex.sets.length - 1];
+    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false});
+  });
+  schedSave(); renderMain();
+}
+async function removeRound(si) {
+  if (!await customConfirm('Remove round ' + (si + 1) + '?','remove')) return;
+  pushUndo();
+  wk.exercises.forEach(ex => { if (ex.sets.length > si) ex.sets.splice(si, 1); });
+  wk.exercises = wk.exercises.filter(ex => ex.sets.length);
+  schedSave(); renderMain();
+}
+async function removeExercise(ei) {
+  const ex = wk.exercises[ei]; if (!ex) return;
+  if ((ex.code || ex.name) && !await customConfirm('Remove exercise "' + (ex.code || ex.name) + '"?','remove')) return;
+  pushUndo();
+  wk.exercises.splice(ei, 1);
+  schedSave(); renderMain();
+}
+function addSet(ei) {
+  const ex = wk.exercises[ei]; if (!ex) return;
+  pushUndo();
+  const prev = ex.sets[ex.sets.length - 1];
+  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false});
+  schedSave(); renderMain();
+}
+function removeSet(ei, si) {
+  const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
+  if (ex.sets.length === 1) { removeExercise(ei); return; }   // last interval → remove the whole segment
+  pushUndo();
+  ex.sets.splice(si, 1);
+  schedSave(); renderMain();
+}
+
+// ── AUTO-SEQUENCE (the whole workout runs as intervals: work → rest → next work…) ──
+// Planned times drive the countdowns; a step without a time waits for a manual ✓.
+// Absolute timestamps (endTs) → the sequence survives a reload; pausedLeft = paused remainder in ms.
+function ensureRun() {
+  if (!wk.run) wk.run = {startedAt:null, phase:null, ei:null, si:null, endTs:null, pausedLeft:null};
+  return wk.run;
+}
+// execution order of [exercise, round] steps — strength runs round-major (circuit), cardio segment-major
+function stepOrder() {
+  const out = [], exs = wk.exercises || [];
+  if (wk.type === 'cardio') exs.forEach((ex, ei) => (ex.sets || []).forEach((s, si) => out.push([ei, si])));
+  else {
+    const n = exs.length ? Math.max(...exs.map(ex => (ex.sets || []).length)) : 0;
+    for (let si = 0; si < n; si++) exs.forEach((ex, ei) => { if ((ex.sets || [])[si]) out.push([ei, si]); });
+  }
+  return out;
+}
+function nextPending() {
+  for (const [ei, si] of stepOrder()) { if (!wk.exercises[ei].sets[si].done) return [ei, si]; }
+  return null;
+}
+function startWorkout() {
+  const r = ensureRun();
+  if (r.startedAt) return;
+  r.startedAt = Date.now();
+  const prep = +wk.prepSec || 0;
+  if (prep > 0 && nextPending()) { r.phase = 'prep'; r.ei = null; r.si = null; r.endTs = Date.now() + prep * 1000; r.pausedLeft = null; }
+  else startNextWork();
+  schedSave(); renderMain();
+  showStatusMsg('▶ workout started');
+}
+function startNextWork() {
+  const r = ensureRun();
+  const nxt = nextPending();
+  if (!nxt) { r.phase = r.startedAt ? 'done' : null; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; return; }
+  const [ei, si] = nxt;
+  const s = wk.exercises[ei].sets[si];
+  r.ei = ei; r.si = si; r.pausedLeft = null;
+  if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
+  else { r.phase = 'manual'; r.endTs = null; }   // no planned time → wait for ✓
+}
+function startRestPhase() {
+  const r = ensureRun();
+  if (!nextPending()) { r.phase = 'done'; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; return; }
+  const p = +wk.pauseSec || 0;
+  if (p > 0) { r.phase = 'rest'; r.ei = null; r.si = null; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; }
+  else startNextWork();
+}
+function completeCurrentWork() {   // work countdown elapsed, skip, or ✓ on the current row
+  const r = ensureRun();
+  if (r.ei != null && wk.exercises[r.ei] && wk.exercises[r.ei].sets[r.si]) wk.exercises[r.ei].sets[r.si].done = true;
+  startRestPhase();
+}
+// ✓ on a row: the current step advances the sequence; any other row is just marked done
+function toggleSetDone(ei, si) {
+  const s = wk.exercises[ei].sets[si];
+  const r = ensureRun();
+  if (!s.done) {
+    s.done = true;
+    if (!r.startedAt) r.startedAt = Date.now();   // first ✓ auto-starts the workout
+    if ((r.phase === 'work' || r.phase === 'manual') && r.ei === ei && r.si === si) startRestPhase();
+    else if (r.phase == null || r.phase === 'done') startRestPhase();
+  } else {
+    s.done = false;
+    if (r.phase === 'done') startNextWork();   // a row re-opened after everything was done
+  }
+  schedSave(); renderMain();
+}
+function pauseResume() {
+  const r = ensureRun();
+  if (r.phase !== 'work' && r.phase !== 'rest' && r.phase !== 'prep') return;
+  if (r.pausedLeft != null) { r.endTs = Date.now() + r.pausedLeft; r.pausedLeft = null; }
+  else if (r.endTs) { r.pausedLeft = Math.max(0, r.endTs - Date.now()); r.endTs = null; }
+  schedSave(); tick();
+}
+function addPhase(sec) {
+  const r = ensureRun();
+  if (r.pausedLeft != null) r.pausedLeft += sec * 1000;
+  else if (r.endTs) r.endTs += sec * 1000;
+  else return;
+  schedSave(); tick();
+}
+function skipPhase() {
+  const r = ensureRun();
+  if (r.phase === 'work' || r.phase === 'manual') completeCurrentWork();
+  else if (r.phase === 'rest' || r.phase === 'prep') startNextWork();
+  else return;
+  schedSave(); renderMain();
+}
+function updateRunUi() {
+  const started = !!(wk.run && wk.run.startedAt);
+  const sb = el('wkStartBtn'), fb = el('wkFinishBtn');
+  if (sb) sb.style.display = started ? 'none' : '';
+  if (fb) fb.style.display = started ? '' : 'none';
+  tick();
+}
+function tick() {
+  const r = wk.run;
+  const elapsed = el('wkElapsed');
+  if (elapsed) elapsed.textContent = (r && r.startedAt) ? mmss((Date.now() - r.startedAt) / 1000) : '0:00';
+  if (!r || !r.startedAt) { const nb = el('nowBar'); if (nb) nb.style.display = 'none'; return; }
+  // countdown expired → beep + advance (each transition fires exactly once: endTs/phase change immediately)
+  if (r.pausedLeft == null && r.endTs && Date.now() >= r.endTs) {
+    if (r.phase === 'work') { beep(); completeCurrentWork(); saveSession(); renderMain(); return; }
+    if (r.phase === 'rest' || r.phase === 'prep') { beep(); startNextWork(); saveSession(); renderMain(); return; }
+  }
+  updateNowBar();
+}
+function updateNowBar() {
+  const r = wk.run;
+  const bar = el('nowBar'); if (!bar) return;
+  if (!r || !r.startedAt || !r.phase) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const lbl = el('nowLabel'), exl = el('nowEx'), t = el('nowTime'), pb = el('pauseBtn');
+  const remMs = r.pausedLeft != null ? r.pausedLeft : (r.endTs ? r.endTs - Date.now() : null);
+  bar.classList.toggle('over', r.phase === 'done');
+  if (pb) { pb.textContent = r.pausedLeft != null ? '▶' : '⏸'; pb.style.display = (r.phase === 'work' || r.phase === 'rest' || r.phase === 'prep') ? '' : 'none'; }
+  if (r.phase === 'prep') {
+    lbl.textContent = 'prep';
+    const nxt = nextPending();
+    const nx = nxt ? wk.exercises[nxt[0]] : null;
+    exl.textContent = 'mental preparation' + (nx ? ' · first: ' + (nx.code || nx.name || '') : '') + (r.pausedLeft != null ? ' · paused' : '');
+    t.textContent = mmss(Math.max(0, Math.ceil(remMs / 1000)));
+  } else if (r.phase === 'work' || r.phase === 'manual') {
+    const ex = wk.exercises[r.ei] || {};
+    lbl.textContent = ex.code || 'work';
+    exl.textContent = (ex.name || '')
+      + (wk.type !== 'cardio' ? ' · round ' + (r.si + 1) : '')
+      + (r.phase === 'manual' ? ' · no time set — tap ✓ when done' : '')
+      + (r.pausedLeft != null ? ' · paused' : '');
+    t.textContent = r.phase === 'manual' ? '—' : mmss(Math.max(0, Math.ceil(remMs / 1000)));
+  } else if (r.phase === 'rest') {
+    lbl.textContent = 'rest';
+    const nxt = nextPending();
+    const nx = nxt ? wk.exercises[nxt[0]] : null;
+    exl.textContent = (nx ? 'next: ' + (nx.code || nx.name || '') : '') + (r.pausedLeft != null ? ' · paused' : '');
+    t.textContent = mmss(Math.max(0, Math.ceil(remMs / 1000)));
+  } else {   // done
+    lbl.textContent = 'done';
+    exl.textContent = 'all exercises complete — ■ finish & log';
+    t.textContent = '✓';
+  }
+}
+function beep() {
+  try {
+    const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+    const ctx = window._actx || (window._actx = new C());
+    if (ctx.state === 'suspended') ctx.resume();
+    [0, .35].forEach(t => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(.25, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + t + .25);
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + .3);
+    });
+  } catch(e) {}
+}
+
+// ── FINISH & LOG ────────────────────────────────────────────────────────────
+async function finishWorkout() {
+  const r = wk.run;
+  if (!r || !r.startedAt) { showStatusMsg('⚠ workout not started'); return; }
+  const anyDone = wk.exercises.some(ex => (ex.sets || []).some(s => s.done));
+  const msg = anyDone ? 'Finish this workout and save it to the log? (only ✓ rows are logged)'
+                      : 'Finish this workout and save it to the log? Nothing is checked ✓ — ALL rows will be logged.';
+  if (!await customConfirm(msg,'finish')) return;
+  pushUndo();
+  const totalSec = Math.round((Date.now() - r.startedAt) / 1000);
+  const entry = {
+    id: Date.now(), date: Date.now(), tplId: activeLibId,
+    name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
+    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name,
+      sets: ex.sets.filter(s => anyDone ? s.done : true).map(s => ({reps: s.reps, weight: s.weight, durSec: s.durSec, done: !!s.done}))}))
+      .filter(e => e.sets.length),
+    note: wk.note || ''
+  };
+  archive.push(entry); saveArchive();
+  wk.run = null; wk.note = '';
+  wk.exercises.forEach(ex => ex.sets.forEach(s => { s.done = false; }));   // planned times (durSec) stay for next time
+  schedSave(); renderMain(); renderNotes(); renderLog();
+  showSave('✓ workout logged (' + mmss(totalSec) + ')');
+}
+
+// ── LOG (notes panel) ───────────────────────────────────────────────────────
+function renderLog() {
+  const c = el('logList'); if (!c) return;
+  if (!archive.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
+  const items = [...archive].sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0));
+  c.innerHTML = items.map(a => {
+    const d = new Date(a.date || a.id);
+    const ds = d.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'2-digit'}) + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+    const lines = (a.entries || []).map(e => {
+      const sets = e.sets || [];
+      if (!sets.length) return '';
+      const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
+      const w = [...new Set(sets.map(s => s.weight).filter(Boolean))].join(', ');
+      const durs = sets.filter(s => s.durSec != null);
+      let sp = '';
+      if (durs.length) {
+        const totD = durs.reduce((t,s) => t + s.durSec, 0);
+        const totR = durs.reduce((t,s) => t + (parseFloat(String(s.reps).replace(',','.')) || 0), 0);
+        sp = totR > 0 ? ' · ' + (totD / totR).toFixed(1) + ' s/rep' : ' · ' + mmss(totD);
+      }
+      return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(reps)}${w ? ' @ ' + esc(w) : ''}${sp}</div>`;
+    }).join('');
+    return `<div class="log-item">
+      <div class="log-head"><span class="log-date">${esc(ds)}</span><span class="log-name">${esc(a.name)}</span>
+        <span class="log-total">${mmss(a.totalSec || 0)}</span>
+        <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
+      ${lines}${a.note ? `<div class="log-note">${esc(a.note)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+async function deleteLogEntry(id) {
+  if (!await customConfirm('Delete this log entry?','delete')) return;
+  archive = archive.filter(x => String(x.id) !== String(id));
+  saveArchive(); renderLog();
+  showSave('✕ log entry deleted');
+}
+
+// ── BODY MEASUREMENTS (Tanita) ──────────────────────────────────────────────
+function addBodyEntry() {
+  const num = id => { const v = normDec((el(id).value || '').trim()); return v === '' ? null : parseFloat(v); };
+  const entry = {
+    id: Date.now(), date: el('bodyDate').value || new Date().toISOString().slice(0,10),
+    weight: num('bodyWeight'), fat: num('bodyFat'), water: num('bodyWater'),
+    muscle: num('bodyMuscle'), visceral: num('bodyVisc'),
+    note: (el('bodyNote').value || '').trim(), mt: Date.now()
+  };
+  if ([entry.weight, entry.fat, entry.water, entry.muscle, entry.visceral].every(v => v == null || isNaN(v))) {
+    customAlert('Enter at least one value.'); return;
+  }
+  body.push(entry); saveBody(); renderBody();
+  ['bodyWeight','bodyFat','bodyWater','bodyMuscle','bodyVisc','bodyNote'].forEach(id => { el(id).value = ''; });
+  showSave('✓ measurement saved');
+}
+async function deleteBodyEntry(id) {
+  if (!await customConfirm('Delete this measurement?','delete')) return;
+  body = body.filter(x => String(x.id) !== String(id));
+  saveBody(); renderBody();
+  showSave('✕ measurement deleted');
+}
+function renderBody() {
+  const dateIn = el('bodyDate');
+  if (dateIn && !dateIn.value) dateIn.value = new Date().toISOString().slice(0,10);
+  const c = el('bodyList'); if (!c) return;
+  if (!body.length) { c.innerHTML = '<p class="lib-empty">No measurements yet.</p>'; return; }
+  const nv = v => (v == null || isNaN(v)) ? '–' : String(v);
+  const items = [...body].sort((a,b) => String(b.date).localeCompare(String(a.date)) || ((b.id || 0) - (a.id || 0)));
+  c.innerHTML = '<div class="body-row body-head"><span>date</span><span>kg</span><span>fat%</span><span>h₂o%</span><span>musc</span><span>visc</span><span></span></div>'
+    + items.map(b =>
+      `<div class="body-row"><span>${esc(fmtDate(b.date))}</span><span>${nv(b.weight)}</span><span>${nv(b.fat)}</span><span>${nv(b.water)}</span><span>${nv(b.muscle)}</span><span>${nv(b.visceral)}</span><button class="log-del" onclick="deleteBodyEntry(${jsArg(b.id)})" title="delete">✕</button></div>`
+      + (b.note ? `<div class="body-note">${esc(b.note)}</div>` : '')
+    ).join('');
+}
+
+// ── SEED TEMPLATES (from the training protocols; fixed ids + mt:0 → devices merge, never duplicate) ──
+function seedLibrary() {
+  let seeded = false;
+  try { seeded = !!localStorage.getItem('workout-v1-seeded'); } catch(e) {}
+  if (seeded || library.length) return;
+  const S = (code, name, sets, reps, weight, note, dur) => ({code, name, note,
+    sets: Array.from({length: sets}, () => ({reps, weight, durSec: dur ?? null}))});
+  const tpl = (id, name, type, pauseSec, exercises, note) => ({id, name, mt: 0, data: {type, pauseSec, prepSec: 120, note: note || '', exercises}});
+  library = [
+    tpl('sta','Strength A — heavy','strength',105,[
+      S('BPC','Biceps curl (seated, one arm L/R)',3,10,'','down slow 4 s · elbow fixed, no torso swing'),
+      S('BEL','Weighted sit-ups',3,10,'','dumbbells at chest · short pause up · down 3–4 s · no bouncing, move from the belly, don’t pull the neck'),
+      S('WNG','Wings (raise overhead)',3,10,'','elbows slightly bent, palms slightly up, no rotation · up: 2–3 s to the hard mid-point + mini pause, then normal to overhead (no clink) · down ~2 s · shoulders down, not to the ears'),
+      S('PRS','Dumbbell bench press',3,10,'','up smooth, no swing · ~0.5 s pause · down 3 s · shoulder blades retracted the whole set'),
+    ],'main strength stimulus · HR low, full control · longer pauses = technique quality · if HR rises, do NOT shorten the pause'),
+    tpl('stb','Strength B — technique','strength',100,[
+      S('UPB','Up & Belly (press + sit-ups)',3,10,'2×8kg','press: neutral grip, shoulders down, up 1–2 s, pause ~1 s, down 3 s · belly: dumbbells at chest, pause up, down 3–4 s'),
+      S('FMD','From Down (seated drag curl)',3,12,'2×8kg','neutral grip, close to the body, elbows slightly back · up 1–2 s, short pause, down 3–4 s'),
+      S('BCL/BCR','Belly Cross (cross-body crunch, L then R)',3,8,'2.3kg','one arm extended back with the weight, other behind the head · rotate from the trunk, not the arm · short hold, down 3–4 s'),
+      S('SDL/SDR','Sides (lateral raise, L then R)',3,8,'3.3kg','only to shoulder level · pause up 0.5–1 s · down ~3 s · shoulders away from the ears'),
+    ],'light day = technique, not performance · very low HR · fine on worse recovery'),
+    tpl('stc','Strength C — standard','strength',45,[
+      S('STP','Standing press',2,10,'2×8kg',''),
+      S('EBL','Easy belly (light core)',2,10,'',''),
+      S('BAR','Bent arm raise',2,10,'2×8kg',''),
+      S('CRH','Curl & hold',2,10,'2×8kg','hold at the top'),
+    ],'optional habit workout (15–20 min) · ~2 rounds · pauses 30–60 s by feel'),
+    tpl('stcm','Strength C — mini','strength',30,[
+      S('STP','Standing press',1,10,'2×8kg',''),
+      S('BAR','Bent arm raise',1,10,'2×8kg',''),
+      S('EBL','Easy belly',1,10,'',''),
+    ],'~10 min · 1–2 rounds (up to 3 when replacing STA/STB) · minimal pauses · goal is the habit, not performance'),
+    tpl('cara','Cardio A — intense','cardio',60,[
+      S('WUP','Breathing warm-up',1,'','','2–3 min',150),
+      S('INT','All-in interval + guided slowdown',4,'','','near max, driven by breath · quick HR drop after the interval matters',180),
+      S('CDN','Breathing cool-down',1,'','','',120),
+    ],'standing arm swings, no legs, no weights · HR avg 120–135 · HR max briefly, ideally ≤165–168 · do not add volume or frequency — shorten the all-in by a few seconds when HR climbs'),
+    tpl('carb','Cardio B — controlled','cardio',30,[
+      S('WUP','Breathing warm-up',1,'','','',120),
+      S('INT','30 s interval + easy slowdown',8,'','','rhythm + breath · 2nd half with 1 kg wrist weights, controlled',30),
+      S('ALL','60 s all-in',2,'','','the second one with wrist weights',60),
+      S('CDN','Breathing cool-down',1,'','','',120),
+    ],'HR avg 115–130, mostly Z2–Z3 · no long stays in max zones · active recovery, supports strength training'),
+  ];
+  saveLibrary();
+  try { localStorage.setItem('workout-v1-seeded','1'); } catch(e) {}
+}
+
+init();
+</script>
+
+<!-- Clear storage modal -->
+<div class="modal-bg" id="clearStorageModal">
+  <div class="modal" style="max-width:360px">
+    <h2>delete data</h2>
+    <p style="font-size:.82rem;color:var(--muted)">Select what you want to delete. This action cannot be undone.</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
+      <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>current session</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>library</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>workout log</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-body" checked><span>body measurements</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings (font, dark mode)</span></label>
+    </div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" onclick="closeModal('clearStorageModal')">cancel</button>
+      <button class="modal-btn" onclick="toggleAllClear()">select/deselect all</button>
+      <button class="modal-btn primary" onclick="doSelectiveClear()">delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom confirm modal -->
+<div class="modal-bg" id="confirmModal">
+  <div class="modal" style="max-width:340px">
+    <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
+      <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gist settings modal -->
+<div class="modal-bg" id="jsonbinModal">
+  <div class="modal" style="max-width:400px;gap:.65rem">
+    <h2>Gist sync settings</h2>
+    <p>Enter your GitHub token and Gist ID. Data is stored only in this browser.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Create a token at <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). You can find your gists at <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
+    <div class="jb-field">
+      <label>GitHub Token</label>
+      <input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label>Gist ID</label>
+      <input type="text" id="jbIdInput" placeholder="abc123def456… (empty = will be created)" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label>Device name</label>
+      <input type="text" id="jbDeviceInput" placeholder="e.g. work PC, phone…" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="modal-row" id="gistHistoryRow" style="display:none">
+      <button class="btn-io" onclick="openGistHistory()">⏱ version history</button>
+    </div>
+    <div class="modal-row" id="syncLinkRow" style="display:none">
+      <button class="btn-io" id="syncLinkBtn" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="saveJsonBinSettings()">save</button>
+      <button class="modal-btn" onclick="closeModal('jsonbinModal')">cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
+   Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
+   Data lives in a single private gist (file workout-sync.json).
+   Base kolekce: library (LWW dle id) + archive (append-only union).
+   Add other collections at the spots marked // APP LOGIC. */
+(function(){
+  const GHTOKEN = 'workout-gist-token';      // GitHub token (scope gist)
+  const GISTID  = 'workout-gist-id';          // Gist ID (empty = sync will create it on the first push)
+  const ASKEY   = 'workout-autosync';
+  const GIST_API  = 'https://api.github.com/gists';
+  const GIST_FILE = 'workout-sync.json';      // file name inside the gist (data = JSON string)
+  const DEVICE = 'workout-device';           // name of this device (attached to the payload → visible in version history)
+  function defaultDeviceName() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'Android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iPhone/iPad';
+    if (/Windows/i.test(ua)) return 'PC (Windows)';
+    if (/Macintosh|Mac OS/i.test(ua)) return 'Mac';
+    if (/Linux/i.test(ua)) return 'PC (Linux)';
+    return 'device';
+  }
+  function getDeviceName() {
+    try { let n = localStorage.getItem(DEVICE); if (!n) { n = defaultDeviceName(); localStorage.setItem(DEVICE, n); } return n; }
+    catch(e) { return defaultDeviceName(); }
+  }
+  const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
+  let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
+  let pushCooldownUntil = 0;                   // set when GitHub rate-limits us → don't push again until then (avoids hammering a secondary limit)
+  let applyingRemote = false;                 // true during a silent merge → suppresses the save-hook (no recursion)
+  let cloudSchemaAhead = false;               // cloud written by a newer app version → pause our push so we can't overwrite it
+  let schemaWarnShown = false;                // the blocking warning is shown at most once per session
+  // Inspect a freshly fetched cloud record: is its schema newer than what this build understands?
+  function checkCloudSchema(record) {
+    const cs = +(record && record.schema) || 0;
+    cloudSchemaAhead = cs > APP_SCHEMA;
+    updateAutoSyncBtn();
+    if (cloudSchemaAhead) {
+      showStatusMsg('⚠ A newer version of the app is in use on another device — reload this page before editing (sync paused to protect your data)', 8000);
+      if (!schemaWarnShown) {
+        schemaWarnShown = true;
+        try { customAlert('A newer version of this app is in use on another device.\n\nReload this page (Ctrl+Shift+R) before editing here. Until you do, this older version will NOT upload its changes, so it cannot overwrite the newer data in the cloud.'); } catch(e) {}
+      }
+    }
+    return cloudSchemaAhead;
+  }
+
+  // One-time migration from the old JSONBin sync → Gist slots (you can delete this in a newly created app).
+  // NOTE: a JSONBin key ≠ GitHub token and a JSONBin Bin ID ≠ Gist ID — the values are only moved to
+  // the correct slot; the user must overwrite them manually in ⚙. An invalid Gist ID self-heals (404 →
+  // creates a new gist). Runs before the first read of the sync keys.
+  (function migrateJsonbinToGist(){
+    try {
+      const move = (oldK, newK) => { const v = localStorage.getItem(oldK); if (v == null) return;
+        if (localStorage.getItem(newK) == null) localStorage.setItem(newK, v); localStorage.removeItem(oldK); };
+      move('workout-jsonbin-key', GHTOKEN);
+      move('workout-jsonbin-id',  GISTID);
+    } catch(e) {}
+  })();
+
+  // headers: reading (GET) does not need Content-Type, writing (POST/PATCH) does
+  function ghHeaders(token, write) {
+    const h = { 'Accept': 'application/vnd.github+json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    if (write) h['Content-Type'] = 'application/json';
+    return h;
+  }
+  function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
+  // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private
+  function gistWriteInit(token, creating, payload) {
+    const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
+    const body = creating ? { description: 'workout-sync', public: false, files } : { files };
+    return { method: creating ? 'POST' : 'PATCH', mode:'cors', credentials:'omit', headers: ghHeaders(token, true), body: JSON.stringify(body) };
+  }
+  function openJsonBinSettings() {
+    try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(GISTID)||''; } catch(e) {}
+    try { el('jbDeviceInput').value = getDeviceName(); } catch(e) {}
+    try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    el('jsonbinModal').classList.add('open');
+  }
+  function saveJsonBinSettings() {
+    let idChanged = false;
+    try {
+      const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      const dev = el('jbDeviceInput').value.trim();
+      if (dev) localStorage.setItem(DEVICE, dev); else localStorage.removeItem(DEVICE);
+      idChanged = id !== (localStorage.getItem(GISTID) || '');
+      if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
+      if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
+    } catch(e) {}
+    if (idChanged) {   // newly entered ID → download the cloud right away (otherwise only after reload)
+      try { sessionStorage.removeItem('workout-cloud-checked'); } catch(e) {}
+      try { checkCloudOnStartup(); } catch(e) {}
+    }
+    closeModal('jsonbinModal');
+  }
+  function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
+  // link for a new device: Gist ID (optionally token + autosync) in the URL hash —
+  // the hash is not sent to the server and the recipient removes it from the address and history right after load
+  async function copySyncLink() {
+    const gistId = localStorage.getItem(GISTID) || '';
+    if (!gistId) { showSyncTooltip('⚠ save a Gist ID first'); return; }
+    const token = localStorage.getItem(GHTOKEN) || '';
+    let withTok = false;
+    if (token) withTok = await customConfirm('Include the GitHub token in the link too? The link will then expose all data — only send it between your own devices. Without the token you will enter it manually on the new device.', 'include token');
+    const p = new URLSearchParams();
+    p.set('gid', gistId);
+    if (withTok) p.set('tok', token);
+    if (autosyncEnabled()) p.set('as', '1');
+    const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/workout-app/';
+    const url = base + '#' + p.toString();
+    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 link copied — open it on the new device'); flashBtn('syncLinkBtn', '✓ link copied'); }
+    catch(e) {   // clipboard API missing (http / old browser) → hidden textarea, otherwise at least show the link
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch(e2) {}
+      document.body.removeChild(ta);
+      if (ok) { showSyncTooltip('🔗 link copied — open it on the new device'); flashBtn('syncLinkBtn', '✓ link copied'); }
+      else await customAlert('Copy the link for the new device: ' + url);
+    }
+  }
+  function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
+  // GET the gist — returns the raw Response (the caller checks res.ok)
+  async function gistGet(gistId, token) {
+    return fetch(gistUrl(gistId), { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+  }
+  // extracts the stored data (GIST_FILE content) from the GET response as an object; null = cannot read
+  async function gistRecord(res) {
+    let json; try { json = await res.json(); } catch(e) { return null; }
+    const file = json && json.files && json.files[GIST_FILE];
+    if (!file) return null;
+    let content = file.content;
+    if (file.truncated && file.raw_url) {   // GitHub truncates content > ~1 MB → fetch it via raw_url
+      try { content = await (await fetch(file.raw_url, { mode:'cors', credentials:'omit' })).text(); } catch(e) {}
+    }
+    if (!content) return null;
+    try { return JSON.parse(content); } catch(e) { return null; }
+  }
+  function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
+  function hasToken() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // a token is enough → sync creates the gist itself
+
+  /* ── TOMBSTONES (propagation of deletions between devices) ── */
+  const TOMB_KEY  = 'workout-tombstones';    // { "<ns>:<id>": deletedAtTs }
+  const KNOWN_KEY = 'workout-syncknown';     // [ "<ns>:<id>", … ] state from the previous reconcile
+  const TOMB_TTL  = 90 * 864e5;               // drop tombstones older than 90 days
+  let tombstones = {};
+  let knownIds = null;                         // null = not tracked yet
+  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(TOMB_KEY) || '{}') || {}; } catch(e) { tombstones = {}; } }
+  function saveTombstones() { try { localStorage.setItem(TOMB_KEY, JSON.stringify(tombstones)); } catch(e) {} }
+  function loadKnownIds()   { try { const s = localStorage.getItem(KNOWN_KEY); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
+  function saveKnownIds()   { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...(knownIds || [])])); } catch(e) {} }
+  function isTombstoned(key) { return !!tombstones[key]; }
+  // set of "<ns>:<id>" of all currently existing items
+  function currentKeySet() {
+    const s = new Set();
+    library.forEach(e => { if (e && e.id != null) s.add('lib:' + e.id); });
+    archive.forEach(e => { if (e && e.id != null) s.add('arc:' + e.id); });
+    body.forEach(e => { if (e && e.id != null) s.add('bod:' + e.id); });
+    return s;
+  }
+  function pruneTombstones() {
+    const cutoff = Date.now() - TOMB_TTL;
+    Object.keys(tombstones).forEach(k => { if (!(tombstones[k] > cutoff)) delete tombstones[k]; });
+  }
+  // diff the current state against the last known → deletions are recorded as tombstones
+  function reconcileTombstones() {
+    const cur = currentKeySet(), now = Date.now();
+    if (knownIds) knownIds.forEach(k => { if (!cur.has(k)) tombstones[k] = now; });
+    cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // exists ⇒ alive
+    knownIds = cur;
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+  }
+  function mergeCloudTombstones(cloudTomb) {
+    if (!cloudTomb || typeof cloudTomb !== 'object') return;
+    Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
+  }
+  // locally delete append-only collections that have a tombstone (LWW collections are handled by lwwMerge)
+  function applyTombstones() {
+    let removed = 0;
+    const sweep = (ns, getId) => arr => arr.filter(x => { if (tombstones[ns + ':' + getId(x)]) { removed++; return false; } return true; });
+    archive = sweep('arc', x => x.id)(archive);
+    // APP LOGIC: delete other append-only collections here
+    return removed;
+  }
+  // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
+  function sigOf(items, arch, bod, tomb) {
+    const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
+    const arcS = arr => arr.map(x => String((x && x.id) || '')).sort().join(',') + ':' + arr.length;
+    const tS   = o => Object.keys(o || {}).sort().join(',');
+    return [idS(items), arcS(arch), idS(bod), tS(tomb)].join('||');
+  }
+  function localSig() { return sigOf(library, archive, body, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.tombstones || {}); }
+
+  // the toolbar button is also a status indicator
+  function updateAutoSyncBtn() {
+    const b = el('autoSyncBtn'); if (!b) return;
+    const on = autosyncEnabled();
+    b.classList.toggle('on', on);
+    if (cloudSchemaAhead) {   // outdated build — push is paused; make it visible
+      if (!b.classList.contains('syncing')) b.textContent = '⚠';
+      b.title = 'this app version is outdated — reload the page; uploads are paused so you cannot overwrite newer data';
+      return;
+    }
+    if (!b.classList.contains('syncing')) b.textContent = '☁';
+    b.title = on ? 'automatic sync enabled — click to disable'
+                 : 'enable automatic sync (Gist)';
+  }
+  function setSyncState(state) {
+    const b = el('autoSyncBtn'); if (!b) return;
+    clearTimeout(stateTimer);
+    b.classList.remove('syncing');
+    if (state === 'syncing')  { b.textContent = '↑'; b.classList.add('syncing'); }
+    else if (state === 'ok')  { b.textContent = '☁'; stateTimer = setTimeout(updateAutoSyncBtn, 3000); }
+    else if (state === 'err') { b.textContent = '⚠'; stateTimer = setTimeout(updateAutoSyncBtn, 5000); }
+    else updateAutoSyncBtn();
+  }
+  function toggleAutoSync() {
+    const on = !autosyncEnabled();
+    try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
+    updateAutoSyncBtn();
+    if (on && !hasToken()) { showStatusMsg('⚠ set a GitHub token via ⚙ first (the gist will be created automatically)', 4500); return; }
+    if (on) {
+      reconcileTombstones();   // tombstone baseline
+      // PULL → merge → push (via checkCloudOnStartup): a direct push on a new device would
+      // overwrite the gist with an empty local state before the cloud data is downloaded
+      try { sessionStorage.removeItem('workout-cloud-checked'); } catch(e) {}
+      checkCloudOnStartup();
+    }
+  }
+
+  // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
+  function buildAutoPayload() {
+    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, body: body, tombstones: tombstones, device: getDeviceName() };
+  }
+  function scheduleAutoPush() {
+    if (!autosyncEnabled() || !hasToken()) return;
+    if (pushTimer) return;        // already scheduled → coalesce
+    const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs), pushCooldownUntil - Date.now());
+    pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
+  }
+  async function doAutoPush() {
+    if (!autosyncEnabled() || !hasToken()) return;
+    if (cloudSchemaAhead) { setSyncState('err'); showStatusMsg('⚠ sync paused — a newer app version is in the cloud. Reload to update.', 5000); return; }   // never let an older build overwrite newer data
+    if (pushing) { pushAgain = true; return; }
+    if (Date.now() < pushCooldownUntil) { scheduleAutoPush(); return; }   // rate-limit cooldown still active → defer
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) return;
+    let gistId = localStorage.getItem(GISTID);
+    let creating = !gistId;        // the gist does not exist yet → autosync creates it (POST)
+    pushing = true; setSyncState('syncing');
+    try {
+      const payload = buildAutoPayload();
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
+      if (!res.ok) {
+        let body = null;
+        try { body = await res.json(); } catch(_) {}
+        const detail = (body && body.message) ? ' — ' + body.message : '';
+        if (res.status === 403 || res.status === 429) {   // rate limited → back off instead of hammering (a secondary limit only clears if we stop)
+          const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+          const reset = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
+          const remaining = res.headers.get('x-ratelimit-remaining');
+          let waitMs = retryAfter ? retryAfter * 1000
+                     : (remaining === '0' && reset) ? (reset * 1000 - Date.now())
+                     : 60000;                              // secondary limit, no hint → wait a minute
+          waitMs = Math.min(Math.max(waitMs || 0, 10000), 3600000);
+          pushCooldownUntil = Date.now() + waitMs;
+          console.warn('[autosync] rate-limited, pausing ' + Math.ceil(waitMs/1000) + 's' + detail);
+          showStatusMsg('⚠ sync paused (GitHub rate limit) — auto-retry in ' + Math.ceil(waitMs/1000) + ' s', 6000);
+          setSyncState('err');
+          pushing = false; pushAgain = false;
+          clearTimeout(pushTimer); pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, waitMs + 100);
+          return;
+        }
+        throw new Error('HTTP ' + res.status + detail);   // surface GitHub's reason (bad credentials / missing gist scope / …)
+      }
+      pushCooldownUntil = 0;
+      if (creating) {
+        const json = await res.json().catch(() => null);
+        const newId = json && json.id;
+        if (newId) { try { localStorage.setItem(GISTID, newId); } catch(e) {} }
+      }
+      lastPushTs = Date.now(); setSyncState('ok');
+    } catch(e) {
+      console.warn('[autosync] push failed:', (e && e.message) ? e.message : e);
+      setSyncState('err');
+    } finally {
+      pushing = false;
+      if (pushAgain) { pushAgain = false; scheduleAutoPush(); }
+    }
+  }
+
+  // LWW merge of a keyed array: the newer mt wins; a deletion wins only if it is newer
+  // than the last edit (an edit after deletion = resurrection). Returns a new array + counts.
+  function lwwMerge(localArr, cloudArr, ns, keyOf, normalize) {
+    const byKey = new Map();
+    (localArr || []).forEach(x => { if (x && keyOf(x) != null) byKey.set(String(keyOf(x)), x); });
+    let added = 0, updated = 0, removed = 0;
+    (cloudArr || []).forEach(c => {
+      if (!c || keyOf(c) == null) return;
+      const k = String(keyOf(c)), cmt = +c.mt || 0, ex = byKey.get(k);
+      if (ex) {
+        if (cmt > (+ex.mt || 0)) { byKey.set(k, normalize(c)); updated++; }
+      } else {
+        const tomb = tombstones[ns + ':' + k] || 0;
+        if (cmt >= tomb) { byKey.set(k, normalize(c)); added++; if (tomb && cmt > tomb) delete tombstones[ns + ':' + k]; }
+      }
+    });
+    for (const [k, x] of byKey) {
+      const tomb = tombstones[ns + ':' + k] || 0;
+      if (tomb && tomb >= (+x.mt || 0)) { byKey.delete(k); removed++; }
+      else if (tomb) delete tombstones[ns + ':' + k];   // local edit newer than the deletion → keep it, drop the tombstone
+    }
+    return { arr: [...byKey.values()], added, updated, removed };
+  }
+
+  // silent two-way merge cloud → local
+  function autoImportSilent(record) {
+    if (!record || typeof record !== 'object') return;
+    applyingRemote = true;
+    try {
+    mergeCloudTombstones(record.tombstones);
+    let removed = applyTombstones();           // append-only collections (archive)
+    let added = 0, updated = 0;
+    // library — LWW by id
+    const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
+    library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
+    // archive — only add missing (append-only)
+    const arcIds = new Set(archive.map(x => String(x.id)));
+    (record.archive || []).forEach(it => {
+      if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
+    });
+    // body measurements — LWW by id (identity normalize → unknown/newer fields survive)
+    const bodR = lwwMerge(body, record.body || [], 'bod', x => x.id, c => c);
+    body = bodR.arr; added += bodR.added; updated += bodR.updated; removed += bodR.removed;
+    // NOTE: the live workout (wk) is intentionally NOT refreshed from a merged template —
+    // it is a working copy with the user's in-progress sets; a manual save (LWW, mt=now) wins.
+
+    if (added || updated || removed) {
+      saveLibrary(); saveArchive(); saveBody();
+      if (typeof renderLibrary === 'function') renderLibrary();
+      if (typeof renderLog === 'function') renderLog();
+      if (typeof renderBody === 'function') renderBody();
+      let msg;
+      if (added && !updated && !removed)      msg = '☁ +' + added + ' new items from sync';
+      else if (updated && !added && !removed) msg = '☁ ' + updated + ' items updated from sync';
+      else {
+        const parts = [];
+        if (added)   parts.push('+' + added);
+        if (updated) parts.push('~' + updated);
+        if (removed) parts.push('−' + removed);
+        msg = '☁ synced: ' + parts.join(' ');
+      }
+      if (removed) msg += ' — something was deleted (check / restore from history)';
+      showStatusMsg(msg, 4000);
+    }
+    // align the baseline to the new state and save tombstones
+    knownIds = currentKeySet();
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+    } finally { applyingRemote = false; }
+  }
+
+  // hook after each persistence of a synced collection: record deletions (tombstones) and schedule a push
+  function autoSyncOnSave() {
+    if (applyingRemote) return;      // changes from the merge must not trigger reconcile/push
+    if (!hasToken()) return;         // without a token there is nothing to track (sync creates the gist itself)
+    reconcileTombstones();
+    if (autosyncEnabled()) scheduleAutoPush();
+  }
+
+  // silent PULL (focus / visibilitychange / interval): download the cloud and merge if it differs — no spinner
+  let lastPullTs = 0;
+  const PULL_MIN_INTERVAL = 30000;            // max 1 pull / 30 s (focus + visibility fire together)
+  async function silentPull() {
+    if (Date.now() - lastPullTs < PULL_MIN_INTERVAL) return;
+    lastPullTs = Date.now();
+    const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(GISTID);
+    if (!token || !gistId) return;             // without a token and Gist ID there is nowhere to download from
+    if (pushing) return;                       // a push is in progress → let it finish
+    if (pulling) return;                       // a pull is already running → do not start a second
+    pulling = true;
+    const sBtn = el('syncDownBtn');
+    if (sBtn) { sBtn.disabled = true; sBtn.classList.add('syncing'); }
+    let changed = false;
+    try {
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
+      if (localSig() !== cloudSig(record)) {
+        const before = localSig();
+        autoImportSilent(record);
+        changed = localSig() !== before;
+      }
+      if (autosyncEnabled()) scheduleAutoPush();
+    } catch(e) { console.warn('[silentPull] failed:', (e && e.message) ? e.message : e); }
+    finally {
+      pulling = false;
+      if (sBtn) {
+        sBtn.disabled = false;
+        sBtn.classList.remove('syncing');
+        if (changed) { sBtn.textContent = '✓'; setTimeout(() => { sBtn.textContent = '↓'; }, 1500); }
+        else sBtn.textContent = '↓';
+      }
+    }
+  }
+
+  async function doCloudUpload() {
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) { showSyncTooltip('⚠ missing GitHub token — open ⚙'); return; }
+    let gistId = localStorage.getItem(GISTID);
+    const items    = library.filter(e => exportSelected.has(e.id));
+    const archItems = archive.filter(e => exportArchSelected.has(e.id));
+    if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
+    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, body};
+    closeModal('exportModal');
+    showSyncTooltip('↑ uploading…');
+    try {
+      let creating = !gistId;
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      if (creating) { const json = await res.json().catch(() => null); const newId = json && json.id; if (newId) localStorage.setItem(GISTID, newId); }
+      const t = new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+      showSyncTooltip('↑ uploaded '+t+' ('+items.length+'i '+archItems.length+'a)');
+    } catch(e) {
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
+    }
+  }
+
+  async function syncDownload() {
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) { showSyncTooltip('⚠ missing Gist ID — open ⚙'); return; }
+    const btn = el('syncDownBtn'); btn.disabled = true;
+    showSyncTooltip('↓ downloading…');
+    try {
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token);
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) throw new Error('Invalid data in the gist');
+      if (!record.items && !record.teas && !record.archive && !record.body) throw new Error('The gist contains no items');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import from Gist';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('↓ downloaded — check the selection and import');
+    } catch(e) {
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
+    } finally { btn.disabled = false; }
+  }
+
+  async function checkCloudOnStartup() {
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) {
+      // the gist does not exist yet → with autosync on and existing data, create it right away
+      if (autosyncEnabled() && hasToken() && (library.length || archive.length)) scheduleAutoPush();
+      return;
+    }
+    if (sessionStorage.getItem('workout-cloud-checked')) return;
+    sessionStorage.setItem('workout-cloud-checked','1');
+    const btn = el('syncDownBtn'); const origTitle = btn.title;
+    btn.disabled = true; btn.title = 'checking cloud…';
+    try {
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
+      // AUTOSYNC: silent two-way merge (incl. deletions and edits)
+      if (autosyncEnabled()) {
+        if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
+        return;
+      }
+      // otherwise (autosync off): offer a manual import if the data differs
+      const cloudItems = record.items || record.teas || [];
+      const cloudArch  = record.archive || [];
+      const cloudBody  = record.body || [];
+      const idSig = arr => arr.map(x => String(x.id||'')).sort().join(',')+':'+arr.length;
+      if (idSig(library)+'|'+idSig(archive)+'|'+idSig(body) === idSig(cloudItems)+'|'+idSig(cloudArch)+'|'+idSig(cloudBody)) return;
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import from Gist';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('☁ cloud has different data — check the selection');
+    } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
+  }
+
+  /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
+     Loads the gist history[], allows preview (via the import modal) and restore
+     (via the standard LWW merge autoImportSilent + push). */
+  let gistRevs = [];   // the last ≤20 revisions from openGistHistory (index = order in the list)
+  const gistRevCache = {};        // version → record (cached so reopening / filtering never refetches)
+  let historyRateLimited = false; // a 403/429 during history fetches → stop firing more
+  let ghFilterDev = '';           // device filter ('' = all)
+  function historyGistId() { try { return localStorage.getItem(GISTID); } catch(e) { return null; } }
+  async function openGistHistory() {
+    const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
+    if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
+    closeModal('jsonbinModal');
+    gistRevs = []; historyRateLimited = false; ghFilterDev = '';
+    { const fr = el('ghDevFilterRow'); if (fr) fr.style.display = 'none'; }
+    el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
+    el('gistHistoryModal').classList.add('open');
+    try {
+      const res = await gistGet(gistId, token);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      gistRevs = ((json && json.history) || []).slice(0, 100);
+      renderGistHistory();
+    } catch(e) {
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+    }
+  }
+  function renderGistHistory() {
+    if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">No history available</p>'; return; }
+    el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
+      const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
+      const tag = i === 0 ? '<span class="gh-rev-chg">newest</span>' : '';
+      return '<div class="gh-rev" id="ghRev' + i + '" data-device="' + esc(rev._device || '') + '"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
+        + '<span class="gh-rev-dev" id="ghDev' + i + '">' + (rev._device ? '· ' + esc(rev._device) : '') + '</span>' + tag + '</div>'
+        + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
+        + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">restore</button></div></div>';
+    }).join('');
+    updateDeviceFilter(); applyGhFilter();
+    loadHistoryDevices();
+  }
+  // fetch the device name (payload.device) for the top ≤20 revisions — gently (2 workers, spaced, cached, stop on rate limit)
+  function loadHistoryDevices() {
+    const N = Math.min(gistRevs.length, 20);
+    let idx = 0;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const worker = async () => {
+      while (idx < N && !historyRateLimited) {
+        const i = idx++;
+        const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+        const cached = rev.version in gistRevCache;
+        try {
+          const rec = await fetchGistRevision(rev.version);
+          if (rec && rec.device) {
+            rev._device = rec.device;
+            const row = el('ghRev' + i); if (row) row.dataset.device = rec.device;
+            const span = el('ghDev' + i); if (span) span.textContent = '· ' + rec.device;
+            updateDeviceFilter(); if (ghFilterDev) applyGhFilter();
+          }
+        } catch(_) { /* rate limit / error → historyRateLimited stops the loop */ }
+        if (!cached) await sleep(150);   // space network requests so we don't trip the secondary rate limit
+      }
+    };
+    worker(); worker();   // 2 gentle parallel workers
+  }
+  // distinct devices seen so far → populate the filter dropdown (only when ≥2 devices)
+  function updateDeviceFilter() {
+    const devs = [...new Set(gistRevs.map(r => r && r._device).filter(Boolean))].sort();
+    const row = el('ghDevFilterRow'), sel = el('ghDevFilter');
+    if (!row || !sel) return;
+    if (devs.length < 2) { row.style.display = 'none'; return; }
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">all devices</option>' + devs.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+    sel.value = devs.indexOf(cur) >= 0 ? cur : '';
+    row.style.display = '';
+  }
+  function onGhDevFilter() { ghFilterDev = el('ghDevFilter') ? el('ghDevFilter').value : ''; applyGhFilter(); }
+  function applyGhFilter() {
+    document.querySelectorAll('#gistHistoryList .gh-rev').forEach(row => {
+      const dev = row.dataset.device || '';
+      row.style.display = (!ghFilterDev || dev === ghFilterDev) ? '' : 'none';
+    });
+  }
+  // downloads the content of a specific revision → record (object) or null (cached per version)
+  async function fetchGistRevision(version) {
+    if (version in gistRevCache) return gistRevCache[version];
+    const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
+    const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+    if (res.status === 403 || res.status === 429) { historyRateLimited = true; throw new Error('HTTP ' + res.status); }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const file = json && json.files && json.files[GIST_FILE];
+    const rec = (!file || !file.content) ? null : JSON.parse(file.content);
+    gistRevCache[version] = rec;
+    return rec;
+  }
+  async function gistHistoryPreview(i) {
+    const rev = gistRevs[i]; if (!rev) return;
+    try {
+      const record = await fetchGistRevision(rev.version);
+      if (!record) throw new Error('empty revision');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Revision preview';
+      parseImportJson(JSON.stringify(record));
+      closeModal('gistHistoryModal');
+    } catch(e) {
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+    }
+  }
+  async function gistHistoryRestore(i) {
+    const rev = gistRevs[i]; if (!rev) return;
+    const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
+    if (!await customConfirm('Restore the version from ' + d + '? Current data stays — the older version will be merged via the standard merge.', 'restore')) return;
+    const winAtStart = (typeof activeWin !== 'undefined') ? activeWin : null;
+    try {
+      const record = await fetchGistRevision(rev.version);
+      if (!record) throw new Error('empty revision');
+      if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // the window switched → the data belongs to another window
+      autoImportSilent(record);
+      scheduleAutoPush();
+      showStatusMsg('↩ version restored', 3000);
+      closeModal('gistHistoryModal');
+    } catch(e) {
+      showStatusMsg('⚠ restore failed', 3000);
+    }
+  }
+  window.openGistHistory      = openGistHistory;
+  window.gistHistoryPreview   = gistHistoryPreview;
+  window.gistHistoryRestore   = gistHistoryRestore;
+  window.onGhDevFilter        = onGhDevFilter;
+  window.openJsonBinSettings  = openJsonBinSettings;
+  window.saveJsonBinSettings  = saveJsonBinSettings;
+  window.doCloudUpload        = doCloudUpload;
+  window.syncDownload         = syncDownload;
+  window.checkCloudOnStartup  = checkCloudOnStartup;
+  window.toggleAutoSync       = toggleAutoSync;
+  window.copySyncLink         = copySyncLink;
+  window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
+  loadTombstones(); loadKnownIds();
+  // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
+  ['saveLibrary','saveArchive','saveBody'].forEach(fn => {
+    const orig = window[fn];
+    if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
+  });
+  // PULL ON FOCUS — returning to the tab/window immediately downloads changes from another device
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autosyncEnabled()) silentPull(); });
+  window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
+  // PULL every 5 minutes (only when the tab is visible)
+  setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
+  // ── SYNC LINK: one-time device setup from the URL hash (#gid=…&tok=…&as=1) ──
+  // Must run BEFORE checkCloudOnStartup so the first cloud check already uses the new ID.
+  (function importSyncLink() {
+    if ((location.hash || '').indexOf('gid=') === -1) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // delete the sensitive hash from the address and history
+    if (!gid) return;
+    try {
+      localStorage.setItem(GISTID, gid);
+      if (tok) localStorage.setItem(GHTOKEN, tok);
+      if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
+    } catch(e) {}
+    try { sessionStorage.removeItem('workout-cloud-checked'); } catch(e) {}
+    showSyncTooltip(tok ? '🔗 sync set up from link' : '🔗 Gist ID set — enter the token via ⚙');
+  })();
+  updateAutoSyncBtn();
+  checkCloudOnStartup();
+})();
+</script>
+<footer style="text-align:center; padding: 8px;">
+  <a href="https://lordkrabaty.github.io/webapps/" title="home page — all apps" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
+</footer>
+
+<!-- Gist history modal -->
+<div class="modal-bg" id="gistHistoryModal">
+  <div class="modal" style="max-width:460px;gap:.65rem">
+    <h2>Version history</h2>
+    <div class="modal-row" id="ghDevFilterRow" style="display:none;align-items:center;gap:.5rem">
+      <label style="font-size:.72rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase">Device</label>
+      <select id="ghDevFilter" onchange="onGhDevFilter()" style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.82rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none"></select>
+    </div>
+    <div class="modal-list" id="gistHistoryList"></div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
