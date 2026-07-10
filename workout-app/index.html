@@ -344,6 +344,12 @@ textarea::placeholder{color:var(--mid)}
 .log-note-wk{margin-top:.2rem;border-top:1px solid var(--off);padding-top:.2rem}
 .log-set-note{display:flex;gap:.3rem;align-items:flex-start;padding-left:.4rem}
 .log-rn{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-top:.16rem;flex-shrink:0}
+.log-actions{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
+.log-act-btn{font-family:'DM Sans',sans-serif;font-size:.68rem;color:var(--muted);background:none;border:var(--b);border-radius:var(--r);padding:.18rem .45rem;cursor:pointer;white-space:nowrap}
+@media(hover:hover){.log-act-btn:hover{background:var(--off);color:var(--black);border-color:var(--dark)}}
+/* log edit modal */
+.le-ex{display:flex;gap:.4rem;align-items:center;margin-top:.35rem;border-bottom:1px solid var(--light);padding-bottom:.15rem}
+.le-row{display:flex;gap:.4rem;align-items:center;padding:.15rem 0}
 .log-tools{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.1rem}
 
 /* BODY (Tanita measurements) */
@@ -503,6 +509,30 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div id="statusToast"></div>
+
+<!-- Save log entry as template modal -->
+<div class="modal-bg" id="tplNameModal">
+  <div class="modal" style="max-width:360px">
+    <h2>Save as a new template</h2>
+    <div class="jb-field"><label>template name</label><input id="tplNameInput" type="text" spellcheck="false" onkeydown="if(event.key==='Enter')confirmLogToTemplate()"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('tplNameModal')">cancel</button>
+      <button class="modal-btn primary" onclick="confirmLogToTemplate()">save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log entry edit modal -->
+<div class="modal-bg" id="logEditModal">
+  <div class="modal" style="max-width:440px">
+    <h2>Edit log entry</h2>
+    <div class="modal-list" id="logEditBody" style="max-height:340px"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('logEditModal')">cancel</button>
+      <button class="modal-btn primary" onclick="saveLogEdit()">save</button>
+    </div>
+  </div>
+</div>
 
 <!-- Import modal -->
 <div class="modal-bg" id="importModal">
@@ -851,7 +881,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -1097,10 +1127,11 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 
 // template snapshot of the live workout — structure only (run/done state excluded).
 // durSec = the PLANNED exercise time (filled by hand, editable) — it belongs to the template.
-function tplFromWk() {
+function tplFromWk(w) {
+  w = w || wk;
   return {
-    type: wk.type, pauseSec: wk.pauseSec, prepSec: wk.prepSec ?? 120, sidePauseSec: wk.sidePauseSec ?? 0, note: wk.note || '',
-    exercises: (wk.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side,
+    type: w.type, pauseSec: w.pauseSec, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, note: w.note || '',
+    exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null}))}))
   };
 }
@@ -1614,6 +1645,11 @@ function renderLog() {
         <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
       ${lines}
       <textarea class="log-note-in log-note-wk" rows="1" placeholder="· workout note" title="note for the whole workout — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>
+      <div class="log-actions">
+        <button class="log-act-btn" onclick="openLogEdit(${jsArg(a.id)})" title="edit the logged reps / weights / times">✎ edit</button>
+        <button class="log-act-btn" onclick="useLogAsWorkout(${jsArg(a.id)})" title="load this logged workout into the main panel">← use as workout</button>
+        <button class="log-act-btn" onclick="logToTemplate(${jsArg(a.id)})" title="save this logged workout as a new template">→ template</button>
+      </div>
     </div>`;
   }).join('');
   c.querySelectorAll('.log-note-in').forEach(autoResizeTA);   // hidden pane → resized again on tab switch
@@ -1644,6 +1680,125 @@ function updateLogSetNote(id, exIdx, setIdx, val) {
   saveArchive();
   showSave('✓ log note saved');
 }
+// ── LOG ENTRY: EDIT / USE AS WORKOUT / SAVE AS TEMPLATE (tea-app principle) ──
+// The modal edits a DRAFT copy — every input binds to it, add/remove re-renders it,
+// nothing touches the archive until "save" (cancel discards everything).
+let logEditId = null, logEditDraft = null;
+function openLogEdit(id) {
+  const a = archive.find(x => String(x.id) === String(id)); if (!a) return;
+  logEditId = id;
+  logEditDraft = JSON.parse(JSON.stringify(a));
+  renderLogEdit();
+  el('logEditModal').classList.add('open');
+}
+function renderLogEdit() {
+  const d = logEditDraft; if (!d) return;
+  el('logEditBody').innerHTML = `
+    <div class="jb-field"><label>name</label><input type="text" value="${esc(d.name || '')}" spellcheck="false" oninput="logEditDraft.name=this.value"></div>
+    <div class="jb-field"><label>total time (m:ss)</label><input type="text" value="${mmss(d.totalSec || 0)}" onchange="const v=parseDur(this.value);if(v!=null)logEditDraft.totalSec=v;this.value=mmss(logEditDraft.totalSec||0)"></div>`
+    + (d.entries || []).map((e, ei) => `
+      <div class="le-ex">
+        <input class="ex-code" value="${esc(e.code || '')}" placeholder="CODE" oninput="logEditDraft.entries[${ei}].code=this.value">
+        <input class="ex-name" value="${esc(e.name || '')}" placeholder="exercise name" oninput="logEditDraft.entries[${ei}].name=this.value">${e.side ? '<span class="set-x">L/R</span>' : ''}
+        <button class="btn-add" onclick="leAddSet(${ei})" title="add a round to this exercise">+</button>
+        <button class="ex-del" onclick="leDelEx(${ei})" title="remove this exercise">✕</button>
+      </div>
+      ${(e.sets || []).map((s, si) => `
+        <div class="le-row">
+          <span class="set-num">${s.rd || si + 1}</span>
+          <input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" title="reps" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].reps=this.value">
+          <span class="set-x">×</span>
+          <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" title="weight" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].weight=this.value">
+          <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" title="time (m:ss or seconds)" placeholder="m:ss" onchange="leDur(${ei},${si},this)">
+          <button class="set-del" onclick="leDelSet(${ei},${si})" title="remove this round">✕</button>
+        </div>`).join('')}`).join('')
+    + `<button class="btn-io" style="margin-top:.4rem" onclick="leAddEx()">+ add exercise</button>`;
+}
+function leDur(ei, si, inp) {
+  const v = parseDur(inp.value);
+  logEditDraft.entries[ei].sets[si].durSec = v;
+  inp.value = v != null ? mmss(v) : '';
+}
+function leAddSet(ei) {
+  const sets = logEditDraft.entries[ei].sets;
+  const p = sets[sets.length - 1];
+  sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: true, rd: p ? (+p.rd || sets.length) + 1 : 1, note: ''});
+  renderLogEdit();
+}
+function leDelSet(ei, si) {
+  const e = logEditDraft.entries[ei];
+  e.sets.splice(si, 1);
+  if (!e.sets.length) logEditDraft.entries.splice(ei, 1);   // last round removed → the exercise goes too
+  renderLogEdit();
+}
+function leDelEx(ei) { logEditDraft.entries.splice(ei, 1); renderLogEdit(); }
+function leAddEx() {
+  logEditDraft.entries = logEditDraft.entries || [];
+  logEditDraft.entries.push({code:'', name:'', side:false, note:'', sets:[{reps:'', weight:'', durSec:null, done:true, rd:1, note:''}]});
+  renderLogEdit();
+}
+function saveLogEdit() {
+  const i = archive.findIndex(x => String(x.id) === String(logEditId));
+  if (i < 0 || !logEditDraft) { closeModal('logEditModal'); return; }
+  logEditDraft.name = (logEditDraft.name || '').trim() || 'workout';
+  logEditDraft.entries = (logEditDraft.entries || []).filter(e => (e.sets || []).length);
+  logEditDraft.mt = Date.now();   // edited log entry wins LWW → syncs to other devices
+  archive[i] = logEditDraft;
+  logEditDraft = null;
+  saveArchive(); renderLog();
+  closeModal('logEditModal');
+  showSave('✓ log entry updated');
+}
+// rebuild a live-workout structure from a log entry; cues/pauses/linked come from the source template if it still exists
+function logEntryToWk(a) {
+  const tpl = library.find(x => x.data && String(x.id) === String(a.tplId));
+  const d = tpl ? tpl.data : null;
+  const tplEx = code => d && (d.exercises || []).find(x => x.code === code);
+  return {
+    name: a.name || '', type: a.type || (d && d.type) || 'strength',
+    pauseSec: d ? (+d.pauseSec || 105) : 105,
+    prepSec: (d && d.prepSec != null) ? +d.prepSec : 120,
+    sidePauseSec: d ? (+d.sidePauseSec || 0) : 0,
+    note: '', run: null,
+    exercises: (a.entries || []).map(e => {
+      const te = tplEx(e.code);
+      return {code: e.code || '', name: e.name || '', note: te ? (te.note || '') : '', snote: '',
+        linked: te ? te.linked !== false : true, side: !!e.side,
+        sets: (e.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: ''}))};
+    })
+  };
+}
+async function useLogAsWorkout(id) {
+  const a = archive.find(x => String(x.id) === String(id)); if (!a) return;
+  if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) first.'); return; }
+  if (!await customConfirm('Load this logged workout into the main panel? The current setup will be replaced (undo ↩ works).','load')) return;
+  pushUndo();
+  wk = logEntryToWk(a);
+  const tpl = library.find(x => String(x.id) === String(a.tplId));
+  activeLibId = tpl ? tpl.id : null;   // keep the template link when it still exists
+  markSaved();
+  renderMain(); renderNotes(); renderLibrary(); schedSave();
+  showSave('↩ loaded from the log');
+}
+let tplFromLogId = null;
+function logToTemplate(id) {
+  const a = archive.find(x => String(x.id) === String(id)); if (!a) return;
+  tplFromLogId = id;
+  const d = new Date(a.date || a.id);
+  el('tplNameInput').value = (a.name || 'workout') + ' — ' + d.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'2-digit'});
+  el('tplNameModal').classList.add('open');
+  setTimeout(() => { try { el('tplNameInput').focus(); el('tplNameInput').select(); } catch(e) {} }, 50);
+}
+function confirmLogToTemplate() {
+  const a = archive.find(x => String(x.id) === String(tplFromLogId));
+  if (!a) { closeModal('tplNameModal'); return; }
+  const name = (el('tplNameInput').value || '').trim() || 'workout';
+  const entry = {id: Date.now(), name, data: tplFromWk(logEntryToWk(a)), mt: Date.now()};
+  library.push(entry); saveLibrary(); renderLibrary();
+  closeModal('tplNameModal');
+  showSave('✓ saved as a new template');
+}
+
 // ── LOG TEXT EXPORT ─────────────────────────────────────────────────────────
 function logEntryText(a) {
   const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)];
