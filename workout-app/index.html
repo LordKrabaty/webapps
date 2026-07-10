@@ -363,7 +363,23 @@ textarea::placeholder{color:var(--mid)}
 .body-list{display:flex;flex-direction:column;gap:.1rem;overflow-y:auto;flex:1;min-height:0;margin-top:.6rem}
 .body-row{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(5,minmax(0,1fr)) 20px;gap:.25rem;align-items:center;font-family:'DM Mono',monospace;font-size:.76rem;color:var(--black);padding:.22rem .2rem;border-bottom:1px solid var(--light);flex-shrink:0}
 .body-row.body-head{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1.5px solid var(--black)}
+.body-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .body-note{font-size:.72rem;color:var(--muted);font-style:italic;padding:.05rem .2rem .25rem;flex-shrink:0}
+/* body field manager */
+.bf-chips{display:flex;flex-wrap:wrap;gap:.3rem}
+.bf-chip{display:inline-flex;align-items:center;gap:.3rem;border:var(--b);border-radius:var(--r);padding:.15rem .45rem;font-size:.72rem;color:var(--dark)}
+.bf-x{border:none;background:none;color:var(--muted);cursor:pointer;font-size:.62rem;padding:0;line-height:1}
+@media(hover:hover){.bf-x:hover{color:var(--black)}}
+.bf-in{font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;min-width:0;flex:1}
+.bf-in:focus{outline:2px solid var(--black);outline-offset:1px}
+/* body chart (single-series monochrome line, inline SVG) */
+.bc-ctrls{display:flex;gap:.3rem;margin:.55rem 0 .3rem;flex-wrap:wrap}
+.bc-ctrls select.bf-in{flex:1;min-width:6em}
+.bc-wrap{position:relative;flex-shrink:0}
+.bc-svg{width:100%;height:auto;display:block;border:var(--b);border-radius:var(--r);background:var(--w);touch-action:pan-y}
+.bc-lbl{font-family:'DM Mono',monospace;font-size:9px;fill:var(--muted)}
+.bc-vlbl{font-family:'DM Mono',monospace;font-size:10px;fill:var(--black)}
+.bc-tip{position:absolute;top:2px;background:var(--w);border:var(--bh);border-radius:var(--r);padding:.15rem .4rem;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--black);pointer-events:none;white-space:nowrap;z-index:2}
 </style>
 </head>
 <body>
@@ -461,16 +477,8 @@ textarea::placeholder{color:var(--mid)}
       <div id="logList" class="log-list"></div>
     </div>
     <div class="notes-pane" id="pane-body">
-      <div class="body-form">
-        <div class="field"><label>date</label><input type="date" id="bodyDate"></div>
-        <div class="field"><label>weight kg</label><input type="text" inputmode="decimal" id="bodyWeight" placeholder="–"></div>
-        <div class="field"><label>fat %</label><input type="text" inputmode="decimal" id="bodyFat" placeholder="–"></div>
-        <div class="field"><label>water %</label><input type="text" inputmode="decimal" id="bodyWater" placeholder="–"></div>
-        <div class="field"><label>muscle kg</label><input type="text" inputmode="decimal" id="bodyMuscle" placeholder="–"></div>
-        <div class="field"><label>visceral</label><input type="text" inputmode="decimal" id="bodyVisc" placeholder="–"></div>
-        <div class="field" style="grid-column:1/-1"><label>note</label><input type="text" id="bodyNote" placeholder="optional"></div>
-      </div>
-      <button class="btn-lib primary" onclick="addBodyEntry()">+ add measurement</button>
+      <div id="bodyForm"></div>
+      <div id="bodyChart"></div>
       <div id="bodyList" class="body-list"></div>
     </div>
     <div class="notes-pane" id="pane-note">
@@ -570,7 +578,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 2;   // 2: archive (workout log) merged via LWW (mt on entries, editable log notes)
+const APP_SCHEMA = 3;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) — an older build would drop it on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -744,7 +752,7 @@ async function doSelectiveClear() {
   if (el('clr-session').checked)    toDelete.push('workout-v1-session');
   if (el('clr-library').checked)    toDelete.push('workout-v1-library','workout-v1-seeded');   // clearing the library also restores the default templates on reload
   if (el('clr-archive').checked)    toDelete.push('workout-v1-archive');
-  if (el('clr-body').checked)       toDelete.push('workout-v1-body');
+  if (el('clr-body').checked)       toDelete.push('workout-v1-body','workout-v1-bodyfields');
   if (el('clr-appearance').checked) toDelete.push('workout-fs','workout-dark','workout-panel-fs');
   // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
   // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
@@ -972,7 +980,7 @@ function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
   if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body}, null, 2);
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
   let downloaded = false;
@@ -1074,6 +1082,11 @@ function doImport() {
     bodyAdded++;
   });
   if (bodyAdded) { saveBody(); renderBody(); }
+  // body column config: adopt from the file (import wins on sync)
+  if (rec.bodyFields && Array.isArray(rec.bodyFields.fields)) {
+    bodyFields = {fields: rec.bodyFields.fields, mt: Date.now()};
+    saveBodyFields(); renderBody();
+  }
   closeModal('importModal');
   showSave('↓ imported: ' + (added + updated) + ' workouts' + (logAdded ? ' +' + logAdded + ' log' : '') + (bodyAdded ? ' +' + bodyAdded + ' body' : ''));
 }
@@ -1083,7 +1096,7 @@ function init() {
   initFs();
   initDark();
   loadPanelFs();
-  loadLibrary(); loadArchive(); loadBody();
+  loadLibrary(); loadArchive(); loadBody(); loadBodyFields();
   seedLibrary();
   const restored = loadSession();
   if (activeLibId) markSaved();
@@ -1932,39 +1945,203 @@ async function deleteLogEntry(id) {
 }
 
 // ── BODY MEASUREMENTS (Tanita) ──────────────────────────────────────────────
-function addBodyEntry() {
-  const num = id => { const v = normDec((el(id).value || '').trim()); return v === '' ? null : parseFloat(v); };
-  const entry = {
-    id: Date.now(), date: el('bodyDate').value || new Date().toISOString().slice(0,10),
-    weight: num('bodyWeight'), fat: num('bodyFat'), water: num('bodyWater'),
-    muscle: num('bodyMuscle'), visceral: num('bodyVisc'),
-    note: (el('bodyNote').value || '').trim(), mt: Date.now()
-  };
-  if ([entry.weight, entry.fat, entry.water, entry.muscle, entry.visceral].every(v => v == null || isNaN(v))) {
-    customAlert('Enter at least one value.'); return;
-  }
-  body.push(entry); saveBody(); renderBody();
-  ['bodyWeight','bodyFat','bodyWater','bodyMuscle','bodyVisc','bodyNote'].forEach(id => { el(id).value = ''; });
-  showSave('✓ measurement saved');
+// Tracked columns are configurable (bodyFields = {mt, fields:[{key,label}]} — whole-object LWW on sync).
+// New entries store values in vals{key:number}; legacy entries keep the old top-level keys, valOf reads both.
+const BODYF_KEY = 'workout-v1-bodyfields';
+const BODY_DEFAULT_FIELDS = [
+  {key:'weight', label:'kg'}, {key:'fat', label:'fat%'}, {key:'water', label:'h₂o%'},
+  {key:'muscle', label:'musc'}, {key:'visceral', label:'visc'},
+];
+let bodyFields = null;
+let bodyEditId = null, bodyMgrOpen = false;
+function loadBodyFields() {
+  try { bodyFields = JSON.parse(localStorage.getItem(BODYF_KEY) || 'null'); } catch(e) { bodyFields = null; }
+  if (!bodyFields || !Array.isArray(bodyFields.fields)) bodyFields = {mt: 0, fields: BODY_DEFAULT_FIELDS.map(f => ({...f}))};
 }
+function saveBodyFields() { try { localStorage.setItem(BODYF_KEY, JSON.stringify(bodyFields)); } catch(e) {} }
+function bodyFieldList() { return bodyFields.fields; }
+function valOf(b, key) {
+  if (b.vals && b.vals[key] != null) return b.vals[key];
+  return b[key] != null ? b[key] : null;
+}
+function addBodyField() {
+  const inp = el('newBodyField');
+  const label = (inp && inp.value || '').trim();
+  if (!label) return;
+  const key = label.toLowerCase().replace(/[^a-z0-9]+/g, '') || ('f' + Date.now());
+  if (bodyFieldList().some(f => f.key === key)) { customAlert('This field already exists.'); return; }
+  bodyFields.fields.push({key, label});
+  bodyFields.mt = Date.now();
+  saveBodyFields(); renderBody();
+  showSave('✓ field added');
+}
+async function removeBodyField(key) {
+  const f = bodyFieldList().find(x => x.key === key); if (!f) return;
+  if (!await customConfirm('Remove the "' + f.label + '" column? Stored values stay hidden, not deleted — a field with the same label brings them back.','remove')) return;
+  bodyFields.fields = bodyFields.fields.filter(x => x.key !== key);
+  bodyFields.mt = Date.now();
+  saveBodyFields(); renderBody();
+}
+function toggleBodyFieldsMgr() { bodyMgrOpen = !bodyMgrOpen; renderBody(); }
+function addBodyEntry() {
+  const fields = bodyFieldList();
+  const vals = {};
+  let any = false;
+  fields.forEach(f => {
+    const v = normDec((el('bf-' + f.key).value || '').trim());
+    if (v !== '' && !isNaN(parseFloat(v))) { vals[f.key] = parseFloat(v); any = true; }
+  });
+  if (!any) { customAlert('Enter at least one value.'); return; }
+  const date = el('bodyDate').value || new Date().toISOString().slice(0,10);
+  const time = el('bodyTime').value || '';
+  const note = (el('bodyNote').value || '').trim();
+  const editing = bodyEditId != null ? body.find(x => String(x.id) === String(bodyEditId)) : null;
+  if (editing) {
+    editing.date = date; editing.time = time; editing.note = note; editing.vals = vals;
+    BODY_DEFAULT_FIELDS.forEach(f => { delete editing[f.key]; });   // legacy copies must not shadow the edit
+    editing.mt = Date.now();
+    bodyEditId = null;
+    showSave('✓ measurement updated');
+  } else {
+    body.push({id: Date.now(), date, time, vals, note, mt: Date.now()});
+    showSave('✓ measurement saved');
+  }
+  saveBody(); renderBody();
+}
+function editBodyEntry(id) { bodyEditId = id; bodyMgrOpen = false; renderBody(); }
+function cancelBodyEdit() { bodyEditId = null; renderBody(); }
 async function deleteBodyEntry(id) {
   if (!await customConfirm('Delete this measurement?','delete')) return;
   body = body.filter(x => String(x.id) !== String(id));
+  if (String(bodyEditId) === String(id)) bodyEditId = null;
   saveBody(); renderBody();
   showSave('✕ measurement deleted');
 }
+function renderBodyForm() {
+  const c = el('bodyForm'); if (!c) return;
+  const fields = bodyFieldList();
+  const editing = bodyEditId != null ? body.find(x => String(x.id) === String(bodyEditId)) : null;
+  const now = new Date();
+  const defDate = editing ? (editing.date || '') : now.toISOString().slice(0,10);
+  const defTime = editing ? (editing.time || '') : now.toTimeString().slice(0,5);
+  c.innerHTML = `<div class="body-form">
+    <div class="field"><label>date</label><input type="date" id="bodyDate" value="${esc(defDate)}"></div>
+    <div class="field"><label>time</label><input type="time" id="bodyTime" value="${esc(defTime)}"></div>
+    ${fields.map(f => `<div class="field"><label>${esc(f.label)}</label><input type="text" inputmode="decimal" id="bf-${esc(f.key)}" placeholder="–" value="${editing && valOf(editing, f.key) != null ? esc(valOf(editing, f.key)) : ''}"></div>`).join('')}
+    <div class="field" style="grid-column:1/-1"><label>note</label><input type="text" id="bodyNote" placeholder="optional" value="${editing ? esc(editing.note || '') : ''}"></div>
+  </div>
+  <div style="display:flex;gap:.4rem">
+    <button class="btn-lib primary" style="flex:1;width:auto" onclick="addBodyEntry()">${editing ? '✓ save changes' : '+ add measurement'}</button>
+    ${editing ? `<button class="btn-lib" style="width:auto" onclick="cancelBodyEdit()">cancel</button>` : ''}
+    <button class="btn-lib" style="width:auto" onclick="toggleBodyFieldsMgr()" title="add / remove tracked columns">⚙</button>
+  </div>
+  <div id="bodyFieldsMgr" style="display:${bodyMgrOpen ? 'block' : 'none'};margin-top:.45rem">
+    <div class="bf-chips">${fields.map(f => `<span class="bf-chip">${esc(f.label)}<button class="bf-x" onclick="removeBodyField('${esc(f.key)}')" title="remove this column">✕</button></span>`).join('')}</div>
+    <div style="display:flex;gap:.3rem;margin-top:.35rem">
+      <input type="text" class="bf-in" id="newBodyField" placeholder="new column label (e.g. BMR)" onkeydown="if(event.key==='Enter')addBodyField()">
+      <button class="btn-add" onclick="addBodyField()" title="add column">+</button>
+    </div>
+  </div>`;
+}
+// ── BODY CHART — one metric over a from–to range; monochrome inline SVG line ──
+let bcMetric = null, bcFrom = null, bcTo = null;
+function renderBodyChart() {
+  const c = el('bodyChart'); if (!c) return;
+  const fields = bodyFieldList();
+  if (!fields.length || !body.length) { c.innerHTML = ''; return; }
+  if (!bcMetric || !fields.some(f => f.key === bcMetric)) bcMetric = fields[0].key;
+  if (!bcTo) bcTo = new Date().toISOString().slice(0, 10);
+  if (!bcFrom) {   // default range: last 90 days, or the full history if shorter
+    const dates = body.map(b => b.date).filter(Boolean).sort();
+    const d90 = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
+    bcFrom = (dates.length && dates[0] > d90) ? dates[0] : d90;
+  }
+  const ctrls = `<div class="bc-ctrls">
+    <select class="bf-in" onchange="bcMetric=this.value;renderBodyChart()" title="metric to plot">${fields.map(f => `<option value="${esc(f.key)}"${f.key === bcMetric ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
+    <input type="date" class="bf-in" value="${esc(bcFrom)}" onchange="bcFrom=this.value;renderBodyChart()" title="from">
+    <input type="date" class="bf-in" value="${esc(bcTo)}" onchange="bcTo=this.value;renderBodyChart()" title="to">
+  </div>`;
+  const pts = body
+    .filter(b => valOf(b, bcMetric) != null && b.date >= bcFrom && b.date <= bcTo)
+    .map(b => ({ts: Date.parse(b.date + 'T' + (b.time || '12:00')), v: +valOf(b, bcMetric), date: b.date, time: b.time || ''}))
+    .filter(p => !isNaN(p.ts) && !isNaN(p.v))
+    .sort((a, b) => a.ts - b.ts);
+  if (!pts.length) { c.innerHTML = ctrls + '<p class="lib-empty">No data in this range.</p>'; return; }
+  const W = 440, H = 180, L = 40, R = 12, T = 16, B = 20;
+  const x0 = pts[0].ts, x1 = pts[pts.length - 1].ts;
+  const xs = ts => x1 > x0 ? L + (ts - x0) / (x1 - x0) * (W - L - R) : (L + W - R) / 2;
+  const dMin = Math.min(...pts.map(p => p.v)), dMax = Math.max(...pts.map(p => p.v));
+  let vmin = dMin, vmax = dMax;
+  if (vmin === vmax) { vmin -= 1; vmax += 1; }
+  const pad = (vmax - vmin) * 0.1;
+  vmin -= pad; vmax += pad;
+  const ys = v => T + (vmax - v) / (vmax - vmin) * (H - T - B);
+  const fmtV = v => { const s = (Math.round(v * 10) / 10).toFixed(1); return s.endsWith('.0') ? s.slice(0, -2) : s; };
+  const gvs = dMin === dMax ? [dMin] : [dMin, (dMin + dMax) / 2, dMax];
+  const grid = gvs.map(v => `<line x1="${L}" y1="${ys(v).toFixed(1)}" x2="${W - R}" y2="${ys(v).toFixed(1)}" stroke="var(--light)" stroke-width="1"/>
+    <text x="${L - 4}" y="${(ys(v) + 3).toFixed(1)}" text-anchor="end" class="bc-lbl">${fmtV(v)}</text>`).join('');
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + xs(p.ts).toFixed(1) + ' ' + ys(p.v).toFixed(1)).join(' ');
+  const dots = pts.map(p => `<circle cx="${xs(p.ts).toFixed(1)}" cy="${ys(p.v).toFixed(1)}" r="3" fill="var(--black)" stroke="var(--w)" stroke-width="1.5"/>`).join('');
+  // selective direct labels: only the extremes (the tooltip covers the rest)
+  const iMin = pts.findIndex(p => p.v === dMin), iMax = pts.findIndex(p => p.v === dMax);
+  const vlbl = (i, above) => `<text x="${xs(pts[i].ts).toFixed(1)}" y="${(ys(pts[i].v) + (above ? -8 : 15)).toFixed(1)}" text-anchor="middle" class="bc-vlbl">${fmtV(pts[i].v)}</text>`;
+  const xlbl = `<text x="${L}" y="${H - 5}" class="bc-lbl">${esc(fmtDate(pts[0].date))}</text>
+    <text x="${W - R}" y="${H - 5}" text-anchor="end" class="bc-lbl">${esc(fmtDate(pts[pts.length - 1].date))}</text>`;
+  c.innerHTML = ctrls + `<div class="bc-wrap">
+    <svg viewBox="0 0 ${W} ${H}" class="bc-svg" id="bcSvg">
+      ${grid}${xlbl}
+      <path d="${path}" fill="none" stroke="var(--black)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      ${pts.length > 1 && iMax !== iMin ? vlbl(iMax, true) : ''}${pts.length > 1 ? vlbl(iMin, false) : vlbl(0, true)}
+      <g id="bcHover" style="display:none">
+        <line id="bcHx" x1="0" y1="${T}" x2="0" y2="${H - B}" stroke="var(--mid)" stroke-width="1" stroke-dasharray="2 3"/>
+        <circle id="bcHc" r="4.5" fill="var(--w)" stroke="var(--black)" stroke-width="2"/>
+      </g>
+    </svg>
+    <div id="bcTip" class="bc-tip" style="display:none"></div>
+  </div>`;
+  initBcHover(pts.map(p => ({x: xs(p.ts), y: ys(p.v), v: p.v, date: p.date, time: p.time})));
+}
+// crosshair + tooltip: nearest point under the pointer (tap works on touch/e-ink)
+function initBcHover(pts) {
+  const svg = el('bcSvg'), tip = el('bcTip'); if (!svg || !tip) return;
+  function show(evt) {
+    const r = svg.getBoundingClientRect();
+    const mx = (evt.clientX - r.left) / r.width * 440;
+    let best = 0, bd = Infinity;
+    pts.forEach((p, i) => { const d = Math.abs(p.x - mx); if (d < bd) { bd = d; best = i; } });
+    const p = pts[best];
+    el('bcHover').style.display = '';
+    el('bcHx').setAttribute('x1', p.x); el('bcHx').setAttribute('x2', p.x);
+    el('bcHc').setAttribute('cx', p.x); el('bcHc').setAttribute('cy', p.y);
+    tip.style.display = 'block';
+    tip.textContent = fmtDate(p.date) + (p.time ? ' ' + p.time : '') + ' · ' + p.v;
+    const px = p.x / 440 * r.width;
+    tip.style.left = Math.max(0, Math.min(r.width - tip.offsetWidth, px - tip.offsetWidth / 2)) + 'px';
+  }
+  function hide() { const h = el('bcHover'); if (h) h.style.display = 'none'; tip.style.display = 'none'; }
+  svg.addEventListener('pointermove', show);
+  svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointerleave', hide);
+}
 function renderBody() {
-  const dateIn = el('bodyDate');
-  if (dateIn && !dateIn.value) dateIn.value = new Date().toISOString().slice(0,10);
+  renderBodyForm();
+  renderBodyChart();
   const c = el('bodyList'); if (!c) return;
   if (!body.length) { c.innerHTML = '<p class="lib-empty">No measurements yet.</p>'; return; }
+  const fields = bodyFieldList();
+  const cols = `grid-template-columns:minmax(0,1.5fr) repeat(${fields.length},minmax(0,1fr)) 18px 18px`;
   const nv = v => (v == null || isNaN(v)) ? '–' : String(v);
-  const items = [...body].sort((a,b) => String(b.date).localeCompare(String(a.date)) || ((b.id || 0) - (a.id || 0)));
-  c.innerHTML = '<div class="body-row body-head"><span>date</span><span>kg</span><span>fat%</span><span>h₂o%</span><span>musc</span><span>visc</span><span></span></div>'
-    + items.map(b =>
-      `<div class="body-row"><span>${esc(fmtDate(b.date))}</span><span>${nv(b.weight)}</span><span>${nv(b.fat)}</span><span>${nv(b.water)}</span><span>${nv(b.muscle)}</span><span>${nv(b.visceral)}</span><button class="log-del" onclick="deleteBodyEntry(${jsArg(b.id)})" title="delete">✕</button></div>`
-      + (b.note ? `<div class="body-note">${esc(b.note)}</div>` : '')
-    ).join('');
+  const items = [...body].sort((a,b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || ((b.id || 0) - (a.id || 0)));
+  c.innerHTML = `<div class="body-row body-head" style="${cols}"><span>date</span>${fields.map(f => `<span title="${esc(f.label)}">${esc(f.label)}</span>`).join('')}<span></span><span></span></div>`
+    + items.map(b => {
+      const ds = fmtDate(b.date) + (b.time ? ' ' + b.time : '');
+      return `<div class="body-row" style="${cols}"><span title="${esc(ds)}">${esc(ds)}</span>`
+        + fields.map(f => `<span>${nv(valOf(b, f.key))}</span>`).join('')
+        + `<button class="log-del" onclick="editBodyEntry(${jsArg(b.id)})" title="edit this measurement">✎</button>`
+        + `<button class="log-del" onclick="deleteBodyEntry(${jsArg(b.id)})" title="delete">✕</button></div>`
+        + (b.note ? `<div class="body-note">${esc(b.note)}</div>` : '');
+    }).join('');
 }
 
 // ── SEED TEMPLATES (from the training protocols; fixed ids + mt:0 → devices merge, never duplicate) ──
@@ -2263,13 +2440,13 @@ init();
   // which applies tombstones itself; kept as a no-op extension point
   function applyTombstones() { return 0; }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(items, arch, bod, tomb) {
+  function sigOf(items, arch, bod, bf, tomb) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
-    return [idS(items), idS(arch), idS(bod), tS(tomb)].join('||');   // archive with mt — log note edits must sync
+    return [idS(items), idS(arch), idS(bod), 'bf@' + ((bf && bf.mt) || 0), tS(tomb)].join('||');   // archive with mt — log note edits must sync
   }
-  function localSig() { return sigOf(library, archive, body, tombstones); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.tombstones || {}); }
+  function localSig() { return sigOf(library, archive, body, bodyFields, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.bodyFields, r.tombstones || {}); }
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn() {
@@ -2310,7 +2487,7 @@ init();
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
-    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, body: body, tombstones: tombstones, device: getDeviceName() };
+    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, body: body, bodyFields: bodyFields, tombstones: tombstones, device: getDeviceName() };
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
@@ -2414,6 +2591,12 @@ init();
     // body measurements — LWW by id (identity normalize → unknown/newer fields survive)
     const bodR = lwwMerge(body, record.body || [], 'bod', x => x.id, c => c);
     body = bodR.arr; added += bodR.added; updated += bodR.updated; removed += bodR.removed;
+    // body column config — whole-object LWW by mt
+    const cbf = record.bodyFields;
+    if (cbf && Array.isArray(cbf.fields) && (+cbf.mt || 0) > (+(bodyFields && bodyFields.mt) || 0)) {
+      bodyFields = JSON.parse(JSON.stringify(cbf));
+      saveBodyFields(); updated++;
+    }
     // NOTE: the live workout (wk) is intentionally NOT refreshed from a merged template —
     // it is a working copy with the user's in-progress sets; a manual save (LWW, mt=now) wins.
 
@@ -2494,7 +2677,7 @@ init();
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, body};
+    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
@@ -2710,7 +2893,7 @@ init();
   window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
-  ['saveLibrary','saveArchive','saveBody'].forEach(fn => {
+  ['saveLibrary','saveArchive','saveBody','saveBodyFields'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
