@@ -314,6 +314,12 @@ textarea::placeholder{color:var(--mid)}
 .wx-code{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;width:5.5em;flex-shrink:0;color:var(--black)}
 .wx-name{flex:1;min-width:0;font-size:.85rem;color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wx-cue{font-size:.72rem;color:var(--muted);line-height:1.4;word-break:break-word}
+.grip{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;color:var(--mid);font-size:.8rem;line-height:1;flex-shrink:0;padding:0 .1rem;font-family:'DM Mono',monospace}
+[data-ei].dragging{opacity:.4}
+[data-ei].drag-over-top{box-shadow:0 -2.5px 0 0 var(--black)}
+[data-ei].drag-over-bottom{box-shadow:0 2.5px 0 0 var(--black)}
+.wx-move{width:18px;height:22px;border:var(--b);border-radius:3px;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;line-height:1;flex-shrink:0;padding:0}
+@media(hover:hover){.wx-move:hover{background:var(--off);color:var(--black)}}
 .wk-addrow{display:flex;gap:.5rem;margin-top:.2rem}
 .wk-addrow .btn-lib{width:auto;flex:1}
 .set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
@@ -1084,6 +1090,7 @@ function init() {
   renderLibrary(); renderMain(); renderNotes(); renderLog(); renderBody();
   updateUndoBtn();
   if (restored) showSave('↓ restored');
+  initWkDnd();
   setInterval(tick, 500);
   // web fonts change line metrics → re-grow the note fields once fonts are ready
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => document.querySelectorAll('.ex-note-in,.ex-snote-in,.log-note-in').forEach(autoResizeTA));
@@ -1182,6 +1189,7 @@ async function deleteLibraryEntry(id) {
 // ── MAIN PANEL RENDER ───────────────────────────────────────────────────────
 function renderMain() {
   const c = el('wkMain'); if (!c) return;
+  if (window._wkDndActive) { window._wkDndPending = true; return; }   // a timer transition mid-drag must not destroy the dragged nodes
   let html = `
   <div class="wk-setup">
     <div class="field" style="flex:1;min-width:150px"><label>workout name</label>
@@ -1245,28 +1253,34 @@ function roundsHtml() {
 // one exercise inside a round — full editable header in round 1; later rounds mirror the
 // technique cues read-only. Each round has its OWN independent session note (per set).
 function wxItemHtml(ex, ei, si) {
+  const grip = `<span class="grip" title="drag to reorder the exercise">⠿</span>`;
   const head = si === 0
     ? `<div class="ex-head">
-        <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
+        ${grip}<input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
         <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
+        <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move exercise up">↑</button>
+        <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move exercise down">↓</button>
         <button class="ex-side${ex.side ? ' on' : ''}" onclick="toggleExSide(${ei})" title="${ex.side ? 'one side at a time: the timer runs twice per round (left, then right), rest after both — click to turn off' : 'click if this exercise is done one arm/side at a time — the timer will run twice per round (L, then R)'}">L/R</button>
         <button class="ex-link${ex.linked === false ? ' ind' : ''}" onclick="toggleExLink(${ei})" title="${ex.linked === false ? 'rounds are independent — click to link them again (copies round 1 values to all)' : 'all rounds share reps / weight / time — click to make each round independent'}">${ex.linked === false ? '≠' : '='}</button>
         <button class="ex-del" onclick="removeExercise(${ei})" title="remove exercise">✕</button>
       </div>
       <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>`
-    : `<div class="ex-head"><span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`
+    : `<div class="ex-head">${grip}<span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`
       + (ex.note ? `<div class="wx-cue">${esc(ex.note)}</div>` : '');
   const s = ex.sets[si];
-  return `<div class="wx-item">${head}${dataRowHtml(s, ei, si, false)}
+  return `<div class="wx-item" data-ei="${ei}">${head}${dataRowHtml(s, ei, si, false)}
     <textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].snote=this.value;schedSave()" placeholder="· note (round ${si + 1}) → log">${esc(s.snote || '')}</textarea>
   </div>`;
 }
 function exBlockHtml(ex, ei) {
   const setRows = (ex.sets || []).map((s, si) => dataRowHtml(s, ei, si, true)).join('');
-  return `<div class="ex-block">
+  return `<div class="ex-block" data-ei="${ei}">
     <div class="ex-head">
+      <span class="grip" title="drag to reorder the segment">⠿</span>
       <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="segment code">
       <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="segment name">
+      <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move segment up">↑</button>
+      <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move segment down">↓</button>
       <button class="ex-link${ex.linked === false ? ' ind' : ''}" onclick="toggleExLink(${ei})" title="${ex.linked === false ? 'intervals are independent — click to link them again (copies the first interval to all)' : 'all intervals share reps / weight / time — click to make each independent'}">${ex.linked === false ? '≠' : '='}</button>
       <button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>
       <button class="ex-del" onclick="removeExercise(${ei})" title="remove segment">✕</button>
@@ -1330,6 +1344,82 @@ function toggleExSide(ei) {
   pushUndo();
   ex.side = !ex.side;
   schedSave(); renderMain();
+}
+// reorder exercises — `to` is the insertion index in the ORIGINAL array (drop above = target index,
+// drop below = target index + 1). The exercise order is global: it applies to every round.
+function moveExercise(from, to) {
+  const exs = wk.exercises;
+  if (from < 0 || from >= exs.length) { renderMain(); return; }
+  let dest = to > from ? to - 1 : to;
+  dest = Math.max(0, Math.min(exs.length - 1, dest));
+  if (dest === from) { renderMain(); return; }
+  pushUndo();
+  const curEx = (wk.run && wk.run.ei != null) ? exs[wk.run.ei] : null;
+  const [ex] = exs.splice(from, 1);
+  exs.splice(dest, 0, ex);
+  if (curEx) wk.run.ei = exs.indexOf(curEx);   // the running step follows its exercise
+  schedSave(); renderMain();
+}
+function moveExerciseBy(ei, dir) { moveExercise(ei, dir < 0 ? ei - 1 : ei + 2); }
+// ── DRAG & DROP (pointer events, grip-only — rows are full of inputs; no DOM reshuffle
+//    during the drag, just an indicator line; the array reorders once on drop) ──
+function initWkDnd() {
+  const c = el('wkMain'); if (!c || c._dndInit) return;
+  c._dndInit = true;
+  let src = null, over = null, pos = null, active = false, sx = 0, sy = 0;
+  const blockScroll = e => { if (active) e.preventDefault(); };
+  function clearMarks() { c.querySelectorAll('[data-ei]').forEach(r => r.classList.remove('drag-over-top','drag-over-bottom','dragging')); }
+  function start() {
+    if (active || !src) return;
+    active = true; window._wkDndActive = true;
+    src.classList.add('dragging');
+    src.style.pointerEvents = 'none';   // elementFromPoint must see the row underneath the finger
+    document.addEventListener('touchmove', blockScroll, {passive:false});
+  }
+  function onDown(e) {
+    if (!e.target.closest('.grip')) return;
+    const row = e.target.closest('[data-ei]'); if (!row) return;
+    src = row; sx = e.clientX; sy = e.clientY; active = false;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onCancel, true);
+    if (e.pointerType && e.pointerType !== 'mouse') start();   // touch/pen on the grip → drag starts immediately
+    e.preventDefault();
+  }
+  function onMove(e) {
+    if (!src) return;
+    if (!active) {
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) < 5) return;   // mouse: small threshold
+      start();
+    }
+    const t = document.elementFromPoint(e.clientX, e.clientY);
+    const row = t && t.closest ? t.closest('[data-ei]') : null;
+    c.querySelectorAll('[data-ei]').forEach(r => r.classList.remove('drag-over-top','drag-over-bottom'));
+    over = null; pos = null;
+    if (row && row !== src) {
+      const rc = row.getBoundingClientRect();
+      pos = e.clientY < rc.top + rc.height / 2 ? 'top' : 'bottom';
+      row.classList.add(pos === 'top' ? 'drag-over-top' : 'drag-over-bottom');
+      over = row;
+    }
+    e.preventDefault();
+  }
+  function onUp() { finish(true); }
+  function onCancel() { finish(false); }
+  function finish(apply) {
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onCancel, true);
+    document.removeEventListener('touchmove', blockScroll);
+    const wasActive = active, s = src, o = over, p = pos;
+    if (s) s.style.pointerEvents = '';
+    clearMarks();
+    active = false; window._wkDndActive = false;
+    src = null; over = null; pos = null;
+    if (apply && wasActive && s && o) moveExercise(+s.dataset.ei, +o.dataset.ei + (p === 'bottom' ? 1 : 0));
+    else if (window._wkDndPending) { window._wkDndPending = false; renderMain(); }
+  }
+  c.addEventListener('pointerdown', onDown);
 }
 function renderNotes() { const t = el('wkNote'); if (t) t.value = wk.note || ''; }
 function switchTab(name, btn) {
