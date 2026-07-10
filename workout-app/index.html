@@ -1236,7 +1236,7 @@ function renderMain() {
   let html = `
   <div class="wk-setup">
     <div class="field" style="flex:1;min-width:150px"><label>workout name</label>
-      <input type="text" value="${esc(wk.name)}" oninput="wk.name=this.value;schedSave()" placeholder="e.g. Strength A"></div>
+      <input type="text" value="${esc(wk.name)}" oninput="wk.name=this.value;schedSave();updateHeaderName()" placeholder="e.g. Strength A"></div>
     <div class="field"><label>type</label>
       <select onchange="wk.type=this.value;schedSave();renderLibrary()">
         <option value="strength"${wk.type !== 'cardio' ? ' selected' : ''}>strength</option>
@@ -1276,7 +1276,15 @@ function renderMain() {
   }
   c.innerHTML = html;
   c.querySelectorAll('.ex-note-in,.ex-snote-in').forEach(autoResizeTA);
+  updateHeaderName();
   updateRunUi();
+}
+// active workout name mirrored into the toolbar brand (headerSub is prepared in the template)
+function updateHeaderName() {
+  const n = (wk.name || '').trim();
+  const s = el('headerSub'), sep = el('headerSep');
+  if (s) { s.textContent = n; s.style.display = n ? 'inline' : 'none'; }
+  if (sep) sep.style.display = n ? 'inline' : 'none';
 }
 function roundsHtml() {
   const exs = wk.exercises || [];
