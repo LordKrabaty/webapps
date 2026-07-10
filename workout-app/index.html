@@ -326,6 +326,8 @@ textarea::placeholder{color:var(--mid)}
 .wk-addrow{display:flex;gap:.5rem;margin-top:.2rem}
 .wk-addrow .btn-lib{width:auto;flex:1}
 .set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
+.set-go{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.65rem;line-height:1;padding:0}
+@media(hover:hover){.set-go:hover{background:var(--off);color:var(--black)}}
 .set-done.on{background:var(--black);border-color:var(--black);color:var(--w)}
 .set-del,.log-del{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;opacity:.4;flex-shrink:0;padding:0;line-height:1}
 @media(hover:hover){.set-del:hover,.log-del:hover{opacity:1}}
@@ -527,6 +529,19 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div id="statusToast"></div>
+
+<!-- Finish workout modal (log or discard) -->
+<div class="modal-bg" id="finishModal">
+  <div class="modal" style="max-width:360px">
+    <h2>Finish workout</h2>
+    <p id="finishMsg" style="font-size:.85rem;color:var(--muted);line-height:1.5"></p>
+    <div style="display:flex;flex-direction:column;gap:.5rem">
+      <button class="modal-btn primary" onclick="confirmFinish()">✓ finish &amp; log</button>
+      <button class="modal-btn danger" onclick="discardWorkout()">✕ discard — log nothing</button>
+      <button class="modal-btn" onclick="closeModal('finishModal')">cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- Free activity modal (bike, swimming… — logged retrospectively, no timer) -->
 <div class="modal-bg" id="actModal">
@@ -928,7 +943,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -1373,6 +1388,7 @@ function dataRowHtml(s, ei, si, numbered) {
     <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–">
     <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="exercise time — m:ss or seconds, editable any time" placeholder="m:ss">
     <span class="set-dur">${sr}</span>
+    <button class="set-go" onclick="jumpToStep(${ei},${si})" title="jump here — start this exercise now and continue from it">▶</button>
     <button class="set-done${s.done ? ' on' : ''}" onclick="toggleSetDone(${ei},${si})" title="done → starts the rest timer">✓</button>
     ${numbered ? `<button class="set-del" onclick="removeSet(${ei},${si})" title="remove interval">✕</button>` : ''}
   </div>`;
@@ -1562,9 +1578,38 @@ function stepOrder() {
   }
   return out;
 }
+// first pending step AFTER the current position (wraps to the skipped-over ones at the end) —
+// jumping forward must continue forward, not bounce back to steps left behind
 function nextPending() {
-  for (const [ei, si] of stepOrder()) { if (!wk.exercises[ei].sets[si].done) return [ei, si]; }
+  const order = stepOrder();
+  const r = wk.run;
+  let from = 0;
+  if (r && r.ei != null) {
+    const i = order.findIndex(([e, s]) => e === r.ei && s === r.si);
+    if (i >= 0) from = i + 1;
+  }
+  for (let i = from; i < order.length; i++) { const [e, s] = order[i]; if (!wk.exercises[e].sets[s].done) return [e, s]; }
+  for (let i = 0; i < from; i++) { const [e, s] = order[i]; if (!wk.exercises[e].sets[s].done) return [e, s]; }
   return null;
+}
+// set the run state to a concrete step and start its work (or manual) phase
+function beginWorkPhase(ei, si) {
+  const r = ensureRun();
+  const ex = wk.exercises[ei], s = ex.sets[si];
+  r.ei = ei; r.si = si; r.pausedLeft = null;
+  r.half = ex.side ? 'L' : null;
+  if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
+  else { r.phase = 'manual'; r.endTs = null; }
+}
+// ▶ on a row: jump to that exercise (from its start) and continue the sequence from there
+function jumpToStep(ei, si) {
+  const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
+  const r = ensureRun();
+  if (!r.startedAt) r.startedAt = Date.now();
+  ex.sets[si].done = false;   // re-opening a completed set restarts it
+  beginWorkPhase(ei, si);
+  schedSave(); renderMain();
+  showStatusMsg('▶ jumped to ' + (ex.code || ex.name || 'exercise'));
 }
 function startWorkout() {
   const r = ensureRun();
@@ -1612,7 +1657,8 @@ function startRestPhase() {
   const r = ensureRun();
   if (!nextPending()) { r.phase = 'done'; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
   const p = +wk.pauseSec || 0;
-  if (p > 0) { r.phase = 'rest'; r.ei = null; r.si = null; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; r.half = null; }
+  // ei/si stay pointing at the completed step during the rest — nextPending continues after it
+  if (p > 0) { r.phase = 'rest'; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; r.half = null; }
   else startNextWork();
 }
 function completeCurrentWork() {   // both halves done (or ✓ on the current row) → mark done, rest
@@ -1629,7 +1675,7 @@ function toggleSetDone(ei, si) {
     s.done = true;
     if (!r.startedAt) r.startedAt = Date.now();   // first ✓ auto-starts the workout
     if ((r.phase === 'work' || r.phase === 'manual' || r.phase === 'srest') && r.ei === ei && r.si === si) startRestPhase();
-    else if (r.phase == null || r.phase === 'done') startRestPhase();
+    else if (r.phase == null || r.phase === 'done') { r.ei = ei; r.si = si; startRestPhase(); }   // continue after the checked row
   } else {
     s.done = false;
     if (r.phase === 'done') startNextWork();   // a row re-opened after everything was done
@@ -1676,15 +1722,13 @@ function stepBack() {
     if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
     else { r.phase = 'manual'; r.endTs = null; }
   } else {
-    const prev = prevDoneStep();
-    if (!prev) { showStatusMsg('⚠ nothing to go back to'); return; }
-    const [ei, si] = prev;
-    const ex = wk.exercises[ei], s = ex.sets[si];
-    s.done = false;
-    r.ei = ei; r.si = si; r.pausedLeft = null;
-    r.half = ex.side ? 'L' : null;
-    if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
-    else { r.phase = 'manual'; r.endTs = null; }
+    // during the rest the position still points at the just-completed step → reopen exactly that one
+    const cur = (r.phase === 'rest' && r.ei != null && wk.exercises[r.ei] && wk.exercises[r.ei].sets[r.si] && wk.exercises[r.ei].sets[r.si].done)
+      ? [r.ei, r.si] : prevDoneStep();
+    if (!cur) { showStatusMsg('⚠ nothing to go back to'); return; }
+    const [ei, si] = cur;
+    wk.exercises[ei].sets[si].done = false;
+    beginWorkPhase(ei, si);
   }
   schedSave(); renderMain();
 }
@@ -1788,13 +1832,28 @@ function beep() {
 }
 
 // ── FINISH & LOG ────────────────────────────────────────────────────────────
-async function finishWorkout() {
+function finishWorkout() {
   const r = wk.run;
   if (!r || !r.startedAt) { showStatusMsg('⚠ workout not started'); return; }
   const anyDone = wk.exercises.some(ex => (ex.sets || []).some(s => s.done));
-  const msg = anyDone ? 'Finish this workout and save it to the log? (only ✓ rows are logged)'
-                      : 'Finish this workout and save it to the log? Nothing is checked ✓ — ALL rows will be logged.';
-  if (!await customConfirm(msg,'finish')) return;
+  el('finishMsg').textContent = anyDone
+    ? 'Only ✓ rows are logged.'
+    : 'Nothing is checked ✓ — ALL rows will be logged if you save.';
+  el('finishModal').classList.add('open');
+}
+function discardWorkout() {
+  closeModal('finishModal');
+  pushUndo();
+  wk.run = null; wk.note = '';
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.snote = ''; }); });
+  schedSave(); renderMain(); renderNotes();
+  showSave('✕ workout discarded (not logged) — undo ↩ restores it');
+}
+function confirmFinish() {
+  closeModal('finishModal');
+  const r = wk.run;
+  if (!r || !r.startedAt) return;
+  const anyDone = wk.exercises.some(ex => (ex.sets || []).some(s => s.done));
   pushUndo();
   const totalSec = Math.round((Date.now() - r.startedAt) / 1000);
   const entry = {
