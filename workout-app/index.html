@@ -321,9 +321,11 @@ textarea::placeholder{color:var(--mid)}
 .set-del,.log-del{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;opacity:.4;flex-shrink:0;padding:0;line-height:1}
 @media(hover:hover){.set-del:hover,.log-del:hover{opacity:1}}
 .btn-add{width:22px;height:22px;border:var(--b);border-radius:3px;background:none;color:var(--black);cursor:pointer;font-size:.85rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-.ex-link{width:22px;height:22px;border:var(--b);border-radius:3px;background:none;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;font-size:.8rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-@media(hover:hover){.ex-link:hover{background:var(--off)}}
-.ex-link.ind{background:var(--black);color:var(--w);border-color:var(--black)}
+.ex-link,.ex-side{height:22px;border:var(--b);border-radius:3px;background:none;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.ex-link{width:22px;font-size:.8rem}
+.ex-side{font-size:.62rem;padding:0 .3rem;letter-spacing:.02em}
+@media(hover:hover){.ex-link:hover,.ex-side:hover{background:var(--off)}}
+.ex-link.ind,.ex-side.on{background:var(--black);color:var(--w);border-color:var(--black)}
 @media(hover:hover){.btn-add:hover{background:var(--off)}}
 .ex-del{font-size:.7rem;color:var(--muted);opacity:.4;border:none;background:none;cursor:pointer;width:20px;height:20px;flex-shrink:0;padding:0}
 @media(hover:hover){.ex-del:hover{opacity:1}}
@@ -378,11 +380,6 @@ textarea::placeholder{color:var(--mid)}
     <button id="libToggleBtn" onclick="toggleLibPanel()" title="library">☰</button>
     <button id="undoBtn" onclick="undo()" disabled title="undo (Ctrl+Z)">↩</button>
     <button id="redoBtn" onclick="redo()" disabled title="redo (Ctrl+Y)">↪</button>
-    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automatically save changes">
-      <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
-      ⟳
-    </label>
-    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="save changes">✓</button>
     <div style="position:relative;display:inline-flex">
       <button class="btn-sm" onclick="toggleNewMenu(event)" title="new / save as">+</button>
       <div id="newMenu" class="new-menu" style="display:none">
@@ -547,7 +544,6 @@ const ARCHIVE_KEY = 'workout-v1-archive';
 let library = [], activeLibId = null;
 let archive = [];
 let undoStack = [], redoStack = [], savedSnapshot = null;
-let autoSave = false;
 const UNDO_MAX = 40;
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -594,8 +590,7 @@ function schedSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     saveSession(); showSave();
-    if (autoSave && activeLibId && isDirty()) updateLibraryEntry();
-    updateHeaderDirty();
+    if (activeLibId && isDirty()) updateLibraryEntry();   // edits to the loaded template always auto-save
   }, 300);
 }
 
@@ -630,7 +625,7 @@ function saveToLibrary() {
   const name = (wk.name || '').trim() || 'workout ' + new Date().toLocaleDateString('en-GB');
   const entry = {id: Date.now(), name, data: tplFromWk(), mt: Date.now()};
   library.push(entry); saveLibrary();
-  activeLibId = entry.id; markSaved(); renderLibrary(); updateHeaderDirty();
+  activeLibId = entry.id; markSaved(); renderLibrary();
   showSave('✓ saved to library');
 }
 function updateLibraryEntry() {
@@ -642,7 +637,7 @@ function updateLibraryEntry() {
     e.data = data; e.name = name; e.mt = Date.now();
     saveLibrary();
   }
-  markSaved(); renderLibrary(); updateHeaderDirty();
+  markSaved(); renderLibrary();
   showSave('✓ changes saved');
 }
 function renderLibrary() {
@@ -661,12 +656,6 @@ function renderLibrary() {
     });
     list.innerHTML = html;
   }
-  updateHeaderDirty();
-}
-function updateHeaderDirty() {
-  const hSave = el('headerSaveBtn');
-  if (hSave) { hSave.style.display = activeLibId ? '' : 'none'; hSave.classList.toggle('dirty', isDirty()); }
-  const lbl = el('autoSaveLbl'); if (lbl) lbl.style.display = activeLibId ? 'flex' : 'none';
 }
 async function newSession() {
   if (!await customConfirm('Open a blank workout?','open')) return;
@@ -676,17 +665,6 @@ async function newSession() {
   renderMain(); renderNotes();
   renderLibrary(); schedSave();
   showSave('new workout');
-}
-
-// ── AUTO-SAVE ─────────────────────────────────────────────────────────────
-function initAutoSave() {
-  try { autoSave = !!localStorage.getItem('workout-autosave'); } catch(e) {}
-  const chk = el('autoSaveChk'); if (chk) chk.checked = autoSave;
-}
-function toggleAutoSave(on) {
-  autoSave = on;
-  try { if (on) localStorage.setItem('workout-autosave','1'); else localStorage.removeItem('workout-autosave'); } catch(e) {}
-  if (on && activeLibId && isDirty()) updateLibraryEntry();
 }
 
 // ── UNDO ──────────────────────────────────────────────────────────────────
@@ -1066,7 +1044,6 @@ function doImport() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 function init() {
-  initAutoSave();
   initFs();
   initDark();
   loadPanelFs();
@@ -1098,8 +1075,9 @@ document.addEventListener('keydown', e => {
 // wk (live workout) = {name, type:'strength'|'cardio', pauseSec, prepSec, note,
 //   exercises:[{code, name, note (technique cues, template), snote (segment note, cardio → log),
 //     linked (default true: reps/weight/time edits mirror into every round; ≠ = independent),
+//     side (true = one side at a time: the work timer runs twice per round, L then R, rest after both),
 //     sets:[{reps, weight, durSec, done, snote (per-round note → log)}]}],
-//   run:{startedAt, phase:'work'|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft} | null}
+//   run:{startedAt, phase:'prep'|'work'|'srest'(L↔R switch)|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft, half:'L'|'R'|null} | null}
 // library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
 // archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable)
 // body entry    = {id, date:'yyyy-mm-dd', weight, fat, water, muscle, visceral, note, mt} (LWW)
@@ -1108,7 +1086,7 @@ let body = [];
 function loadBody() { try { body = JSON.parse(localStorage.getItem(BODY_KEY) || '[]'); } catch(e) { body = []; } }
 function saveBody() { try { localStorage.setItem(BODY_KEY, JSON.stringify(body)); } catch(e) {} }
 
-function blankWorkout() { return {name:'', type:'strength', pauseSec:105, prepSec:120, note:'', exercises:[], run:null}; }
+function blankWorkout() { return {name:'', type:'strength', pauseSec:105, prepSec:120, sidePauseSec:0, note:'', exercises:[], run:null}; }
 let wk = blankWorkout();
 
 function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
@@ -1121,8 +1099,8 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 // durSec = the PLANNED exercise time (filled by hand, editable) — it belongs to the template.
 function tplFromWk() {
   return {
-    type: wk.type, pauseSec: wk.pauseSec, prepSec: wk.prepSec ?? 120, note: wk.note || '',
-    exercises: (wk.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false,
+    type: wk.type, pauseSec: wk.pauseSec, prepSec: wk.prepSec ?? 120, sidePauseSec: wk.sidePauseSec ?? 0, note: wk.note || '',
+    exercises: (wk.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null}))}))
   };
 }
@@ -1139,8 +1117,8 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', pauseSec: +d.pauseSec || 105, prepSec: d.prepSec != null ? +d.prepSec : 120, note: d.note || '',
-    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false,
+  wk = {name: e.name, type: d.type || 'strength', pauseSec: +d.pauseSec || 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, note: d.note || '',
+    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: ''}))})),
     run: null};
   prefillFromLast(id);
@@ -1186,6 +1164,8 @@ function renderMain() {
       <input type="number" value="${esc(wk.pauseSec)}" min="0" oninput="wk.pauseSec=parseInt(this.value)||0;schedSave()"></div>
     <div class="field" style="width:5.5em"><label>prep (s)</label>
       <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()"></div>
+    ${(wk.exercises || []).some(ex => ex.side) ? `<div class="field" style="width:5.5em"><label>L↔R (s)</label>
+      <input type="number" value="${esc(wk.sidePauseSec ?? 0)}" min="0" title="pause between the left and right side of L/R exercises (0 = switch immediately)" oninput="wk.sidePauseSec=parseInt(this.value)||0;schedSave()"></div>` : ''}
   </div>
   <div class="wk-runbar">
     <button class="btn-sm" id="wkStartBtn" onclick="startWorkout()">▶ start workout</button>
@@ -1238,6 +1218,7 @@ function wxItemHtml(ex, ei, si) {
     ? `<div class="ex-head">
         <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
         <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
+        <button class="ex-side${ex.side ? ' on' : ''}" onclick="toggleExSide(${ei})" title="${ex.side ? 'one side at a time: the timer runs twice per round (left, then right), rest after both — click to turn off' : 'click if this exercise is done one arm/side at a time — the timer will run twice per round (L, then R)'}">L/R</button>
         <button class="ex-link${ex.linked === false ? ' ind' : ''}" onclick="toggleExLink(${ei})" title="${ex.linked === false ? 'rounds are independent — click to link them again (copies round 1 values to all)' : 'all rounds share reps / weight / time — click to make each round independent'}">${ex.linked === false ? '≠' : '='}</button>
         <button class="ex-del" onclick="removeExercise(${ei})" title="remove exercise">✕</button>
       </div>
@@ -1269,7 +1250,7 @@ function dataRowHtml(s, ei, si, numbered) {
   const r = parseFloat(String(s.reps ?? '').replace(',','.'));
   const sr = (s.durSec != null && r > 0) ? (s.durSec / r).toFixed(1) + ' s/rep' : '';
   const run = wk.run;
-  const cur = !!(run && run.ei === ei && run.si === si && (run.phase === 'work' || run.phase === 'manual'));
+  const cur = !!(run && run.ei === ei && run.si === si && (run.phase === 'work' || run.phase === 'manual' || run.phase === 'srest'));
   return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
     ${numbered ? `<span class="set-num">${si + 1}</span>` : ''}
     <input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
@@ -1313,6 +1294,12 @@ function toggleExLink(ei) {
   } else ex.linked = false;
   schedSave(); renderMain();
 }
+function toggleExSide(ei) {
+  const ex = wk.exercises[ei]; if (!ex) return;
+  pushUndo();
+  ex.side = !ex.side;
+  schedSave(); renderMain();
+}
 function renderNotes() { const t = el('wkNote'); if (t) t.value = wk.note || ''; }
 function switchTab(name, btn) {
   document.querySelectorAll('.notes-tab').forEach(b => b.classList.toggle('active', b === btn));
@@ -1326,7 +1313,7 @@ function addExercise() {
   // strength: a new exercise joins every existing round; cardio: starts with one interval
   const n = (wk.type !== 'cardio' && wk.exercises.length)
     ? Math.max(1, ...wk.exercises.map(ex => (ex.sets || []).length)) : 1;
-  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:''}))});
+  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:''}))});
   schedSave(); renderMain();
 }
 function addRound() {
@@ -1371,7 +1358,7 @@ function removeSet(ei, si) {
 // Planned times drive the countdowns; a step without a time waits for a manual ✓.
 // Absolute timestamps (endTs) → the sequence survives a reload; pausedLeft = paused remainder in ms.
 function ensureRun() {
-  if (!wk.run) wk.run = {startedAt:null, phase:null, ei:null, si:null, endTs:null, pausedLeft:null};
+  if (!wk.run) wk.run = {startedAt:null, phase:null, ei:null, si:null, endTs:null, pausedLeft:null, half:null};
   return wk.run;
 }
 // execution order of [exercise, round] steps — strength runs round-major (circuit), cardio segment-major
@@ -1401,23 +1388,46 @@ function startWorkout() {
 function startNextWork() {
   const r = ensureRun();
   const nxt = nextPending();
-  if (!nxt) { r.phase = r.startedAt ? 'done' : null; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; return; }
+  if (!nxt) { r.phase = r.startedAt ? 'done' : null; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
   const [ei, si] = nxt;
-  const s = wk.exercises[ei].sets[si];
+  const ex = wk.exercises[ei], s = ex.sets[si];
   r.ei = ei; r.si = si; r.pausedLeft = null;
+  r.half = ex.side ? 'L' : null;   // per-side exercise → the work step runs twice (left, then right)
   if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
   else { r.phase = 'manual'; r.endTs = null; }   // no planned time → wait for ✓
 }
+// work countdown elapsed / skip: on a per-side exercise the left half hands over to the right
+// (optionally via a short switch-side pause), only after both halves is the set complete
+function advanceWorkStep() {
+  const r = ensureRun();
+  const ex = wk.exercises[r.ei];
+  if (ex && ex.side && r.half === 'L') {
+    r.half = 'R'; r.pausedLeft = null;
+    const sp = +wk.sidePauseSec || 0;
+    if (sp > 0) { r.phase = 'srest'; r.endTs = Date.now() + sp * 1000; return; }   // switch-side pause, then the right side
+    startRightHalf();
+    return;
+  }
+  completeCurrentWork();
+}
+function startRightHalf() {
+  const r = ensureRun();
+  const ex = wk.exercises[r.ei], s = ex && ex.sets[r.si];
+  r.pausedLeft = null;
+  if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
+  else { r.phase = 'manual'; r.endTs = null; }
+}
 function startRestPhase() {
   const r = ensureRun();
-  if (!nextPending()) { r.phase = 'done'; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; return; }
+  if (!nextPending()) { r.phase = 'done'; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
   const p = +wk.pauseSec || 0;
-  if (p > 0) { r.phase = 'rest'; r.ei = null; r.si = null; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; }
+  if (p > 0) { r.phase = 'rest'; r.ei = null; r.si = null; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; r.half = null; }
   else startNextWork();
 }
-function completeCurrentWork() {   // work countdown elapsed, skip, or ✓ on the current row
+function completeCurrentWork() {   // both halves done (or ✓ on the current row) → mark done, rest
   const r = ensureRun();
   if (r.ei != null && wk.exercises[r.ei] && wk.exercises[r.ei].sets[r.si]) wk.exercises[r.ei].sets[r.si].done = true;
+  r.half = null;
   startRestPhase();
 }
 // ✓ on a row: the current step advances the sequence; any other row is just marked done
@@ -1427,7 +1437,7 @@ function toggleSetDone(ei, si) {
   if (!s.done) {
     s.done = true;
     if (!r.startedAt) r.startedAt = Date.now();   // first ✓ auto-starts the workout
-    if ((r.phase === 'work' || r.phase === 'manual') && r.ei === ei && r.si === si) startRestPhase();
+    if ((r.phase === 'work' || r.phase === 'manual' || r.phase === 'srest') && r.ei === ei && r.si === si) startRestPhase();
     else if (r.phase == null || r.phase === 'done') startRestPhase();
   } else {
     s.done = false;
@@ -1437,7 +1447,7 @@ function toggleSetDone(ei, si) {
 }
 function pauseResume() {
   const r = ensureRun();
-  if (r.phase !== 'work' && r.phase !== 'rest' && r.phase !== 'prep') return;
+  if (r.phase !== 'work' && r.phase !== 'rest' && r.phase !== 'prep' && r.phase !== 'srest') return;
   if (r.pausedLeft != null) { r.endTs = Date.now() + r.pausedLeft; r.pausedLeft = null; }
   else if (r.endTs) { r.pausedLeft = Math.max(0, r.endTs - Date.now()); r.endTs = null; }
   schedSave(); tick();
@@ -1451,7 +1461,8 @@ function addPhase(sec) {
 }
 function skipPhase() {
   const r = ensureRun();
-  if (r.phase === 'work' || r.phase === 'manual') completeCurrentWork();
+  if (r.phase === 'work' || r.phase === 'manual') advanceWorkStep();
+  else if (r.phase === 'srest') startRightHalf();
   else if (r.phase === 'rest' || r.phase === 'prep') startNextWork();
   else return;
   schedSave(); renderMain();
@@ -1470,7 +1481,8 @@ function tick() {
   if (!r || !r.startedAt) { const nb = el('nowBar'); if (nb) nb.style.display = 'none'; return; }
   // countdown expired → beep + advance (each transition fires exactly once: endTs/phase change immediately)
   if (r.pausedLeft == null && r.endTs && Date.now() >= r.endTs) {
-    if (r.phase === 'work') { beep(); completeCurrentWork(); saveSession(); renderMain(); return; }
+    if (r.phase === 'work') { beep(); advanceWorkStep(); saveSession(); renderMain(); return; }
+    if (r.phase === 'srest') { beep(); startRightHalf(); saveSession(); renderMain(); return; }
     if (r.phase === 'rest' || r.phase === 'prep') { beep(); startNextWork(); saveSession(); renderMain(); return; }
   }
   updateNowBar();
@@ -1483,7 +1495,7 @@ function updateNowBar() {
   const lbl = el('nowLabel'), exl = el('nowEx'), t = el('nowTime'), pb = el('pauseBtn');
   const remMs = r.pausedLeft != null ? r.pausedLeft : (r.endTs ? r.endTs - Date.now() : null);
   bar.classList.toggle('over', r.phase === 'done');
-  if (pb) { pb.textContent = r.pausedLeft != null ? '▶' : '⏸'; pb.style.display = (r.phase === 'work' || r.phase === 'rest' || r.phase === 'prep') ? '' : 'none'; }
+  if (pb) { pb.textContent = r.pausedLeft != null ? '▶' : '⏸'; pb.style.display = (r.phase === 'work' || r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') ? '' : 'none'; }
   if (r.phase === 'prep') {
     lbl.textContent = 'prep';
     const nxt = nextPending();
@@ -1492,12 +1504,17 @@ function updateNowBar() {
     t.textContent = mmss(Math.max(0, Math.ceil(remMs / 1000)));
   } else if (r.phase === 'work' || r.phase === 'manual') {
     const ex = wk.exercises[r.ei] || {};
-    lbl.textContent = ex.code || 'work';
-    exl.textContent = (ex.name || '')
+    lbl.textContent = (ex.code || 'work') + (r.half ? ' ' + r.half : '');
+    exl.textContent = (r.half ? (r.half === 'L' ? 'left side · ' : 'right side · ') : '') + (ex.name || '')
       + (wk.type !== 'cardio' ? ' · round ' + (r.si + 1) : '')
       + (r.phase === 'manual' ? ' · no time set — tap ✓ when done' : '')
       + (r.pausedLeft != null ? ' · paused' : '');
     t.textContent = r.phase === 'manual' ? '—' : mmss(Math.max(0, Math.ceil(remMs / 1000)));
+  } else if (r.phase === 'srest') {
+    const ex = wk.exercises[r.ei] || {};
+    lbl.textContent = 'switch';
+    exl.textContent = 'switch sides — right next · ' + (ex.code || ex.name || '') + (r.pausedLeft != null ? ' · paused' : '');
+    t.textContent = mmss(Math.max(0, Math.ceil(remMs / 1000)));
   } else if (r.phase === 'rest') {
     lbl.textContent = 'rest';
     const nxt = nextPending();
@@ -1539,7 +1556,7 @@ async function finishWorkout() {
   const entry = {
     id: Date.now(), date: Date.now(), tplId: activeLibId,
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
-    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name, note: (ex.snote || '').trim(),
+    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name, side: !!ex.side, note: (ex.snote || '').trim(),
       sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, done: !!s.done, rd: si + 1, note: (s.snote || '').trim()}))
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
@@ -1566,7 +1583,7 @@ function exStatText(e) {
     const totR = durs.reduce((t,s) => t + (parseFloat(String(s.reps).replace(',','.')) || 0), 0);
     sp = totR > 0 ? ' · ' + (totD / totR).toFixed(1) + ' s/rep' : ' · ' + mmss(totD);
   }
-  return reps + (w ? ' @ ' + w : '') + sp;
+  return reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '');
 }
 function logDateStr(a, longYear) {
   const d = new Date(a.date || a.id);
@@ -1710,12 +1727,12 @@ function seedLibrary() {
   let seeded = false;
   try { seeded = !!localStorage.getItem('workout-v1-seeded'); } catch(e) {}
   if (seeded || library.length) return;
-  const S = (code, name, sets, reps, weight, note, dur) => ({code, name, note,
+  const S = (code, name, sets, reps, weight, note, dur, side) => ({code, name, note, side: !!side,
     sets: Array.from({length: sets}, () => ({reps, weight, durSec: dur ?? null}))});
   const tpl = (id, name, type, pauseSec, exercises, note) => ({id, name, mt: 0, data: {type, pauseSec, prepSec: 120, note: note || '', exercises}});
   library = [
     tpl('sta','Strength A — heavy','strength',105,[
-      S('BPC','Biceps curl (seated, one arm L/R)',3,10,'','down slow 4 s · elbow fixed, no torso swing'),
+      S('BPC','Biceps curl (seated, one arm)',3,10,'','down slow 4 s · elbow fixed, no torso swing',null,true),
       S('BEL','Weighted sit-ups',3,10,'','dumbbells at chest · short pause up · down 3–4 s · no bouncing, move from the belly, don’t pull the neck'),
       S('WNG','Wings (raise overhead)',3,10,'','elbows slightly bent, palms slightly up, no rotation · up: 2–3 s to the hard mid-point + mini pause, then normal to overhead (no clink) · down ~2 s · shoulders down, not to the ears'),
       S('PRS','Dumbbell bench press',3,10,'','up smooth, no swing · ~0.5 s pause · down 3 s · shoulder blades retracted the whole set'),
@@ -1723,8 +1740,8 @@ function seedLibrary() {
     tpl('stb','Strength B — technique','strength',100,[
       S('UPB','Up & Belly (press + sit-ups)',3,10,'2×8kg','press: neutral grip, shoulders down, up 1–2 s, pause ~1 s, down 3 s · belly: dumbbells at chest, pause up, down 3–4 s'),
       S('FMD','From Down (seated drag curl)',3,12,'2×8kg','neutral grip, close to the body, elbows slightly back · up 1–2 s, short pause, down 3–4 s'),
-      S('BCL/BCR','Belly Cross (cross-body crunch, L then R)',3,8,'2.3kg','one arm extended back with the weight, other behind the head · rotate from the trunk, not the arm · short hold, down 3–4 s'),
-      S('SDL/SDR','Sides (lateral raise, L then R)',3,8,'3.3kg','only to shoulder level · pause up 0.5–1 s · down ~3 s · shoulders away from the ears'),
+      S('BCL/BCR','Belly Cross (cross-body crunch)',3,8,'2.3kg','one arm extended back with the weight, other behind the head · rotate from the trunk, not the arm · short hold, down 3–4 s',null,true),
+      S('SDL/SDR','Sides (lateral raise)',3,8,'3.3kg','only to shoulder level · pause up 0.5–1 s · down ~3 s · shoulders away from the ears',null,true),
     ],'light day = technique, not performance · very low HR · fine on worse recovery'),
     tpl('stc','Strength C — standard','strength',45,[
       S('STP','Standing press',2,10,'2×8kg',''),

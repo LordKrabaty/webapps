@@ -297,11 +297,6 @@ textarea::placeholder{color:var(--mid)}
     <button id="libToggleBtn" onclick="toggleLibPanel()" title="library">☰</button>
     <button id="undoBtn" onclick="undo()" disabled title="undo (Ctrl+Z)">↩</button>
     <button id="redoBtn" onclick="redo()" disabled title="redo (Ctrl+Y)">↪</button>
-    <label id="autoSaveLbl" class="btn-sm" style="display:none;align-items:center;gap:.35rem;cursor:pointer;padding:.28rem .65rem" title="Automatically save changes">
-      <input type="checkbox" id="autoSaveChk" style="width:12px;height:12px;accent-color:var(--black);cursor:pointer;flex-shrink:0" onchange="toggleAutoSave(this.checked)">
-      ⟳
-    </label>
-    <button id="headerSaveBtn" class="btn-sm" onclick="updateLibraryEntry()" style="display:none" title="save changes">✓</button>
     <div style="position:relative;display:inline-flex">
       <button class="btn-sm" onclick="toggleNewMenu(event)" title="new / save as">+</button>
       <div id="newMenu" class="new-menu" style="display:none">
@@ -443,7 +438,6 @@ const ARCHIVE_KEY = 'APP_NAME-v1-archive';
 let library = [], activeLibId = null;
 let archive = [];
 let undoStack = [], redoStack = [], savedSnapshot = null;
-let autoSave = false;
 const UNDO_MAX = 40;
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -492,6 +486,7 @@ function schedSave() {
     // APP LOGIC: if the app continuously saves the edited record into a synced collection
     // (like todo-app days), flush it here and call window.autoSyncOnSave()
     saveSession(); showSave();
+    if (activeLibId && isDirty()) updateLibraryEntry();   // edits to the loaded item always auto-save (no manual save button)
   }, 300);
 }
 
@@ -534,9 +529,6 @@ function updateLibraryEntry() {
 }
 function renderLibrary() {
   // APP LOGIC: render your item list into the library panel
-  const hSave = el('headerSaveBtn'), hNew = el('headerSaveNewBtn');
-  if (hSave) hSave.style.display = 'none';
-  if (hNew) hNew.textContent = '+ save as new';
 }
 async function newSession() {
   if (!await customConfirm('Open a blank card?','open')) return;
@@ -545,17 +537,6 @@ async function newSession() {
   // APP LOGIC: reset your form fields here
   renderLibrary(); schedSave();
   showSave('new card');
-}
-
-// ── AUTO-SAVE ─────────────────────────────────────────────────────────────
-function initAutoSave() {
-  try { autoSave = !!localStorage.getItem('APP_NAME-autosave'); } catch(e) {}
-  const chk = el('autoSaveChk'); if (chk) chk.checked = autoSave;
-}
-function toggleAutoSave(on) {
-  autoSave = on;
-  try { if (on) localStorage.setItem('APP_NAME-autosave','1'); else localStorage.removeItem('APP_NAME-autosave'); } catch(e) {}
-  if (on && activeLibId && isDirty()) updateLibraryEntry();
 }
 
 // ── UNDO ──────────────────────────────────────────────────────────────────
@@ -912,7 +893,6 @@ function doImport() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 function init() {
-  initAutoSave();
   initFs();
   initDark();
   loadPanelFs();

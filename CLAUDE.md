@@ -58,7 +58,9 @@ Klíče v šabloně používají prefix `APP_NAME` — při kopírování nahrad
 
 - `APP_NAME-v1-session` · `APP_NAME-v1-library` · `APP_NAME-v1-archive`
 - `APP_NAME-fs` · `APP_NAME-dark` · `APP_NAME-panel-fs`
-- `APP_NAME-autosave` · `APP_NAME-gist-token` · `APP_NAME-gist-id`
+- `APP_NAME-gist-token` · `APP_NAME-gist-id`
+
+Pozn.: dřívější `APP_NAME-autosave` (přepínač ⟳ + tlačítko ✓ save changes) byl odstraněn — změny načtené položky se do knihovny ukládají vždy automaticky (debounced přes `schedSave`).
 - `APP_NAME-autosync` · `APP_NAME-tombstones` · `APP_NAME-syncknown` (auto-sync — viz níže)
 
 ---
