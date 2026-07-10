@@ -308,6 +308,9 @@ textarea::placeholder{color:var(--mid)}
 .set-dur{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* rounds view (strength: one round = each exercise once) */
 .round-head{display:flex;align-items:center;gap:.4rem;border-bottom:1px solid var(--light);padding-bottom:.25rem;margin-bottom:.15rem}
+.rnd-tgl{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.75rem;line-height:1;padding:0;flex-shrink:0}
+@media(hover:hover){.rnd-tgl:hover{color:var(--black)}}
+.now-cue{flex-basis:100%;font-size:.74rem;color:var(--muted);line-height:1.45;border-top:1px solid var(--light);padding-top:.3rem;margin-top:.15rem;word-break:break-word}
 .round-title{flex:1;font-size:.7rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .wx-item{display:flex;flex-direction:column;gap:.15rem;padding:.25rem 0;border-bottom:1px solid var(--off);min-width:0}
 .wx-item:last-child{border-bottom:none;padding-bottom:0}
@@ -1166,7 +1169,7 @@ let body = [];
 function loadBody() { try { body = JSON.parse(localStorage.getItem(BODY_KEY) || '[]'); } catch(e) { body = []; } }
 function saveBody() { try { localStorage.setItem(BODY_KEY, JSON.stringify(body)); } catch(e) {} }
 
-function blankWorkout() { return {name:'', type:'strength', pauseSec:105, prepSec:120, sidePauseSec:0, note:'', exercises:[], run:null}; }
+function blankWorkout() { return {name:'', type:'strength', pauseSec:105, prepSec:120, sidePauseSec:0, adjSec:30, note:'', exercises:[], run:null}; }
 let wk = blankWorkout();
 
 function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
@@ -1180,7 +1183,7 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, pauseSec: w.pauseSec, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, note: w.note || '',
+    type: w.type, pauseSec: w.pauseSec, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null}))}))
   };
@@ -1198,7 +1201,7 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', pauseSec: +d.pauseSec || 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, note: d.note || '',
+  wk = {name: e.name, type: d.type || 'strength', pauseSec: +d.pauseSec || 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: ''}))})),
     run: null};
@@ -1233,6 +1236,7 @@ async function deleteLibraryEntry(id) {
 function renderMain() {
   const c = el('wkMain'); if (!c) return;
   if (window._wkDndActive) { window._wkDndPending = true; return; }   // a timer transition mid-drag must not destroy the dragged nodes
+  const adj = +wk.adjSec || 30;
   let html = `
   <div class="wk-setup">
     <div class="field" style="flex:1;min-width:150px"><label>workout name</label>
@@ -1248,6 +1252,8 @@ function renderMain() {
       <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()"></div>
     ${(wk.exercises || []).some(ex => ex.side) ? `<div class="field" style="width:5.5em"><label>L↔R (s)</label>
       <input type="number" value="${esc(wk.sidePauseSec ?? 0)}" min="0" title="pause between the left and right side of L/R exercises (0 = switch immediately)" oninput="wk.sidePauseSec=parseInt(this.value)||0;schedSave()"></div>` : ''}
+    <div class="field" style="width:5.5em"><label>±step (s)</label>
+      <input type="number" value="${esc(wk.adjSec ?? 30)}" min="5" title="how much the −/+ buttons adjust the running countdown" onchange="wk.adjSec=parseInt(this.value)||30;schedSave();renderMain()"></div>
   </div>
   <div class="wk-runbar">
     <button class="btn-sm" id="wkStartBtn" onclick="startWorkout()">▶ start workout</button>
@@ -1258,9 +1264,12 @@ function renderMain() {
     <span class="rest-label" id="nowLabel">rest</span>
     <span class="rest-time" id="nowTime">0:00</span>
     <span class="now-ex" id="nowEx"></span>
+    <button class="btn-sm" onclick="stepBack()" title="back to the previous exercise / side">⏮</button>
     <button class="btn-sm" id="pauseBtn" onclick="pauseResume()" title="pause / resume the sequence">⏸</button>
-    <button class="btn-sm" onclick="addPhase(30)" title="add 30 s to the current phase">+30s</button>
-    <button class="btn-sm" onclick="skipPhase()" title="skip to the next phase">skip</button>
+    <button class="btn-sm" onclick="skipPhase()" title="skip to the next phase">⏭</button>
+    <button class="btn-sm" onclick="addPhase(-${adj})" title="shorten the current phase by ${adj} s (configurable via ±step)">−${adj}s</button>
+    <button class="btn-sm" onclick="addPhase(${adj})" title="add ${adj} s to the current phase (configurable via ±step)">+${adj}s</button>
+    <div class="now-cue" id="nowCue" style="display:none"></div>
   </div>`;
   if (wk.type === 'cardio') {
     // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
@@ -1292,14 +1301,24 @@ function roundsHtml() {
   const n = Math.max(...exs.map(ex => (ex.sets || []).length));
   let html = '';
   for (let si = 0; si < n; si++) {
-    const rows = exs.map((ex, ei) => (ex.sets || [])[si] != null ? wxItemHtml(ex, ei, si) : '').join('');
+    const inRound = exs.filter(ex => (ex.sets || [])[si]);
+    const doneN = inRound.filter(ex => ex.sets[si].done).length;
+    const coll = !!(wk.collapsed && wk.collapsed[si]);
+    const rows = coll ? '' : exs.map((ex, ei) => (ex.sets || [])[si] != null ? wxItemHtml(ex, ei, si) : '').join('');
     html += `<div class="ex-block">
-      <div class="round-head"><span class="round-title">round ${si + 1}</span>
+      <div class="round-head">
+        <button class="rnd-tgl" onclick="toggleRound(${si})" title="${coll ? 'expand' : 'collapse'} round ${si + 1}">${coll ? '▸' : '▾'}</button>
+        <span class="round-title" onclick="toggleRound(${si})" style="cursor:pointer">round ${si + 1}${coll ? ` · ${doneN}/${inRound.length} done` : ''}</span>
         <button class="ex-del" onclick="removeRound(${si})" title="remove round ${si + 1}">✕</button></div>
       ${rows}
     </div>`;
   }
   return html;
+}
+function toggleRound(si) {
+  wk.collapsed = wk.collapsed || {};
+  if (wk.collapsed[si]) delete wk.collapsed[si]; else wk.collapsed[si] = true;
+  schedSave(); renderMain();
 }
 // one exercise inside a round — full editable header in round 1; later rounds mirror the
 // technique cues read-only. Each round has its OWN independent session note (per set).
@@ -1626,10 +1645,48 @@ function pauseResume() {
 }
 function addPhase(sec) {
   const r = ensureRun();
-  if (r.pausedLeft != null) r.pausedLeft += sec * 1000;
-  else if (r.endTs) r.endTs += sec * 1000;
+  if (r.pausedLeft != null) r.pausedLeft = Math.max(0, r.pausedLeft + sec * 1000);
+  else if (r.endTs) r.endTs = Math.max(Date.now(), r.endTs + sec * 1000);   // shortening below zero ends the phase on the next tick
   else return;
   schedSave(); tick();
+}
+// ⏮ one phase back: R half → restart the left side; otherwise re-open the most recently
+// completed step (in sequence order before the current one) and run its work phase again
+function prevDoneStep() {
+  const order = stepOrder();
+  const r = wk.run;
+  let curIdx = order.length;
+  if (r && r.ei != null) {
+    const i = order.findIndex(([e, s]) => e === r.ei && s === r.si);
+    if (i >= 0) curIdx = i;
+  }
+  for (let i = curIdx - 1; i >= 0; i--) {
+    const [e, s] = order[i];
+    if (wk.exercises[e].sets[s].done) return [e, s];
+  }
+  return null;
+}
+function stepBack() {
+  const r = ensureRun();
+  if (!r.startedAt) return;
+  if ((r.phase === 'work' || r.phase === 'manual' || r.phase === 'srest') && r.half === 'R') {
+    r.half = 'L';   // right side (or the switch pause) → back to the left side
+    const s = wk.exercises[r.ei] && wk.exercises[r.ei].sets[r.si];
+    r.pausedLeft = null;
+    if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
+    else { r.phase = 'manual'; r.endTs = null; }
+  } else {
+    const prev = prevDoneStep();
+    if (!prev) { showStatusMsg('⚠ nothing to go back to'); return; }
+    const [ei, si] = prev;
+    const ex = wk.exercises[ei], s = ex.sets[si];
+    s.done = false;
+    r.ei = ei; r.si = si; r.pausedLeft = null;
+    r.half = ex.side ? 'L' : null;
+    if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
+    else { r.phase = 'manual'; r.endTs = null; }
+  }
+  schedSave(); renderMain();
 }
 function skipPhase() {
   const r = ensureRun();
@@ -1697,6 +1754,21 @@ function updateNowBar() {
     lbl.textContent = 'done';
     exl.textContent = 'all exercises complete — ■ finish & log';
     t.textContent = '✓';
+  }
+  // technique cues right under the running timer — current exercise while working,
+  // the upcoming exercise's cues during rest/prep (time to get ready)
+  const cueEl = el('nowCue');
+  if (cueEl) {
+    let cue = '';
+    if (r.phase === 'work' || r.phase === 'manual' || r.phase === 'srest') {
+      const ex = wk.exercises[r.ei]; cue = (ex && ex.note) || '';
+    } else if (r.phase === 'rest' || r.phase === 'prep') {
+      const nxt = nextPending();
+      const nx = nxt ? wk.exercises[nxt[0]] : null;
+      if (nx && nx.note) cue = 'next: ' + nx.note;
+    }
+    cueEl.textContent = cue;
+    cueEl.style.display = cue ? 'block' : 'none';
   }
 }
 function beep() {
