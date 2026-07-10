@@ -48,8 +48,8 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 #statusToast{display:none;position:fixed;top:.7rem;left:50%;transform:translateX(-50%);z-index:300;background:var(--w);color:var(--black);border:var(--bh);border-radius:var(--r);padding:.45rem .85rem;font-size:.78rem;font-family:'DM Mono',monospace;letter-spacing:.03em;max-width:min(480px,92vw);text-align:center;pointer-events:none}
 .jb-field{display:flex;flex-direction:column;gap:.3rem}
 .jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
-.jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
-.jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.jb-field input,.jb-field select{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none;min-width:0;width:100%}
+.jb-field input:focus,.jb-field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
 #importModal.from-cloud .jb-import-hide{display:none!important}
 
 /* export/import buttons */
@@ -343,6 +343,7 @@ textarea::placeholder{color:var(--mid)}
 .log-date{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0}
 .log-name{font-size:.85rem;font-weight:500;color:var(--black);flex:1;min-width:0}
 .log-total{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
+.log-int{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);border:var(--b);border-radius:var(--r);padding:.04rem .3rem;flex-shrink:0}
 .log-ex{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--dark);padding-left:.2rem;line-height:1.5}
 .log-code{font-weight:500;color:var(--black)}
 .log-note-in{width:100%;font-size:.72rem;font-style:italic;color:var(--muted);border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.08rem .2rem;flex:0 0 auto;min-height:0;resize:none;overflow:hidden;line-height:1.5;font-family:'DM Sans',sans-serif}
@@ -523,6 +524,35 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div id="statusToast"></div>
+
+<!-- Free activity modal (bike, swimming… — logged retrospectively, no timer) -->
+<div class="modal-bg" id="actModal">
+  <div class="modal" style="max-width:400px;gap:.6rem">
+    <h2 id="actTitle">Log an activity</h2>
+    <div class="jb-field"><label>activity</label><input id="actName" type="text" placeholder="e.g. bike, swimming, walk" spellcheck="false"></div>
+    <div class="modal-row">
+      <div class="jb-field" style="flex:1"><label>date</label><input id="actDate" type="date"></div>
+      <div class="jb-field" style="flex:1"><label>time</label><input id="actTime" type="time"></div>
+    </div>
+    <div class="modal-row">
+      <div class="jb-field" style="flex:1"><label>duration (min or h:mm)</label><input id="actDur" type="text" inputmode="numeric" placeholder="45"></div>
+      <div class="jb-field" style="flex:1"><label>felt intensity</label>
+        <select id="actInt">
+          <option value="">–</option>
+          <option value="1">1 · very easy</option>
+          <option value="2">2 · easy</option>
+          <option value="3">3 · moderate</option>
+          <option value="4">4 · hard</option>
+          <option value="5">5 · all-out</option>
+        </select></div>
+    </div>
+    <div class="jb-field"><label>description</label><input id="actNote" type="text" placeholder="optional" spellcheck="false"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('actModal')">cancel</button>
+      <button class="modal-btn primary" onclick="saveActivity()">save</button>
+    </div>
+  </div>
+</div>
 
 <!-- Save log entry as template modal -->
 <div class="modal-bg" id="tplNameModal">
@@ -895,7 +925,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -1728,7 +1758,10 @@ function renderLog() {
   const c = el('logList'); if (!c) return;
   if (!archive.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
   const items = [...archive].sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0));
-  c.innerHTML = `<div class="log-tools"><button class="btn-io" onclick="copyLogText()" title="copy the whole log to the clipboard as plain text">⧉ copy log as text</button></div>`
+  c.innerHTML = `<div class="log-tools">
+      <button class="btn-io" onclick="openActivityModal()" title="log a free activity (bike, swimming…) — duration, description, felt intensity">+ activity</button>
+      <button class="btn-io" onclick="copyLogText()" title="copy the whole log to the clipboard as plain text">⧉ copy log as text</button>
+    </div>`
     + items.map(a => {
     const lines = (a.entries || []).map((e, idx) => {
       if (!(e.sets || []).length) return '';
@@ -1741,18 +1774,21 @@ function renderLog() {
         ${setNotes}
         <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
     }).join('');
+    const isAct = a.type === 'activity';
+    const actions = isAct
+      ? `<button class="log-act-btn" onclick="openActivityModal(${jsArg(a.id)})" title="edit this activity">✎ edit</button>`
+      : `<button class="log-act-btn" onclick="openLogEdit(${jsArg(a.id)})" title="edit the logged reps / weights / times">✎ edit</button>
+        <button class="log-act-btn" onclick="useLogAsWorkout(${jsArg(a.id)})" title="load this logged workout into the main panel">← use as workout</button>
+        <button class="log-act-btn" onclick="logToTemplate(${jsArg(a.id)})" title="save this logged workout as a new template">→ template</button>`;
     return `<div class="log-item">
       <div class="log-head"><span class="log-date">${esc(logDateStr(a))}</span><span class="log-name">${esc(a.name)}</span>
+        ${a.intensity ? `<span class="log-int" title="felt intensity">int ${esc(a.intensity)}/5</span>` : ''}
         <span class="log-total">${mmss(a.totalSec || 0)}</span>
         <button class="log-del" onclick="copyLogText(${jsArg(a.id)})" title="copy this entry as text">⧉</button>
         <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
       ${lines}
-      <textarea class="log-note-in log-note-wk" rows="1" placeholder="· workout note" title="note for the whole workout — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>
-      <div class="log-actions">
-        <button class="log-act-btn" onclick="openLogEdit(${jsArg(a.id)})" title="edit the logged reps / weights / times">✎ edit</button>
-        <button class="log-act-btn" onclick="useLogAsWorkout(${jsArg(a.id)})" title="load this logged workout into the main panel">← use as workout</button>
-        <button class="log-act-btn" onclick="logToTemplate(${jsArg(a.id)})" title="save this logged workout as a new template">→ template</button>
-      </div>
+      <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>
+      <div class="log-actions">${actions}</div>
     </div>`;
   }).join('');
   c.querySelectorAll('.log-note-in').forEach(autoResizeTA);   // hidden pane → resized again on tab switch
@@ -1783,6 +1819,52 @@ function updateLogSetNote(id, exIdx, setIdx, val) {
   saveArchive();
   showSave('✓ log note saved');
 }
+// ── FREE ACTIVITIES (bike, swimming… — retrospective log entry, no timer) ──
+let actEditId = null;
+function fmtMin(sec) { const m = Math.round((+sec || 0) / 60); return m >= 60 ? Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') : String(m); }
+function parseMin(v) {   // '45' = 45 min, '1:30' = 1 h 30 min → seconds
+  v = String(v || '').trim(); if (!v) return null;
+  const m = v.match(/^(\d+):(\d{1,2})$/); if (m) return ((+m[1]) * 60 + (+m[2])) * 60;
+  const n = parseFloat(v.replace(',', '.')); return isNaN(n) ? null : Math.round(n * 60);
+}
+function openActivityModal(id) {
+  actEditId = id ?? null;
+  const a = id != null ? archive.find(x => String(x.id) === String(id)) : null;
+  el('actTitle').textContent = a ? 'Edit activity' : 'Log an activity';
+  const d = a ? new Date(a.date || a.id) : new Date();
+  const pad = n => String(n).padStart(2, '0');
+  el('actName').value = a ? (a.name || '') : '';
+  el('actDate').value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  el('actTime').value = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  el('actDur').value = a && a.totalSec ? fmtMin(a.totalSec) : '';
+  el('actInt').value = a && a.intensity ? String(a.intensity) : '';
+  el('actNote').value = a ? (a.note || '') : '';
+  el('actModal').classList.add('open');
+  if (!a) setTimeout(() => { try { el('actName').focus(); } catch(e) {} }, 50);
+}
+function saveActivity() {
+  const name = (el('actName').value || '').trim();
+  if (!name) { customAlert('Enter the activity name.'); return; }
+  const ts = Date.parse((el('actDate').value || '') + 'T' + (el('actTime').value || '12:00'));
+  const totalSec = parseMin(el('actDur').value) || 0;
+  const intensity = parseInt(el('actInt').value) || null;
+  const note = (el('actNote').value || '').trim();
+  const a = actEditId != null ? archive.find(x => String(x.id) === String(actEditId)) : null;
+  if (a) {
+    a.name = name; if (!isNaN(ts)) a.date = ts;
+    a.totalSec = totalSec; a.intensity = intensity; a.note = note;
+    a.mt = Date.now();
+    showSave('✓ activity updated');
+  } else {
+    archive.push({id: Date.now(), date: isNaN(ts) ? Date.now() : ts, name, type: 'activity',
+      totalSec, intensity, note, entries: [], mt: Date.now()});
+    showSave('✓ activity logged');
+  }
+  actEditId = null;
+  saveArchive(); renderLog();
+  closeModal('actModal');
+}
+
 // ── LOG ENTRY: EDIT / USE AS WORKOUT / SAVE AS TEMPLATE (tea-app principle) ──
 // The modal edits a DRAFT copy — every input binds to it, add/remove re-renders it,
 // nothing touches the archive until "save" (cancel discards everything).
@@ -1904,7 +1986,8 @@ function confirmLogToTemplate() {
 
 // ── LOG TEXT EXPORT ─────────────────────────────────────────────────────────
 function logEntryText(a) {
-  const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)];
+  const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)
+    + (a.intensity ? ' · intensity ' + a.intensity + '/5' : '')];
   (a.entries || []).forEach(e => {
     if (!(e.sets || []).length) return;
     lines.push('  ' + (e.code || e.name) + ' ' + exStatText(e) + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
