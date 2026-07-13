@@ -294,6 +294,7 @@ textarea::placeholder{color:var(--mid)}
    otherwise the inline height from autoResizeTA is ignored and the field collapses */
 .ex-note-in,.ex-snote-in{width:100%;border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.1rem 0;flex:0 0 auto;min-height:0;resize:none;overflow:hidden;line-height:1.45;font-family:'DM Sans',sans-serif}
 .ex-note-in{font-size:.74rem;color:var(--muted)}
+.iv-cue{padding-left:1.5rem}
 .ex-snote-in{font-size:.74rem;font-style:italic;color:var(--dark)}
 .ex-snote-in:focus{outline:none;border-bottom:1px solid var(--black)}
 .ex-sets{display:flex;flex-direction:column;gap:.3rem}
@@ -302,6 +303,7 @@ textarea::placeholder{color:var(--mid)}
 .set-num{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--muted);width:1.2em;text-align:right;flex-shrink:0}
 .set-in{width:3.2em;font-family:'DM Mono',monospace;font-size:.85rem;text-align:center;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.28rem .2rem;outline:none;min-width:0;flex-shrink:0}
 .set-w{width:4.8em}
+.iv-name{width:auto;flex:1;min-width:5em;text-align:left;font-family:'DM Sans',sans-serif;padding:.28rem .45rem}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-t{width:4.5em}
@@ -327,6 +329,7 @@ textarea::placeholder{color:var(--mid)}
 .wk-addrow .btn-lib{width:auto;flex:1}
 .set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
 .set-go{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.65rem;line-height:1;padding:0}
+.set-rep{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
 @media(hover:hover){.set-go:hover{background:var(--off);color:var(--black)}}
 .set-done.on{background:var(--black);border-color:var(--black);color:var(--w)}
 .set-del,.log-del{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;opacity:.4;flex-shrink:0;padding:0;line-height:1}
@@ -1174,7 +1177,7 @@ document.addEventListener('keydown', e => {
 //   exercises:[{code, name, note (technique cues, template), snote (segment note, cardio → log),
 //     linked (default true: reps/weight/time edits mirror into every round; ≠ = independent),
 //     side (true = one side at a time: the work timer runs twice per round, L then R, rest after both),
-//     sets:[{reps, weight, durSec, done, snote (per-round note → log)}]}],
+//     sets:[{reps, weight, durSec, done, snote (per-round note → log), cue (per-interval technique note, template — shown in the now-bar during that interval)}]}],
 //   run:{startedAt, phase:'prep'|'work'|'srest'(L↔R switch)|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft, half:'L'|'R'|null} | null}
 // library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
 // archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable)
@@ -1199,8 +1202,8 @@ function tplFromWk(w) {
   w = w || wk;
   return {
     type: w.type, pauseSec: w.pauseSec, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
-    exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null}))}))
+    exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? ''}))}))
   };
 }
 function applySessionData(d) {
@@ -1216,9 +1219,9 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', pauseSec: +d.pauseSec || 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
-    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: ''}))})),
+  wk = {name: e.name, type: d.type || 'strength', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
+    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? ''}))})),
     run: null};
   prefillFromLast(id);
   activeLibId = e.id; markSaved();
@@ -1358,7 +1361,10 @@ function wxItemHtml(ex, ei, si) {
   </div>`;
 }
 function exBlockHtml(ex, ei) {
-  const setRows = (ex.sets || []).map((s, si) => dataRowHtml(s, ei, si, true)).join('');
+  const setRows = (ex.sets || []).map((s, si) =>
+    dataRowHtml(s, ei, si, true)
+    + `<textarea class="ex-note-in iv-cue" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].cue=this.value;schedSave()" placeholder="· interval note (shown during this interval)">${esc(s.cue || '')}</textarea>`
+  ).join('');
   return `<div class="ex-block" data-ei="${ei}">
     <div class="ex-head">
       <span class="grip" title="drag to reorder the segment">⠿</span>
@@ -1366,7 +1372,7 @@ function exBlockHtml(ex, ei) {
       <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="segment name">
       <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move segment up">↑</button>
       <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move segment down">↓</button>
-      <button class="ex-link${ex.linked === false ? ' ind' : ''}" onclick="toggleExLink(${ei})" title="${ex.linked === false ? 'intervals are independent — click to link them again (copies the first interval to all)' : 'all intervals share reps / weight / time — click to make each independent'}">${ex.linked === false ? '≠' : '='}</button>
+      <span class="set-x">×</span><input class="set-in" type="text" inputmode="numeric" style="width:2.6em" value="${exRepeat(ex)}" onchange="setSegmentRepeat(${ei},this.value)" title="how many times the whole segment (its interval sequence) repeats before the next segment">
       <button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>
       <button class="ex-del" onclick="removeExercise(${ei})" title="remove segment">✕</button>
     </div>
@@ -1376,21 +1382,26 @@ function exBlockHtml(ex, ei) {
   </div>`;
 }
 // reps × weight, editable planned/actual time (m:ss or seconds), live s/rep, done ✓ (starts the rest timer)
-function dataRowHtml(s, ei, si, numbered) {
+function dataRowHtml(s, ei, si, cardio) {
   const r = parseFloat(String(s.reps ?? '').replace(',','.'));
-  const sr = (s.durSec != null && r > 0) ? (s.durSec / r).toFixed(1) + ' s/rep' : '';
+  const sr = (!cardio && s.durSec != null && r > 0) ? (s.durSec / r).toFixed(1) + ' s/rep' : '';
   const run = wk.run;
   const cur = !!(run && run.ei === ei && run.si === si && (run.phase === 'work' || run.phase === 'manual' || run.phase === 'srest'));
-  return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
-    ${numbered ? `<span class="set-num">${si + 1}</span>` : ''}
-    <input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
+  // cardio is time-based: instead of reps × weight one wide interval-name field (work / rest / all-in)
+  const mid = cardio
+    ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">`
+    : `<input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
-    <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–">
-    <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="exercise time — m:ss or seconds, editable any time" placeholder="m:ss">
+    <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–">`;
+  return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
+    ${cardio ? `<span class="set-num">${si + 1}</span>` : ''}
+    ${mid}
+    <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="time — m:ss or seconds, editable any time" placeholder="m:ss">
     <span class="set-dur">${sr}</span>
+    ${(() => { const ex = wk.exercises[ei], R = exRepeat(ex); return R > 1 ? `<span class="set-rep" title="completed repetitions of this interval">${setDn(s)}/${R}</span>` : ''; })()}
     <button class="set-go" onclick="jumpToStep(${ei},${si})" title="jump here — start this exercise now and continue from it">▶</button>
     <button class="set-done${s.done ? ' on' : ''}" onclick="toggleSetDone(${ei},${si})" title="done → starts the rest timer">✓</button>
-    ${numbered ? `<button class="set-del" onclick="removeSet(${ei},${si})" title="remove interval">✕</button>` : ''}
+    ${cardio ? `<button class="set-del" onclick="removeSet(${ei},${si})" title="remove interval">✕</button>` : ''}
   </div>`;
 }
 function parseDur(v) {
@@ -1402,7 +1413,7 @@ function setDurInput(ei, si, inp) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   const v = parseDur(inp.value);
   ex.sets[si].durSec = v;
-  if (ex.linked !== false) ex.sets.forEach(s => { s.durSec = v; });   // linked rounds share the time
+  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s.durSec = v; });   // linked rounds share the time (cardio intervals are distinct)
   const r = wk.run;
   if (r && r.phase === 'manual' && r.ei === ei && r.si === si) startNextWork();   // time filled for the waiting step → its countdown starts right away
   schedSave(); renderMain();
@@ -1411,7 +1422,7 @@ function setDurInput(ei, si, inp) {
 function setSetVal(ei, si, field, val) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   ex.sets[si][field] = val;
-  if (ex.linked !== false) ex.sets.forEach(s => { s[field] = val; });
+  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s[field] = val; });
   schedSave(); renderMain();
 }
 // = rounds share reps/weight/time ↔ ≠ each round independent; re-linking copies round 1 to all
@@ -1520,7 +1531,7 @@ function addExercise() {
   // strength: a new exercise joins every existing round; cardio: starts with one interval
   const n = (wk.type !== 'cardio' && wk.exercises.length)
     ? Math.max(1, ...wk.exercises.map(ex => (ex.sets || []).length)) : 1;
-  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:''}))});
+  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, repeat: 1, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:'', iname:'', cue:''}))});
   schedSave(); renderMain();
 }
 function addRound() {
@@ -1528,7 +1539,7 @@ function addRound() {
   pushUndo();
   wk.exercises.forEach(ex => {
     const p = ex.sets[ex.sets.length - 1];
-    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: ''});
+    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: '', iname: p ? (p.iname ?? '') : '', cue: ''});
   });
   schedSave(); renderMain();
 }
@@ -1550,9 +1561,29 @@ function addSet(ei) {
   const ex = wk.exercises[ei]; if (!ex) return;
   pushUndo();
   const prev = ex.sets[ex.sets.length - 1];
-  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: ''});
+  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: '', iname: '', cue: ''});
   schedSave(); renderMain();
 }
+// cardio: how many times the WHOLE segment (its interval sequence) runs before the next segment
+function setSegmentRepeat(ei, n) {
+  const ex = wk.exercises[ei]; if (!ex) return;
+  n = Math.max(1, Math.min(99, parseInt(n) || 1));
+  if (n === exRepeat(ex)) return;
+  pushUndo();
+  ex.repeat = n;
+  ex.sets.forEach(s => setSetDn(ex, s, Math.min(setDn(s), n)));   // clamp progress to the new count
+  schedSave(); renderMain();
+}
+// repetition progress: s.dn = completed repetitions of this interval (0..repeat);
+// s.done stays the boolean "fully done" view used by rows, rounds and the log
+function exRepeat(ex) { return Math.max(1, parseInt(ex && ex.repeat) || 1); }
+function setDn(s) { return s.dn != null ? s.dn : (s.done ? 1 : 0); }
+function setSetDn(ex, s, n) {
+  const R = exRepeat(ex);
+  s.dn = Math.max(0, Math.min(R, n));
+  s.done = s.dn >= R;
+}
+function stepDone(ex, s, rep) { return setDn(s) > rep; }
 function removeSet(ei, si) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   if (ex.sets.length === 1) { removeExercise(ei); return; }   // last interval → remove the whole segment
@@ -1565,49 +1596,58 @@ function removeSet(ei, si) {
 // Planned times drive the countdowns; a step without a time waits for a manual ✓.
 // Absolute timestamps (endTs) → the sequence survives a reload; pausedLeft = paused remainder in ms.
 function ensureRun() {
-  if (!wk.run) wk.run = {startedAt:null, phase:null, ei:null, si:null, endTs:null, pausedLeft:null, half:null};
+  if (!wk.run) wk.run = {startedAt:null, phase:null, ei:null, si:null, rep:0, endTs:null, pausedLeft:null, half:null};
   return wk.run;
 }
-// execution order of [exercise, round] steps — strength runs round-major (circuit), cardio segment-major
+// execution order of [exercise, interval, repetition] steps — strength runs round-major
+// (circuit, rep always 0), cardio runs its segments in order and each segment's interval
+// sequence repeats ex.repeat× back-to-back before the next segment
 function stepOrder() {
   const out = [], exs = wk.exercises || [];
-  if (wk.type === 'cardio') exs.forEach((ex, ei) => (ex.sets || []).forEach((s, si) => out.push([ei, si])));
+  if (wk.type === 'cardio') exs.forEach((ex, ei) => {
+    const R = exRepeat(ex);
+    for (let rep = 0; rep < R; rep++) (ex.sets || []).forEach((s, si) => out.push([ei, si, rep]));
+  });
   else {
     const n = exs.length ? Math.max(...exs.map(ex => (ex.sets || []).length)) : 0;
-    for (let si = 0; si < n; si++) exs.forEach((ex, ei) => { if ((ex.sets || [])[si]) out.push([ei, si]); });
+    for (let si = 0; si < n; si++) exs.forEach((ex, ei) => { if ((ex.sets || [])[si]) out.push([ei, si, 0]); });
   }
   return out;
+}
+function curStepIdx(order) {
+  const r = wk.run;
+  if (!r || r.ei == null) return -1;
+  return order.findIndex(([e, s, p]) => e === r.ei && s === r.si && p === (r.rep || 0));
 }
 // first pending step AFTER the current position (wraps to the skipped-over ones at the end) —
 // jumping forward must continue forward, not bounce back to steps left behind
 function nextPending() {
   const order = stepOrder();
-  const r = wk.run;
-  let from = 0;
-  if (r && r.ei != null) {
-    const i = order.findIndex(([e, s]) => e === r.ei && s === r.si);
-    if (i >= 0) from = i + 1;
-  }
-  for (let i = from; i < order.length; i++) { const [e, s] = order[i]; if (!wk.exercises[e].sets[s].done) return [e, s]; }
-  for (let i = 0; i < from; i++) { const [e, s] = order[i]; if (!wk.exercises[e].sets[s].done) return [e, s]; }
+  const i = curStepIdx(order);
+  const from = i >= 0 ? i + 1 : 0;
+  const pend = ([e, s, p]) => !stepDone(wk.exercises[e], wk.exercises[e].sets[s], p);
+  for (let k = from; k < order.length; k++) if (pend(order[k])) return order[k];
+  for (let k = 0; k < from; k++) if (pend(order[k])) return order[k];
   return null;
 }
 // set the run state to a concrete step and start its work (or manual) phase
-function beginWorkPhase(ei, si) {
+function beginWorkPhase(ei, si, rep) {
   const r = ensureRun();
   const ex = wk.exercises[ei], s = ex.sets[si];
-  r.ei = ei; r.si = si; r.pausedLeft = null;
+  r.ei = ei; r.si = si; r.rep = rep || 0; r.pausedLeft = null;
   r.half = ex.side ? 'L' : null;
   if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
   else { r.phase = 'manual'; r.endTs = null; }
 }
-// ▶ on a row: jump to that exercise (from its start) and continue the sequence from there
+// ▶ on a row: jump to that interval (its first pending repetition) and continue from there
 function jumpToStep(ei, si) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   const r = ensureRun();
   if (!r.startedAt) r.startedAt = Date.now();
-  ex.sets[si].done = false;   // re-opening a completed set restarts it
-  beginWorkPhase(ei, si);
+  const s = ex.sets[si];
+  const rep = Math.min(setDn(s), exRepeat(ex) - 1);
+  setSetDn(ex, s, rep);   // re-open this repetition
+  beginWorkPhase(ei, si, rep);
   schedSave(); renderMain();
   showStatusMsg('▶ jumped to ' + (ex.code || ex.name || 'exercise'));
 }
@@ -1624,13 +1664,8 @@ function startWorkout() {
 function startNextWork() {
   const r = ensureRun();
   const nxt = nextPending();
-  if (!nxt) { r.phase = r.startedAt ? 'done' : null; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
-  const [ei, si] = nxt;
-  const ex = wk.exercises[ei], s = ex.sets[si];
-  r.ei = ei; r.si = si; r.pausedLeft = null;
-  r.half = ex.side ? 'L' : null;   // per-side exercise → the work step runs twice (left, then right)
-  if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
-  else { r.phase = 'manual'; r.endTs = null; }   // no planned time → wait for ✓
+  if (!nxt) { r.phase = r.startedAt ? 'done' : null; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
+  beginWorkPhase(nxt[0], nxt[1], nxt[2]);
 }
 // work countdown elapsed / skip: on a per-side exercise the left half hands over to the right
 // (optionally via a short switch-side pause), only after both halves is the set complete
@@ -1655,29 +1690,31 @@ function startRightHalf() {
 }
 function startRestPhase() {
   const r = ensureRun();
-  if (!nextPending()) { r.phase = 'done'; r.ei = null; r.si = null; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
+  if (!nextPending()) { r.phase = 'done'; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
   const p = +wk.pauseSec || 0;
   // ei/si stay pointing at the completed step during the rest — nextPending continues after it
   if (p > 0) { r.phase = 'rest'; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; r.half = null; }
   else startNextWork();
 }
-function completeCurrentWork() {   // both halves done (or ✓ on the current row) → mark done, rest
+function completeCurrentWork() {   // both halves done (or ✓ on the current row) → count the repetition, rest
   const r = ensureRun();
-  if (r.ei != null && wk.exercises[r.ei] && wk.exercises[r.ei].sets[r.si]) wk.exercises[r.ei].sets[r.si].done = true;
+  const ex = r.ei != null ? wk.exercises[r.ei] : null;
+  const s = ex && ex.sets[r.si];
+  if (s) setSetDn(ex, s, Math.max(setDn(s), (r.rep || 0) + 1));
   r.half = null;
   startRestPhase();
 }
-// ✓ on a row: the current step advances the sequence; any other row is just marked done
+// ✓ on a row: fully done (all repetitions); the current step advances the sequence
 function toggleSetDone(ei, si) {
-  const s = wk.exercises[ei].sets[si];
+  const ex = wk.exercises[ei], s = ex.sets[si];
   const r = ensureRun();
   if (!s.done) {
-    s.done = true;
+    setSetDn(ex, s, exRepeat(ex));
     if (!r.startedAt) r.startedAt = Date.now();   // first ✓ auto-starts the workout
-    if ((r.phase === 'work' || r.phase === 'manual' || r.phase === 'srest') && r.ei === ei && r.si === si) startRestPhase();
-    else if (r.phase == null || r.phase === 'done') { r.ei = ei; r.si = si; startRestPhase(); }   // continue after the checked row
+    if ((r.phase === 'work' || r.phase === 'manual' || r.phase === 'srest') && r.ei === ei && r.si === si) { r.half = null; startRestPhase(); }
+    else if (r.phase == null || r.phase === 'done') { r.ei = ei; r.si = si; r.rep = exRepeat(ex) - 1; startRestPhase(); }   // continue after the checked row
   } else {
-    s.done = false;
+    setSetDn(ex, s, 0);
     if (r.phase === 'done') startNextWork();   // a row re-opened after everything was done
   }
   schedSave(); renderMain();
@@ -1700,15 +1737,11 @@ function addPhase(sec) {
 // completed step (in sequence order before the current one) and run its work phase again
 function prevDoneStep() {
   const order = stepOrder();
-  const r = wk.run;
-  let curIdx = order.length;
-  if (r && r.ei != null) {
-    const i = order.findIndex(([e, s]) => e === r.ei && s === r.si);
-    if (i >= 0) curIdx = i;
-  }
-  for (let i = curIdx - 1; i >= 0; i--) {
-    const [e, s] = order[i];
-    if (wk.exercises[e].sets[s].done) return [e, s];
+  const i = curStepIdx(order);
+  const curIdx = i >= 0 ? i : order.length;
+  for (let k = curIdx - 1; k >= 0; k--) {
+    const [e, s, p] = order[k];
+    if (stepDone(wk.exercises[e], wk.exercises[e].sets[s], p)) return order[k];
   }
   return null;
 }
@@ -1722,13 +1755,14 @@ function stepBack() {
     if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
     else { r.phase = 'manual'; r.endTs = null; }
   } else {
-    // during the rest the position still points at the just-completed step → reopen exactly that one
-    const cur = (r.phase === 'rest' && r.ei != null && wk.exercises[r.ei] && wk.exercises[r.ei].sets[r.si] && wk.exercises[r.ei].sets[r.si].done)
-      ? [r.ei, r.si] : prevDoneStep();
+    // during the rest the position still points at the just-completed step → reopen exactly that repetition
+    const rex = r.ei != null ? wk.exercises[r.ei] : null;
+    const cur = (r.phase === 'rest' && rex && rex.sets[r.si] && stepDone(rex, rex.sets[r.si], r.rep || 0))
+      ? [r.ei, r.si, r.rep || 0] : prevDoneStep();
     if (!cur) { showStatusMsg('⚠ nothing to go back to'); return; }
-    const [ei, si] = cur;
-    wk.exercises[ei].sets[si].done = false;
-    beginWorkPhase(ei, si);
+    const [ei, si, rep] = cur;
+    setSetDn(wk.exercises[ei], wk.exercises[ei].sets[si], rep);   // re-open this repetition
+    beginWorkPhase(ei, si, rep);
   }
   schedSave(); renderMain();
 }
@@ -1769,6 +1803,7 @@ function updateNowBar() {
   const remMs = r.pausedLeft != null ? r.pausedLeft : (r.endTs ? r.endTs - Date.now() : null);
   bar.classList.toggle('over', r.phase === 'done');
   if (pb) { pb.textContent = r.pausedLeft != null ? '▶' : '⏸'; pb.style.display = (r.phase === 'work' || r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') ? '' : 'none'; }
+  const repTag = (ex, rep) => (ex && exRepeat(ex) > 1) ? ' · rep ' + ((rep || 0) + 1) + '/' + exRepeat(ex) : '';
   if (r.phase === 'prep') {
     lbl.textContent = 'prep';
     const nxt = nextPending();
@@ -1777,9 +1812,10 @@ function updateNowBar() {
     t.textContent = mmss(Math.max(0, Math.ceil(remMs / 1000)));
   } else if (r.phase === 'work' || r.phase === 'manual') {
     const ex = wk.exercises[r.ei] || {};
-    lbl.textContent = (ex.code || 'work') + (r.half ? ' ' + r.half : '');
-    exl.textContent = (r.half ? (r.half === 'L' ? 'left side · ' : 'right side · ') : '') + (ex.name || '')
-      + (wk.type !== 'cardio' ? ' · round ' + (r.si + 1) : '')
+    const s = (ex.sets || [])[r.si];
+    lbl.textContent = ((s && s.iname) || ex.code || 'work') + (r.half ? ' ' + r.half : '');
+    exl.textContent = (r.half ? (r.half === 'L' ? 'left side · ' : 'right side · ') : '') + ((s && s.iname) ? (ex.code || ex.name || '') : (ex.name || ''))
+      + (wk.type !== 'cardio' ? ' · round ' + (r.si + 1) : repTag(ex, r.rep))
       + (r.phase === 'manual' ? ' · no time set — tap ✓ when done' : '')
       + (r.pausedLeft != null ? ' · paused' : '');
     t.textContent = r.phase === 'manual' ? '—' : mmss(Math.max(0, Math.ceil(remMs / 1000)));
@@ -1792,7 +1828,8 @@ function updateNowBar() {
     lbl.textContent = 'rest';
     const nxt = nextPending();
     const nx = nxt ? wk.exercises[nxt[0]] : null;
-    exl.textContent = (nx ? 'next: ' + (nx.code || nx.name || '') : '') + (r.pausedLeft != null ? ' · paused' : '');
+    const ns = nxt && nx ? (nx.sets || [])[nxt[1]] : null;
+    exl.textContent = (nx ? 'next: ' + ((ns && ns.iname) || nx.code || nx.name || '') + repTag(nx, nxt[2]) : '') + (r.pausedLeft != null ? ' · paused' : '');
     t.textContent = mmss(Math.max(0, Math.ceil(remMs / 1000)));
   } else {   // done
     lbl.textContent = 'done';
@@ -1805,11 +1842,15 @@ function updateNowBar() {
   if (cueEl) {
     let cue = '';
     if (r.phase === 'work' || r.phase === 'manual' || r.phase === 'srest') {
-      const ex = wk.exercises[r.ei]; cue = (ex && ex.note) || '';
+      const ex = wk.exercises[r.ei];
+      const s = ex && ex.sets[r.si];
+      cue = [(s && s.cue), (ex && ex.note)].filter(Boolean).join(' — ');
     } else if (r.phase === 'rest' || r.phase === 'prep') {
       const nxt = nextPending();
       const nx = nxt ? wk.exercises[nxt[0]] : null;
-      if (nx && nx.note) cue = 'next: ' + nx.note;
+      const ns = nxt && nx ? nx.sets[nxt[1]] : null;
+      const parts = [(ns && ns.cue), (nx && nx.note)].filter(Boolean);
+      if (parts.length) cue = 'next: ' + parts.join(' — ');
     }
     cueEl.textContent = cue;
     cueEl.style.display = cue ? 'block' : 'none';
@@ -1845,7 +1886,7 @@ function discardWorkout() {
   closeModal('finishModal');
   pushUndo();
   wk.run = null; wk.note = '';
-  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.snote = ''; }); });
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });
   schedSave(); renderMain(); renderNotes();
   showSave('✕ workout discarded (not logged) — undo ↩ restores it');
 }
@@ -1859,8 +1900,8 @@ function confirmFinish() {
   const entry = {
     id: Date.now(), date: Date.now(), tplId: activeLibId,
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
-    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name, side: !!ex.side, note: (ex.snote || '').trim(),
-      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, done: !!s.done, rd: si + 1, note: (s.snote || '').trim()}))
+    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
+      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, iname: s.iname || undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim()}))
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
     note: wk.note || '',
@@ -1868,7 +1909,7 @@ function confirmFinish() {
   };
   archive.push(entry); saveArchive();
   wk.run = null; wk.note = '';
-  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.snote = ''; }); });   // planned times (durSec) stay for next time
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });   // planned times (durSec) stay for next time
   schedSave(); renderMain(); renderNotes(); renderLog();
   showSave('✓ workout logged (' + mmss(totalSec) + ')');
 }
@@ -1877,6 +1918,11 @@ function confirmFinish() {
 // one exercise line: "10/10/9 @ 20kg · 3.8 s/rep" — shared by the log view and the text export
 function exStatText(e) {
   const sets = e.sets || [];
+  // cardio segments log as named timed intervals: "×4 work 3:00 / rest 3:00"
+  if (sets.some(s => s.iname)) {
+    const body = sets.map(s => [s.iname, s.durSec != null ? mmss(s.durSec) : null].filter(Boolean).join(' ') || '–').join(' / ');
+    return (e.rep > 1 ? '×' + e.rep + ' ' : '') + body;
+  }
   const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
   const w = [...new Set(sets.map(s => s.weight).filter(Boolean))].join(', ');
   const durs = sets.filter(s => s.durSec != null);
@@ -1886,7 +1932,7 @@ function exStatText(e) {
     const totR = durs.reduce((t,s) => t + (parseFloat(String(s.reps).replace(',','.')) || 0), 0);
     sp = totR > 0 ? ' · ' + (totD / totR).toFixed(1) + ' s/rep' : ' · ' + mmss(totD);
   }
-  return reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '');
+  return (e.rep > 1 ? '×' + e.rep + ' ' : '') + reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '');
 }
 function logDateStr(a, longYear) {
   const d = new Date(a.date || a.id);
@@ -2030,9 +2076,10 @@ function renderLogEdit() {
       ${(e.sets || []).map((s, si) => `
         <div class="le-row">
           <span class="set-num">${s.rd || si + 1}</span>
-          <input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" title="reps" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].reps=this.value">
+          ${s.iname != null ? `<input class="set-in iv-name" type="text" value="${esc(s.iname)}" title="interval name" placeholder="work / rest…" oninput="logEditDraft.entries[${ei}].sets[${si}].iname=this.value">`
+          : `<input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" title="reps" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].reps=this.value">
           <span class="set-x">×</span>
-          <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" title="weight" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].weight=this.value">
+          <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" title="weight" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].weight=this.value">`}
           <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" title="time (m:ss or seconds)" placeholder="m:ss" onchange="leDur(${ei},${si},this)">
           <button class="set-del" onclick="leDelSet(${ei},${si})" title="remove this round">✕</button>
         </div>`).join('')}`).join('')
@@ -2080,7 +2127,7 @@ function logEntryToWk(a) {
   const tplEx = code => d && (d.exercises || []).find(x => x.code === code);
   return {
     name: a.name || '', type: a.type || (d && d.type) || 'strength',
-    pauseSec: d ? (+d.pauseSec || 105) : 105,
+    pauseSec: (d && d.pauseSec != null) ? +d.pauseSec : 105,
     prepSec: (d && d.prepSec != null) ? +d.prepSec : 120,
     sidePauseSec: d ? (+d.sidePauseSec || 0) : 0,
     note: '', run: null,
@@ -2373,6 +2420,9 @@ function seedLibrary() {
   if (seeded || library.length) return;
   const S = (code, name, sets, reps, weight, note, dur, side) => ({code, name, note, side: !!side,
     sets: Array.from({length: sets}, () => ({reps, weight, durSec: dur ?? null}))});
+  // cardio segment: named timed intervals run in sequence, the whole segment repeats ×N
+  const SC = (code, name, repeat, ivs, note) => ({code, name, note, repeat,
+    sets: ivs.map(([iname, dur, cue]) => ({reps:'', weight:'', durSec: dur ?? null, iname, cue: cue || ''}))});
   const tpl = (id, name, type, pauseSec, exercises, note) => ({id, name, mt: 0, data: {type, pauseSec, prepSec: 120, note: note || '', exercises}});
   library = [
     tpl('sta','Strength A — heavy','strength',105,[
@@ -2398,16 +2448,25 @@ function seedLibrary() {
       S('BAR','Bent arm raise',1,10,'2×8kg',''),
       S('EBL','Easy belly',1,10,'',''),
     ],'~10 min · 1–2 rounds (up to 3 when replacing STA/STB) · minimal pauses · goal is the habit, not performance'),
-    tpl('cara','Cardio A — intense','cardio',60,[
-      S('WUP','Breathing warm-up',1,'','','2–3 min',150),
-      S('INT','All-in interval + guided slowdown',4,'','','near max, driven by breath · quick HR drop after the interval matters',180),
-      S('CDN','Breathing cool-down',1,'','','',120),
+    tpl('cara','Cardio A — intense','cardio',0,[
+      SC('WUP','Breathing warm-up',1,[['breathe',150,'']]),
+      SC('INT','All-in intervals',4,[
+        ['all-in',180,'near max, driven by breath'],
+        ['slow down',60,'guided slowdown · a quick HR drop matters'],
+      ],'near max, driven by breath · quick HR drop after the interval matters'),
+      SC('CDN','Breathing cool-down',1,[['breathe',120,'']]),
     ],'standing arm swings, no legs, no weights · HR avg 120–135 · HR max briefly, ideally ≤165–168 · do not add volume or frequency — shorten the all-in by a few seconds when HR climbs'),
-    tpl('carb','Cardio B — controlled','cardio',30,[
-      S('WUP','Breathing warm-up',1,'','','',120),
-      S('INT','30 s interval + easy slowdown',8,'','','rhythm + breath · 2nd half with 1 kg wrist weights, controlled',30),
-      S('ALL','60 s all-in',2,'','','the second one with wrist weights',60),
-      S('CDN','Breathing cool-down',1,'','','',120),
+    tpl('carb','Cardio B — controlled','cardio',0,[
+      SC('WUP','Breathing warm-up',1,[['breathe',120,'']]),
+      SC('INT','30 s intervals',8,[
+        ['work',30,'rhythm + breath · 2nd half with 1 kg wrist weights, controlled'],
+        ['easy',30,'light slowdown'],
+      ],'rhythm + breath'),
+      SC('ALL','60 s all-in',2,[
+        ['all-in',60,'the second one with wrist weights'],
+        ['easy',60,''],
+      ]),
+      SC('CDN','Breathing cool-down',1,[['breathe',120,'']]),
     ],'HR avg 115–130, mostly Z2–Z3 · no long stays in max zones · active recovery, supports strength training'),
   ];
   saveLibrary();
