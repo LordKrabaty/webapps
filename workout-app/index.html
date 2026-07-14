@@ -1277,6 +1277,7 @@ function renderMain() {
     <button class="btn-sm" id="wkStartBtn" onclick="startWorkout()">▶ start workout</button>
     <span class="wk-elapsed" id="wkElapsed">0:00</span>
     <button class="btn-sm" id="wkFinishBtn" onclick="finishWorkout()" style="display:none">■ finish &amp; log</button>
+    ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
   <div class="rest-bar" id="nowBar" style="display:none">
     <span class="rest-label" id="nowLabel">rest</span>
@@ -1361,25 +1362,63 @@ function wxItemHtml(ex, ei, si) {
   </div>`;
 }
 function exBlockHtml(ex, ei) {
-  const setRows = (ex.sets || []).map((s, si) =>
+  const coll = !!(wk.collapsedEx && wk.collapsedEx[ei]);
+  const R = exRepeat(ex);
+  const total = (ex.sets || []).length * R;
+  const doneN = (ex.sets || []).reduce((t, s) => t + Math.min(setDn(s), R), 0);
+  const setRows = coll ? '' : (ex.sets || []).map((s, si) =>
     dataRowHtml(s, ei, si, true)
     + `<textarea class="ex-note-in iv-cue" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].cue=this.value;schedSave()" placeholder="· interval note (shown during this interval)">${esc(s.cue || '')}</textarea>`
   ).join('');
   return `<div class="ex-block" data-ei="${ei}">
     <div class="ex-head">
+      <button class="rnd-tgl" onclick="toggleSegment(${ei})" title="${coll ? 'expand' : 'collapse'} segment">${coll ? '▸' : '▾'}</button>
       <span class="grip" title="drag to reorder the segment">⠿</span>
       <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="segment code">
       <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="segment name">
       <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move segment up">↑</button>
       <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move segment down">↓</button>
       <span class="set-x">×</span><input class="set-in" type="text" inputmode="numeric" style="width:2.6em" value="${exRepeat(ex)}" onchange="setSegmentRepeat(${ei},this.value)" title="how many times the whole segment (its interval sequence) repeats before the next segment">
-      <button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>
+      ${coll ? `<span class="set-rep" title="completed / total interval repetitions">${doneN}/${total}</span>` : `<button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>`}
       <button class="ex-del" onclick="removeExercise(${ei})" title="remove segment">✕</button>
     </div>
-    <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
+    ${coll ? '' : `<textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
     <textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].snote=this.value;schedSave()" placeholder="note for this workout → log">${esc(ex.snote || '')}</textarea>
-    <div class="ex-sets">${setRows}</div>
+    <div class="ex-sets">${setRows}</div>`}
   </div>`;
+}
+function toggleSegment(ei) {
+  wk.collapsedEx = wk.collapsedEx || {};
+  if (wk.collapsedEx[ei]) delete wk.collapsedEx[ei]; else wk.collapsedEx[ei] = true;
+  schedSave(); renderMain();
+}
+// collapse / expand everything (strength rounds or cardio segments)
+function allCollapsed() {
+  if (wk.type === 'cardio') {
+    const n = (wk.exercises || []).length;
+    return n > 0 && wk.collapsedEx && wk.exercises.every((ex, ei) => wk.collapsedEx[ei]);
+  }
+  const exs = wk.exercises || [];
+  const n = exs.length ? Math.max(...exs.map(ex => (ex.sets || []).length)) : 0;
+  if (!n) return false;
+  if (!wk.collapsed) return false;
+  for (let si = 0; si < n; si++) if (!wk.collapsed[si]) return false;
+  return true;
+}
+function toggleAllCollapse() {
+  const expandAll = allCollapsed();
+  if (wk.type === 'cardio') {
+    wk.collapsedEx = {};
+    if (!expandAll) (wk.exercises || []).forEach((ex, ei) => { wk.collapsedEx[ei] = true; });
+  } else {
+    wk.collapsed = {};
+    if (!expandAll) {
+      const exs = wk.exercises || [];
+      const n = exs.length ? Math.max(...exs.map(ex => (ex.sets || []).length)) : 0;
+      for (let si = 0; si < n; si++) wk.collapsed[si] = true;
+    }
+  }
+  schedSave(); renderMain();
 }
 // reps × weight, editable planned/actual time (m:ss or seconds), live s/rep, done ✓ (starts the rest timer)
 function dataRowHtml(s, ei, si, cardio) {
