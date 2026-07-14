@@ -304,6 +304,7 @@ textarea::placeholder{color:var(--mid)}
 .set-in{width:3.2em;font-family:'DM Mono',monospace;font-size:.85rem;text-align:center;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.28rem .2rem;outline:none;min-width:0;flex-shrink:0}
 .set-w{width:4.8em}
 .iv-name{width:auto;flex:1;min-width:5em;text-align:left;font-family:'DM Sans',sans-serif;padding:.28rem .45rem}
+.ex-flags{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-t{width:4.5em}
@@ -323,8 +324,6 @@ textarea::placeholder{color:var(--mid)}
 [data-ei].dragging{opacity:.4}
 [data-ei].drag-over-top{box-shadow:0 -2.5px 0 0 var(--black)}
 [data-ei].drag-over-bottom{box-shadow:0 2.5px 0 0 var(--black)}
-.wx-move{width:18px;height:22px;border:var(--b);border-radius:3px;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;line-height:1;flex-shrink:0;padding:0}
-@media(hover:hover){.wx-move:hover{background:var(--off);color:var(--black)}}
 .wk-addrow{display:flex;gap:.5rem;margin-top:.2rem}
 .wk-addrow .btn-lib{width:auto;flex:1}
 .set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
@@ -335,11 +334,6 @@ textarea::placeholder{color:var(--mid)}
 .set-del,.log-del{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;opacity:.4;flex-shrink:0;padding:0;line-height:1}
 @media(hover:hover){.set-del:hover,.log-del:hover{opacity:1}}
 .btn-add{width:22px;height:22px;border:var(--b);border-radius:3px;background:none;color:var(--black);cursor:pointer;font-size:.85rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-.ex-link,.ex-side{height:22px;border:var(--b);border-radius:3px;background:none;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-.ex-link{width:22px;font-size:.8rem}
-.ex-side{font-size:.62rem;padding:0 .3rem;letter-spacing:.02em}
-@media(hover:hover){.ex-link:hover,.ex-side:hover{background:var(--off)}}
-.ex-link.ind,.ex-side.on{background:var(--black);color:var(--w);border-color:var(--black)}
 @media(hover:hover){.btn-add:hover{background:var(--off)}}
 .ex-del{font-size:.7rem;color:var(--muted);opacity:.4;border:none;background:none;cursor:pointer;width:20px;height:20px;flex-shrink:0;padding:0}
 @media(hover:hover){.ex-del:hover{opacity:1}}
@@ -532,6 +526,15 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 <div id="statusToast"></div>
+
+<!-- Exercise settings modal -->
+<div class="modal-bg" id="exSetModal">
+  <div class="modal" style="max-width:380px;gap:.6rem">
+    <h2 id="exSetTitle">Exercise settings</h2>
+    <div id="exSetBody" style="display:flex;flex-direction:column;gap:.55rem"></div>
+    <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exSetModal')">close</button></div>
+  </div>
+</div>
 
 <!-- Finish workout modal (log or discard) -->
 <div class="modal-bg" id="finishModal">
@@ -948,7 +951,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -1189,7 +1192,7 @@ let body = [];
 function loadBody() { try { body = JSON.parse(localStorage.getItem(BODY_KEY) || '[]'); } catch(e) { body = []; } }
 function saveBody() { try { localStorage.setItem(BODY_KEY, JSON.stringify(body)); } catch(e) {} }
 
-function blankWorkout() { return {name:'', type:'strength', order:'circuit', pauseSec:105, prepSec:120, sidePauseSec:0, adjSec:30, note:'', exercises:[], run:null}; }
+function blankWorkout() { return {name:'', type:'strength', order:'circuit', pauseSec:105, setPauseSec:null, prepSec:120, sidePauseSec:0, adjSec:30, note:'', exercises:[], run:null}; }
 let wk = blankWorkout();
 
 function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
@@ -1203,8 +1206,9 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
+    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
+      pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? ''}))}))
   };
 }
@@ -1221,8 +1225,9 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
+  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
+      pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? ''}))})),
     run: null};
   prefillFromLast(id);
@@ -1272,7 +1277,9 @@ function renderMain() {
         <option value="seq"${wk.order === 'seq' ? ' selected' : ''}>same exercise in a row</option>
       </select></div>` : ''}
     <div class="field" style="width:5.5em"><label>rest (s)</label>
-      <input type="number" value="${esc(wk.pauseSec)}" min="0" oninput="wk.pauseSec=parseInt(this.value)||0;schedSave()"></div>
+      <input type="number" value="${esc(wk.pauseSec)}" min="0" title="rest between exercises" oninput="wk.pauseSec=parseInt(this.value)||0;schedSave()"></div>
+    <div class="field" style="width:5.5em"><label>set rest (s)</label>
+      <input type="number" value="${wk.setPauseSec != null ? esc(wk.setPauseSec) : ''}" min="0" placeholder="= rest" title="rest between sets/intervals of the SAME exercise — empty = same as rest" oninput="wk.setPauseSec=this.value===''?null:(parseInt(this.value)||0);schedSave()"></div>
     <div class="field" style="width:5.5em"><label>prep (s)</label>
       <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()"></div>
     ${(wk.exercises || []).some(ex => ex.side) ? `<div class="field" style="width:5.5em"><label>L↔R (s)</label>
@@ -1361,11 +1368,8 @@ function wxItemHtml(ex, ei, si) {
     ? `<div class="ex-head">
         ${grip}<input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
         <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
-        <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move exercise up">↑</button>
-        <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move exercise down">↓</button>
-        <button class="ex-side${ex.side ? ' on' : ''}" onclick="toggleExSide(${ei})" title="${ex.side ? 'one side at a time: the timer runs twice per round (left, then right), rest after both — click to turn off' : 'click if this exercise is done one arm/side at a time — the timer will run twice per round (L, then R)'}">L/R</button>
-        <button class="ex-link${ex.linked === false ? ' ind' : ''}" onclick="toggleExLink(${ei})" title="${ex.linked === false ? 'rounds are independent — click to link them again (copies round 1 values to all)' : 'all rounds share reps / weight / time — click to make each round independent'}">${ex.linked === false ? '≠' : '='}</button>
-        <button class="ex-del" onclick="removeExercise(${ei})" title="remove exercise">✕</button>
+        ${exFlags(ex)}
+        <button class="btn-add" onclick="openExSettings(${ei})" title="exercise settings — order, L/R, linked sets, pauses, remove…">⚙</button>
       </div>
       <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>`
     : `<div class="ex-head">${grip}<span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`
@@ -1389,12 +1393,9 @@ function seqBlockHtml(ex, ei) {
       <span class="grip" title="drag to reorder the exercise">⠿</span>
       <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
       <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
-      <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move exercise up">↑</button>
-      <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move exercise down">↓</button>
-      <button class="ex-side${ex.side ? ' on' : ''}" onclick="toggleExSide(${ei})" title="${ex.side ? 'one side at a time: the timer runs twice per set (left, then right), rest after both — click to turn off' : 'click if this exercise is done one arm/side at a time — the timer will run twice per set (L, then R)'}">L/R</button>
-      <button class="ex-link${ex.linked === false ? ' ind' : ''}" onclick="toggleExLink(${ei})" title="${ex.linked === false ? 'sets are independent — click to link them again (copies set 1 values to all)' : 'all sets share reps / weight / time — click to make each set independent'}">${ex.linked === false ? '≠' : '='}</button>
+      ${exFlags(ex)}
       ${coll ? `<span class="set-rep" title="completed / total sets">${doneN}/${(ex.sets || []).length}</span>` : `<button class="btn-add" onclick="addSet(${ei})" title="add set">+</button>`}
-      <button class="ex-del" onclick="removeExercise(${ei})" title="remove exercise">✕</button>
+      <button class="btn-add" onclick="openExSettings(${ei})" title="exercise settings — order, L/R, linked sets, pauses, remove…">⚙</button>
     </div>
     ${coll ? '' : `<textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
     <div class="ex-sets">${rows}</div>`}
@@ -1415,11 +1416,9 @@ function exBlockHtml(ex, ei) {
       <span class="grip" title="drag to reorder the segment">⠿</span>
       <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="segment code">
       <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="segment name">
-      <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move segment up">↑</button>
-      <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move segment down">↓</button>
-      <span class="set-x">×</span><input class="set-in" type="text" inputmode="numeric" style="width:2.6em" value="${exRepeat(ex)}" onchange="setSegmentRepeat(${ei},this.value)" title="how many times the whole segment (its interval sequence) repeats before the next segment">
+      ${exFlags(ex)}
       ${coll ? `<span class="set-rep" title="completed / total interval repetitions">${doneN}/${total}</span>` : `<button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>`}
-      <button class="ex-del" onclick="removeExercise(${ei})" title="remove segment">✕</button>
+      <button class="btn-add" onclick="openExSettings(${ei})" title="segment settings — order, repeats, pauses, remove…">⚙</button>
     </div>
     ${coll ? '' : `<textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
     <textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].snote=this.value;schedSave()" placeholder="note for this workout → log">${esc(ex.snote || '')}</textarea>
@@ -1521,6 +1520,57 @@ function toggleExSide(ei) {
   ex.side = !ex.side;
   schedSave(); renderMain();
 }
+// per-exercise pause overrides (empty = inherit the workout-level value)
+function setExPause(ei, field, val) {
+  const ex = wk.exercises[ei]; if (!ex) return;
+  ex[field] = String(val).trim() === '' ? null : Math.max(0, parseInt(val) || 0);
+  schedSave(); renderMain();
+}
+// compact header badges for non-default exercise settings (details live in the ⚙ modal)
+function exFlags(ex) {
+  const f = [
+    ex.side ? 'L/R' : null,
+    exRepeat(ex) > 1 ? '×' + exRepeat(ex) : null,
+    ex.linked === false ? '≠' : null,
+    (ex.pauseSec != null || ex.sidePauseSec != null) ? '⏲' : null,
+  ].filter(Boolean).join(' ');
+  return f ? `<span class="ex-flags" title="non-default settings — open ⚙ to change">${f}</span>` : '';
+}
+// ── ⚙ EXERCISE SETTINGS MODAL — order, L/R, linked sets, repeats, pause overrides, remove ──
+let exSetEi = null;
+function openExSettings(ei) {
+  exSetEi = ei;
+  renderExSettings();
+  el('exSetModal').classList.add('open');
+}
+function exSetMove(dir) {
+  const ex = wk.exercises[exSetEi]; if (!ex) return;
+  moveExerciseBy(exSetEi, dir);
+  exSetEi = wk.exercises.indexOf(ex);
+  renderExSettings();
+}
+function renderExSettings() {
+  const ex = wk.exercises[exSetEi];
+  if (!ex) { closeModal('exSetModal'); return; }
+  const cardio = wk.type === 'cardio';
+  el('exSetTitle').textContent = (ex.code || ex.name || (cardio ? 'segment' : 'exercise')) + ' — settings';
+  el('exSetBody').innerHTML = `
+    <div class="modal-row">
+      <button class="modal-btn" onclick="exSetMove(-1)">↑ move up</button>
+      <button class="modal-btn" onclick="exSetMove(1)">↓ move down</button>
+    </div>
+    ${cardio ? `
+    <div class="jb-field"><label>segment repeats (×)</label>
+      <input type="text" inputmode="numeric" value="${exRepeat(ex)}" onchange="setSegmentRepeat(${exSetEi},this.value);renderExSettings()" title="how many times the whole interval sequence runs back-to-back"></div>`
+    : `
+    <label class="modal-item${ex.side ? ' sel' : ''}"><input type="checkbox" ${ex.side ? 'checked' : ''} onchange="toggleExSide(${exSetEi});renderExSettings()"><span>one side at a time (L/R) — the timer runs twice, left then right</span></label>
+    <label class="modal-item${ex.linked === false ? '' : ' sel'}"><input type="checkbox" ${ex.linked === false ? '' : 'checked'} onchange="toggleExLink(${exSetEi});renderExSettings()"><span>linked sets — reps / weight / time edits mirror into every set</span></label>`}
+    <div class="jb-field"><label>rest after this ${cardio ? 'segment' : 'exercise'} (s) — empty = workout default</label>
+      <input type="text" inputmode="numeric" value="${ex.pauseSec != null ? ex.pauseSec : ''}" placeholder="${esc(wk.pauseSec ?? '')}" onchange="setExPause(${exSetEi},'pauseSec',this.value);renderExSettings()"></div>
+    ${ex.side ? `<div class="jb-field"><label>L↔R switch pause (s) — empty = workout default</label>
+      <input type="text" inputmode="numeric" value="${ex.sidePauseSec != null ? ex.sidePauseSec : ''}" placeholder="${esc(wk.sidePauseSec ?? 0)}" onchange="setExPause(${exSetEi},'sidePauseSec',this.value);renderExSettings()"></div>` : ''}
+    <button class="modal-btn danger" onclick="closeModal('exSetModal');removeExercise(${exSetEi})">✕ remove ${cardio ? 'segment' : 'exercise'}</button>`;
+}
 // reorder exercises — `to` is the insertion index in the ORIGINAL array (drop above = target index,
 // drop below = target index + 1). The exercise order is global: it applies to every round.
 function moveExercise(from, to) {
@@ -1610,7 +1660,7 @@ function addExercise() {
   // strength: a new exercise joins every existing round; cardio: starts with one interval
   const n = (wk.type !== 'cardio' && wk.exercises.length)
     ? Math.max(1, ...wk.exercises.map(ex => (ex.sets || []).length)) : 1;
-  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, repeat: 1, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:'', iname:'', cue:''}))});
+  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, repeat: 1, pauseSec: null, sidePauseSec: null, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:'', iname:'', cue:''}))});
   schedSave(); renderMain();
 }
 function addRound() {
@@ -1756,7 +1806,7 @@ function advanceWorkStep() {
   const ex = wk.exercises[r.ei];
   if (ex && ex.side && r.half === 'L') {
     r.half = 'R'; r.pausedLeft = null;
-    const sp = +wk.sidePauseSec || 0;
+    const sp = ex.sidePauseSec != null ? +ex.sidePauseSec : (+wk.sidePauseSec || 0);
     if (sp > 0) { r.phase = 'srest'; r.endTs = Date.now() + sp * 1000; return; }   // switch-side pause, then the right side
     startRightHalf();
     return;
@@ -1772,8 +1822,14 @@ function startRightHalf() {
 }
 function startRestPhase() {
   const r = ensureRun();
-  if (!nextPending()) { r.phase = 'done'; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
-  const p = +wk.pauseSec || 0;
+  const nxt = nextPending();
+  if (!nxt) { r.phase = 'done'; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
+  // the next step stays within the same exercise → the (optional) set rest applies, otherwise the exercise rest;
+  // a per-exercise override (of the just-completed exercise) beats both workout-level values
+  const cex = r.ei != null ? wk.exercises[r.ei] : null;
+  const sameEx = r.ei != null && nxt[0] === r.ei;
+  const p = (cex && cex.pauseSec != null) ? +cex.pauseSec
+    : (sameEx && wk.setPauseSec != null) ? +wk.setPauseSec : (+wk.pauseSec || 0);
   // ei/si stay pointing at the completed step during the rest — nextPending continues after it
   if (p > 0) { r.phase = 'rest'; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; r.half = null; }
   else startNextWork();
