@@ -363,6 +363,7 @@ textarea::placeholder{color:var(--mid)}
 .le-ex{display:flex;gap:.4rem;align-items:center;margin-top:.35rem;border-bottom:1px solid var(--light);padding-bottom:.15rem}
 .le-row{display:flex;gap:.4rem;align-items:center;padding:.15rem 0}
 .log-tools{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.1rem}
+.log-filter{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.35rem}
 
 /* BODY (Tanita measurements) */
 .body-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem;margin-bottom:.55rem}
@@ -476,19 +477,32 @@ textarea::placeholder{color:var(--mid)}
     <div class="card-title"><span class="card-title-text">log &amp; body</span></div>
     <div class="notes-tabs">
       <button class="notes-tab active" onclick="switchTab('log',this)">log</button>
-      <button class="notes-tab" onclick="switchTab('body',this)">body</button>
       <button class="notes-tab" onclick="switchTab('note',this)">notes</button>
+      <button class="notes-tab" onclick="switchTab('body',this)">body</button>
     </div>
     <div class="notes-pane active" id="pane-log">
+      <div class="log-tools">
+        <button class="btn-io" onclick="openActivityModal()" title="log a free activity (bike, swimming…) — duration, description, felt intensity">+ activity</button>
+        <button class="btn-io" onclick="copyLogText()" title="copy the (filtered) log to the clipboard as plain text">⧉ copy log as text</button>
+      </div>
+      <div class="log-filter">
+        <input type="text" class="bf-in" placeholder="filter — workout / exercise / note…" title="matches the workout name, exercise codes & names and notes" oninput="logFilter=this.value;renderLog()">
+        <select class="bf-in" style="flex:0 0 auto;width:auto" onchange="logRange=+this.value;renderLog()" title="time range">
+          <option value="0">all time</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="365">1 year</option>
+        </select>
+      </div>
       <div id="logList" class="log-list"></div>
+    </div>
+    <div class="notes-pane" id="pane-note">
+      <textarea id="wkNote" placeholder="workout notes — HR, feel, adjustments… (saved with the logged workout)" oninput="wk.note=this.value;schedSave()"></textarea>
     </div>
     <div class="notes-pane" id="pane-body">
       <div id="bodyForm"></div>
       <div id="bodyChart"></div>
       <div id="bodyList" class="body-list"></div>
-    </div>
-    <div class="notes-pane" id="pane-note">
-      <textarea id="wkNote" placeholder="workout notes — HR, feel, adjustments… (saved with the logged workout)" oninput="wk.note=this.value;schedSave()"></textarea>
     </div>
   </div>
 </div>
@@ -2137,15 +2151,26 @@ function logDateStr(a, longYear) {
   return d.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year: longYear ? 'numeric' : '2-digit'})
     + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
 }
+// log filter: free text matches the workout name, exercise codes/names and all notes; range in days (0 = all)
+let logFilter = '', logRange = 0;
+function logMatches(a) {
+  if (logRange > 0 && (a.date || a.id || 0) < Date.now() - logRange * 864e5) return false;
+  const q = logFilter.trim().toLowerCase();
+  if (!q) return true;
+  const hay = [a.name, a.note,
+    ...(a.entries || []).flatMap(e => [e.code, e.name, e.note, ...(e.sets || []).map(s => s.note)])]
+    .filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(q);
+}
+function filteredLog() {
+  return archive.filter(logMatches).sort((a, b) => (b.date || b.id || 0) - (a.date || a.id || 0));
+}
 function renderLog() {
   const c = el('logList'); if (!c) return;
   if (!archive.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
-  const items = [...archive].sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0));
-  c.innerHTML = `<div class="log-tools">
-      <button class="btn-io" onclick="openActivityModal()" title="log a free activity (bike, swimming…) — duration, description, felt intensity">+ activity</button>
-      <button class="btn-io" onclick="copyLogText()" title="copy the whole log to the clipboard as plain text">⧉ copy log as text</button>
-    </div>`
-    + items.map(a => {
+  const items = filteredLog();
+  if (!items.length) { c.innerHTML = '<p class="lib-empty">Nothing matches the filter.</p>'; return; }
+  c.innerHTML = items.map(a => {
     const lines = (a.entries || []).map((e, idx) => {
       if (!(e.sets || []).length) return '';
       // per-round notes (editable) — rendered only for sets that have one
@@ -2385,8 +2410,8 @@ function logEntryText(a) {
 function copyLogText(id) {
   const items = id != null
     ? archive.filter(a => String(a.id) === String(id))
-    : [...archive].sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0));
-  if (!items.length) { showStatusMsg('⚠ log is empty'); return; }
+    : filteredLog();   // the text export honors the active filter
+  if (!items.length) { showStatusMsg('⚠ log is empty (or nothing matches the filter)'); return; }
   copyText(items.map(logEntryText).join('\n\n'), id != null ? '✓ entry copied as text' : '✓ log copied as text');
 }
 function copyText(txt, okMsg) {
