@@ -1366,18 +1366,27 @@ function toggleRound(si) {
   if (wk.collapsed[si]) delete wk.collapsed[si]; else wk.collapsed[si] = true;
   schedSave(); renderMain();
 }
+// live-sync the read-only mirrors in later rounds while typing in round 1 (no re-render — focus stays)
+function syncExLabels(ei) {
+  const ex = wk.exercises[ei]; if (!ex) return;
+  document.querySelectorAll(`.wx-item[data-ei="${ei}"]`).forEach(row => {
+    const c = row.querySelector('.wx-code'); if (c) c.textContent = ex.code;
+    const n = row.querySelector('.wx-name'); if (n) n.textContent = ex.name;
+    const cu = row.querySelector('.wx-cue'); if (cu) cu.textContent = ex.note;
+  });
+}
 // one exercise inside a round — full editable header in round 1; later rounds mirror the
 // technique cues read-only. Each round has its OWN independent session note (per set).
 function wxItemHtml(ex, ei, si) {
   const grip = `<span class="grip" title="drag to reorder the exercise">⠿</span>`;
   const head = si === 0
     ? `<div class="ex-head">
-        ${grip}<input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
-        <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
+        ${grip}<input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave();syncExLabels(${ei})" placeholder="CODE" title="exercise code">
+        <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave();syncExLabels(${ei})" placeholder="exercise name">
         ${exFlags(ex)}
         <button class="btn-add" onclick="openExSettings(${ei})" title="exercise settings — order, L/R, linked sets, pauses, remove…">⚙</button>
       </div>
-      <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>`
+      <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave();syncExLabels(${ei})" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>`
     : `<div class="ex-head">${grip}<span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`
       + (ex.note ? `<div class="wx-cue">${esc(ex.note)}</div>` : '');
   const s = ex.sets[si];
