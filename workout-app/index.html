@@ -277,6 +277,7 @@ textarea::placeholder{color:var(--mid)}
 .wk-setup{display:flex;gap:.6rem .9rem;flex-wrap:wrap;margin-bottom:.75rem}
 .wk-runbar{display:flex;align-items:center;gap:.7rem;margin-bottom:.75rem;flex-wrap:wrap}
 .wk-elapsed{font-family:'DM Mono',monospace;font-size:1.55rem;line-height:1;color:var(--black);min-width:4ch}
+.wk-est{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);flex-shrink:0}
 .rest-bar{display:flex;align-items:center;gap:.8rem;border:var(--bh);border-radius:var(--r);padding:.5rem .9rem;margin-bottom:.75rem;flex-wrap:wrap}
 .rest-bar.over{background:var(--black)}
 .rest-bar.over .rest-time,.rest-bar.over .rest-label{color:var(--w)}
@@ -777,9 +778,14 @@ function renderLibrary() {
       const n = archive.filter(a => String(a.tplId) === String(e.id) && (a.date || a.id || 0) >= wkStart).length;
       return `<span class="lib-wk${n >= t ? ' met' : ''}" title="done / weekly goal (this week, Mon–Sun)">${n}/${t}</span>`;
     };
+    const durBadge = e => {
+      const est = estimateDur(e.data || {});
+      if (!est.sec) return '';
+      return `<span class="lib-wk" title="estimated duration with the current settings (planned times + rests + prep)${est.partial ? ' — some steps have no planned time' : ''}">${est.partial ? '≥' : '~'}${fmtEst(est.sec)}</span>`;
+    };
     const row = e => `<div class="lib-item ${String(e.id) === String(activeLibId) ? 'active' : ''}" onclick="loadFromLibrary(${jsArg(e.id)})">
       <span class="lib-item-name">${esc(e.name)}</span>
-      ${badge(e)}
+      ${durBadge(e)}${badge(e)}
       <button class="lib-item-del" onclick="event.stopPropagation();deleteLibraryEntry(${jsArg(e.id)})" title="delete"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
     </div>`;
     let html = '';
@@ -1325,6 +1331,7 @@ function renderMain() {
   <div class="wk-runbar">
     <button class="btn-sm" id="wkStartBtn" onclick="startWorkout()">▶ start workout</button>
     <span class="wk-elapsed" id="wkElapsed">0:00</span>
+    ${(() => { const est = estimateDur(wk); return est.sec ? `<span class="wk-est" title="estimated total with the current settings (planned times + rests + prep)">${est.partial ? '≥' : '~'}${fmtEst(est.sec)}</span>` : ''; })()}
     <button class="btn-sm" id="wkFinishBtn" onclick="finishWorkout()" style="display:none">■ finish &amp; log</button>
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
@@ -2327,6 +2334,50 @@ function saveActivity() {
   actEditId = null;
   saveArchive(); renderLog(); renderLibrary();
   closeModal('actModal');
+}
+// estimated total duration of a workout-like object (template data or live wk),
+// mirroring the sequencer: planned times (×2 + switch pause on L/R), rests by transition
+// (per-exercise override > set rest > rest) and the preparation phase
+function estimateDur(w) {
+  const exs = (w && w.exercises) || [];
+  const order = [];
+  if (w.type === 'cardio') exs.forEach((ex, ei) => {
+    const R = Math.max(1, parseInt(ex.repeat) || 1);
+    for (let r = 0; r < R; r++) (ex.sets || []).forEach(() => order.push(ei));
+  });
+  else if (w.order === 'seq') exs.forEach((ex, ei) => (ex.sets || []).forEach(() => order.push(ei)));
+  else {
+    const n = exs.length ? Math.max(...exs.map(ex => (ex.sets || []).length)) : 0;
+    for (let si = 0; si < n; si++) exs.forEach((ex, ei) => { if ((ex.sets || [])[si]) order.push(ei); });
+  }
+  if (!order.length) return {sec: 0, partial: false};
+  let sec = +w.prepSec || 0, partial = false;
+  // per-exercise average planned time (rows may differ; cardio rows differ by design)
+  const avgDur = exs.map(ex => {
+    const ds = (ex.sets || []).map(s => s.durSec).filter(v => v != null);
+    if (ds.length < (ex.sets || []).length) partial = true;
+    return ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : 0;
+  });
+  // exact per-step times where known: walk sets in the same order as the step list
+  const idx = exs.map(() => 0);
+  order.forEach((ei, k) => {
+    const ex = exs[ei];
+    const si = idx[ei] % (ex.sets || []).length; idx[ei]++;
+    const s = (ex.sets || [])[si];
+    const d = s && s.durSec != null ? +s.durSec : avgDur[ei];
+    sec += d * (ex.side ? 2 : 1);
+    if (ex.side) sec += ex.sidePauseSec != null ? +ex.sidePauseSec : (+w.sidePauseSec || 0);
+    if (k < order.length - 1) {
+      const sameEx = order[k + 1] === ei;
+      sec += (ex.pauseSec != null) ? +ex.pauseSec
+        : (sameEx && w.setPauseSec != null) ? +w.setPauseSec : (+w.pauseSec || 0);
+    }
+  });
+  return {sec: Math.round(sec), partial};
+}
+function fmtEst(sec) {
+  const m = Math.round(sec / 60);
+  return m >= 60 ? Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0') : m + 'm';
 }
 // substitute label of an activity — live template name, snapshot as a fallback
 function actSubName(a) {
