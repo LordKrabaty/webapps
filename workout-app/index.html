@@ -685,7 +685,8 @@ function schedSave() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     saveSession(); showSave();
-    if (activeLibId && isDirty()) updateLibraryEntry();   // edits to the loaded template always auto-save
+    if (activeLibId) { if (isDirty()) updateLibraryEntry(); }   // edits to the loaded template always auto-save
+    else if ((wk.name || '').trim() || (wk.exercises || []).length) saveToLibrary();   // a new workout auto-creates its template
   }, 300);
 }
 
@@ -708,11 +709,12 @@ function loadSession() {
   } catch(e) {}
   return false;
 }
-// dirty = structural change vs the library template (run state / timed durations excluded)
-function markSaved() { savedSnapshot = JSON.stringify(tplFromWk()); }
+// dirty = name or structural change vs the library template (run state excluded)
+function tplSnap() { return JSON.stringify({name: (wk.name || '').trim(), data: tplFromWk()}); }
+function markSaved() { savedSnapshot = tplSnap(); }
 function isDirty() {
   if (!activeLibId || savedSnapshot == null) return false;
-  return JSON.stringify(tplFromWk()) !== savedSnapshot;
+  return tplSnap() !== savedSnapshot;
 }
 
 // ── LIBRARY OPERATIONS ────────────────────────────────────────────────────
