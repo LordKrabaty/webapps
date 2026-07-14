@@ -484,6 +484,7 @@ textarea::placeholder{color:var(--mid)}
       <div class="log-tools">
         <button class="btn-io" onclick="openActivityModal()" title="log a free activity (bike, swimming…) — duration, description, felt intensity">+ activity</button>
         <button class="btn-io" onclick="copyLogText()" title="copy the (filtered) log to the clipboard as plain text">⧉ copy log as text</button>
+        <button class="btn-io" id="logAllBtn" onclick="toggleAllLog()" title="expand all entries">▸ all</button>
       </div>
       <div class="log-filter">
         <input type="text" class="bf-in" placeholder="filter — workout / exercise / note…" title="matches the workout name, exercise codes & names and notes" oninput="logFilter=this.value;renderLog()">
@@ -2165,38 +2166,66 @@ function logMatches(a) {
 function filteredLog() {
   return archive.filter(logMatches).sort((a, b) => (b.date || b.id || 0) - (a.date || a.id || 0));
 }
+// log entries collapse by default — collapsed shows date · name · time · intensity + the note (if any)
+let logOpen = {};
+function toggleLogEntry(id) {
+  if (logOpen[id]) delete logOpen[id]; else logOpen[id] = true;
+  renderLog();
+}
+function toggleAllLog() {
+  const items = filteredLog();
+  if (items.some(a => !logOpen[a.id])) items.forEach(a => { logOpen[a.id] = true; });
+  else logOpen = {};
+  renderLog();
+}
 function renderLog() {
   const c = el('logList'); if (!c) return;
+  const items = archive.length ? filteredLog() : [];
+  const ab = el('logAllBtn');
+  if (ab) {
+    const allOpen = items.length > 0 && items.every(a => logOpen[a.id]);
+    ab.textContent = allOpen ? '▾ all' : '▸ all';
+    ab.title = allOpen ? 'collapse all entries' : 'expand all entries';
+  }
   if (!archive.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
-  const items = filteredLog();
   if (!items.length) { c.innerHTML = '<p class="lib-empty">Nothing matches the filter.</p>'; return; }
   c.innerHTML = items.map(a => {
-    const lines = (a.entries || []).map((e, idx) => {
-      if (!(e.sets || []).length) return '';
-      // per-round notes (editable) — rendered only for sets that have one
-      const setNotes = e.sets.map((s, sIdx) => s.note
-        ? `<div class="log-set-note"><span class="log-rn">r${s.rd || sIdx + 1}</span>
-           <textarea class="log-note-in" rows="1" title="round note — editable" oninput="autoResizeTA(this)" onchange="updateLogSetNote(${jsArg(a.id)},${idx},${sIdx},this.value)">${esc(s.note)}</textarea></div>`
-        : '').join('');
-      return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(exStatText(e))}</div>
-        ${setNotes}
-        <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
-    }).join('');
+    const open = !!logOpen[a.id];
     const isAct = a.type === 'activity';
-    const actions = isAct
-      ? `<button class="log-act-btn" onclick="openActivityModal(${jsArg(a.id)})" title="edit this activity">✎ edit</button>`
-      : `<button class="log-act-btn" onclick="openLogEdit(${jsArg(a.id)})" title="edit the logged reps / weights / times">✎ edit</button>
-        <button class="log-act-btn" onclick="useLogAsWorkout(${jsArg(a.id)})" title="load this logged workout into the main panel">← use as workout</button>
-        <button class="log-act-btn" onclick="logToTemplate(${jsArg(a.id)})" title="save this logged workout as a new template">→ template</button>`;
+    let body = '';
+    if (open) {
+      const lines = (a.entries || []).map((e, idx) => {
+        if (!(e.sets || []).length) return '';
+        // per-round notes (editable) — rendered only for sets that have one
+        const setNotes = e.sets.map((s, sIdx) => s.note
+          ? `<div class="log-set-note"><span class="log-rn">r${s.rd || sIdx + 1}</span>
+             <textarea class="log-note-in" rows="1" title="round note — editable" oninput="autoResizeTA(this)" onchange="updateLogSetNote(${jsArg(a.id)},${idx},${sIdx},this.value)">${esc(s.note)}</textarea></div>`
+          : '').join('');
+        return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(exStatText(e))}</div>
+          ${setNotes}
+          <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
+      }).join('');
+      const actions = isAct
+        ? `<button class="log-act-btn" onclick="openActivityModal(${jsArg(a.id)})" title="edit this activity">✎ edit</button>`
+        : `<button class="log-act-btn" onclick="openLogEdit(${jsArg(a.id)})" title="edit the logged reps / weights / times">✎ edit</button>
+          <button class="log-act-btn" onclick="useLogAsWorkout(${jsArg(a.id)})" title="load this logged workout into the main panel">← use as workout</button>
+          <button class="log-act-btn" onclick="logToTemplate(${jsArg(a.id)})" title="save this logged workout as a new template">→ template</button>`;
+      body = `${lines}
+        <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>
+        <div class="log-actions">${actions}</div>`;
+    } else if (a.note) {
+      body = `<textarea class="log-note-in log-note-wk" rows="1" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note)}</textarea>`;
+    }
     return `<div class="log-item">
-      <div class="log-head"><span class="log-date">${esc(logDateStr(a))}</span><span class="log-name">${esc(a.name)}</span>
+      <div class="log-head">
+        <button class="rnd-tgl" onclick="toggleLogEntry(${jsArg(a.id)})" title="${open ? 'collapse' : 'expand'} entry">${open ? '▾' : '▸'}</button>
+        <span class="log-date" onclick="toggleLogEntry(${jsArg(a.id)})" style="cursor:pointer">${esc(logDateStr(a))}</span>
+        <span class="log-name" onclick="toggleLogEntry(${jsArg(a.id)})" style="cursor:pointer">${esc(a.name)}</span>
         ${a.intensity ? `<span class="log-int" title="felt intensity">int ${esc(a.intensity)}/5</span>` : ''}
         <span class="log-total">${mmss(a.totalSec || 0)}</span>
         <button class="log-del" onclick="copyLogText(${jsArg(a.id)})" title="copy this entry as text">⧉</button>
         <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
-      ${lines}
-      <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>
-      <div class="log-actions">${actions}</div>
+      ${body}
     </div>`;
   }).join('');
   c.querySelectorAll('.log-note-in').forEach(autoResizeTA);   // hidden pane → resized again on tab switch
