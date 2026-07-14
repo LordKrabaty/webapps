@@ -1187,7 +1187,7 @@ let body = [];
 function loadBody() { try { body = JSON.parse(localStorage.getItem(BODY_KEY) || '[]'); } catch(e) { body = []; } }
 function saveBody() { try { localStorage.setItem(BODY_KEY, JSON.stringify(body)); } catch(e) {} }
 
-function blankWorkout() { return {name:'', type:'strength', pauseSec:105, prepSec:120, sidePauseSec:0, adjSec:30, note:'', exercises:[], run:null}; }
+function blankWorkout() { return {name:'', type:'strength', order:'circuit', pauseSec:105, prepSec:120, sidePauseSec:0, adjSec:30, note:'', exercises:[], run:null}; }
 let wk = blankWorkout();
 
 function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
@@ -1201,7 +1201,7 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, pauseSec: w.pauseSec, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
+    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? ''}))}))
   };
@@ -1219,7 +1219,7 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
+  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? ''}))})),
     run: null};
@@ -1264,6 +1264,11 @@ function renderMain() {
         <option value="strength"${wk.type !== 'cardio' ? ' selected' : ''}>strength</option>
         <option value="cardio"${wk.type === 'cardio' ? ' selected' : ''}>cardio</option>
       </select></div>
+    ${wk.type !== 'cardio' ? `<div class="field"><label>order</label>
+      <select onchange="wk.order=this.value;schedSave();renderMain()" title="how the sequence walks the sets">
+        <option value="circuit"${wk.order !== 'seq' ? ' selected' : ''}>alternate (rounds)</option>
+        <option value="seq"${wk.order === 'seq' ? ' selected' : ''}>same exercise in a row</option>
+      </select></div>` : ''}
     <div class="field" style="width:5.5em"><label>rest (s)</label>
       <input type="number" value="${esc(wk.pauseSec)}" min="0" oninput="wk.pauseSec=parseInt(this.value)||0;schedSave()"></div>
     <div class="field" style="width:5.5em"><label>prep (s)</label>
@@ -1294,6 +1299,13 @@ function renderMain() {
     // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
     html += (wk.exercises || []).map((ex, ei) => exBlockHtml(ex, ei)).join('');
     html += `<button class="btn-lib" onclick="addExercise()" style="margin-top:.2rem">+ add segment</button>`;
+  } else if (wk.order === 'seq') {
+    // "same exercise in a row" — one block per exercise, its sets listed underneath
+    html += (wk.exercises || []).map((ex, ei) => seqBlockHtml(ex, ei)).join('');
+    html += `<div class="wk-addrow">
+      <button class="btn-lib" onclick="addExercise()">+ add exercise</button>
+      <button class="btn-lib" onclick="addRound()">+ add set to all</button>
+    </div>`;
   } else {
     // strength = rounds: one round runs through every exercise once, then repeats
     html += roundsHtml();
@@ -1361,13 +1373,38 @@ function wxItemHtml(ex, ei, si) {
     <textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].snote=this.value;schedSave()" placeholder="· note (round ${si + 1}) → log">${esc(s.snote || '')}</textarea>
   </div>`;
 }
+// strength in "same exercise in a row" order: one block per exercise, numbered set rows below
+function seqBlockHtml(ex, ei) {
+  const coll = !!(wk.collapsedEx && wk.collapsedEx[ei]);
+  const doneN = (ex.sets || []).filter(s => s.done).length;
+  const rows = coll ? '' : (ex.sets || []).map((s, si) =>
+    dataRowHtml(s, ei, si, false, true)
+    + `<textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].snote=this.value;schedSave()" placeholder="· note (set ${si + 1}) → log">${esc(s.snote || '')}</textarea>`
+  ).join('');
+  return `<div class="ex-block" data-ei="${ei}">
+    <div class="ex-head">
+      <button class="rnd-tgl" onclick="toggleSegment(${ei})" title="${coll ? 'expand' : 'collapse'} exercise">${coll ? '▸' : '▾'}</button>
+      <span class="grip" title="drag to reorder the exercise">⠿</span>
+      <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
+      <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
+      <button class="wx-move" onclick="moveExerciseBy(${ei},-1)" title="move exercise up">↑</button>
+      <button class="wx-move" onclick="moveExerciseBy(${ei},1)" title="move exercise down">↓</button>
+      <button class="ex-side${ex.side ? ' on' : ''}" onclick="toggleExSide(${ei})" title="${ex.side ? 'one side at a time: the timer runs twice per set (left, then right), rest after both — click to turn off' : 'click if this exercise is done one arm/side at a time — the timer will run twice per set (L, then R)'}">L/R</button>
+      <button class="ex-link${ex.linked === false ? ' ind' : ''}" onclick="toggleExLink(${ei})" title="${ex.linked === false ? 'sets are independent — click to link them again (copies set 1 values to all)' : 'all sets share reps / weight / time — click to make each set independent'}">${ex.linked === false ? '≠' : '='}</button>
+      ${coll ? `<span class="set-rep" title="completed / total sets">${doneN}/${(ex.sets || []).length}</span>` : `<button class="btn-add" onclick="addSet(${ei})" title="add set">+</button>`}
+      <button class="ex-del" onclick="removeExercise(${ei})" title="remove exercise">✕</button>
+    </div>
+    ${coll ? '' : `<textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
+    <div class="ex-sets">${rows}</div>`}
+  </div>`;
+}
 function exBlockHtml(ex, ei) {
   const coll = !!(wk.collapsedEx && wk.collapsedEx[ei]);
   const R = exRepeat(ex);
   const total = (ex.sets || []).length * R;
   const doneN = (ex.sets || []).reduce((t, s) => t + Math.min(setDn(s), R), 0);
   const setRows = coll ? '' : (ex.sets || []).map((s, si) =>
-    dataRowHtml(s, ei, si, true)
+    dataRowHtml(s, ei, si, true, true)
     + `<textarea class="ex-note-in iv-cue" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].cue=this.value;schedSave()" placeholder="· interval note (shown during this interval)">${esc(s.cue || '')}</textarea>`
   ).join('');
   return `<div class="ex-block" data-ei="${ei}">
@@ -1394,7 +1431,7 @@ function toggleSegment(ei) {
 }
 // collapse / expand everything (strength rounds or cardio segments)
 function allCollapsed() {
-  if (wk.type === 'cardio') {
+  if (wk.type === 'cardio' || wk.order === 'seq') {   // block-per-exercise views collapse by exercise
     const n = (wk.exercises || []).length;
     return n > 0 && wk.collapsedEx && wk.exercises.every((ex, ei) => wk.collapsedEx[ei]);
   }
@@ -1407,7 +1444,7 @@ function allCollapsed() {
 }
 function toggleAllCollapse() {
   const expandAll = allCollapsed();
-  if (wk.type === 'cardio') {
+  if (wk.type === 'cardio' || wk.order === 'seq') {
     wk.collapsedEx = {};
     if (!expandAll) (wk.exercises || []).forEach((ex, ei) => { wk.collapsedEx[ei] = true; });
   } else {
@@ -1421,7 +1458,8 @@ function toggleAllCollapse() {
   schedSave(); renderMain();
 }
 // reps × weight, editable planned/actual time (m:ss or seconds), live s/rep, done ✓ (starts the rest timer)
-function dataRowHtml(s, ei, si, cardio) {
+function dataRowHtml(s, ei, si, cardio, numbered) {
+  numbered = numbered || cardio;
   const r = parseFloat(String(s.reps ?? '').replace(',','.'));
   const sr = (!cardio && s.durSec != null && r > 0) ? (s.durSec / r).toFixed(1) + ' s/rep' : '';
   const run = wk.run;
@@ -1433,14 +1471,14 @@ function dataRowHtml(s, ei, si, cardio) {
     <span class="set-x">×</span>
     <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–">`;
   return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
-    ${cardio ? `<span class="set-num">${si + 1}</span>` : ''}
+    ${numbered ? `<span class="set-num">${si + 1}</span>` : ''}
     ${mid}
     <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="time — m:ss or seconds, editable any time" placeholder="m:ss">
     <span class="set-dur">${sr}</span>
     ${(() => { const ex = wk.exercises[ei], R = exRepeat(ex); return R > 1 ? `<span class="set-rep" title="completed repetitions of this interval">${setDn(s)}/${R}</span>` : ''; })()}
     <button class="set-go" onclick="jumpToStep(${ei},${si})" title="jump here — start this exercise now and continue from it">▶</button>
     <button class="set-done${s.done ? ' on' : ''}" onclick="toggleSetDone(${ei},${si})" title="done → starts the rest timer">✓</button>
-    ${cardio ? `<button class="set-del" onclick="removeSet(${ei},${si})" title="remove interval">✕</button>` : ''}
+    ${numbered ? `<button class="set-del" onclick="removeSet(${ei},${si})" title="remove this ${cardio ? 'interval' : 'set'}">✕</button>` : ''}
   </div>`;
 }
 function parseDur(v) {
@@ -1647,7 +1685,10 @@ function stepOrder() {
     const R = exRepeat(ex);
     for (let rep = 0; rep < R; rep++) (ex.sets || []).forEach((s, si) => out.push([ei, si, rep]));
   });
-  else {
+  else if (wk.order === 'seq') {
+    // all sets of one exercise back-to-back, then the next exercise
+    exs.forEach((ex, ei) => (ex.sets || []).forEach((s, si) => out.push([ei, si, 0])));
+  } else {
     const n = exs.length ? Math.max(...exs.map(ex => (ex.sets || []).length)) : 0;
     for (let si = 0; si < n; si++) exs.forEach((ex, ei) => { if ((ex.sets || [])[si]) out.push([ei, si, 0]); });
   }
@@ -1854,7 +1895,7 @@ function updateNowBar() {
     const s = (ex.sets || [])[r.si];
     lbl.textContent = ((s && s.iname) || ex.code || 'work') + (r.half ? ' ' + r.half : '');
     exl.textContent = (r.half ? (r.half === 'L' ? 'left side · ' : 'right side · ') : '') + ((s && s.iname) ? (ex.code || ex.name || '') : (ex.name || ''))
-      + (wk.type !== 'cardio' ? ' · round ' + (r.si + 1) : repTag(ex, r.rep))
+      + (wk.type !== 'cardio' ? (wk.order === 'seq' ? ' · set ' : ' · round ') + (r.si + 1) : repTag(ex, r.rep))
       + (r.phase === 'manual' ? ' · no time set — tap ✓ when done' : '')
       + (r.pausedLeft != null ? ' · paused' : '');
     t.textContent = r.phase === 'manual' ? '—' : mmss(Math.max(0, Math.ceil(remMs / 1000)));
