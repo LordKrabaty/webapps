@@ -137,6 +137,9 @@ header{
 .lib-item-del svg{width:10px;height:10px;stroke:var(--w);fill:none;stroke-width:2.5;stroke-linecap:round}
 .lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
 .lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
+.lib-wk{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
+.lib-wk.met{color:var(--black);font-weight:500}
+.lib-item.active .lib-wk{color:var(--w)}
 .lib-cat-header{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.55rem .55rem .1rem;margin-top:.1rem}
 .lib-cat-header:first-child{margin-top:0;padding-top:.1rem}
 .btn-lib{width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.42rem .6rem;cursor:pointer;text-align:center;letter-spacing:.02em}
@@ -588,6 +591,8 @@ textarea::placeholder{color:var(--mid)}
           <option value="5">5 · all-out</option>
         </select></div>
     </div>
+    <div class="jb-field"><label>counts as (substitute for a workout)</label>
+      <select id="actTpl" title="optional — the activity then counts into that template's weekly done/target and is found when filtering by its name"></select></div>
     <div class="jb-field"><label>description</label><input id="actNote" type="text" placeholder="optional" spellcheck="false"></div>
     <div class="modal-row">
       <button class="modal-btn" onclick="closeModal('actModal')">cancel</button>
@@ -763,8 +768,18 @@ function renderLibrary() {
   if (!library.length) { list.innerHTML = '<p class="lib-empty">No workouts yet.</p>'; }
   else {
     const typeOf = e => ((e.data && e.data.type) === 'cardio') ? 'cardio' : 'strength';
+    // Monday 00:00 of the current week — the done/target badge counts this week's logged sessions
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    const wkStart = d.getTime() - ((d.getDay() + 6) % 7) * 864e5;
+    const badge = e => {
+      const t = e.data && e.data.weekTarget;
+      if (t == null || t <= 0) return '';
+      const n = archive.filter(a => String(a.tplId) === String(e.id) && (a.date || a.id || 0) >= wkStart).length;
+      return `<span class="lib-wk${n >= t ? ' met' : ''}" title="done / weekly goal (this week, Mon–Sun)">${n}/${t}</span>`;
+    };
     const row = e => `<div class="lib-item ${String(e.id) === String(activeLibId) ? 'active' : ''}" onclick="loadFromLibrary(${jsArg(e.id)})">
       <span class="lib-item-name">${esc(e.name)}</span>
+      ${badge(e)}
       <button class="lib-item-del" onclick="event.stopPropagation();deleteLibraryEntry(${jsArg(e.id)})" title="delete"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
     </div>`;
     let html = '';
@@ -1210,7 +1225,7 @@ let body = [];
 function loadBody() { try { body = JSON.parse(localStorage.getItem(BODY_KEY) || '[]'); } catch(e) { body = []; } }
 function saveBody() { try { localStorage.setItem(BODY_KEY, JSON.stringify(body)); } catch(e) {} }
 
-function blankWorkout() { return {name:'', type:'strength', order:'circuit', pauseSec:105, setPauseSec:null, prepSec:120, sidePauseSec:0, adjSec:30, note:'', exercises:[], run:null}; }
+function blankWorkout() { return {name:'', type:'strength', order:'circuit', pauseSec:105, setPauseSec:null, prepSec:120, sidePauseSec:0, adjSec:30, weekTarget:null, note:'', exercises:[], run:null}; }
 let wk = blankWorkout();
 
 function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
@@ -1224,7 +1239,7 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
+    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? ''}))}))
@@ -1243,7 +1258,7 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
+  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? ''}))})),
@@ -1304,6 +1319,8 @@ function renderMain() {
       <input type="number" value="${esc(wk.sidePauseSec ?? 0)}" min="0" title="pause between the left and right side of L/R exercises (0 = switch immediately)" oninput="wk.sidePauseSec=parseInt(this.value)||0;schedSave()"></div>` : ''}
     <div class="field" style="width:5.5em"><label>±step (s)</label>
       <input type="number" value="${esc(wk.adjSec ?? 30)}" min="5" title="how much the −/+ buttons adjust the running countdown" onchange="wk.adjSec=parseInt(this.value)||30;schedSave();renderMain()"></div>
+    <div class="field" style="width:5.5em"><label>×/week</label>
+      <input type="number" value="${wk.weekTarget != null ? esc(wk.weekTarget) : ''}" min="0" placeholder="–" title="optional weekly goal — the library shows done/target for the current week (Mon–Sun)" oninput="wk.weekTarget=this.value===''?null:(parseInt(this.value)||0);schedSave();renderLibrary()"></div>
   </div>
   <div class="wk-runbar">
     <button class="btn-sm" id="wkStartBtn" onclick="startWorkout()">▶ start workout</button>
@@ -2123,7 +2140,7 @@ function confirmFinish() {
   archive.push(entry); saveArchive();
   wk.run = null; wk.note = '';
   wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });   // planned times (durSec) stay for next time
-  schedSave(); renderMain(); renderNotes(); renderLog();
+  schedSave(); renderMain(); renderNotes(); renderLog(); renderLibrary();   // the weekly badge counts logged sessions
   showSave('✓ workout logged (' + mmss(totalSec) + ')');
 }
 
@@ -2158,7 +2175,8 @@ function logMatches(a) {
   if (logRange > 0 && (a.date || a.id || 0) < Date.now() - logRange * 864e5) return false;
   const q = logFilter.trim().toLowerCase();
   if (!q) return true;
-  const hay = [a.name, a.note,
+  const tpl = a.tplId != null ? library.find(x => String(x.id) === String(a.tplId)) : null;
+  const hay = [a.name, a.note, tpl && tpl.name, a.tplName,   // template name → substitutes are found too
     ...(a.entries || []).flatMap(e => [e.code, e.name, e.note, ...(e.sets || []).map(s => s.note)])]
     .filter(Boolean).join(' ').toLowerCase();
   return hay.includes(q);
@@ -2221,6 +2239,7 @@ function renderLog() {
         <button class="rnd-tgl" onclick="toggleLogEntry(${jsArg(a.id)})" title="${open ? 'collapse' : 'expand'} entry">${open ? '▾' : '▸'}</button>
         <span class="log-date" onclick="toggleLogEntry(${jsArg(a.id)})" style="cursor:pointer">${esc(logDateStr(a))}</span>
         <span class="log-name" onclick="toggleLogEntry(${jsArg(a.id)})" style="cursor:pointer">${esc(a.name)}</span>
+        ${isAct && actSubName(a) ? `<span class="log-int" title="counts as a substitute for this workout">↷ ${esc(actSubName(a))}</span>` : ''}
         ${a.intensity ? `<span class="log-int" title="felt intensity">int ${esc(a.intensity)}/5</span>` : ''}
         <span class="log-total">${mmss(a.totalSec || 0)}</span>
         <button class="log-del" onclick="copyLogText(${jsArg(a.id)})" title="copy this entry as text">⧉</button>
@@ -2275,6 +2294,8 @@ function openActivityModal(id) {
   el('actTime').value = pad(d.getHours()) + ':' + pad(d.getMinutes());
   el('actDur').value = a && a.totalSec ? fmtMin(a.totalSec) : '';
   el('actInt').value = a && a.intensity ? String(a.intensity) : '';
+  el('actTpl').innerHTML = '<option value="">—</option>'
+    + library.map(t => `<option value="${esc(t.id)}"${a && String(a.tplId) === String(t.id) ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
   el('actNote').value = a ? (a.note || '') : '';
   el('actModal').classList.add('open');
   if (!a) setTimeout(() => { try { el('actName').focus(); } catch(e) {} }, 50);
@@ -2286,20 +2307,31 @@ function saveActivity() {
   const totalSec = parseMin(el('actDur').value) || 0;
   const intensity = parseInt(el('actInt').value) || null;
   const note = (el('actNote').value || '').trim();
+  // optional substitution: the activity counts as this template (weekly badge + name search)
+  const tplSel = el('actTpl').value || null;
+  const tpl = tplSel ? library.find(x => String(x.id) === String(tplSel)) : null;
+  const tplId = tpl ? tpl.id : null;
+  const tplName = tpl ? tpl.name : null;
   const a = actEditId != null ? archive.find(x => String(x.id) === String(actEditId)) : null;
   if (a) {
     a.name = name; if (!isNaN(ts)) a.date = ts;
     a.totalSec = totalSec; a.intensity = intensity; a.note = note;
+    a.tplId = tplId; a.tplName = tplName;
     a.mt = Date.now();
     showSave('✓ activity updated');
   } else {
     archive.push({id: Date.now(), date: isNaN(ts) ? Date.now() : ts, name, type: 'activity',
-      totalSec, intensity, note, entries: [], mt: Date.now()});
+      totalSec, intensity, note, tplId, tplName, entries: [], mt: Date.now()});
     showSave('✓ activity logged');
   }
   actEditId = null;
-  saveArchive(); renderLog();
+  saveArchive(); renderLog(); renderLibrary();
   closeModal('actModal');
+}
+// substitute label of an activity — live template name, snapshot as a fallback
+function actSubName(a) {
+  const tpl = a.tplId != null ? library.find(x => String(x.id) === String(a.tplId)) : null;
+  return (tpl && tpl.name) || a.tplName || '';
 }
 
 // ── LOG ENTRY: EDIT / USE AS WORKOUT / SAVE AS TEMPLATE (tea-app principle) ──
@@ -2425,6 +2457,7 @@ function confirmLogToTemplate() {
 // ── LOG TEXT EXPORT ─────────────────────────────────────────────────────────
 function logEntryText(a) {
   const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)
+    + (a.type === 'activity' && actSubName(a) ? ' · as ' + actSubName(a) : '')
     + (a.intensity ? ' · intensity ' + a.intensity + '/5' : '')];
   (a.entries || []).forEach(e => {
     if (!(e.sets || []).length) return;
@@ -2461,7 +2494,7 @@ function copyText(txt, okMsg) {
 async function deleteLogEntry(id) {
   if (!await customConfirm('Delete this log entry?','delete')) return;
   archive = archive.filter(x => String(x.id) !== String(id));
-  saveArchive(); renderLog();
+  saveArchive(); renderLog(); renderLibrary();
   showSave('✕ log entry deleted');
 }
 
