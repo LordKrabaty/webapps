@@ -1333,6 +1333,7 @@ function renderMain() {
     <span class="wk-elapsed" id="wkElapsed">0:00</span>
     ${(() => { const est = estimateDur(wk); return est.sec ? `<span class="wk-est" title="estimated total with the current settings (planned times + rests + prep)">${est.partial ? '≥' : '~'}${fmtEst(est.sec)}</span>` : ''; })()}
     <button class="btn-sm" id="wkFinishBtn" onclick="finishWorkout()" style="display:none">■ finish &amp; log</button>
+    <button class="btn-sm" id="musicBtn" onclick="toggleMusic()" title="workout music — music/work.mp3 during exercises, music/rest.mp3 during pauses (files pushed to the repo)">${musicOn ? '♪ on' : '♪ off'}</button>
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
   <div class="rest-bar" id="nowBar" style="display:none">
@@ -1834,7 +1835,7 @@ function jumpToStep(ei, si) {
   const rep = Math.min(setDn(s), exRepeat(ex) - 1);
   setSetDn(ex, s, rep);   // re-open this repetition
   beginWorkPhase(ei, si, rep);
-  schedSave(); renderMain();
+  schedSave(); renderMain(); updateMusic();
   showStatusMsg('▶ jumped to ' + (ex.code || ex.name || 'exercise'));
 }
 function startWorkout() {
@@ -1844,7 +1845,7 @@ function startWorkout() {
   const prep = +wk.prepSec || 0;
   if (prep > 0 && nextPending()) { r.phase = 'prep'; r.ei = null; r.si = null; r.endTs = Date.now() + prep * 1000; r.pausedLeft = null; }
   else startNextWork();
-  schedSave(); renderMain();
+  schedSave(); renderMain(); updateMusic();
   showStatusMsg('▶ workout started');
 }
 function startNextWork() {
@@ -1909,7 +1910,7 @@ function toggleSetDone(ei, si) {
     setSetDn(ex, s, 0);
     if (r.phase === 'done') startNextWork();   // a row re-opened after everything was done
   }
-  schedSave(); renderMain();
+  schedSave(); renderMain(); updateMusic();
 }
 function pauseResume() {
   const r = ensureRun();
@@ -1956,7 +1957,7 @@ function stepBack() {
     setSetDn(wk.exercises[ei], wk.exercises[ei].sets[si], rep);   // re-open this repetition
     beginWorkPhase(ei, si, rep);
   }
-  schedSave(); renderMain();
+  schedSave(); renderMain(); updateMusic();
 }
 function skipPhase() {
   const r = ensureRun();
@@ -1964,7 +1965,7 @@ function skipPhase() {
   else if (r.phase === 'srest') startRightHalf();
   else if (r.phase === 'rest' || r.phase === 'prep') startNextWork();
   else return;
-  schedSave(); renderMain();
+  schedSave(); renderMain(); updateMusic();
 }
 function updateRunUi() {
   const started = !!(wk.run && wk.run.startedAt);
@@ -1977,14 +1978,15 @@ function tick() {
   const r = wk.run;
   const elapsed = el('wkElapsed');
   if (elapsed) elapsed.textContent = (r && r.startedAt) ? mmss((Date.now() - r.startedAt) / 1000) : '0:00';
-  if (!r || !r.startedAt) { const nb = el('nowBar'); if (nb) nb.style.display = 'none'; return; }
+  if (!r || !r.startedAt) { const nb = el('nowBar'); if (nb) nb.style.display = 'none'; updateMusic(); return; }
   // countdown expired → beep + advance (each transition fires exactly once: endTs/phase change immediately)
   if (r.pausedLeft == null && r.endTs && Date.now() >= r.endTs) {
-    if (r.phase === 'work') { beep(); advanceWorkStep(); saveSession(); renderMain(); return; }
-    if (r.phase === 'srest') { beep(); startRightHalf(); saveSession(); renderMain(); return; }
-    if (r.phase === 'rest' || r.phase === 'prep') { beep(); startNextWork(); saveSession(); renderMain(); return; }
+    if (r.phase === 'work') { beep(); advanceWorkStep(); saveSession(); renderMain(); updateMusic(); return; }
+    if (r.phase === 'srest') { beep(); startRightHalf(); saveSession(); renderMain(); updateMusic(); return; }
+    if (r.phase === 'rest' || r.phase === 'prep') { beep(); startNextWork(); saveSession(); renderMain(); updateMusic(); return; }
   }
   updateNowBar();
+  updateMusic();
 }
 // "10 × 20kg · 2:00" for a step — what the user needs to grab/do
 function stepInfo(ei, si, withTime) {
@@ -2109,6 +2111,55 @@ function beep() {
   } catch(e) {}
 }
 
+// ── MUSIC (repo-hosted MP3 loops) ───────────────────────────────────────────
+// music/work.mp3 plays during exercises (work/manual), music/rest.mp3 during
+// pauses (rest/prep/srest). Files live in the repo next to index.html →
+// zero per-device setup, the browser caches them. Each track keeps its
+// position while the other plays, so it resumes where it left off.
+const MUSIC_KEY = 'workout-music';
+let musicOn = true; try { musicOn = localStorage.getItem(MUSIC_KEY) !== '0'; } catch(e) {}
+const musicTracks = {};   // lazily created looping <audio> elements, keyed 'work' | 'rest'
+function musicAudio(kind) {
+  let a = musicTracks[kind];
+  if (!a) {
+    a = musicTracks[kind] = new Audio('music/' + kind + '.mp3');
+    a.loop = true; a.preload = 'none';
+    // missing/unreachable file → give up quietly until the ♪ toggle retries (load() below)
+    a.addEventListener('error', () => {
+      a._dead = true;
+      if (!a._deadMsg) { a._deadMsg = true; showStatusMsg('⚠ music/' + kind + '.mp3 not found — add it to the repo', 4000); }
+    });
+  }
+  return a;
+}
+// which track the current run phase wants (null = silence)
+function musicTarget() {
+  const r = wk && wk.run;
+  if (!musicOn || !r || !r.startedAt || r.pausedLeft != null) return null;
+  if (r.phase === 'work' || r.phase === 'manual') return 'work';
+  if (r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') return 'rest';
+  return null;
+}
+// idempotent — safe to call from every tick; play() rejection (autoplay policy
+// before the first user gesture) is ignored, the next tap-driven call succeeds
+function updateMusic() {
+  const want = musicTarget();
+  ['work', 'rest'].forEach(kind => {
+    const a = want === kind ? musicAudio(kind) : musicTracks[kind];
+    if (!a || a._dead) return;
+    if (want === kind) { if (a.paused) a.play().catch(() => {}); }
+    else if (!a.paused) a.pause();
+  });
+}
+function toggleMusic() {
+  musicOn = !musicOn;
+  try { localStorage.setItem(MUSIC_KEY, musicOn ? '1' : '0'); } catch(e) {}
+  if (musicOn) Object.values(musicTracks).forEach(a => { if (a._dead) { a._dead = false; a.load(); } });   // retry files added since
+  const b = el('musicBtn'); if (b) b.textContent = musicOn ? '♪ on' : '♪ off';
+  showStatusMsg(musicOn ? '♪ music on' : '♪ music off');
+  updateMusic();
+}
+
 // ── FINISH & LOG ────────────────────────────────────────────────────────────
 function finishWorkout() {
   const r = wk.run;
@@ -2124,7 +2175,7 @@ function discardWorkout() {
   pushUndo();
   wk.run = null; wk.note = '';
   wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });
-  schedSave(); renderMain(); renderNotes();
+  schedSave(); renderMain(); renderNotes(); updateMusic();
   showSave('✕ workout discarded (not logged) — undo ↩ restores it');
 }
 function confirmFinish() {
@@ -2147,7 +2198,7 @@ function confirmFinish() {
   archive.push(entry); saveArchive();
   wk.run = null; wk.note = '';
   wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });   // planned times (durSec) stay for next time
-  schedSave(); renderMain(); renderNotes(); renderLog(); renderLibrary();   // the weekly badge counts logged sessions
+  schedSave(); renderMain(); renderNotes(); renderLog(); renderLibrary(); updateMusic();   // the weekly badge counts logged sessions
   showSave('✓ workout logged (' + mmss(totalSec) + ')');
 }
 
