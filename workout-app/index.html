@@ -334,9 +334,12 @@ textarea::placeholder{color:var(--mid)}
 .wk-addrow{display:flex;gap:.5rem;margin-top:.2rem}
 .wk-addrow .btn-lib{width:auto;flex:1}
 .set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
-.set-go{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.65rem;line-height:1;padding:0}
+.set-go,.set-mus{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.65rem;line-height:1;padding:0}
+.set-mus{width:auto;min-width:26px;padding:0 .25rem;font-family:'DM Mono',monospace;font-size:.6rem}
+.set-mus.on{color:var(--black)}
 .set-rep{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
-@media(hover:hover){.set-go:hover{background:var(--off);color:var(--black)}}
+@media(hover:hover){.set-go:hover,.set-mus:hover{background:var(--off);color:var(--black)}}
+.rest-gap{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);padding:.12rem .2rem .12rem 1.55rem}
 .set-done.on{background:var(--black);border-color:var(--black);color:var(--w)}
 .set-del,.log-del{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;opacity:.4;flex-shrink:0;padding:0;line-height:1}
 @media(hover:hover){.set-del:hover,.log-del:hover{opacity:1}}
@@ -1248,7 +1251,7 @@ function tplFromWk(w) {
     type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? ''}))}))
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null}))}))
   };
 }
 function applySessionData(d) {
@@ -1267,7 +1270,7 @@ function loadFromLibrary(id) {
   wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? ''}))})),
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null}))})),
     run: null};
   prefillFromLast(id);
   activeLibId = e.id; markSaved();
@@ -1352,11 +1355,11 @@ function renderMain() {
   </div>`;
   if (wk.type === 'cardio') {
     // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
-    html += (wk.exercises || []).map((ex, ei) => exBlockHtml(ex, ei)).join('');
+    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(plannedRestSec(wk.exercises[ei - 1], false)) : '') + exBlockHtml(ex, ei)).join('');
     html += `<button class="btn-lib" onclick="addExercise()" style="margin-top:.2rem">+ add segment</button>`;
   } else if (wk.order === 'seq') {
     // "same exercise in a row" — one block per exercise, its sets listed underneath
-    html += (wk.exercises || []).map((ex, ei) => seqBlockHtml(ex, ei)).join('');
+    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(plannedRestSec(wk.exercises[ei - 1], false)) : '') + seqBlockHtml(ex, ei)).join('');
     html += `<div class="wk-addrow">
       <button class="btn-lib" onclick="addExercise()">+ add exercise</button>
       <button class="btn-lib" onclick="addRound()">+ add set to all</button>
@@ -1381,6 +1384,17 @@ function updateHeaderName() {
   if (s) { s.textContent = n; s.style.display = n ? 'inline' : 'none'; }
   if (sep) sep.style.display = n ? 'inline' : 'none';
 }
+// planned rest AFTER a step of exercise ex (mirrors startRestPhase): per-exercise
+// override beats the workout-level values; sameEx = the next step stays in this exercise
+function plannedRestSec(ex, sameEx) {
+  if (ex && ex.pauseSec != null) return +ex.pauseSec;
+  if (sameEx && wk.setPauseSec != null) return +wk.setPauseSec;
+  return +wk.pauseSec || 0;
+}
+// small divider between rows/blocks showing the rest the sequence will insert there
+function restGapHtml(sec) {
+  return sec > 0 ? `<div class="rest-gap">↳ rest ${mmss(sec)}</div>` : '';
+}
 function roundsHtml() {
   const exs = wk.exercises || [];
   if (!exs.length) return '';
@@ -1390,8 +1404,13 @@ function roundsHtml() {
     const inRound = exs.filter(ex => (ex.sets || [])[si]);
     const doneN = inRound.filter(ex => ex.sets[si].done).length;
     const coll = !!(wk.collapsed && wk.collapsed[si]);
-    const rows = coll ? '' : exs.map((ex, ei) => (ex.sets || [])[si] != null ? wxItemHtml(ex, ei, si) : '').join('');
-    html += `<div class="ex-block">
+    // rows run in order within the round → show the rest that follows each exercise
+    const rowParts = exs.map((ex, ei) => (ex.sets || [])[si] != null ? [wxItemHtml(ex, ei, si), ex] : null).filter(Boolean);
+    const rows = coll ? '' : rowParts.map(([h, ex], k) => (k ? restGapHtml(plannedRestSec(rowParts[k - 1][1], false)) : '') + h).join('');
+    // between rounds: the last exercise of the previous round rests before this one
+    const prevRound = si > 0 ? exs.filter(ex => (ex.sets || [])[si - 1]) : [];
+    const between = prevRound.length ? restGapHtml(plannedRestSec(prevRound[prevRound.length - 1], exs.length === 1)) : '';
+    html += `${between}<div class="ex-block">
       <div class="round-head">
         <button class="rnd-tgl" onclick="toggleRound(${si})" title="${coll ? 'expand' : 'collapse'} round ${si + 1}">${coll ? '▸' : '▾'}</button>
         <span class="round-title" onclick="toggleRound(${si})" style="cursor:pointer">round ${si + 1}${coll ? ` · ${doneN}/${inRound.length} done` : ''}</span>
@@ -1439,7 +1458,8 @@ function seqBlockHtml(ex, ei) {
   const coll = !!(wk.collapsedEx && wk.collapsedEx[ei]);
   const doneN = (ex.sets || []).filter(s => s.done).length;
   const rows = coll ? '' : (ex.sets || []).map((s, si) =>
-    dataRowHtml(s, ei, si, false, true)
+    (si ? restGapHtml(plannedRestSec(ex, true)) : '')
+    + dataRowHtml(s, ei, si, false, true)
     + `<textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].snote=this.value;schedSave()" placeholder="· note (set ${si + 1}) → log">${esc(s.snote || '')}</textarea>`
   ).join('');
   return `<div class="ex-block" data-ei="${ei}">
@@ -1462,7 +1482,8 @@ function exBlockHtml(ex, ei) {
   const total = (ex.sets || []).length * R;
   const doneN = (ex.sets || []).reduce((t, s) => t + Math.min(setDn(s), R), 0);
   const setRows = coll ? '' : (ex.sets || []).map((s, si) =>
-    dataRowHtml(s, ei, si, true, true)
+    (si ? restGapHtml(plannedRestSec(ex, true)) : '')
+    + dataRowHtml(s, ei, si, true, true)
     + `<textarea class="ex-note-in iv-cue" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].cue=this.value;schedSave()" placeholder="· interval note (shown during this interval)">${esc(s.cue || '')}</textarea>`
   ).join('');
   return `<div class="ex-block" data-ei="${ei}">
@@ -1522,7 +1543,8 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   const cur = !!(run && run.ei === ei && run.si === si && (run.phase === 'work' || run.phase === 'manual' || run.phase === 'srest'));
   // cardio is time-based: instead of reps × weight one wide interval-name field (work / rest / all-in)
   const mid = cardio
-    ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">`
+    ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">
+    <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
     : `<input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
     <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–">`;
@@ -2132,11 +2154,27 @@ function musicAudio(kind) {
   }
   return a;
 }
+// music kind of one interval/set: explicit override (s.mus) beats auto-detection
+// from the interval name — a cardio interval called "rest" gets the rest track
+function setMusicKind(s) {
+  if (s && (s.mus === 'rest' || s.mus === 'work')) return s.mus;
+  return (s && /rest|pause|recover|cool/i.test(s.iname || '')) ? 'rest' : 'work';
+}
+function toggleSetMusic(ei, si) {
+  const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
+  const s = ex.sets[si];
+  s.mus = setMusicKind(s) === 'rest' ? 'work' : 'rest';
+  schedSave(); renderMain(); updateMusic();
+  showStatusMsg('♪ interval plays the ' + s.mus + ' track');
+}
 // which track the current run phase wants (null = silence)
 function musicTarget() {
   const r = wk && wk.run;
   if (!musicOn || !r || !r.startedAt || r.pausedLeft != null) return null;
-  if (r.phase === 'work' || r.phase === 'manual') return 'work';
+  if (r.phase === 'work' || r.phase === 'manual') {
+    const ex = r.ei != null ? wk.exercises[r.ei] : null;
+    return setMusicKind(ex && (ex.sets || [])[r.si]);
+  }
   if (r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') return 'rest';
   return null;
 }

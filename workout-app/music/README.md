@@ -7,6 +7,10 @@ Drop two MP3 files here (e.g. exported from Suno) and push to GitHub:
 | `work.mp3` | exercises (work / manual phases) |
 | `rest.mp3` | pauses (rest between sets/exercises, prep countdown, L↔R side switch) |
 
+Cardio intervals: an interval whose name contains rest / pause / recover / cool
+automatically plays `rest.mp3` even though it is a running interval. The ♪W/♪R
+button on each interval row overrides the auto-detection.
+
 Both tracks loop. Each keeps its position while the other plays, so the work
 track resumes where it left off after a rest. Toggle with the ♪ button next to
 ▶ start workout (per-device preference, stored in localStorage).
