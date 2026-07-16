@@ -313,6 +313,9 @@ textarea::placeholder{color:var(--mid)}
 .set-w{width:4.8em;min-width:2.6em}
 .iv-name{width:auto;flex:1;min-width:5em;text-align:left;font-family:'DM Sans',sans-serif;padding:.28rem .45rem}
 .ex-flags{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
+.ex-score{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.08rem .1rem;outline:none;flex-shrink:0}
+.ex-score:focus{outline:2px solid var(--black);outline-offset:1px}
+.ex-score.unset{color:var(--muted)}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-t{width:4.5em;min-width:3.2em}
@@ -570,6 +573,41 @@ textarea::placeholder{color:var(--mid)}
   <div class="modal" style="max-width:360px">
     <h2>Finish workout</h2>
     <p id="finishMsg" style="font-size:.85rem;color:var(--muted);line-height:1.5"></p>
+    <div class="modal-row" id="finStr" style="display:none">
+      <div class="jb-field" style="flex:1"><label>energy today</label>
+        <select id="finEnergy" title="how you felt overall today">
+          <option value="">–</option>
+          <option value="1">1 · drained</option>
+          <option value="2">2 · low</option>
+          <option value="3">3 · okay</option>
+          <option value="4">4 · good</option>
+          <option value="5">5 · fully charged</option>
+        </select></div>
+      <div class="jb-field" style="flex:1"><label>focus</label>
+        <select id="finFocus" title="low focus is an early warning that technique will slip">
+          <option value="">–</option>
+          <option value="1">1 · scattered</option>
+          <option value="2">2 · distracted</option>
+          <option value="3">3 · okay</option>
+          <option value="4">4 · focused</option>
+          <option value="5">5 · locked in</option>
+        </select></div>
+    </div>
+    <div class="modal-row" id="finCar" style="display:none">
+      <div class="jb-field" style="flex:1.4"><label>RPE (session)</label>
+        <select id="finRpe" title="felt effort of the whole session — cross-check against the heart-rate data">
+          <option value="">–</option>
+          <option value="1">1 · very easy</option>
+          <option value="2">2 · easy</option>
+          <option value="3">3 · moderate</option>
+          <option value="4">4 · hard</option>
+          <option value="5">5 · all-out</option>
+        </select></div>
+      <div class="jb-field" style="flex:1"><label>HR avg</label>
+        <input id="finHrAvg" type="number" inputmode="numeric" min="0" placeholder="–" title="average heart rate (from the watch)"></div>
+      <div class="jb-field" style="flex:1"><label>HR max</label>
+        <input id="finHrMax" type="number" inputmode="numeric" min="0" placeholder="–" title="max heart rate (from the watch)"></div>
+    </div>
     <div style="display:flex;flex-direction:column;gap:.5rem">
       <button class="modal-btn primary" onclick="confirmFinish()">✓ finish &amp; log</button>
       <button class="modal-btn danger" onclick="discardWorkout()">✕ discard — log nothing</button>
@@ -1226,6 +1264,7 @@ document.addEventListener('keydown', e => {
 // ── WORKOUT DATA MODEL ──────────────────────────────────────────────────────
 // wk (live workout) = {name, type:'strength'|'cardio', pauseSec, prepSec, note,
 //   exercises:[{code, name, note (technique cues, template), snote (segment note, cardio → log),
+//     tech (technique 1–5), rir (reps in reserve on the LAST set, 0–4) — strength ratings, session-scoped like snote → log, numbers for trends,
 //     linked (default true: reps/weight/time edits mirror into every round; ≠ = independent),
 //     side (true = one side at a time: the work timer runs twice per round, L then R, rest after both),
 //     pauseSec (⚙ rest after any step of this exercise/segment), innerPauseSec (⚙ rest between steps INSIDE it — beats pauseSec on same-exercise transitions), sidePauseSec (⚙ L↔R switch),
@@ -1233,7 +1272,9 @@ document.addEventListener('keydown', e => {
 //       restSec (rest AFTER this set/interval, template — overrides the ⚙/workout rests; editable in the ↳ gap under the row, null = inherit)}]}],
 //   run:{startedAt, phase:'prep'|'work'|'srest'(L↔R switch)|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft, half:'L'|'R'|null} | null}
 // library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
-// archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable)
+// archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable);
+//   session ratings (numbers, all optional): energy 1–5 + focus 1–5 (strength), rpe 1–5 + hrAvg + hrMax (cardio);
+//   per-exercise entries carry tech / rir (see above)
 // body entry    = {id, date:'yyyy-mm-dd', weight, fat, water, muscle, visceral, note, mt} (LWW)
 const BODY_KEY = 'workout-v1-body';
 let body = [];
@@ -1469,10 +1510,11 @@ function wxItemHtml(ex, ei, si) {
         ${grip}<input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave();syncExLabels(${ei})" placeholder="CODE" title="exercise code">
         <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave();syncExLabels(${ei})" placeholder="exercise name">
         ${exFlags(ex)}
+        ${exScoreHtml(ex, ei)}
         <button class="btn-add" onclick="openExSettings(${ei})" title="exercise settings — order, L/R, linked sets, pauses, remove…">⚙</button>
       </div>
       <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave();syncExLabels(${ei})" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>`
-    : `<div class="ex-head">${grip}<span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span></div>`
+    : `<div class="ex-head">${grip}<span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span>${exScoreHtml(ex, ei)}</div>`
       + (ex.note ? `<div class="wx-cue">${esc(ex.note)}</div>` : '');
   const s = ex.sets[si];
   return `<div class="wx-item" data-ei="${ei}">${head}${dataRowHtml(s, ei, si, false)}
@@ -1495,6 +1537,7 @@ function seqBlockHtml(ex, ei) {
       <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
       <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
       ${exFlags(ex)}
+      ${exScoreHtml(ex, ei)}
       ${coll ? `<span class="set-rep" title="completed / total sets">${doneN}/${(ex.sets || []).length}</span>` : `<button class="btn-add" onclick="addSet(${ei})" title="add set">+</button>`}
       <button class="btn-add" onclick="openExSettings(${ei})" title="exercise settings — order, L/R, linked sets, pauses, remove…">⚙</button>
     </div>
@@ -1648,6 +1691,20 @@ function exFlags(ex) {
     (ex.pauseSec != null || ex.innerPauseSec != null || ex.sidePauseSec != null || (ex.sets || []).some(s => s.restSec != null)) ? '⏲' : null,
   ].filter(Boolean).join(' ');
   return f ? `<span class="ex-flags" title="non-default settings — open ⚙ to change">${f}</span>` : '';
+}
+// ── EXERCISE RATINGS (strength) — tech 1–5 + RIR 0–4, two taps, numbers → trends ──
+const TECH_TITLE = 'technique this session — 5: smooth &amp; controlled from rep 1 · 4: one correction · 3: had to correct repeatedly · 2: form fell apart, tempo drifted · 1: done, but way off';
+const RIR_TITLE = 'reps in reserve on the LAST set — how many clean reps were left (0 = failure)';
+function scoreOpts(lbl, cur, vals) {
+  return `<option value=""${cur == null ? ' selected' : ''}>${lbl}</option>`
+    + vals.map(v => `<option value="${v}"${cur != null && +cur === v ? ' selected' : ''}>${lbl} ${v}</option>`).join('');
+}
+// mini selects for the exercise header — rendered in every round header, so a change re-renders to keep the mirrors in sync
+function exScoreHtml(ex, ei) {
+  return `<select class="ex-score${ex.tech == null ? ' unset' : ''}" title="${TECH_TITLE}"
+      onchange="wk.exercises[${ei}].tech=this.value===''?null:+this.value;schedSave();renderMain()">${scoreOpts('tech', ex.tech, [1,2,3,4,5])}</select>
+    <select class="ex-score${ex.rir == null ? ' unset' : ''}" title="${RIR_TITLE}"
+      onchange="wk.exercises[${ei}].rir=this.value===''?null:+this.value;schedSave();renderMain()">${scoreOpts('RIR', ex.rir, [0,1,2,3,4])}</select>`;
 }
 // ── ⚙ EXERCISE SETTINGS MODAL — order, L/R, linked sets, repeats, pause overrides, remove ──
 let exSetEi = null;
@@ -2244,13 +2301,18 @@ function finishWorkout() {
   el('finishMsg').textContent = anyDone
     ? 'Only ✓ rows are logged.'
     : 'Nothing is checked ✓ — ALL rows will be logged if you save.';
+  // session ratings — strength: energy + focus · cardio: RPE + heart rate (all optional)
+  const car = wk.type === 'cardio';
+  el('finStr').style.display = car ? 'none' : 'flex';
+  el('finCar').style.display = car ? 'flex' : 'none';
+  ['finEnergy','finFocus','finRpe','finHrAvg','finHrMax'].forEach(i => { el(i).value = ''; });
   el('finishModal').classList.add('open');
 }
 function discardWorkout() {
   closeModal('finishModal');
   pushUndo();
   wk.run = null; wk.note = '';
-  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });
   schedSave(); renderMain(); renderNotes(); updateMusic();
   showSave('✕ workout discarded (not logged) — undo ↩ restores it');
 }
@@ -2261,19 +2323,23 @@ function confirmFinish() {
   const anyDone = wk.exercises.some(ex => (ex.sets || []).some(s => s.done));
   pushUndo();
   const totalSec = Math.round((Date.now() - r.startedAt) / 1000);
+  const num = id => { const v = parseInt(el(id).value); return isNaN(v) ? undefined : v; };   // ratings stay numbers; undefined = unset, dropped by JSON
   const entry = {
     id: Date.now(), date: Date.now(), tplId: activeLibId,
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
     entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
+      tech: ex.tech ?? undefined, rir: ex.rir ?? undefined,
       sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, iname: s.iname || undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim()}))
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
     note: wk.note || '',
+    energy: num('finEnergy'), focus: num('finFocus'),          // strength session ratings
+    rpe: num('finRpe'), hrAvg: num('finHrAvg'), hrMax: num('finHrMax'),   // cardio session ratings (hidden fields stay empty)
     mt: Date.now()   // log entries sync via LWW — notes stay editable afterwards
   };
   archive.push(entry); saveArchive();
   wk.run = null; wk.note = '';
-  wk.exercises.forEach(ex => { ex.snote = ''; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });   // planned times (durSec) stay for next time
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });   // planned times (durSec) stay for next time
   schedSave(); renderMain(); renderNotes(); renderLog(); renderLibrary(); updateMusic();   // the weekly badge counts logged sessions
   showSave('✓ workout logged (' + mmss(totalSec) + ')');
 }
@@ -2296,7 +2362,17 @@ function exStatText(e) {
     const totR = durs.reduce((t,s) => t + (parseFloat(String(s.reps).replace(',','.')) || 0), 0);
     sp = totR > 0 ? ' · ' + (totD / totR).toFixed(1) + ' s/rep' : ' · ' + mmss(totD);
   }
-  return (e.rep > 1 ? '×' + e.rep + ' ' : '') + reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '');
+  return (e.rep > 1 ? '×' + e.rep + ' ' : '') + reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '')
+    + (e.tech ? ' · tech ' + e.tech : '') + (e.rir != null ? ' · RIR ' + e.rir : '');
+}
+// compact session-rating line: "energy 4 · focus 3" / "RPE 4 · HR 152/178" — log head + text export
+function sessScoreText(a) {
+  const p = [];
+  if (a.energy) p.push('energy ' + a.energy);
+  if (a.focus) p.push('focus ' + a.focus);
+  if (a.rpe) p.push('RPE ' + a.rpe);
+  if (a.hrAvg || a.hrMax) p.push('HR ' + (a.hrAvg || '–') + '/' + (a.hrMax || '–'));
+  return p.join(' · ');
 }
 function logDateStr(a, longYear) {
   const d = new Date(a.date || a.id);
@@ -2375,6 +2451,7 @@ function renderLog() {
         <span class="log-name" onclick="toggleLogEntry(${jsArg(a.id)})" style="cursor:pointer">${esc(a.name)}</span>
         ${isAct && actSubName(a) ? `<span class="log-int" title="counts as a substitute for this workout">↷ ${esc(actSubName(a))}</span>` : ''}
         ${a.intensity ? `<span class="log-int" title="felt intensity">int ${esc(a.intensity)}/5</span>` : ''}
+        ${sessScoreText(a) ? `<span class="log-int" title="session ratings (1–5) — set in the finish &amp; log dialog, editable via ✎ edit">${esc(sessScoreText(a))}</span>` : ''}
         <span class="log-total">${mmss(a.totalSec || 0)}</span>
         <button class="log-del" onclick="copyLogText(${jsArg(a.id)})" title="copy this entry as text">⧉</button>
         <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
@@ -2527,13 +2604,29 @@ function openLogEdit(id) {
 }
 function renderLogEdit() {
   const d = logEditDraft; if (!d) return;
+  const cardio = d.type === 'cardio';
+  // session ratings — editable after the fact (forgot the finish dialog / data arrived later from the watch)
+  const leNum = f => `logEditDraft.${f}=this.value===''?null:+this.value`;
+  const scoreRow = cardio
+    ? `<div class="modal-row">
+        <div class="jb-field" style="flex:1.4"><label>RPE (session)</label><select onchange="${leNum('rpe')}">${scoreOpts('RPE', d.rpe, [1,2,3,4,5])}</select></div>
+        <div class="jb-field" style="flex:1"><label>HR avg</label><input type="number" inputmode="numeric" min="0" value="${d.hrAvg ?? ''}" placeholder="–" oninput="${leNum('hrAvg')}"></div>
+        <div class="jb-field" style="flex:1"><label>HR max</label><input type="number" inputmode="numeric" min="0" value="${d.hrMax ?? ''}" placeholder="–" oninput="${leNum('hrMax')}"></div>
+      </div>`
+    : `<div class="modal-row">
+        <div class="jb-field" style="flex:1"><label>energy today</label><select onchange="${leNum('energy')}">${scoreOpts('energy', d.energy, [1,2,3,4,5])}</select></div>
+        <div class="jb-field" style="flex:1"><label>focus</label><select onchange="${leNum('focus')}">${scoreOpts('focus', d.focus, [1,2,3,4,5])}</select></div>
+      </div>`;
   el('logEditBody').innerHTML = `
     <div class="jb-field"><label>name</label><input type="text" value="${esc(d.name || '')}" spellcheck="false" oninput="logEditDraft.name=this.value"></div>
-    <div class="jb-field"><label>total time (m:ss)</label><input type="text" value="${mmss(d.totalSec || 0)}" onchange="const v=parseDur(this.value);if(v!=null)logEditDraft.totalSec=v;this.value=mmss(logEditDraft.totalSec||0)"></div>`
+    <div class="jb-field"><label>total time (m:ss)</label><input type="text" value="${mmss(d.totalSec || 0)}" onchange="const v=parseDur(this.value);if(v!=null)logEditDraft.totalSec=v;this.value=mmss(logEditDraft.totalSec||0)"></div>
+    ${scoreRow}`
     + (d.entries || []).map((e, ei) => `
       <div class="le-ex">
         <input class="ex-code" value="${esc(e.code || '')}" placeholder="CODE" oninput="logEditDraft.entries[${ei}].code=this.value">
         <input class="ex-name" value="${esc(e.name || '')}" placeholder="exercise name" oninput="logEditDraft.entries[${ei}].name=this.value">${e.side ? '<span class="set-x">L/R</span>' : ''}
+        ${cardio ? '' : `<select class="ex-score${e.tech == null ? ' unset' : ''}" title="${TECH_TITLE}" onchange="logEditDraft.entries[${ei}].tech=this.value===''?null:+this.value;this.classList.toggle('unset',!this.value)">${scoreOpts('tech', e.tech, [1,2,3,4,5])}</select>
+        <select class="ex-score${e.rir == null ? ' unset' : ''}" title="${RIR_TITLE}" onchange="logEditDraft.entries[${ei}].rir=this.value===''?null:+this.value;this.classList.toggle('unset',!this.value)">${scoreOpts('RIR', e.rir, [0,1,2,3,4])}</select>`}
         <button class="btn-add" onclick="leAddSet(${ei})" title="add a round to this exercise">+</button>
         <button class="ex-del" onclick="leDelEx(${ei})" title="remove this exercise">✕</button>
       </div>
@@ -2638,7 +2731,8 @@ function confirmLogToTemplate() {
 function logEntryText(a) {
   const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)
     + (a.type === 'activity' && actSubName(a) ? ' · as ' + actSubName(a) : '')
-    + (a.intensity ? ' · intensity ' + a.intensity + '/5' : '')];
+    + (a.intensity ? ' · intensity ' + a.intensity + '/5' : '')
+    + (sessScoreText(a) ? ' · ' + sessScoreText(a) : '')];
   (a.entries || []).forEach(e => {
     if (!(e.sets || []).length) return;
     lines.push('  ' + (e.code || e.name) + ' ' + exStatText(e) + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
