@@ -1407,9 +1407,12 @@ function plannedRestSec(ex, s, sameEx) {
 }
 // editable gap between steps: the rest AFTER step (ei,si) — a typed value is a per-step
 // override, empty = inherit (⚙ inside-rest → ⚙ after-rest → workout set rest / rest);
-// `what` overrides the tooltip subject (between-block/round gaps)
+// `what` overrides the tooltip subject (between-block/round gaps). A zero rest hides the
+// gap entirely (raise the ⚙/workout rests to bring it back) — unless the zero is this
+// step's own typed override, which must stay visible to remain clearable
 function restGapEditHtml(ei, si, sameEx, what) {
   const ex = wk.exercises[ei], s = (ex.sets || [])[si]; if (!s) return '';
+  if (plannedRestSec(ex, s, sameEx) <= 0 && s.restSec == null) return '';
   what = what || (wk.type === 'cardio' ? 'interval' : sameEx ? 'set' : 'exercise');
   return `<div class="rest-gap">↳ rest <input class="rest-gap-in" type="text" inputmode="numeric" value="${s.restSec != null ? mmss(s.restSec) : ''}" placeholder="${mmss(plannedRestSec(ex, null, sameEx))}" onchange="setSetRest(${ei},${si},this.value)" title="rest after this ${what} — m:ss or seconds, empty = default"></div>`;
 }
