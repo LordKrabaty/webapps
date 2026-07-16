@@ -1362,6 +1362,10 @@ function renderMain() {
   if (wk.type === 'cardio') {
     // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
     html += (wk.exercises || []).map((ex, ei) => (ei ? restGapAfterExHtml(ei - 1, false, 'segment (with ×repeats it also runs between the repeats)') : '') + exBlockHtml(ex, ei)).join('');
+    // a repeated LAST segment rests between its repeats too — without a next block there is
+    // no between-segment gap to edit that rest in, so show a trailing one
+    const lastEi = (wk.exercises || []).length - 1;
+    if (lastEi >= 0 && exRepeat(wk.exercises[lastEi]) > 1) html += restGapAfterExHtml(lastEi, true, 'repeat (between the repeats of this segment)');
     html += `<button class="btn-lib" onclick="addExercise()" style="margin-top:.2rem">+ add segment</button>`;
   } else if (wk.order === 'seq') {
     // "same exercise in a row" — one block per exercise, its sets listed underneath
