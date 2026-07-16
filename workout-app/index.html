@@ -339,7 +339,10 @@ textarea::placeholder{color:var(--mid)}
 .set-mus.on{color:var(--black)}
 .set-rep{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
 @media(hover:hover){.set-go:hover,.set-mus:hover{background:var(--off);color:var(--black)}}
-.rest-gap{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);padding:.12rem .2rem .12rem 1.55rem}
+.rest-gap{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);padding:.12rem .2rem .12rem 1.55rem;display:flex;align-items:center;gap:.35rem}
+.rest-gap-in{width:3.6em;font-family:'DM Mono',monospace;font-size:.62rem;text-align:center;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.08rem .1rem;outline:none}
+.rest-gap-in::placeholder{color:var(--muted)}
+.rest-gap-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-done.on{background:var(--black);border-color:var(--black);color:var(--w)}
 .set-del,.log-del{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.7rem;opacity:.4;flex-shrink:0;padding:0;line-height:1}
 @media(hover:hover){.set-del:hover,.log-del:hover{opacity:1}}
@@ -659,7 +662,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 3;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) — an older build would drop it on push
+const APP_SCHEMA = 4;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1224,7 +1227,9 @@ document.addEventListener('keydown', e => {
 //   exercises:[{code, name, note (technique cues, template), snote (segment note, cardio → log),
 //     linked (default true: reps/weight/time edits mirror into every round; ≠ = independent),
 //     side (true = one side at a time: the work timer runs twice per round, L then R, rest after both),
-//     sets:[{reps, weight, durSec, done, snote (per-round note → log), cue (per-interval technique note, template — shown in the now-bar during that interval)}]}],
+//     pauseSec (⚙ rest after any step of this exercise/segment), innerPauseSec (⚙ rest between steps INSIDE it — beats pauseSec on same-exercise transitions), sidePauseSec (⚙ L↔R switch),
+//     sets:[{reps, weight, durSec, done, snote (per-round note → log), cue (per-interval technique note, template — shown in the now-bar during that interval),
+//       restSec (rest AFTER this set/interval, template — overrides the ⚙/workout rests; editable in the ↳ gap under the row, null = inherit)}]}],
 //   run:{startedAt, phase:'prep'|'work'|'srest'(L↔R switch)|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft, half:'L'|'R'|null} | null}
 // library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
 // archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable)
@@ -1250,8 +1255,8 @@ function tplFromWk(w) {
   return {
     type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
-      pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null}))}))
+      pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null}))}))
   };
 }
 function applySessionData(d) {
@@ -1269,8 +1274,8 @@ function loadFromLibrary(id) {
   const d = JSON.parse(JSON.stringify(e.data || {}));
   wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
-      pauseSec: ex.pauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null}))})),
+      pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null}))})),
     run: null};
   prefillFromLast(id);
   activeLibId = e.id; markSaved();
@@ -1355,11 +1360,11 @@ function renderMain() {
   </div>`;
   if (wk.type === 'cardio') {
     // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
-    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(plannedRestSec(wk.exercises[ei - 1], false)) : '') + exBlockHtml(ex, ei)).join('');
+    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(restAfterExSec(wk.exercises[ei - 1], false)) : '') + exBlockHtml(ex, ei)).join('');
     html += `<button class="btn-lib" onclick="addExercise()" style="margin-top:.2rem">+ add segment</button>`;
   } else if (wk.order === 'seq') {
     // "same exercise in a row" — one block per exercise, its sets listed underneath
-    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(plannedRestSec(wk.exercises[ei - 1], false)) : '') + seqBlockHtml(ex, ei)).join('');
+    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(restAfterExSec(wk.exercises[ei - 1], false)) : '') + seqBlockHtml(ex, ei)).join('');
     html += `<div class="wk-addrow">
       <button class="btn-lib" onclick="addExercise()">+ add exercise</button>
       <button class="btn-lib" onclick="addRound()">+ add set to all</button>
@@ -1384,16 +1389,32 @@ function updateHeaderName() {
   if (s) { s.textContent = n; s.style.display = n ? 'inline' : 'none'; }
   if (sep) sep.style.display = n ? 'inline' : 'none';
 }
-// planned rest AFTER a step of exercise ex (mirrors startRestPhase): per-exercise
-// override beats the workout-level values; sameEx = the next step stays in this exercise
-function plannedRestSec(ex, sameEx) {
+// planned rest AFTER a step of exercise ex (the sequencer uses this too): the step's own
+// override (s.restSec) beats the ⚙ inside-rest (same exercise) beats the ⚙ after-rest
+// beats the workout-level values; sameEx = the next step stays in this exercise.
+// Pass s = null for the inherited default (the ↳ gap placeholder).
+function plannedRestSec(ex, s, sameEx) {
+  if (s && s.restSec != null) return +s.restSec;
+  if (sameEx && ex && ex.innerPauseSec != null) return +ex.innerPauseSec;   // ⚙ rest INSIDE this segment/exercise
   if (ex && ex.pauseSec != null) return +ex.pauseSec;
   if (sameEx && wk.setPauseSec != null) return +wk.setPauseSec;
   return +wk.pauseSec || 0;
 }
+// rest that follows the LAST step of an exercise/segment (its last set's override applies)
+function restAfterExSec(ex, sameEx) {
+  const ss = (ex && ex.sets) || [];
+  return plannedRestSec(ex, ss[ss.length - 1], sameEx);
+}
 // small divider between rows/blocks showing the rest the sequence will insert there
 function restGapHtml(sec) {
   return sec > 0 ? `<div class="rest-gap">↳ rest ${mmss(sec)}</div>` : '';
+}
+// editable gap between steps inside a block: the rest AFTER step (ei,si) — a typed value
+// is a per-step override, empty = inherit (⚙ inside-rest → ⚙ after-rest → workout set rest / rest)
+function restGapEditHtml(ei, si, sameEx) {
+  const ex = wk.exercises[ei], s = (ex.sets || [])[si]; if (!s) return '';
+  const what = wk.type === 'cardio' ? 'interval' : sameEx ? 'set' : 'exercise';
+  return `<div class="rest-gap">↳ rest <input class="rest-gap-in" type="text" inputmode="numeric" value="${s.restSec != null ? mmss(s.restSec) : ''}" placeholder="${mmss(plannedRestSec(ex, null, sameEx))}" onchange="setSetRest(${ei},${si},this.value)" title="rest after this ${what} — m:ss or seconds, empty = default"></div>`;
 }
 function roundsHtml() {
   const exs = wk.exercises || [];
@@ -1404,12 +1425,12 @@ function roundsHtml() {
     const inRound = exs.filter(ex => (ex.sets || [])[si]);
     const doneN = inRound.filter(ex => ex.sets[si].done).length;
     const coll = !!(wk.collapsed && wk.collapsed[si]);
-    // rows run in order within the round → show the rest that follows each exercise
-    const rowParts = exs.map((ex, ei) => (ex.sets || [])[si] != null ? [wxItemHtml(ex, ei, si), ex] : null).filter(Boolean);
-    const rows = coll ? '' : rowParts.map(([h, ex], k) => (k ? restGapHtml(plannedRestSec(rowParts[k - 1][1], false)) : '') + h).join('');
+    // rows run in order within the round → editable rest gap after each exercise's set
+    const rowParts = exs.map((ex, ei) => (ex.sets || [])[si] != null ? [wxItemHtml(ex, ei, si), ei] : null).filter(Boolean);
+    const rows = coll ? '' : rowParts.map(([h, ei2], k) => (k ? restGapEditHtml(rowParts[k - 1][1], si, false) : '') + h).join('');
     // between rounds: the last exercise of the previous round rests before this one
-    const prevRound = si > 0 ? exs.filter(ex => (ex.sets || [])[si - 1]) : [];
-    const between = prevRound.length ? restGapHtml(plannedRestSec(prevRound[prevRound.length - 1], exs.length === 1)) : '';
+    const prevEx = si > 0 ? exs.filter(ex => (ex.sets || [])[si - 1]).pop() : null;
+    const between = prevEx ? restGapHtml(plannedRestSec(prevEx, prevEx.sets[si - 1], exs.length === 1)) : '';
     html += `${between}<div class="ex-block">
       <div class="round-head">
         <button class="rnd-tgl" onclick="toggleRound(${si})" title="${coll ? 'expand' : 'collapse'} round ${si + 1}">${coll ? '▸' : '▾'}</button>
@@ -1458,7 +1479,7 @@ function seqBlockHtml(ex, ei) {
   const coll = !!(wk.collapsedEx && wk.collapsedEx[ei]);
   const doneN = (ex.sets || []).filter(s => s.done).length;
   const rows = coll ? '' : (ex.sets || []).map((s, si) =>
-    (si ? restGapHtml(plannedRestSec(ex, true)) : '')
+    (si ? restGapEditHtml(ei, si - 1, true) : '')
     + dataRowHtml(s, ei, si, false, true)
     + `<textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].snote=this.value;schedSave()" placeholder="· note (set ${si + 1}) → log">${esc(s.snote || '')}</textarea>`
   ).join('');
@@ -1482,7 +1503,7 @@ function exBlockHtml(ex, ei) {
   const total = (ex.sets || []).length * R;
   const doneN = (ex.sets || []).reduce((t, s) => t + Math.min(setDn(s), R), 0);
   const setRows = coll ? '' : (ex.sets || []).map((s, si) =>
-    (si ? restGapHtml(plannedRestSec(ex, true)) : '')
+    (si ? restGapEditHtml(ei, si - 1, true) : '')
     + dataRowHtml(s, ei, si, true, true)
     + `<textarea class="ex-note-in iv-cue" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].cue=this.value;schedSave()" placeholder="· interval note (shown during this interval)">${esc(s.cue || '')}</textarea>`
   ).join('');
@@ -1597,6 +1618,15 @@ function toggleExSide(ei) {
   ex.side = !ex.side;
   schedSave(); renderMain();
 }
+// per-step rest override typed into the ↳ gap under a row (empty = inherit); linked
+// non-cardio exercises mirror it into every round, like reps/weight/time
+function setSetRest(ei, si, val) {
+  const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
+  const v = String(val).trim() === '' ? null : parseDur(val);
+  ex.sets[si].restSec = v;
+  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s.restSec = v; });
+  schedSave(); renderMain();
+}
 // per-exercise pause overrides (empty = inherit the workout-level value)
 function setExPause(ei, field, val) {
   const ex = wk.exercises[ei]; if (!ex) return;
@@ -1609,7 +1639,7 @@ function exFlags(ex) {
     ex.side ? 'L/R' : null,
     exRepeat(ex) > 1 ? '×' + exRepeat(ex) : null,
     ex.linked === false ? '≠' : null,
-    (ex.pauseSec != null || ex.sidePauseSec != null) ? '⏲' : null,
+    (ex.pauseSec != null || ex.innerPauseSec != null || ex.sidePauseSec != null || (ex.sets || []).some(s => s.restSec != null)) ? '⏲' : null,
   ].filter(Boolean).join(' ');
   return f ? `<span class="ex-flags" title="non-default settings — open ⚙ to change">${f}</span>` : '';
 }
@@ -1642,8 +1672,10 @@ function renderExSettings() {
     : `
     <label class="modal-item${ex.side ? ' sel' : ''}"><input type="checkbox" ${ex.side ? 'checked' : ''} onchange="toggleExSide(${exSetEi});renderExSettings()"><span>one side at a time (L/R) — the timer runs twice, left then right</span></label>
     <label class="modal-item${ex.linked === false ? '' : ' sel'}"><input type="checkbox" ${ex.linked === false ? '' : 'checked'} onchange="toggleExLink(${exSetEi});renderExSettings()"><span>linked sets — reps / weight / time edits mirror into every set</span></label>`}
+    <div class="jb-field"><label>rest between ${cardio ? 'intervals inside this segment' : 'sets of this exercise'} (s) — empty = inherit</label>
+      <input type="text" inputmode="numeric" value="${ex.innerPauseSec != null ? ex.innerPauseSec : ''}" placeholder="${(() => { const v = ex.pauseSec != null ? ex.pauseSec : (wk.setPauseSec != null ? wk.setPauseSec : (wk.pauseSec ?? 0)); return esc(v); })()}" title="rest inserted between the ${cardio ? 'intervals of this segment (and between its repeats)' : 'sets of this exercise'} — the ↳ rest gap under a row can still override it per ${cardio ? 'interval' : 'set'}" onchange="setExPause(${exSetEi},'innerPauseSec',this.value);renderExSettings()"></div>
     <div class="jb-field"><label>rest after this ${cardio ? 'segment' : 'exercise'} (s) — empty = workout default</label>
-      <input type="text" inputmode="numeric" value="${ex.pauseSec != null ? ex.pauseSec : ''}" placeholder="${esc(wk.pauseSec ?? '')}" onchange="setExPause(${exSetEi},'pauseSec',this.value);renderExSettings()"></div>
+      <input type="text" inputmode="numeric" value="${ex.pauseSec != null ? ex.pauseSec : ''}" placeholder="${esc(wk.pauseSec ?? '')}" title="rest before the next ${cardio ? 'segment' : 'exercise'}; without the 'between' value above it also applies inside" onchange="setExPause(${exSetEi},'pauseSec',this.value);renderExSettings()"></div>
     ${ex.side ? `<div class="jb-field"><label>L↔R switch pause (s) — empty = workout default</label>
       <input type="text" inputmode="numeric" value="${ex.sidePauseSec != null ? ex.sidePauseSec : ''}" placeholder="${esc(wk.sidePauseSec ?? 0)}" onchange="setExPause(${exSetEi},'sidePauseSec',this.value);renderExSettings()"></div>` : ''}
     <button class="modal-btn danger" onclick="closeModal('exSetModal');removeExercise(${exSetEi})">✕ remove ${cardio ? 'segment' : 'exercise'}</button>`;
@@ -1737,7 +1769,7 @@ function addExercise() {
   // strength: a new exercise joins every existing round; cardio: starts with one interval
   const n = (wk.type !== 'cardio' && wk.exercises.length)
     ? Math.max(1, ...wk.exercises.map(ex => (ex.sets || []).length)) : 1;
-  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, repeat: 1, pauseSec: null, sidePauseSec: null, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:'', iname:'', cue:''}))});
+  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, repeat: 1, pauseSec: null, innerPauseSec: null, sidePauseSec: null, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:'', iname:'', cue:'', restSec:null}))});
   schedSave(); renderMain();
 }
 function addRound() {
@@ -1745,7 +1777,7 @@ function addRound() {
   pushUndo();
   wk.exercises.forEach(ex => {
     const p = ex.sets[ex.sets.length - 1];
-    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: '', iname: p ? (p.iname ?? '') : '', cue: ''});
+    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: '', iname: p ? (p.iname ?? '') : '', cue: '', restSec: p ? (p.restSec ?? null) : null});
   });
   schedSave(); renderMain();
 }
@@ -1767,7 +1799,7 @@ function addSet(ei) {
   const ex = wk.exercises[ei]; if (!ex) return;
   pushUndo();
   const prev = ex.sets[ex.sets.length - 1];
-  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: '', iname: '', cue: ''});
+  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: '', iname: '', cue: '', restSec: prev ? (prev.restSec ?? null) : null});
   schedSave(); renderMain();
 }
 // cardio: how many times the WHOLE segment (its interval sequence) runs before the next segment
@@ -1901,12 +1933,12 @@ function startRestPhase() {
   const r = ensureRun();
   const nxt = nextPending();
   if (!nxt) { r.phase = 'done'; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
-  // the next step stays within the same exercise → the (optional) set rest applies, otherwise the exercise rest;
-  // a per-exercise override (of the just-completed exercise) beats both workout-level values
+  // rest hierarchy after the just-completed step: its own per-step override (restSec, the ↳ gap)
+  // beats the ⚙ inside-rest (same exercise) beats the ⚙ after-rest beats the workout-level values
   const cex = r.ei != null ? wk.exercises[r.ei] : null;
+  const cs = cex ? (cex.sets || [])[r.si] : null;
   const sameEx = r.ei != null && nxt[0] === r.ei;
-  const p = (cex && cex.pauseSec != null) ? +cex.pauseSec
-    : (sameEx && wk.setPauseSec != null) ? +wk.setPauseSec : (+wk.pauseSec || 0);
+  const p = plannedRestSec(cex, cs, sameEx);
   // ei/si stay pointing at the completed step during the rest — nextPending continues after it
   if (p > 0) { r.phase = 'rest'; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; r.half = null; }
   else startNextWork();
@@ -2034,8 +2066,8 @@ function nextPreview() {
   if (!nxt) return 'last one — then ■ finish & log';
   const nx = wk.exercises[nxt[0]], ns = (nx.sets || [])[nxt[1]];
   const sameEx = nxt[0] === r.ei;
-  const p = (ex && ex.pauseSec != null) ? +ex.pauseSec
-    : (sameEx && wk.setPauseSec != null) ? +wk.setPauseSec : (+wk.pauseSec || 0);
+  const cs = ex ? (ex.sets || [])[r.si] : null;
+  const p = plannedRestSec(ex, cs, sameEx);
   const nlabel = (ns && ns.iname) || nx.code || nx.name || '';
   const info = stepInfo(nxt[0], nxt[1], true);
   return (p > 0 ? 'rest ' + mmss(p) + ' → ' : '→ ') + nlabel + (info ? ' · ' + info : '');
@@ -2426,7 +2458,7 @@ function saveActivity() {
 }
 // estimated total duration of a workout-like object (template data or live wk),
 // mirroring the sequencer: planned times (×2 + switch pause on L/R), rests by transition
-// (per-exercise override > set rest > rest) and the preparation phase
+// (per-step override > per-exercise override > set rest > rest) and the preparation phase
 function estimateDur(w) {
   const exs = (w && w.exercises) || [];
   const order = [];
@@ -2458,7 +2490,9 @@ function estimateDur(w) {
     if (ex.side) sec += ex.sidePauseSec != null ? +ex.sidePauseSec : (+w.sidePauseSec || 0);
     if (k < order.length - 1) {
       const sameEx = order[k + 1] === ei;
-      sec += (ex.pauseSec != null) ? +ex.pauseSec
+      sec += (s && s.restSec != null) ? +s.restSec
+        : (sameEx && ex.innerPauseSec != null) ? +ex.innerPauseSec
+        : (ex.pauseSec != null) ? +ex.pauseSec
         : (sameEx && w.setPauseSec != null) ? +w.setPauseSec : (+w.pauseSec || 0);
     }
   });
