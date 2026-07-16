@@ -1325,13 +1325,13 @@ function renderMain() {
         <option value="seq"${wk.order === 'seq' ? ' selected' : ''}>same exercise in a row</option>
       </select></div>` : ''}
     <div class="field" style="width:7em"><label>between ${wk.type === 'cardio' ? 'segments' : 'exercises'} (s)</label>
-      <input type="number" value="${esc(wk.pauseSec)}" min="0" title="rest between ${wk.type === 'cardio' ? 'segments' : 'different exercises'} — and the default wherever no more specific rest is set" oninput="wk.pauseSec=parseInt(this.value)||0;schedSave()"></div>
+      <input type="number" value="${esc(wk.pauseSec)}" min="0" title="rest between ${wk.type === 'cardio' ? 'segments' : 'different exercises'} — and the default wherever no more specific rest is set" oninput="wk.pauseSec=parseInt(this.value)||0;schedSave()" onchange="renderMain()"></div>
     <div class="field" style="width:7em"><label>${wk.type === 'cardio' ? 'inside segment (s)' : 'between sets (s)'}</label>
-      <input type="number" value="${wk.setPauseSec != null ? esc(wk.setPauseSec) : ''}" min="0" placeholder="${esc(wk.pauseSec)}" title="rest between ${wk.type === 'cardio' ? 'intervals INSIDE a segment' : 'sets of the SAME exercise'} — empty = same as between ${wk.type === 'cardio' ? 'segments' : 'exercises'}; ⚙ and the ↳ gaps override it" oninput="wk.setPauseSec=this.value===''?null:(parseInt(this.value)||0);schedSave()"></div>
+      <input type="number" value="${wk.setPauseSec != null ? esc(wk.setPauseSec) : ''}" min="0" placeholder="${esc(wk.pauseSec)}" title="rest between ${wk.type === 'cardio' ? 'intervals INSIDE a segment' : 'sets of the SAME exercise'} — empty = same as between ${wk.type === 'cardio' ? 'segments' : 'exercises'}; ⚙ and the ↳ gaps override it" oninput="wk.setPauseSec=this.value===''?null:(parseInt(this.value)||0);schedSave()" onchange="renderMain()"></div>
     <div class="field" style="width:5.5em"><label>prep (s)</label>
-      <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()"></div>
+      <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()" onchange="renderMain()"></div>
     ${(wk.exercises || []).some(ex => ex.side) ? `<div class="field" style="width:5.5em"><label>L↔R (s)</label>
-      <input type="number" value="${esc(wk.sidePauseSec ?? 0)}" min="0" title="pause between the left and right side of L/R exercises (0 = switch immediately)" oninput="wk.sidePauseSec=parseInt(this.value)||0;schedSave()"></div>` : ''}
+      <input type="number" value="${esc(wk.sidePauseSec ?? 0)}" min="0" title="pause between the left and right side of L/R exercises (0 = switch immediately)" oninput="wk.sidePauseSec=parseInt(this.value)||0;schedSave()" onchange="renderMain()"></div>` : ''}
     <div class="field" style="width:5.5em"><label>±step (s)</label>
       <input type="number" value="${esc(wk.adjSec ?? 30)}" min="5" title="how much the −/+ buttons adjust the running countdown" onchange="wk.adjSec=parseInt(this.value)||30;schedSave();renderMain()"></div>
     <div class="field" style="width:5.5em"><label>×/week</label>
@@ -1361,11 +1361,11 @@ function renderMain() {
   </div>`;
   if (wk.type === 'cardio') {
     // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
-    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(restAfterExSec(wk.exercises[ei - 1], false)) : '') + exBlockHtml(ex, ei)).join('');
+    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapAfterExHtml(ei - 1, false, 'segment (with ×repeats it also runs between the repeats)') : '') + exBlockHtml(ex, ei)).join('');
     html += `<button class="btn-lib" onclick="addExercise()" style="margin-top:.2rem">+ add segment</button>`;
   } else if (wk.order === 'seq') {
     // "same exercise in a row" — one block per exercise, its sets listed underneath
-    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapHtml(restAfterExSec(wk.exercises[ei - 1], false)) : '') + seqBlockHtml(ex, ei)).join('');
+    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapAfterExHtml(ei - 1, false, 'exercise (before the next one)') : '') + seqBlockHtml(ex, ei)).join('');
     html += `<div class="wk-addrow">
       <button class="btn-lib" onclick="addExercise()">+ add exercise</button>
       <button class="btn-lib" onclick="addRound()">+ add set to all</button>
@@ -1401,21 +1401,17 @@ function plannedRestSec(ex, s, sameEx) {
   if (sameEx && wk.setPauseSec != null) return +wk.setPauseSec;
   return +wk.pauseSec || 0;
 }
-// rest that follows the LAST step of an exercise/segment (its last set's override applies)
-function restAfterExSec(ex, sameEx) {
-  const ss = (ex && ex.sets) || [];
-  return plannedRestSec(ex, ss[ss.length - 1], sameEx);
-}
-// small divider between rows/blocks showing the rest the sequence will insert there
-function restGapHtml(sec) {
-  return sec > 0 ? `<div class="rest-gap">↳ rest ${mmss(sec)}</div>` : '';
-}
-// editable gap between steps inside a block: the rest AFTER step (ei,si) — a typed value
-// is a per-step override, empty = inherit (⚙ inside-rest → ⚙ after-rest → workout set rest / rest)
-function restGapEditHtml(ei, si, sameEx) {
+// editable gap between steps: the rest AFTER step (ei,si) — a typed value is a per-step
+// override, empty = inherit (⚙ inside-rest → ⚙ after-rest → workout set rest / rest);
+// `what` overrides the tooltip subject (between-block/round gaps)
+function restGapEditHtml(ei, si, sameEx, what) {
   const ex = wk.exercises[ei], s = (ex.sets || [])[si]; if (!s) return '';
-  const what = wk.type === 'cardio' ? 'interval' : sameEx ? 'set' : 'exercise';
+  what = what || (wk.type === 'cardio' ? 'interval' : sameEx ? 'set' : 'exercise');
   return `<div class="rest-gap">↳ rest <input class="rest-gap-in" type="text" inputmode="numeric" value="${s.restSec != null ? mmss(s.restSec) : ''}" placeholder="${mmss(plannedRestSec(ex, null, sameEx))}" onchange="setSetRest(${ei},${si},this.value)" title="rest after this ${what} — m:ss or seconds, empty = default"></div>`;
+}
+// editable gap AFTER the whole block of exercise ei (its last step's override)
+function restGapAfterExHtml(ei, sameEx, what) {
+  return restGapEditHtml(ei, ((wk.exercises[ei] || {}).sets || []).length - 1, sameEx, what);
 }
 function roundsHtml() {
   const exs = wk.exercises || [];
@@ -1430,8 +1426,9 @@ function roundsHtml() {
     const rowParts = exs.map((ex, ei) => (ex.sets || [])[si] != null ? [wxItemHtml(ex, ei, si), ei] : null).filter(Boolean);
     const rows = coll ? '' : rowParts.map(([h, ei2], k) => (k ? restGapEditHtml(rowParts[k - 1][1], si, false) : '') + h).join('');
     // between rounds: the last exercise of the previous round rests before this one
-    const prevEx = si > 0 ? exs.filter(ex => (ex.sets || [])[si - 1]).pop() : null;
-    const between = prevEx ? restGapHtml(plannedRestSec(prevEx, prevEx.sets[si - 1], exs.length === 1)) : '';
+    let prevEi = -1;
+    if (si > 0) exs.forEach((x, i) => { if ((x.sets || [])[si - 1]) prevEi = i; });
+    const between = prevEi >= 0 ? restGapEditHtml(prevEi, si - 1, exs.length === 1, 'round (before the next one)') : '';
     html += `${between}<div class="ex-block">
       <div class="round-head">
         <button class="rnd-tgl" onclick="toggleRound(${si})" title="${coll ? 'expand' : 'collapse'} round ${si + 1}">${coll ? '▸' : '▾'}</button>
@@ -1619,13 +1616,14 @@ function toggleExSide(ei) {
   ex.side = !ex.side;
   schedSave(); renderMain();
 }
-// per-step rest override typed into the ↳ gap under a row (empty = inherit); linked
-// non-cardio exercises mirror it into every round, like reps/weight/time
+// per-step rest override typed into a ↳ gap (empty = inherit). In ROUNDS mode a linked
+// exercise mirrors it into every round (its transition is the same kind in each round);
+// seq mode must NOT mirror — the gap after the block would overwrite the between-set gaps
 function setSetRest(ei, si, val) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   const v = String(val).trim() === '' ? null : parseDur(val);
   ex.sets[si].restSec = v;
-  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s.restSec = v; });
+  if (ex.linked !== false && wk.type !== 'cardio' && wk.order !== 'seq') ex.sets.forEach(s => { s.restSec = v; });
   schedSave(); renderMain();
 }
 // per-exercise pause overrides (empty = inherit the workout-level value)
