@@ -1094,7 +1094,7 @@ function parseItemText(raw) {
   let duration = null, isEvent = false, eventStart = null, eventEnd = null;
   let blockType = 'TASK', isSubtask = false, done = false, urgent = false;
 
-  if (text.startsWith('✒')) { isSubtask = true; text = text.replace(/^✒\s*/, ''); }
+  if (text.startsWith('✒')) { isSubtask = true; text = text.replace(/^(?:✒️?\s*)+/, ''); }
   else if (/^[xX] /.test(text)) { isSubtask = true; done = true; text = text.replace(/^[xX] /i, ''); }
 
   if (text.endsWith(' !')) { urgent = true; text = text.slice(0, -2); }
@@ -1167,6 +1167,9 @@ function _isEmojiMod(ch) {
 function extractLeadingIcon(text) {
   const cps = Array.from(text || '');
   if (!cps.length || !_isEmojiCp(cps[0])) return null;
+  // leading ✒ is the subtask marker (→ buffer serialization), never a row icon — without this
+  // it would be eaten here, re-baked into the subtask text and shown twice next to the ✒ toggle
+  if (cps[0] === '✒') return null;
   let i = 0, icon = '';
   while (i < cps.length && (_isEmojiCp(cps[i]) || _isEmojiMod(cps[i]))) { icon += cps[i]; i++; }
   if (_blockEmojiSet().has(icon.replace(/️/g, ''))) return null;
