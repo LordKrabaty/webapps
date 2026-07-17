@@ -326,8 +326,6 @@ textarea::placeholder{color:var(--mid)}
 .score-opt{font-family:'DM Mono',monospace;font-size:.76rem;text-align:left;background:var(--w);border:var(--b);border-radius:var(--r);padding:.4rem .55rem;color:var(--black);cursor:pointer;min-width:0}
 .score-opts.row .score-opt{flex:1;text-align:center}
 .score-opt.sel{background:var(--black);color:var(--w);border-color:var(--black)}
-.score-opt.half{padding:.18rem .55rem;color:var(--dark)}
-.score-opt.half.sel{color:var(--w)}
 @media(hover:hover){.score-opt:not(.sel):hover{background:var(--off)}}
 .score-cap{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);min-height:1.1em}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
@@ -695,7 +693,7 @@ textarea::placeholder{color:var(--mid)}
     <div class="score-sec"><label>RIR — reps left in reserve on the LAST set</label>
       <div class="score-opts row" id="scoreRirBtns"></div>
       <div class="score-cap" id="scoreRirCap"></div></div>
-    <p style="font-size:.74rem;color:var(--muted);margin:0">Tap to set · tap again to clear.</p>
+    <p style="font-size:.74rem;color:var(--muted);margin:0">Technique: tap again = +0.5, third tap clears · RIR: tap again clears.</p>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exScoreModal')">done</button></div>
   </div>
 </div>
@@ -1753,9 +1751,11 @@ function openExScore(src, ei) {
 const RIR_CAPS = {0:'0 — went to failure', 1:'1 — one clean rep left in the tank', 2:'2 — two clean reps left', 3:'3 — three clean reps left', 4:'4 — four or more left (too easy)'};
 function renderExScore() {
   const ex = scoreTargetEx(); if (!ex) return;
-  // anchored full values with half steps in between (5, 4.5, 4, … 1)
-  el('scoreTechBtns').innerHTML = [5,4.5,4,3.5,3,2.5,2,1.5,1].map(v =>
-    `<button class="score-opt${v % 1 ? ' half' : ''}${ex.tech === v ? ' sel' : ''}" onclick="setExScore('tech',${v})">${v}${TECH_ANCHORS[v] ? ' · ' + TECH_ANCHORS[v] : ''}</button>`).join('');
+  // anchored rows; a second tap on the same row bumps to the half step (4 → 4.5), a third clears
+  el('scoreTechBtns').innerHTML = [5,4,3,2,1].map(v => {
+    const sel = ex.tech === v || ex.tech === v + 0.5;
+    return `<button class="score-opt${sel ? ' sel' : ''}" onclick="setExScore('tech',${v})">${ex.tech === v + 0.5 ? v + '.5' : v} · ${TECH_ANCHORS[v]}</button>`;
+  }).join('');
   el('scoreRirBtns').innerHTML = [0,1,2,3,4].map(v =>
     `<button class="score-opt${ex.rir === v ? ' sel' : ''}" onclick="setExScore('rir',${v})">${v}</button>`).join('');
   // the picked value's meaning, spelled out below the scale (tooltips don't show on touch)
@@ -1763,7 +1763,8 @@ function renderExScore() {
 }
 function setExScore(field, v) {
   const ex = scoreTargetEx(); if (!ex) return;
-  ex[field] = ex[field] === v ? null : v;   // tap the selected value again = clear
+  if (field === 'tech') ex.tech = ex.tech === v ? (v < 5 ? v + 0.5 : null) : (ex.tech === v + 0.5 ? null : v);   // cycle: v → v.5 → clear (5 has no half)
+  else ex[field] = ex[field] === v ? null : v;   // RIR: tap the selected value again = clear
   if (scoreCtx.src === 'log') renderLogEdit();
   else { schedSave(); renderMain(); }       // re-render keeps the round-mirror buttons in sync
   renderExScore();
