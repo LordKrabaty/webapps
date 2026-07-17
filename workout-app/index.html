@@ -384,6 +384,14 @@ textarea::placeholder{color:var(--mid)}
 .log-note-wk{margin-top:.2rem;border-top:1px solid var(--off);padding-top:.2rem}
 .log-set-note{display:flex;gap:.3rem;align-items:flex-start;padding-left:.4rem}
 .log-rn{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-top:.16rem;flex-shrink:0}
+.log-month-hdr{display:flex;align-items:center;gap:.45rem;font-size:.72rem;font-weight:600;letter-spacing:.06em;color:var(--dark);padding:.3rem .1rem 0;cursor:pointer;user-select:none}
+.log-week-hdr{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;font-size:.65rem;color:var(--muted);letter-spacing:.04em;padding:.15rem .15rem 0;border-top:1px dashed var(--light);cursor:pointer;user-select:none}
+.log-grp-sum{font-family:'DM Mono',monospace;font-weight:400;color:var(--muted);font-size:.68rem}
+.log-wk-badge{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);border:var(--b);border-radius:var(--r);padding:.02rem .25rem;flex-shrink:1;min-width:0;max-width:11em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:0}
+.log-wk-badge.met{background:var(--black);color:var(--w);border-color:var(--black);font-weight:500}
+.log-wk-badge.miss{border-style:dashed;color:var(--dark)}
+.log-week-hdr .log-wk-badge{cursor:pointer}
+.log-month-hdr .log-del,.log-week-hdr .log-del{margin-left:auto}
 .log-actions{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
 .log-act-btn{font-family:'DM Sans',sans-serif;font-size:.68rem;color:var(--muted);background:none;border:var(--b);border-radius:var(--r);padding:.18rem .45rem;cursor:pointer;white-space:nowrap}
 @media(hover:hover){.log-act-btn:hover{background:var(--off);color:var(--black);border-color:var(--dark)}}
@@ -696,6 +704,15 @@ textarea::placeholder{color:var(--mid)}
       <div class="score-cap" id="scoreRirCap"></div></div>
     <p style="font-size:.74rem;color:var(--muted);margin:0">Technique: tap again = +0.5, third tap clears · RIR: tap again clears.</p>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exScoreModal')">done</button></div>
+  </div>
+</div>
+
+<!-- Week detail modal — per-exercise breakdown of one ISO week (opened from a week badge in the log) -->
+<div class="modal-bg" id="weekDetailModal">
+  <div class="modal" style="max-width:420px;gap:.7rem">
+    <h2 id="weekDetailTitle">Week</h2>
+    <div id="weekDetailBody" style="display:flex;flex-direction:column;gap:.3rem;overflow-y:auto;min-height:0"></div>
+    <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('weekDetailModal')">done</button></div>
   </div>
 </div>
 
@@ -2488,22 +2505,136 @@ function toggleLogEntry(id) {
 }
 function toggleAllLog() {
   const items = filteredLog();
-  if (items.some(a => !logOpen[a.id])) items.forEach(a => { logOpen[a.id] = true; });
-  else logOpen = {};
+  if (items.some(a => !logOpen[a.id]) || (logMonthColl && logMonthColl.size) || logWeekColl.size) {
+    items.forEach(a => { logOpen[a.id] = true; });
+    logMonthColl = new Set();
+    logWeekColl = new Set();
+  } else {
+    logOpen = {};
+    logMonthColl = new Set(items.map(a => logMonthKey(a.date || a.id)));
+    logWeekColl = new Set(items.map(a => logWeekKey(a.date || a.id)));
+  }
   renderLog();
+}
+// ── LOG GROUPING: months → ISO weeks (todo-app Done-tab pattern) ────────────
+function getISOWeek(t) { const d = new Date(t); d.setHours(0,0,0,0); d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); const w1 = new Date(d.getFullYear(), 0, 4); return 1 + Math.round(((d - w1) / 864e5 - 3 + (w1.getDay() + 6) % 7) / 7); }
+function getISOWeekYear(t) { const d = new Date(t); d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); return d.getFullYear(); }
+function logWeekKey(t) { return getISOWeekYear(t) + '-W' + String(getISOWeek(t)).padStart(2, '0'); }
+function logMonthKey(t) { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function logMonthLabel(mk) { const [y, m] = mk.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-GB', {month:'long'}).toUpperCase() + ' ' + y; }
+function logWeekLabel(wkk) {   // "Week 29 · 13.07–19.07" (Mon–Sun of the ISO week)
+  const m = wkk.match(/^(\d+)-W(\d+)$/); if (!m) return wkk;
+  const j4 = new Date(+m[1], 0, 4);
+  const mon = new Date(+m[1], 0, 4 - (j4.getDay() + 6) % 7 + (+m[2] - 1) * 7);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const f = d => String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
+  return 'Week ' + +m[2] + ' · ' + f(mon) + '–' + f(sun);
+}
+let logMonthColl = null;   // Set of collapsed month keys; null = not initialized (everything but the current month starts collapsed)
+function toggleLogMonth(mk) {
+  if (logMonthColl.has(mk)) logMonthColl.delete(mk); else logMonthColl.add(mk);
+  renderLog();
+}
+let logWeekColl = new Set();   // collapsed ISO-week keys — a split week collapses under both month headers
+function toggleLogWeek(wkk) {
+  if (logWeekColl.has(wkk)) logWeekColl.delete(wkk); else logWeekColl.add(wkk);
+  renderLog();
+}
+// week-header badges: sessions per WORKOUT across the whole ISO week — keyed by template
+// (substituted activities count in, like the library weekly badge), template-less entries
+// group by name; shows done/goal when the template has a weekly goal. Click = the
+// per-exercise breakdown modal for that week.
+function weekWorkoutBadges(wkk, itemsAll) {
+  const groups = new Map();   // key → {label, n, target}
+  itemsAll.filter(a => logWeekKey(a.date || a.id) === wkk).forEach(a => {
+    const tpl = a.tplId != null ? library.find(x => String(x.id) === String(a.tplId)) : null;
+    const key = a.tplId != null ? 't' + a.tplId : 'n' + (a.name || 'workout');
+    if (!groups.has(key)) groups.set(key, {
+      label: (tpl && tpl.name) || a.tplName || a.name || 'workout',
+      n: 0, target: tpl && tpl.data && +tpl.data.weekTarget > 0 ? +tpl.data.weekTarget : 0});
+    groups.get(key).n++;
+  });
+  // templates with a weekly goal that did NOT happen that week → 0/t badge (dashed = still owed)
+  library.forEach(tpl => {
+    if (!(tpl.data && +tpl.data.weekTarget > 0)) return;
+    const key = 't' + tpl.id;
+    if (!groups.has(key)) groups.set(key, {label: tpl.name || 'workout', n: 0, target: +tpl.data.weekTarget});
+  });
+  if (!groups.size) return '';
+  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label)).map(g => {
+    const state = g.target ? (g.n >= g.target ? ' met' : g.n ? '' : ' miss') : '';
+    const goal = g.target ? (g.n >= g.target ? ' — weekly goal met ✓' : ' — ' + (g.target - g.n) + ' more to the weekly goal') : '';
+    return `<span class="log-wk-badge${state}" onclick="event.stopPropagation();openWeekDetail('${wkk}')" title="${esc(g.label)} — sessions in this ISO week${goal} · click for the per-exercise breakdown">${esc(g.label)} ${g.n}${g.target ? '/' + g.target : '×'}</span>`;
+  }).join('');
+}
+// weekly goal of one exercise code = summed weekly goals of the templates containing it
+// (doing every template as targeted trains the code exactly that often)
+function codeWeekTarget(cd) {
+  return library.reduce((t, e) => {
+    const d = e.data; if (!d || !(+d.weekTarget > 0)) return t;
+    return (d.exercises || []).some(x => (x.code || '').trim() === cd) ? t + +d.weekTarget : t;
+  }, 0);
+}
+// per-exercise breakdown of one ISO week (opened from a week badge): sessions per code
+// vs. the code's weekly goal; substituted activities count the codes of their template
+function openWeekDetail(wkk) {
+  const items = filteredLog().filter(a => logWeekKey(a.date || a.id) === wkk);
+  const map = new Map();   // code → {n, name}
+  items.forEach(a => {
+    let list = (a.entries || []).map(e => ({cd: (e.code || '').trim(), name: e.name || ''})).filter(x => x.cd);
+    if (!list.length && a.type === 'activity' && a.tplId != null) {
+      const tpl = library.find(x => String(x.id) === String(a.tplId));
+      list = tpl && tpl.data ? (tpl.data.exercises || []).map(e => ({cd: (e.code || '').trim(), name: e.name || ''})).filter(x => x.cd) : [];
+    }
+    const seen = new Set();
+    list.forEach(({cd, name}) => {
+      if (seen.has(cd)) return; seen.add(cd);
+      const g = map.get(cd) || {n: 0, name: ''};
+      g.n++; if (!g.name) g.name = name;
+      map.set(cd, g);
+    });
+  });
+  // codes from goal-carrying templates that did not happen that week → 0/t rows
+  library.forEach(tpl => {
+    const d = tpl.data; if (!d || !(+d.weekTarget > 0)) return;
+    (d.exercises || []).forEach(e => {
+      const cd = (e.code || '').trim();
+      if (cd && !map.has(cd)) map.set(cd, {n: 0, name: e.name || ''});
+    });
+  });
+  el('weekDetailTitle').textContent = logWeekLabel(wkk);
+  el('weekDetailBody').innerHTML = map.size
+    ? [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([cd, g]) => {
+        const t = codeWeekTarget(cd);
+        const state = t ? (g.n >= t ? ' met' : g.n ? '' : ' miss') : '';
+        return `<div class="log-ex"><span class="log-code">${esc(cd)}</span> ${esc(g.name)} <span class="log-wk-badge${state}" title="sessions that week${t ? ' / weekly goal (summed from templates using this code)' : ''}">${g.n}${t ? '/' + t : '×'}</span></div>`;
+      }).join('')
+    : '<p class="lib-empty">No coded exercises this week.</p>';
+  el('weekDetailModal').classList.add('open');
+}
+// text export of one grouped section — 'm' = calendar month, 'w' = the WHOLE ISO week
+// (even the part rendered under the neighbouring month); both honor the active filter
+function copyLogGroup(kind, key) {
+  const items = filteredLog().filter(a => (kind === 'm' ? logMonthKey(a.date || a.id) : logWeekKey(a.date || a.id)) === key);
+  if (!items.length) { showStatusMsg('⚠ nothing to copy in this group'); return; }
+  copyText(items.map(logEntryText).join('\n\n'), '✓ ' + (kind === 'm' ? logMonthLabel(key) : logWeekLabel(key)) + ' copied as text');
 }
 function renderLog() {
   const c = el('logList'); if (!c) return;
   const items = archive.length ? filteredLog() : [];
+  if (logMonthColl === null) {   // first render: only the current month starts expanded
+    const cur = logMonthKey(Date.now());
+    logMonthColl = new Set(items.map(a => logMonthKey(a.date || a.id)).filter(k => k !== cur));
+  }
   const ab = el('logAllBtn');
   if (ab) {
-    const allOpen = items.length > 0 && items.every(a => logOpen[a.id]);
+    const allOpen = items.length > 0 && items.every(a => logOpen[a.id]) && !logMonthColl.size && !logWeekColl.size;
     ab.textContent = allOpen ? '▾ all' : '▸ all';
-    ab.title = allOpen ? 'collapse all entries' : 'expand all entries';
+    ab.title = allOpen ? 'collapse all months & entries' : 'expand all months & entries';
   }
   if (!archive.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
   if (!items.length) { c.innerHTML = '<p class="lib-empty">Nothing matches the filter.</p>'; return; }
-  c.innerHTML = items.map(a => {
+  const itemHtml = a => {
     const open = !!logOpen[a.id];
     const isAct = a.type === 'activity';
     // action buttons stay visible on collapsed entries too
@@ -2544,6 +2675,48 @@ function renderLog() {
       ${body}
       ${actions}
     </div>`;
+  };
+  // group the (already date-desc) entries: month → ISO week → entries; an active text
+  // filter ignores month collapse so matches are never hidden behind a closed header
+  const searching = !!logFilter.trim();
+  let months = new Map();
+  items.forEach(a => {
+    const t = a.date || a.id;
+    const mk = logMonthKey(t);
+    if (!months.has(mk)) months.set(mk, new Map());
+    const wm = months.get(mk), wkk = logWeekKey(t);
+    if (!wm.has(wkk)) wm.set(wkk, []);
+    wm.get(wkk).push(a);
+  });
+  // the current ISO week renders even with nothing logged yet, so the owed weekly
+  // goals (0/t badges) stay visible — only when some template carries a weekly goal
+  if (!searching && library.some(e => e.data && +e.data.weekTarget > 0)) {
+    const cmk = logMonthKey(Date.now()), cwk = logWeekKey(Date.now());
+    if (!months.has(cmk) || !months.get(cmk).has(cwk)) {
+      const wm = new Map([[cwk, []], ...(months.get(cmk) || new Map())]);   // current week first (newest)
+      const m2 = new Map([[cmk, wm]]);
+      months.forEach((v, k) => { if (k !== cmk) m2.set(k, v); });
+      months = m2;
+    }
+  }
+  c.innerHTML = [...months.entries()].map(([mk, weeks]) => {
+    const all = [...weeks.values()].flat();
+    const coll = !searching && logMonthColl.has(mk);
+    const tot = all.reduce((t, a) => t + (a.totalSec || 0), 0);
+    const head = `<div class="log-month-hdr" onclick="toggleLogMonth('${mk}')" title="${coll ? 'expand' : 'collapse'} this month">
+      <span class="rnd-tgl">${coll ? '▸' : '▾'}</span>${logMonthLabel(mk)}
+      <span class="log-grp-sum">${all.length}×${tot ? ' · ' + fmtEst(tot) : ''}</span>
+      <button class="log-del" onclick="event.stopPropagation();copyLogGroup('m','${mk}')" title="copy this month as text">⧉</button></div>`;
+    if (coll) return head;
+    return head + [...weeks.entries()].map(([wkk, arr]) => {
+      const wcoll = !searching && logWeekColl.has(wkk);
+      const whead = `<div class="log-week-hdr" onclick="toggleLogWeek('${wkk}')" title="${wcoll ? 'expand' : 'collapse'} this week">
+        <span class="rnd-tgl">${wcoll ? '▸' : '▾'}</span>${logWeekLabel(wkk)}
+        <span class="log-grp-sum">${arr.length}×</span>
+        ${weekWorkoutBadges(wkk, items)}
+        <button class="log-del" onclick="event.stopPropagation();copyLogGroup('w','${wkk}')" title="copy this week as text (the whole ISO week)">⧉</button></div>`;
+      return wcoll ? whead : whead + arr.map(itemHtml).join('');
+    }).join('');
   }).join('');
   c.querySelectorAll('.log-note-in').forEach(autoResizeTA);   // hidden pane → resized again on tab switch
 }
