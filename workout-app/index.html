@@ -313,9 +313,20 @@ textarea::placeholder{color:var(--mid)}
 .set-w{width:4.8em;min-width:2.6em}
 .iv-name{width:auto;flex:1;min-width:5em;text-align:left;font-family:'DM Sans',sans-serif;padding:.28rem .45rem}
 .ex-flags{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
-.ex-score{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.08rem .1rem;outline:none;flex-shrink:0}
-.ex-score:focus{outline:2px solid var(--black);outline-offset:1px}
-.ex-score.unset{color:var(--muted)}
+.hd-sp{flex:1}
+.ex-score-btn{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.14rem .4rem;cursor:pointer;flex-shrink:0;white-space:nowrap}
+.ex-score-btn.unset{color:var(--muted)}
+@media(hover:hover){.ex-score-btn:hover{background:var(--off)}}
+.ex-name-sub{display:block;width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;font-weight:500;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.02rem 0 .02rem 1.4rem}
+.ex-name-sub:focus{border-bottom:1px solid var(--black)}
+.score-sec{display:flex;flex-direction:column;gap:.35rem}
+.score-sec>label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.score-opts{display:flex;flex-direction:column;gap:.3rem}
+.score-opts.row{flex-direction:row}
+.score-opt{font-family:'DM Mono',monospace;font-size:.76rem;text-align:left;background:var(--w);border:var(--b);border-radius:var(--r);padding:.4rem .55rem;color:var(--black);cursor:pointer;min-width:0}
+.score-opts.row .score-opt{flex:1;text-align:center}
+.score-opt.sel{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.score-opt:not(.sel):hover{background:var(--off)}}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-t{width:4.5em;min-width:3.2em}
@@ -329,7 +340,8 @@ textarea::placeholder{color:var(--mid)}
 .wx-item{display:flex;flex-direction:column;gap:.15rem;padding:.25rem 0;border-bottom:1px solid var(--off);min-width:0}
 .wx-item:last-child{border-bottom:none;padding-bottom:0}
 .wx-code{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;width:5.5em;flex-shrink:0;color:var(--black)}
-.wx-name{flex:1;min-width:0;font-size:.85rem;color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wx-name{font-size:.78rem;color:var(--dark);padding-left:1.4rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wx-name:empty{display:none}
 .wx-cue{font-size:.72rem;color:var(--muted);line-height:1.4;word-break:break-word}
 .grip{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;color:var(--mid);font-size:.8rem;line-height:1;flex-shrink:0;padding:0 .1rem;font-family:'DM Mono',monospace}
 [data-ei].dragging{opacity:.4}
@@ -668,6 +680,19 @@ textarea::placeholder{color:var(--mid)}
       <button class="modal-btn" onclick="closeModal('logEditModal')">cancel</button>
       <button class="modal-btn primary" onclick="saveLogEdit()">save</button>
     </div>
+  </div>
+</div>
+
+<!-- Exercise rating modal (tech 1–5 + RIR) — opened from the exercise header or the log edit -->
+<div class="modal-bg" id="exScoreModal">
+  <div class="modal" style="max-width:400px;gap:.7rem">
+    <h2 id="exScoreTitle">Rate exercise</h2>
+    <div class="score-sec"><label>technique — whole exercise</label>
+      <div class="score-opts" id="scoreTechBtns"></div></div>
+    <div class="score-sec"><label>RIR — reps left in reserve on the LAST set</label>
+      <div class="score-opts row" id="scoreRirBtns"></div></div>
+    <p style="font-size:.74rem;color:var(--muted);margin:0">Tap to set · tap again to clear.</p>
+    <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exScoreModal')">done</button></div>
   </div>
 </div>
 
@@ -1035,7 +1060,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   const cm = el('confirmModal');
@@ -1508,13 +1533,15 @@ function wxItemHtml(ex, ei, si) {
   const head = si === 0
     ? `<div class="ex-head">
         ${grip}<input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave();syncExLabels(${ei})" placeholder="CODE" title="exercise code">
-        <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave();syncExLabels(${ei})" placeholder="exercise name">
         ${exFlags(ex)}
-        ${exScoreHtml(ex, ei)}
+        <span class="hd-sp"></span>
+        ${exScoreBtnHtml(ex, ei)}
         <button class="btn-add" onclick="openExSettings(${ei})" title="exercise settings — order, L/R, linked sets, pauses, remove…">⚙</button>
       </div>
+      <input class="ex-name-sub" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave();syncExLabels(${ei})" placeholder="exercise name">
       <textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave();syncExLabels(${ei})" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>`
-    : `<div class="ex-head">${grip}<span class="wx-code">${esc(ex.code)}</span><span class="wx-name">${esc(ex.name)}</span>${exScoreHtml(ex, ei)}</div>`
+    : `<div class="ex-head">${grip}<span class="wx-code">${esc(ex.code)}</span><span class="hd-sp"></span>${exScoreBtnHtml(ex, ei)}</div>
+      <div class="wx-name">${esc(ex.name)}</div>`
       + (ex.note ? `<div class="wx-cue">${esc(ex.note)}</div>` : '');
   const s = ex.sets[si];
   return `<div class="wx-item" data-ei="${ei}">${head}${dataRowHtml(s, ei, si, false)}
@@ -1535,12 +1562,13 @@ function seqBlockHtml(ex, ei) {
       <button class="rnd-tgl" onclick="toggleSegment(${ei})" title="${coll ? 'expand' : 'collapse'} exercise">${coll ? '▸' : '▾'}</button>
       <span class="grip" title="drag to reorder the exercise">⠿</span>
       <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="exercise code">
-      <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
       ${exFlags(ex)}
-      ${exScoreHtml(ex, ei)}
+      <span class="hd-sp"></span>
+      ${exScoreBtnHtml(ex, ei)}
       ${coll ? `<span class="set-rep" title="completed / total sets">${doneN}/${(ex.sets || []).length}</span>` : `<button class="btn-add" onclick="addSet(${ei})" title="add set">+</button>`}
       <button class="btn-add" onclick="openExSettings(${ei})" title="exercise settings — order, L/R, linked sets, pauses, remove…">⚙</button>
     </div>
+    <input class="ex-name-sub" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="exercise name">
     ${coll ? '' : `<textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
     <div class="ex-sets">${rows}</div>`}
   </div>`;
@@ -1560,11 +1588,12 @@ function exBlockHtml(ex, ei) {
       <button class="rnd-tgl" onclick="toggleSegment(${ei})" title="${coll ? 'expand' : 'collapse'} segment">${coll ? '▸' : '▾'}</button>
       <span class="grip" title="drag to reorder the segment">⠿</span>
       <input class="ex-code" value="${esc(ex.code)}" oninput="wk.exercises[${ei}].code=this.value;schedSave()" placeholder="CODE" title="segment code">
-      <input class="ex-name" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="segment name">
       ${exFlags(ex)}
+      <span class="hd-sp"></span>
       ${coll ? `<span class="set-rep" title="completed / total interval repetitions">${doneN}/${total}</span>` : `<button class="btn-add" onclick="addSet(${ei})" title="add interval">+</button>`}
       <button class="btn-add" onclick="openExSettings(${ei})" title="segment settings — order, repeats, pauses, remove…">⚙</button>
     </div>
+    <input class="ex-name-sub" value="${esc(ex.name)}" oninput="wk.exercises[${ei}].name=this.value;schedSave()" placeholder="segment name">
     ${coll ? '' : `<textarea class="ex-note-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].note=this.value;schedSave()" placeholder="technique cues (optional)">${esc(ex.note || '')}</textarea>
     <textarea class="ex-snote-in" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].snote=this.value;schedSave()" placeholder="note for this workout → log">${esc(ex.snote || '')}</textarea>
     <div class="ex-sets">${setRows}</div>`}
@@ -1692,19 +1721,44 @@ function exFlags(ex) {
   ].filter(Boolean).join(' ');
   return f ? `<span class="ex-flags" title="non-default settings — open ⚙ to change">${f}</span>` : '';
 }
-// ── EXERCISE RATINGS (strength) — tech 1–5 + RIR 0–4, two taps, numbers → trends ──
-const TECH_TITLE = 'technique this session — 5: smooth &amp; controlled from rep 1 · 4: one correction · 3: had to correct repeatedly · 2: form fell apart, tempo drifted · 1: done, but way off';
-const RIR_TITLE = 'reps in reserve on the LAST set — how many clean reps were left (0 = failure)';
+// ── EXERCISE RATINGS (strength) — tech 1–5 + RIR 0–4, numbers → trends ──────
+// mini button with badges (T4·R2) in the exercise header; tap opens a modal with
+// the anchored scales spelled out (tooltips are invisible on touch devices)
+const TECH_ANCHORS = {5:'smooth & controlled from rep 1', 4:'one correction needed', 3:'had to correct repeatedly', 2:'form fell apart, tempo drifted', 1:'done, but way off'};
 function scoreOpts(lbl, cur, vals) {
   return `<option value=""${cur == null ? ' selected' : ''}>${lbl}</option>`
     + vals.map(v => `<option value="${v}"${cur != null && +cur === v ? ' selected' : ''}>${lbl} ${v}</option>`).join('');
 }
-// mini selects for the exercise header — rendered in every round header, so a change re-renders to keep the mirrors in sync
-function exScoreHtml(ex, ei) {
-  return `<select class="ex-score${ex.tech == null ? ' unset' : ''}" title="${TECH_TITLE}"
-      onchange="wk.exercises[${ei}].tech=this.value===''?null:+this.value;schedSave();renderMain()">${scoreOpts('tech', ex.tech, [1,2,3,4,5])}</select>
-    <select class="ex-score${ex.rir == null ? ' unset' : ''}" title="${RIR_TITLE}"
-      onchange="wk.exercises[${ei}].rir=this.value===''?null:+this.value;schedSave();renderMain()">${scoreOpts('RIR', ex.rir, [0,1,2,3,4])}</select>`;
+function exScoreBtnHtml(ex, ei, src) {
+  const parts = [ex.tech != null ? 'T' + ex.tech : null, ex.rir != null ? 'R' + ex.rir : null].filter(Boolean);
+  return `<button class="ex-score-btn${parts.length ? '' : ' unset'}" onclick="openExScore('${src || 'wk'}',${ei})"
+    title="rate this exercise — technique (1–5) + reps in reserve on the last set">${parts.join('·') || 'rate'}</button>`;
+}
+let scoreCtx = null;   // where the modal writes: {src:'wk'|'log', ei}
+function scoreTargetEx() {
+  if (!scoreCtx) return null;
+  return scoreCtx.src === 'log' ? ((logEditDraft || {}).entries || [])[scoreCtx.ei] : wk.exercises[scoreCtx.ei];
+}
+function openExScore(src, ei) {
+  scoreCtx = {src, ei};
+  const ex = scoreTargetEx(); if (!ex) return;
+  el('exScoreTitle').textContent = ((ex.code || '') + ' ' + (ex.name || '')).trim() || 'Rate exercise';
+  renderExScore();
+  el('exScoreModal').classList.add('open');
+}
+function renderExScore() {
+  const ex = scoreTargetEx(); if (!ex) return;
+  el('scoreTechBtns').innerHTML = [5,4,3,2,1].map(v =>
+    `<button class="score-opt${ex.tech === v ? ' sel' : ''}" onclick="setExScore('tech',${v})">${v} · ${TECH_ANCHORS[v]}</button>`).join('');
+  el('scoreRirBtns').innerHTML = [0,1,2,3,4].map(v =>
+    `<button class="score-opt${ex.rir === v ? ' sel' : ''}" onclick="setExScore('rir',${v})" title="${v === 0 ? '0 = went to failure' : v + ' clean reps left'}">${v}</button>`).join('');
+}
+function setExScore(field, v) {
+  const ex = scoreTargetEx(); if (!ex) return;
+  ex[field] = ex[field] === v ? null : v;   // tap the selected value again = clear
+  if (scoreCtx.src === 'log') renderLogEdit();
+  else { schedSave(); renderMain(); }       // re-render keeps the round-mirror buttons in sync
+  renderExScore();
 }
 // ── ⚙ EXERCISE SETTINGS MODAL — order, L/R, linked sets, repeats, pause overrides, remove ──
 let exSetEi = null;
@@ -2625,8 +2679,7 @@ function renderLogEdit() {
       <div class="le-ex">
         <input class="ex-code" value="${esc(e.code || '')}" placeholder="CODE" oninput="logEditDraft.entries[${ei}].code=this.value">
         <input class="ex-name" value="${esc(e.name || '')}" placeholder="exercise name" oninput="logEditDraft.entries[${ei}].name=this.value">${e.side ? '<span class="set-x">L/R</span>' : ''}
-        ${cardio ? '' : `<select class="ex-score${e.tech == null ? ' unset' : ''}" title="${TECH_TITLE}" onchange="logEditDraft.entries[${ei}].tech=this.value===''?null:+this.value;this.classList.toggle('unset',!this.value)">${scoreOpts('tech', e.tech, [1,2,3,4,5])}</select>
-        <select class="ex-score${e.rir == null ? ' unset' : ''}" title="${RIR_TITLE}" onchange="logEditDraft.entries[${ei}].rir=this.value===''?null:+this.value;this.classList.toggle('unset',!this.value)">${scoreOpts('RIR', e.rir, [0,1,2,3,4])}</select>`}
+        ${cardio ? '' : exScoreBtnHtml(e, ei, 'log')}
         <button class="btn-add" onclick="leAddSet(${ei})" title="add a round to this exercise">+</button>
         <button class="ex-del" onclick="leDelEx(${ei})" title="remove this exercise">✕</button>
       </div>
