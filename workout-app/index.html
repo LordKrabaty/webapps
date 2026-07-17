@@ -326,7 +326,10 @@ textarea::placeholder{color:var(--mid)}
 .score-opt{font-family:'DM Mono',monospace;font-size:.76rem;text-align:left;background:var(--w);border:var(--b);border-radius:var(--r);padding:.4rem .55rem;color:var(--black);cursor:pointer;min-width:0}
 .score-opts.row .score-opt{flex:1;text-align:center}
 .score-opt.sel{background:var(--black);color:var(--w);border-color:var(--black)}
+.score-opt.half{padding:.18rem .55rem;color:var(--dark)}
+.score-opt.half.sel{color:var(--w)}
 @media(hover:hover){.score-opt:not(.sel):hover{background:var(--off)}}
+.score-cap{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);min-height:1.1em}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-t{width:4.5em;min-width:3.2em}
@@ -690,7 +693,8 @@ textarea::placeholder{color:var(--mid)}
     <div class="score-sec"><label>technique — whole exercise</label>
       <div class="score-opts" id="scoreTechBtns"></div></div>
     <div class="score-sec"><label>RIR — reps left in reserve on the LAST set</label>
-      <div class="score-opts row" id="scoreRirBtns"></div></div>
+      <div class="score-opts row" id="scoreRirBtns"></div>
+      <div class="score-cap" id="scoreRirCap"></div></div>
     <p style="font-size:.74rem;color:var(--muted);margin:0">Tap to set · tap again to clear.</p>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exScoreModal')">done</button></div>
   </div>
@@ -1289,7 +1293,7 @@ document.addEventListener('keydown', e => {
 // ── WORKOUT DATA MODEL ──────────────────────────────────────────────────────
 // wk (live workout) = {name, type:'strength'|'cardio', pauseSec, prepSec, note,
 //   exercises:[{code, name, note (technique cues, template), snote (segment note, cardio → log),
-//     tech (technique 1–5), rir (reps in reserve on the LAST set, 0–4) — strength ratings, session-scoped like snote → log, numbers for trends,
+//     tech (technique 1–5 in 0.5 steps), rir (reps in reserve on the LAST set, 0–4) — strength ratings, session-scoped like snote → log, numbers for trends,
 //     linked (default true: reps/weight/time edits mirror into every round; ≠ = independent),
 //     side (true = one side at a time: the work timer runs twice per round, L then R, rest after both),
 //     pauseSec (⚙ rest after any step of this exercise/segment), innerPauseSec (⚙ rest between steps INSIDE it — beats pauseSec on same-exercise transitions), sidePauseSec (⚙ L↔R switch),
@@ -1746,12 +1750,16 @@ function openExScore(src, ei) {
   renderExScore();
   el('exScoreModal').classList.add('open');
 }
+const RIR_CAPS = {0:'0 — went to failure', 1:'1 — one clean rep left in the tank', 2:'2 — two clean reps left', 3:'3 — three clean reps left', 4:'4 — four or more left (too easy)'};
 function renderExScore() {
   const ex = scoreTargetEx(); if (!ex) return;
-  el('scoreTechBtns').innerHTML = [5,4,3,2,1].map(v =>
-    `<button class="score-opt${ex.tech === v ? ' sel' : ''}" onclick="setExScore('tech',${v})">${v} · ${TECH_ANCHORS[v]}</button>`).join('');
+  // anchored full values with half steps in between (5, 4.5, 4, … 1)
+  el('scoreTechBtns').innerHTML = [5,4.5,4,3.5,3,2.5,2,1.5,1].map(v =>
+    `<button class="score-opt${v % 1 ? ' half' : ''}${ex.tech === v ? ' sel' : ''}" onclick="setExScore('tech',${v})">${v}${TECH_ANCHORS[v] ? ' · ' + TECH_ANCHORS[v] : ''}</button>`).join('');
   el('scoreRirBtns').innerHTML = [0,1,2,3,4].map(v =>
-    `<button class="score-opt${ex.rir === v ? ' sel' : ''}" onclick="setExScore('rir',${v})" title="${v === 0 ? '0 = went to failure' : v + ' clean reps left'}">${v}</button>`).join('');
+    `<button class="score-opt${ex.rir === v ? ' sel' : ''}" onclick="setExScore('rir',${v})">${v}</button>`).join('');
+  // the picked value's meaning, spelled out below the scale (tooltips don't show on touch)
+  el('scoreRirCap').textContent = ex.rir != null ? RIR_CAPS[ex.rir] : 'how many clean reps you had left on the last set';
 }
 function setExScore(field, v) {
   const ex = scoreTargetEx(); if (!ex) return;
