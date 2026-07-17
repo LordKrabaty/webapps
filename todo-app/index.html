@@ -3560,7 +3560,9 @@ function renderPreviewList() {
       </button>
     </div>` + (item.note ? `<div class="preview-item-note" onclick="startPreviewNoteEdit(${i},this)" title="edit description / note">${esc(item.note)}</div>` : '');
   }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">No items.</div>';
-  container.innerHTML = itemsHtml + `<div class="preview-add-row">
+  // visual mini timeline — same strip as the Done inline preview (re-rendered on every change)
+  const tl = renderInlineTlStrip(arr, times, _previewSource.windowStart, _previewSource.windowEnd);
+  container.innerHTML = tl + itemsHtml + `<div class="preview-add-row">
     <input id="previewAddText" class="preview-add-text" placeholder="new item… (e.g. task 20m)"
       onkeydown="if(event.key==='Enter')addPreviewItem(false)">
     <input id="previewAddDur" class="preview-add-dur" type="number" min="1" max="720"
