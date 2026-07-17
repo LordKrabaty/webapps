@@ -373,8 +373,9 @@ textarea::placeholder{color:var(--mid)}
 .log-item{border:var(--b);border-radius:var(--r);padding:.5rem .65rem;flex-shrink:0}
 .log-head{display:flex;align-items:baseline;gap:.5rem;min-width:0;flex-wrap:wrap}
 .log-date{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0}
-.log-name{font-size:.85rem;font-weight:500;color:var(--black);flex:1;min-width:0}
-.log-total{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
+.log-name{font-size:.85rem;font-weight:500;color:var(--black);flex:1;min-width:9em;overflow-wrap:anywhere}
+.log-coll .log-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.log-total{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black);margin-left:auto}
 .log-int{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);border:var(--b);border-radius:var(--r);padding:.04rem .3rem;flex-shrink:0}
 .log-ex{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--dark);padding-left:.2rem;line-height:1.5}
 .log-code{font-weight:500;color:var(--black)}
@@ -2505,6 +2506,12 @@ function renderLog() {
   c.innerHTML = items.map(a => {
     const open = !!logOpen[a.id];
     const isAct = a.type === 'activity';
+    // action buttons stay visible on collapsed entries too
+    const actions = `<div class="log-actions">` + (isAct
+      ? `<button class="log-act-btn" onclick="openActivityModal(${jsArg(a.id)})" title="edit this activity">✎ edit</button>`
+      : `<button class="log-act-btn" onclick="openLogEdit(${jsArg(a.id)})" title="edit the logged reps / weights / times">✎ edit</button>
+        <button class="log-act-btn" onclick="useLogAsWorkout(${jsArg(a.id)})" title="load this logged workout into the main panel">← use as workout</button>
+        <button class="log-act-btn" onclick="logToTemplate(${jsArg(a.id)})" title="save this logged workout as a new template">→ template</button>`) + `</div>`;
     let body = '';
     if (open) {
       const lines = (a.entries || []).map((e, idx) => {
@@ -2518,18 +2525,12 @@ function renderLog() {
           ${setNotes}
           <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
       }).join('');
-      const actions = isAct
-        ? `<button class="log-act-btn" onclick="openActivityModal(${jsArg(a.id)})" title="edit this activity">✎ edit</button>`
-        : `<button class="log-act-btn" onclick="openLogEdit(${jsArg(a.id)})" title="edit the logged reps / weights / times">✎ edit</button>
-          <button class="log-act-btn" onclick="useLogAsWorkout(${jsArg(a.id)})" title="load this logged workout into the main panel">← use as workout</button>
-          <button class="log-act-btn" onclick="logToTemplate(${jsArg(a.id)})" title="save this logged workout as a new template">→ template</button>`;
       body = `${lines}
-        <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>
-        <div class="log-actions">${actions}</div>`;
+        <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>`;
     } else if (a.note) {
       body = `<textarea class="log-note-in log-note-wk" rows="1" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note)}</textarea>`;
     }
-    return `<div class="log-item">
+    return `<div class="log-item${open ? '' : ' log-coll'}">
       <div class="log-head">
         <button class="rnd-tgl" onclick="toggleLogEntry(${jsArg(a.id)})" title="${open ? 'collapse' : 'expand'} entry">${open ? '▾' : '▸'}</button>
         <span class="log-date" onclick="toggleLogEntry(${jsArg(a.id)})" style="cursor:pointer">${esc(logDateStr(a))}</span>
@@ -2541,6 +2542,7 @@ function renderLog() {
         <button class="log-del" onclick="copyLogText(${jsArg(a.id)})" title="copy this entry as text">⧉</button>
         <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
       ${body}
+      ${actions}
     </div>`;
   }).join('');
   c.querySelectorAll('.log-note-in').forEach(autoResizeTA);   // hidden pane → resized again on tab switch
