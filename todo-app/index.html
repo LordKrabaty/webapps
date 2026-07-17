@@ -355,6 +355,8 @@ textarea::placeholder{color:var(--mid)}
 .abbrev-hint .ab:active{background:var(--light)}
 @media(hover:hover){.abbrev-hint .ab:hover{background:var(--light)}}
 .abbrev-hint .ab b{font-family:'DM Mono',monospace;color:var(--black);font-weight:600}
+.plan-ahead-note{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.plan-ahead-note.far{color:var(--black);font-weight:600}
 .input-btns{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem}
 .btn-add{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .55rem;cursor:pointer;white-space:nowrap}
 .btn-add:active{background:var(--light)}
@@ -651,8 +653,12 @@ textarea::placeholder{color:var(--mid)}
         <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Block ▾</button>
         <button class="btn-add" id="btnEvent" onclick="toggleEventMenu(event)">+ Event ▾</button>
       </div>
+      <div id="planAheadNote" class="plan-ahead-note" style="display:none"></div>
     </div>
     <div id="pane-tyden" class="notes-pane active">
+      <div id="nextWeekRow" style="display:none;align-items:center;gap:.3rem;flex-shrink:0;margin-bottom:.3rem">
+        <select id="nextWeekSel" class="later-sel" title="which upcoming week to plan" onchange="setNextWeekOffset(this.value)"></select>
+      </div>
       <div id="day-buttons" class="day-buttons"></div>
       <button class="btn-add" id="btnPlanSnapshot" style="flex-shrink:0;align-self:flex-start;margin-bottom:.3rem" onclick="togglePlanSnapshot()">schedule</button>
       <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
@@ -6086,7 +6092,7 @@ function renderWorkDayPicker() {
   if (!container) return;
   const wDays = getWorkingDays(planWeekOffset);
   const titleEl = el('workDayPickerTitle');
-  if (titleEl) titleEl.textContent = 'Working days — ' + (planWeekOffset === 0 ? 'this' : 'next');
+  if (titleEl) titleEl.textContent = 'Working days — ' + (planWeekOffset === 0 ? 'this' : planWeekOffset === 1 ? 'next' : '+' + planWeekOffset + ' wk');
   const days = [
     {n:'Mo',d:1},{n:'Tu',d:2},{n:'We',d:3},{n:'Th',d:4},{n:'Fr',d:5},{n:'Sa',d:6},{n:'Su',d:0}
   ];
@@ -6123,6 +6129,56 @@ function toggleWorkingDay(dayNum, checked) {
   }
 }
 
+// ── NEXT WEEK SELECTOR — plan more than one week ahead ─────────────────────────
+// Persists the chosen week's Monday ISO per window (WK, local-only like laterHorizon — not
+// synced). Stored as an ABSOLUTE date, not an offset: a saved "+3 weeks" would silently point
+// to a different calendar week after a few days. Once the chosen week arrives (or passes),
+// the selection decays back to "next week". Second guard against planning too far by
+// mistake: updatePlanAheadNote() under the add field.
+const NEXT_OFFSET_KEY = 'todo-app-next-week';
+const NEXT_OFFSET_MAX = 8;
+function nextWeekOffset() {
+  let iso = null; try { iso = localStorage.getItem(WK(NEXT_OFFSET_KEY)); } catch(e) {}
+  if (!iso) return 1;
+  const off = Math.round((new Date(iso + 'T12:00:00') - new Date(getMondayIso(0) + 'T12:00:00')) / (7 * 86400000));
+  return (off >= 1 && off <= NEXT_OFFSET_MAX) ? off : 1;
+}
+
+function weekRangeLabel(off) {
+  const mon = new Date(getMondayIso(off) + 'T12:00:00');
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const f = d => d.getDate() + '. ' + (d.getMonth() + 1) + '.';
+  return f(mon) + '–' + f(sun);
+}
+
+function populateNextWeekSel() {
+  const sel = el('nextWeekSel'); if (!sel) return;
+  const cur = nextWeekOffset();
+  sel.innerHTML = Array.from({ length: NEXT_OFFSET_MAX }, (_, i) => {
+    const off = i + 1;
+    const name = off === 1 ? 'next week' : 'in ' + off + ' weeks';
+    return `<option value="${off}"${off === cur ? ' selected' : ''}>${name} · ${weekRangeLabel(off)}</option>`;
+  }).join('');
+}
+
+function setNextWeekOffset(v) {
+  v = parseInt(v, 10);
+  if (!(v >= 1 && v <= NEXT_OFFSET_MAX)) return;
+  try { localStorage.setItem(WK(NEXT_OFFSET_KEY), getMondayIso(v)); } catch(e) {}
+  // re-enter the tab: sets planWeekOffset, moves the active day into the chosen week, re-renders
+  if (el('tab-pristi')?.classList.contains('active')) switchNotesTab('pristi');
+}
+
+// small note under the add field (Next card only): how far ahead the current choice plans
+function updatePlanAheadNote() {
+  const note = el('planAheadNote'); if (!note) return;
+  if (!el('tab-pristi')?.classList.contains('active')) { note.style.display = 'none'; return; }
+  const off = planWeekOffset;
+  note.style.display = '';
+  note.classList.toggle('far', off > 1);
+  note.textContent = (off > 1 ? '⚠ ' : '') + 'planning ' + off + (off === 1 ? ' week' : ' weeks') + ' ahead · ' + weekRangeLabel(off);
+}
+
 function switchNotesTab(name) {
   const isPlan = name === 'tyden' || name === 'pristi';
   el('pane-tyden')?.classList.toggle('active', isPlan);
@@ -6144,6 +6200,12 @@ function switchNotesTab(name) {
     else if (name === 'inbox') qta.placeholder = 'task…';
     else if (name === 'pozdeji') qta.placeholder = '15.6. task  ·  15.-18.6. multi-day  ·  15.6. 9:00-10:00 event';
   }
+  // week selector + plan-ahead note only on the Next card
+  const nwRow = el('nextWeekRow');
+  if (nwRow) {
+    if (name === 'pristi') { populateNextWeekSel(); nwRow.style.display = 'flex'; }
+    else nwRow.style.display = 'none';
+  }
   if (name === 'tyden') {
     planWeekOffset = 0;
     renderWorkDayPicker();
@@ -6155,9 +6217,9 @@ function switchNotesTab(name) {
       switchPlanDay(target);
     } else renderDayButtons();
   } else if (name === 'pristi') {
-    planWeekOffset = 1;
+    planWeekOffset = nextWeekOffset();
     renderWorkDayPicker();
-    const nextDates = getCurrentWeekDates(1);
+    const nextDates = getCurrentWeekDates(planWeekOffset);
     const nextIsos = new Set(nextDates.map(d => d.iso));
     if (!nextIsos.has(activePlanDate)) switchPlanDay(nextDates[0].iso);
     else renderDayButtons();
@@ -6174,6 +6236,7 @@ function switchNotesTab(name) {
   }
   renderTimeline();  // central panel follows the tab: Later → day-overview calendar, otherwise the hour timeline
   updateAbbrevHint();
+  updatePlanAheadNote();
   updateUndoBtn();   // ↩/↪ reflects the active card stack (Later has its own)
 }
 
