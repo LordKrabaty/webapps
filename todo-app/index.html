@@ -1704,7 +1704,9 @@ function rowsHtml(ctx, insertBefore = {}) {
       durEditable = true; durClick = `onclick="${ctx.call(ctx.h.btime, idx)}" title="click: 9:00-10:00 → event · -/✒ → task · d → duplicate"`;
     }
 
-    const draggable = (!item.isEvent && !item.isGhost) ? 'draggable="true"' : '';   // events keep their time; ghosts are not draggable
+    // events are draggable like everything else (drag changes only the list order, same as ↑/↓ —
+    // their time stays); only ghosts (recurrence previews) are excluded
+    const draggable = !item.isGhost ? 'draggable="true"' : '';
 
     return (insertBefore[idx] || '') + `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
       <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${toggle}</span>
