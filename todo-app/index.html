@@ -3345,7 +3345,11 @@ let _weekTplNextWeek = true;
 function openWeekTplLoadModal(entry) {
   _weekTplLoadId = entry.id;
   _weekTplNextWeek = true; // default to targeting next week
-  el('weekTplLoadTitle').textContent = entry.name || String(entry.id);
+  const wtlTitle = el('weekTplLoadTitle');
+  wtlTitle.textContent = entry.name || String(entry.id);
+  wtlTitle.style.cursor = 'text';
+  wtlTitle.title = 'click to rename';
+  wtlTitle.onclick = startWeekTplTitleEdit;
   // Target options: this week + next week (grouped), working days only
   const thisWeek = getCurrentWeekDates(0);
   const nextWeek = getCurrentWeekDates(1);
@@ -3463,15 +3467,11 @@ function openPreview(type, id, dayKey) {
   el('previewModal').classList.add('open');
 }
 
-// Inline rename of a template directly in the preview (only type==='lib').
-function startPreviewTitleEdit() {
-  if (!_previewSource || _previewSource.type !== 'lib') return;
-  const entry = library.find(e => e.id === _previewSource.id);
-  if (!entry) return;
-  const h = el('previewTitle');
+// Shared inline rename of a library entry via its heading (daily preview + week template modal).
+function inlineRenameEntryTitle(h, entry, inputCss, onRenamed) {
   const inp = document.createElement('input');
   inp.className = 'preview-item-input';
-  inp.style.cssText = 'flex:1;min-width:0;font-size:1.05rem';
+  inp.style.cssText = inputCss;
   inp.value = entry.name || '';
   h.style.display = 'none';
   h.parentNode.insertBefore(inp, h);
@@ -3482,9 +3482,10 @@ function startPreviewTitleEdit() {
     if (commit) {
       const val = inp.value.trim();
       if (val && val !== entry.name) {
-        entry.name = val; entry.mt = Date.now(); _previewSource.name = val;
+        entry.name = val; entry.mt = Date.now();
         h.textContent = val;
         saveLibrary(); renderLibrary();
+        if (onRenamed) onRenamed(val);
         showSave('✓ renamed');
       }
     }
@@ -3496,6 +3497,22 @@ function startPreviewTitleEdit() {
     if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
     else if (e.key === 'Escape') { finish(false); e.stopPropagation(); }
   });
+}
+
+// Inline rename of a template directly in the preview (only type==='lib').
+function startPreviewTitleEdit() {
+  if (!_previewSource || _previewSource.type !== 'lib') return;
+  const entry = library.find(e => e.id === _previewSource.id);
+  if (!entry) return;
+  inlineRenameEntryTitle(el('previewTitle'), entry, 'flex:1;min-width:0;font-size:1.05rem',
+    val => { _previewSource.name = val; });
+}
+
+// Inline rename of a week template via the load-modal title — same UX as daily templates.
+function startWeekTplTitleEdit() {
+  const entry = library.find(e => e.id === _weekTplLoadId);
+  if (!entry || entry.type !== 'week') return;
+  inlineRenameEntryTitle(el('weekTplLoadTitle'), entry, 'width:100%;box-sizing:border-box;font-size:1.05rem');
 }
 
 // Applies the currently previewed template to the active day.
