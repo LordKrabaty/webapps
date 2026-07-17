@@ -588,6 +588,7 @@ textarea::placeholder{color:var(--mid)}
 
     <div class="card-title" style="margin-top:.75rem"><span class="card-title-text" id="workDayPickerTitle">Working days</span></div>
     <div id="workDayPicker" style="display:flex;gap:.3rem;margin-top:.2rem"></div>
+    <div id="workDayDefaultRow" style="display:flex;align-items:center;gap:.3rem;margin-top:.3rem"></div>
 
     <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Templates</span></div>
     <div id="libList" style="display:flex;flex-direction:column;gap:.2rem;margin-top:.3rem"></div>
@@ -2832,8 +2833,11 @@ function getMondayIso(weekOffset = 0) {
   m.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + weekOffset * 7);
   return m.getFullYear() + '-' + String(m.getMonth()+1).padStart(2,'0') + '-' + String(m.getDate()).padStart(2,'0');
 }
+// per-window default lives under the special 'default' key inside workingDaysByWeek —
+// it rides the existing sync (union), export and import without any extra wiring
+function defaultWorkingDays() { return workingDaysByWeek['default'] || [1, 2, 3, 4, 5]; }
 function getWorkingDays(weekOffset = 0) {
-  return workingDaysByWeek[getMondayIso(weekOffset)] || [1, 2, 3, 4, 5];
+  return workingDaysByWeek[getMondayIso(weekOffset)] || defaultWorkingDays();
 }
 
 // ── DAY WINDOWS (profiles) — registry + switching ──────────────────────────────────
@@ -6103,11 +6107,26 @@ function renderWorkDayPicker() {
       <input type="checkbox" ${active ? 'checked' : ''} style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="toggleWorkingDay(${d},this.checked)">
     </label>`;
   }).join('');
+  // default row: shown selection vs. this window's default (new weeks start from the default)
+  const defRow = el('workDayDefaultRow');
+  if (defRow) {
+    const sameSet = (a, b) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
+    defRow.innerHTML = sameSet(wDays, defaultWorkingDays())
+      ? '<span style="font-size:.68rem;color:var(--muted)">= window default</span>'
+      : '<button class="btn-sm" onclick="saveWorkDaysAsDefault()" title="use this selection as the default for every week of this window that has no own override">save as default</button>';
+  }
+}
+
+function saveWorkDaysAsDefault() {
+  workingDaysByWeek['default'] = [...getWorkingDays(planWeekOffset)];
+  saveWorkingDays();
+  renderWorkDayPicker();
+  showSave('✓ default working days saved');
 }
 
 function toggleWorkingDay(dayNum, checked) {
   const key = getMondayIso(planWeekOffset);
-  let wDays = workingDaysByWeek[key] ? [...workingDaysByWeek[key]] : [1, 2, 3, 4, 5];
+  let wDays = [...getWorkingDays(planWeekOffset)];
   if (checked) {
     if (!wDays.includes(dayNum)) wDays.push(dayNum);
   } else {
