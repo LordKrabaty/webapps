@@ -1301,7 +1301,9 @@ document.addEventListener('keydown', e => {
 // library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
 // archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable);
 //   session ratings (numbers, all optional): energy 1–5 + focus 1–5 (strength), rpe 1–5 + hrAvg + hrMax (cardio);
-//   per-exercise entries carry tech / rir (see above)
+//   per-exercise entries carry tech / rir (see above); logged sets carry restSec = the EFFECTIVE
+//   rest after that step, resolved through the ⚙ hierarchy at finish time (zero rests are omitted,
+//   editable afterwards in the ✎ edit modal, carried back by "use as workout" / "→ template")
 // body entry    = {id, date:'yyyy-mm-dd', weight, fat, water, muscle, visceral, note, mt} (LWW)
 const BODY_KEY = 'workout-v1-body';
 let body = [];
@@ -2387,12 +2389,29 @@ function confirmFinish() {
   pushUndo();
   const totalSec = Math.round((Date.now() - r.startedAt) / 1000);
   const num = id => { const v = parseInt(el(id).value); return isNaN(v) ? undefined : v; };   // ratings stay numbers; undefined = unset, dropped by JSON
+  // effective rest AFTER each step, resolved through the ⚙ hierarchy NOW (template values
+  // may change later) — walk the planned step order the same way estimateDur does; zero
+  // rests are not logged (the planner hides them too), editable afterwards via ✎ edit
+  const restAfter = wk.exercises.map(ex => (ex.sets || []).map(() => undefined));
+  const order = [];
+  if (wk.type === 'cardio') wk.exercises.forEach((ex, ei) => {
+    for (let k = 0; k < exRepeat(ex); k++) (ex.sets || []).forEach((s, si) => order.push([ei, si]));
+  });
+  else if (wk.order === 'seq') wk.exercises.forEach((ex, ei) => (ex.sets || []).forEach((s, si) => order.push([ei, si])));
+  else {
+    const nR = wk.exercises.length ? Math.max(...wk.exercises.map(ex => (ex.sets || []).length)) : 0;
+    for (let si = 0; si < nR; si++) wk.exercises.forEach((ex, ei) => { if ((ex.sets || [])[si]) order.push([ei, si]); });
+  }
+  order.forEach(([ei, si], k) => {
+    if (k === order.length - 1 || restAfter[ei][si] !== undefined) return;   // nothing follows the last step; cardio repeats keep the first pass
+    restAfter[ei][si] = plannedRestSec(wk.exercises[ei], wk.exercises[ei].sets[si], order[k + 1][0] === ei) || undefined;
+  });
   const entry = {
     id: Date.now(), date: Date.now(), tplId: activeLibId,
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
-    entries: wk.exercises.map(ex => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
+    entries: wk.exercises.map((ex, ei) => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
       tech: ex.tech ?? undefined, rir: ex.rir ?? undefined,
-      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, iname: s.iname || undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim()}))
+      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, iname: s.iname || undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
     note: wk.note || '',
@@ -2411,10 +2430,13 @@ function confirmFinish() {
 // one exercise line: "10/10/9 @ 20kg · 3.8 s/rep" — shared by the log view and the text export
 function exStatText(e) {
   const sets = e.sets || [];
+  // logged rests (effective rest after each set) — uniform shows once, mixed lists all
+  const rests = [...new Set(sets.map(s => s.restSec).filter(v => v != null))];
+  const restStr = rests.length ? ' · rest ' + rests.map(mmss).join('/') : '';
   // cardio segments log as named timed intervals: "×4 work 3:00 / rest 3:00"
   if (sets.some(s => s.iname)) {
     const body = sets.map(s => [s.iname, s.durSec != null ? mmss(s.durSec) : null].filter(Boolean).join(' ') || '–').join(' / ');
-    return (e.rep > 1 ? '×' + e.rep + ' ' : '') + body;
+    return (e.rep > 1 ? '×' + e.rep + ' ' : '') + body + restStr;
   }
   const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
   const w = [...new Set(sets.map(s => s.weight).filter(Boolean))].join(', ');
@@ -2425,7 +2447,7 @@ function exStatText(e) {
     const totR = durs.reduce((t,s) => t + (parseFloat(String(s.reps).replace(',','.')) || 0), 0);
     sp = totR > 0 ? ' · ' + (totD / totR).toFixed(1) + ' s/rep' : ' · ' + mmss(totD);
   }
-  return (e.rep > 1 ? '×' + e.rep + ' ' : '') + reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '')
+  return (e.rep > 1 ? '×' + e.rep + ' ' : '') + reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '') + restStr
     + (e.tech ? ' · tech ' + e.tech : '') + (e.rir != null ? ' · RIR ' + e.rir : '');
 }
 // compact session-rating line: "energy 4 · focus 3" / "RPE 4 · HR 152/178" — log head + text export
@@ -2700,6 +2722,8 @@ function renderLogEdit() {
           <span class="set-x">×</span>
           <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" title="weight" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].weight=this.value">`}
           <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" title="time (m:ss or seconds)" placeholder="m:ss" onchange="leDur(${ei},${si},this)">
+          <span class="set-x" title="rest after this ${s.iname != null ? 'interval' : 'set'}">↳</span>
+          <input class="set-in set-t" type="text" inputmode="numeric" value="${s.restSec != null ? mmss(s.restSec) : ''}" title="rest after this ${s.iname != null ? 'interval' : 'set'} (m:ss or seconds, empty = not logged)" placeholder="rest" onchange="leRest(${ei},${si},this)">
           <button class="set-del" onclick="leDelSet(${ei},${si})" title="remove this round">✕</button>
         </div>`).join('')}`).join('')
     + `<button class="btn-io" style="margin-top:.4rem" onclick="leAddEx()">+ add exercise</button>`;
@@ -2709,10 +2733,15 @@ function leDur(ei, si, inp) {
   logEditDraft.entries[ei].sets[si].durSec = v;
   inp.value = v != null ? mmss(v) : '';
 }
+function leRest(ei, si, inp) {
+  const v = parseDur(inp.value);
+  logEditDraft.entries[ei].sets[si].restSec = v;
+  inp.value = v != null ? mmss(v) : '';
+}
 function leAddSet(ei) {
   const sets = logEditDraft.entries[ei].sets;
   const p = sets[sets.length - 1];
-  sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: true, rd: p ? (+p.rd || sets.length) + 1 : 1, note: ''});
+  sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, restSec: p ? (p.restSec ?? null) : null, done: true, rd: p ? (+p.rd || sets.length) + 1 : 1, note: ''});
   renderLogEdit();
 }
 function leDelSet(ei, si) {
@@ -2754,7 +2783,7 @@ function logEntryToWk(a) {
       const te = tplEx(e.code);
       return {code: e.code || '', name: e.name || '', note: te ? (te.note || '') : '', snote: '',
         linked: te ? te.linked !== false : true, side: !!e.side,
-        sets: (e.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: ''}))};
+        sets: (e.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', restSec: s.restSec ?? null}))};
     })
   };
 }
