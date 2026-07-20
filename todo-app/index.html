@@ -154,6 +154,7 @@ header{position:sticky;top:0;z-index:50;background:var(--w);display:flex;align-i
 .field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
 .field input[type="text"],.field input[type="number"],.field input[type="date"],.field select,.field textarea{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none;width:100%}
 .field textarea{resize:vertical;min-height:3.2rem}
+#itemEditName{resize:none;min-height:auto;overflow:hidden}
 .field input:focus,.field select:focus,.field textarea:focus{outline:2.5px solid var(--black);outline-offset:1px}
 .notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;min-width:0}
 .notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:.95rem 1.05rem;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
@@ -983,7 +984,8 @@ textarea::placeholder{color:var(--mid)}
     <h2 id="itemEditTitle">Edit item</h2>
     <div class="field">
       <label>Name</label>
-      <input type="text" id="itemEditName" placeholder="Item name" onkeydown="if(event.key==='Enter'){event.preventDefault();saveItemEdit();}">
+      <textarea id="itemEditName" rows="1" placeholder="Item name" oninput="autoGrowTextarea(this)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();saveItemEdit();}"></textarea>
     </div>
     <div class="field">
       <label>Description / subtasks</label>
@@ -2343,7 +2345,7 @@ function openItemEdit(ctx, idx) {
   el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
   el('itemEditModal').classList.add('open');
   autoGrowTextarea(el('itemEditNote'));
-  const nameEl = el('itemEditName'); nameEl.focus(); nameEl.select();
+  const nameEl = el('itemEditName'); autoGrowTextarea(nameEl); nameEl.focus(); nameEl.select();
 }
 // The textarea grows with content (rows attribute = minimum), capped at ~70% of screen height so the buttons stay visible
 function autoGrowTextarea(ta) {
