@@ -509,6 +509,8 @@ textarea::placeholder{color:var(--mid)}
 .lc-seg{font-family:'DM Sans',sans-serif;font-size:.72rem;padding:.15rem .5rem;background:var(--w);color:var(--muted);border:none;border-left:1px solid var(--light);cursor:pointer}
 .lc-seg:first-child{border-left:none}
 .lc-seg.active{background:var(--black);color:var(--w)}
+.day-swap-card{cursor:pointer}
+@media(hover:hover){.day-swap-card:hover{background:var(--light)}}
 
 /* ── RESPONSIVE ── */
 @media(max-width:1020px){.app{grid-template-columns:185px 1fr;padding:1rem 1rem 1.5rem}.notes-panel{grid-column:1/-1;grid-row:2}}
@@ -666,7 +668,10 @@ textarea::placeholder{color:var(--mid)}
         <select id="nextWeekSel" class="later-sel" title="which upcoming week to plan" onchange="setNextWeekOffset(this.value)"></select>
       </div>
       <div id="day-buttons" class="day-buttons"></div>
-      <button class="btn-add" id="btnPlanSnapshot" style="flex-shrink:0;align-self:flex-start;margin-bottom:.3rem" onclick="togglePlanSnapshot()">schedule</button>
+      <div style="display:flex;gap:.3rem;flex-shrink:0;margin-bottom:.3rem;flex-wrap:wrap">
+        <button class="btn-add" id="btnPlanSnapshot" onclick="togglePlanSnapshot()">schedule</button>
+        <button class="btn-add" id="btnDaySwap" onclick="openDaySwapModal()" title="swap this whole day (all its items and time window) with another day of the week">⇄</button>
+      </div>
       <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
     </div>
     <div id="pane-hotovo" class="notes-pane">
@@ -856,6 +861,16 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" id="loadConflictCancelBtn">cancel</button>
       <button class="modal-btn primary" id="loadConflictApplyBtn">apply</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="daySwapModal">
+  <div class="modal" style="max-width:420px;max-height:82vh;display:flex;flex-direction:column;gap:.5rem">
+    <h2 id="daySwapTitle" style="font-size:1.05rem">Swap day</h2>
+    <p style="font-size:.82rem;color:var(--muted);line-height:1.5">Pick a day to exchange all items (and the time window) with — the two days swap contents, nothing is lost.</p>
+    <div id="daySwapList" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.45rem"></div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" onclick="closeModal('daySwapModal')">cancel</button>
     </div>
   </div>
 </div>
@@ -6227,6 +6242,57 @@ function switchPlanDay(iso) {
   // a different day is no longer tied to the previously loaded template
   activeLibId = null; savedSnapshot = null;
   schedSave(); renderAll(); renderDayButtons(); renderWeekTab(); renderLibrary();
+}
+
+// ── SWAP WHOLE DAY (Week/Next) ─────────────────────────────────────────────────
+// Exchange all items + the time window of the active day with another day of the shown week.
+// Lossless (both days keep their content, just switched) → simpler than move/overwrite.
+function openDaySwapModal() {
+  if (!activePlanDate) return;
+  autoSavePlanDay();   // flush the live active day so the summaries reflect the latest edits
+  const others = getCurrentWeekDates(planWeekOffset).filter(d => d.iso !== activePlanDate);
+  if (!others.length) { customAlert('No other day in this week to swap with.'); return; }
+  el('daySwapTitle').textContent = 'Swap ' + dayConflictLabel(activePlanDate) + ' with…';
+  el('daySwapList').innerHTML = others.map(({ iso }) => {
+    const its = weekDays.find(d => d.date === iso)?.items || [];
+    const empty = its.length ? '' : ' <span style="font-weight:400;color:var(--muted);font-style:italic">(empty)</span>';
+    return `<div class="day-swap-card" onclick="swapDayWith('${iso}')" style="border:var(--b);border-radius:var(--r);padding:.45rem .55rem">
+      <div style="font-weight:600;font-size:.83rem;margin-bottom:${its.length ? '.2rem' : '0'}">${esc(dayConflictLabel(iso))}${empty}</div>
+      ${its.length ? `<div style="font-size:.78rem;color:var(--muted);display:flex;flex-direction:column;gap:.08rem">${daySummaryLines(its)}</div>` : ''}
+    </div>`;
+  }).join('');
+  el('daySwapModal').classList.add('open');
+}
+
+function swapDayWith(targetIso) {
+  if (!activePlanDate || targetIso === activePlanDate) { closeModal('daySwapModal'); return; }
+  autoSavePlanDay();
+  pushUndo();
+  const now = Date.now();
+  const a = activePlanDate, b = targetIso;
+  const recA = weekDays.find(d => d.date === a);
+  const recB = weekDays.find(d => d.date === b);
+  // capture both payloads by reference BEFORE mutating (recA/recB are distinct arrays → no aliasing)
+  const dataA = recA ? { items: recA.items, windowStart: recA.windowStart, windowEnd: recA.windowEnd }
+                     : { items: [], windowStart, windowEnd };
+  const dataB = recB ? { items: recB.items, windowStart: recB.windowStart, windowEnd: recB.windowEnd }
+                     : { items: [], windowStart: '6:00', windowEnd: '14:00' };
+  const setDay = (iso, data, existing) => {
+    if (existing) { existing.items = data.items; existing.windowStart = data.windowStart; existing.windowEnd = data.windowEnd; existing.mt = now; }
+    else if (data.items.length) weekDays.push({ id: now + Math.random(), date: iso, items: data.items, windowStart: data.windowStart, windowEnd: data.windowEnd, mt: now });
+  };
+  setDay(a, dataB, recA);   // active day gets B's content
+  setDay(b, dataA, recB);   // target day gets A's content
+  saveWeek();
+  // reload the (still active) day from its swapped-in content into the live buffer
+  const newActive = weekDays.find(d => d.date === a);
+  if (newActive) applySessionData(newActive);
+  else { items = []; windowStart = dataB.windowStart; windowEnd = dataB.windowEnd;
+    if (el('winStart')) el('winStart').value = windowStart; if (el('winEnd')) el('winEnd').value = windowEnd; }
+  activeLibId = null; savedSnapshot = null;
+  closeModal('daySwapModal');
+  schedSave(); renderAll(); renderDayButtons(); renderWeekTab(); renderLibrary();
+  showSave('✓ swapped ' + dayConflictLabel(a) + ' ⇄ ' + dayConflictLabel(b));
 }
 
 function renderDayButtons() {
