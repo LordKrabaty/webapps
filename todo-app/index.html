@@ -3175,6 +3175,8 @@ function openBlockTypeEdit(key) {
 
   el('blockEditModal').classList.add('open');
   autoGrowTextarea(el('blockEditNote'));
+  // preset-task notes were grown while the modal was still hidden (scrollHeight≈0 → collapsed) → re-grow now visible
+  tasksEl.querySelectorAll('.bet-note').forEach(ta => autoGrowTextarea(ta));
   setTimeout(() => el('blockEditLabel').focus(), 50);
 }
 
@@ -3194,7 +3196,7 @@ function addBlockEditTask(text, duration, note) {
       <input type="number" class="bet-dur" placeholder="min" value="${duration||''}" min="1" max="480" style="width:58px;font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.3rem .4rem;background:var(--w);color:var(--black);outline:none;text-align:right">
       <button onclick="this.closest('.bet-row').remove()" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.85rem;display:flex;align-items:center;justify-content:center;border-radius:3px" title="delete">✕</button>
     </div>
-    <textarea class="bet-note" placeholder="Preset description for this task (optional)" rows="1" oninput="autoGrowTextarea(this)" style="font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;resize:none;overflow:hidden">${esc(note||'')}</textarea>`;
+    <textarea class="bet-note" placeholder="Preset description for this task (optional)" rows="1" oninput="autoGrowTextarea(this)" style="font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;resize:vertical;overflow-y:auto">${esc(note||'')}</textarea>`;
   el('blockEditTasks').appendChild(row);
   autoGrowTextarea(row.querySelector('.bet-note'));
 }
