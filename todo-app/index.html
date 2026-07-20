@@ -859,10 +859,10 @@ textarea::placeholder{color:var(--mid)}
   <div class="modal" style="max-width:360px">
     <h2 id="weekTplLoadTitle">Load week template</h2>
     <p style="font-size:.8rem;color:var(--muted)">Assign the template days to specific dates. Choose "— skip" to leave one out.</p>
-    <label class="toggle-row" onclick="toggleWeekTplNextWeek()">
-      <div id="weekTplNextWeekToggle" class="toggle-sw on"></div>
-      <span>Next week</span>
-    </label>
+    <div style="display:flex;align-items:center;gap:.4rem;margin:.35rem 0">
+      <span style="font-size:.8rem;color:var(--muted);flex-shrink:0">Target week</span>
+      <select id="weekTplWeekSel" class="later-sel" title="which week to load the template into" onchange="setWeekTplWeekOff(this.value)"></select>
+    </div>
     <div id="weekTplDayList" style="display:flex;flex-direction:column;gap:.4rem;margin:.35rem 0"></div>
     <div class="modal-row" style="margin-top:.5rem">
       <button class="modal-btn" onclick="closeModal('weekTplLoadModal')">cancel</button>
@@ -3345,24 +3345,23 @@ const PREVIEWCTX = {
   render() { renderPreviewList(); },
 };
 
-let _weekTplNextWeek = true;
+let _weekTplWeekOff = 1;   // target week offset (0 = this week, 1 = next, … up to NEXT_OFFSET_MAX)
+
+// day-target options for a given week offset (working days of that week only) + "— skip"
+function weekTplTargetOptions(off) {
+  const optFor = ({ iso, day }) =>
+    `<option value="${iso}">${PLAN_DAY_SHORT[day.getDay()]} · ${day.getDate()}. ${day.getMonth()+1}.</option>`;
+  return '<option value="">— skip</option>' + getCurrentWeekDates(off).map(optFor).join('');
+}
 
 function openWeekTplLoadModal(entry) {
   _weekTplLoadId = entry.id;
-  _weekTplNextWeek = true; // default to targeting next week
+  _weekTplWeekOff = 1; // default to targeting next week
   const wtlTitle = el('weekTplLoadTitle');
   wtlTitle.textContent = entry.name || String(entry.id);
   wtlTitle.style.cursor = 'text';
   wtlTitle.title = 'click to rename';
   wtlTitle.onclick = startWeekTplTitleEdit;
-  // Target options: this week + next week (grouped), working days only
-  const thisWeek = getCurrentWeekDates(0);
-  const nextWeek = getCurrentWeekDates(1);
-  const optFor = ({ iso, day }) =>
-    `<option value="${iso}">${PLAN_DAY_SHORT[day.getDay()]} · ${day.getDate()}. ${day.getMonth()+1}.</option>`;
-  const targetOptions = '<option value="">— skip</option>'
-    + '<optgroup label="This week">' + thisWeek.map(optFor).join('') + '</optgroup>'
-    + '<optgroup label="Next week">' + nextWeek.map(optFor).join('') + '</optgroup>';
   const selectStyle = 'flex:1;font-family:"DM Sans",sans-serif;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.28rem .4rem;background:var(--w);color:var(--black);outline:none;cursor:pointer';
 
   el('weekTplDayList').innerHTML = DAY_ORDER.map((dayKey) => {
@@ -3372,22 +3371,37 @@ function openWeekTplLoadModal(entry) {
     return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.83rem">
       <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${totalMin ? formatDur(totalMin) : '—'}</span></span>
       <span style="color:var(--muted);font-size:.75rem">→</span>
-      <select id="wtl-${dayKey}" style="${selectStyle}">${targetOptions}</select>
+      <select id="wtl-${dayKey}" style="${selectStyle}"></select>
       <button onclick="openPreview('weekTplDay',${entry.id},'${dayKey}')" style="border:none;background:none;cursor:pointer;padding:.15rem .2rem;flex-shrink:0;display:flex;align-items:center;opacity:.6" title="preview">
         <svg width="14" height="11" viewBox="0 0 10 8" fill="none" stroke="var(--black)" stroke-width="1.5" stroke-linecap="round"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
       </button>
     </div>`;
   }).filter(Boolean).join('');
-  el('weekTplNextWeekToggle').classList.toggle('on', _weekTplNextWeek);
-  applyWeekTplWeekChoice();
+  populateWeekTplWeekSel();
+  renderWeekTplTargets();
   el('weekTplLoadModal').classList.add('open');
 }
 
-// Redirects all day selections to the matching day of the chosen week
+// fills the target-week dropdown (this week … NEXT_OFFSET_MAX weeks ahead) with date ranges
+function populateWeekTplWeekSel() {
+  const sel = el('weekTplWeekSel'); if (!sel) return;
+  sel.innerHTML = Array.from({ length: NEXT_OFFSET_MAX + 1 }, (_, off) => {
+    const name = off === 0 ? 'this week' : off === 1 ? 'next week' : 'in ' + off + ' weeks';
+    return `<option value="${off}"${off === _weekTplWeekOff ? ' selected' : ''}>${name} · ${weekRangeLabel(off)}</option>`;
+  }).join('');
+}
+
+// rebuilds every day-target select for the chosen week, then points each at its matching weekday
+function renderWeekTplTargets() {
+  const opts = weekTplTargetOptions(_weekTplWeekOff);
+  DAY_ORDER.forEach(dayKey => { const sel = el('wtl-' + dayKey); if (sel) sel.innerHTML = opts; });
+  applyWeekTplWeekChoice();
+}
+
+// Points all day selections at the matching day of the chosen week
 function applyWeekTplWeekChoice() {
-  const week = getCurrentWeekDates(_weekTplNextWeek ? 1 : 0);
   const byNum = {};
-  week.forEach(({ iso, day }) => { byNum[day.getDay()] = iso; });
+  getCurrentWeekDates(_weekTplWeekOff).forEach(({ iso, day }) => { byNum[day.getDay()] = iso; });
   DAY_ORDER.forEach((dayKey) => {
     const sel = el('wtl-' + dayKey);
     if (!sel) return;
@@ -3395,10 +3409,11 @@ function applyWeekTplWeekChoice() {
   });
 }
 
-function toggleWeekTplNextWeek() {
-  _weekTplNextWeek = !_weekTplNextWeek;
-  el('weekTplNextWeekToggle').classList.toggle('on', _weekTplNextWeek);
-  applyWeekTplWeekChoice();
+function setWeekTplWeekOff(v) {
+  v = parseInt(v, 10);
+  if (!(v >= 0 && v <= NEXT_OFFSET_MAX)) return;
+  _weekTplWeekOff = v;
+  renderWeekTplTargets();
 }
 
 function doLoadWeekTemplate() {
