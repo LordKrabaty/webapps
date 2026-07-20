@@ -504,6 +504,10 @@ textarea::placeholder{color:var(--mid)}
 .toggle-sw::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:var(--mid)}
 .toggle-sw.on{background:var(--black)}
 .toggle-sw.on::after{left:calc(100% - 13px);background:var(--w)}
+.lc-seg-group{display:inline-flex;border:var(--bh);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.lc-seg{font-family:'DM Sans',sans-serif;font-size:.72rem;padding:.15rem .5rem;background:var(--w);color:var(--muted);border:none;border-left:1px solid var(--light);cursor:pointer}
+.lc-seg:first-child{border-left:none}
+.lc-seg.active{background:var(--black);color:var(--w)}
 
 /* ── RESPONSIVE ── */
 @media(max-width:1020px){.app{grid-template-columns:185px 1fr;padding:1rem 1rem 1.5rem}.notes-panel{grid-column:1/-1;grid-row:2}}
@@ -835,6 +839,22 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
       <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="loadConflictModal" style="z-index:200">
+  <div class="modal" style="max-width:440px;max-height:82vh;display:flex;flex-direction:column;gap:.5rem">
+    <h2 id="loadConflictTitle" style="font-size:1.05rem">Day already has content</h2>
+    <p style="font-size:.82rem;color:var(--muted);line-height:1.5">For each day, overwrite it or append the template items to what's there.</p>
+    <div id="loadConflictBulkRow" style="display:none;align-items:center;gap:.4rem;font-size:.76rem;color:var(--muted)">
+      <span>set all:</span>
+      <button class="btn-sm" onclick="setAllLoadConflict('overwrite')">overwrite</button>
+      <button class="btn-sm" onclick="setAllLoadConflict('append')">append</button>
+    </div>
+    <div id="loadConflictList" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.45rem"></div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" id="loadConflictCancelBtn">cancel</button>
+      <button class="modal-btn primary" id="loadConflictApplyBtn">apply</button>
     </div>
   </div>
 </div>
@@ -3320,12 +3340,25 @@ async function applyLibEntry(id) {
   const entry = library.find(e => e.id === id);
   if (!entry || entry.type === 'week') return;
   closeModal('previewModal');
-  const dayLabel = activePlanDate ? ' do dne ' + formatDateCz(activePlanDate) : '';
-  if (!await customConfirm('Load template "' + (entry.name||id) + '"' + dayLabel + '?', 'load')) return;
+  let mode = 'overwrite';
+  if (items && items.length) {           // active day already has content → overwrite / append / cancel
+    const iso = activePlanDate || '__active__';
+    const choices = await askLoadConflict([{ iso, label: activePlanDate ? dayConflictLabel(activePlanDate) : 'current day', items }], true);
+    if (!choices) return;
+    mode = choices[iso];
+  } else {
+    const dayLabel = activePlanDate ? ' to ' + formatDateCz(activePlanDate) : '';
+    if (!await customConfirm('Load template "' + (entry.name||id) + '"' + dayLabel + '?', 'load')) return;
+  }
   pushUndo();
-  applySessionData(entry.data);
-  activeLibId = id;
-  markSaved();
+  if (mode === 'append') {
+    items = items.concat(JSON.parse(JSON.stringify(entry.data.items || [])));   // keep the day's window
+    activeLibId = null;                  // merged with existing → no longer tracks a single template
+  } else {
+    applySessionData(entry.data);
+    activeLibId = id;
+    markSaved();
+  }
   autoSavePlanDay();
   schedSave(); renderLibrary(); renderAll(); renderDayButtons();
 }
@@ -3416,26 +3449,49 @@ function setWeekTplWeekOff(v) {
   renderWeekTplTargets();
 }
 
-function doLoadWeekTemplate() {
+async function doLoadWeekTemplate() {
   const entry = library.find(e => e.id === _weekTplLoadId);
   if (!entry || entry.type !== 'week') return;
-  autoSavePlanDay();
-  pushUndo();
-  let loaded = 0;
+  autoSavePlanDay();   // flush the live active day so its stored items are current for the conflict check
+  // collect the chosen day targets (skip "— skip" and days the template lacks)
+  const targets = [];
   DAY_ORDER.forEach((dayKey) => {
-    const sel = el('wtl-' + dayKey);
-    if (!sel) return;
-    const iso = sel?.value;
-    if (!iso) return;
+    const iso = el('wtl-' + dayKey)?.value;
     const tpl = entry.weekData[dayKey];
-    if (!tpl) return;
+    if (iso && tpl) targets.push({ iso, tpl });
+  });
+  if (!targets.length) { closeModal('weekTplLoadModal'); return; }
+  // target days that already hold items → ask per day: overwrite / append (or cancel)
+  const conflicts = targets
+    .map(t => { const ex = weekDays.find(d => d.date === t.iso); return (ex && ex.items && ex.items.length) ? { iso: t.iso, label: dayConflictLabel(t.iso), items: ex.items } : null; })
+    .filter(Boolean);
+  let choices = null;
+  if (conflicts.length) {
+    choices = await askLoadConflict(conflicts, conflicts.length === 1 && targets.length === 1);
+    if (!choices) return;   // cancel — leave the load modal open so the user can adjust the targets
+  }
+  pushUndo();
+  let loaded = 0, appended = 0;
+  targets.forEach(({ iso, tpl }) => {
     const newItems = JSON.parse(JSON.stringify(tpl.items));
     const existing = weekDays.find(d => d.date === iso);
-    if (existing) { existing.items = newItems; existing.windowStart = tpl.windowStart; existing.windowEnd = tpl.windowEnd; existing.mt = Date.now(); }
-    else weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd, mt: Date.now() });
+    if (existing) {
+      const hadContent = existing.items && existing.items.length;
+      const doAppend = hadContent && choices && choices[iso] === 'append';
+      if (doAppend) {
+        existing.items = existing.items.concat(newItems);   // keep the day's own window on append
+        appended++;
+      } else {
+        existing.items = newItems; existing.windowStart = tpl.windowStart; existing.windowEnd = tpl.windowEnd;
+      }
+      existing.mt = Date.now();
+    } else {
+      weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd, mt: Date.now() });
+    }
     if (iso === activePlanDate) {
-      items = JSON.parse(JSON.stringify(newItems));   // own copy — do not share a reference with the stored day
-      windowStart = tpl.windowStart; windowEnd = tpl.windowEnd;
+      const rec = weekDays.find(d => d.date === iso);
+      items = JSON.parse(JSON.stringify(rec.items));   // own copy — do not share a reference with the stored day
+      windowStart = rec.windowStart; windowEnd = rec.windowEnd;
       if (el('winStart')) el('winStart').value = windowStart;
       if (el('winEnd'))   el('winEnd').value   = windowEnd;
     }
@@ -3444,7 +3500,7 @@ function doLoadWeekTemplate() {
   saveWeek();
   closeModal('weekTplLoadModal');
   schedSave(); renderAll(); renderWeekTab(); renderDayButtons();
-  showSave('✓ loaded ' + loaded + (loaded === 1 ? ' day' : ' days'));
+  showSave('✓ loaded ' + loaded + (loaded === 1 ? ' day' : ' days') + (appended ? ' (' + appended + ' appended)' : ''));
 }
 
 // ── PREVIEW ──────────────────────────────────────────────────────────────────
@@ -4201,6 +4257,67 @@ function customAlert(msg, okLabel='ok') {
   });
 }
 
+// Human date label for a conflict card: "Mo · 27. 7."
+function dayConflictLabel(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return PLAN_DAY_SHORT[d.getDay()] + ' · ' + d.getDate() + '. ' + (d.getMonth() + 1) + '.';
+}
+
+// Compact HTML list of a day's top-level items (blocks/tasks/events; subtasks counted) for the conflict preview.
+function daySummaryLines(list) {
+  const out = [];
+  (list || []).forEach((it, i) => {
+    if (it.isSubtask) return;
+    const bt = BLOCK_TYPES[it.blockType] || BLOCK_TYPES.TASK;
+    const emoji = itemIcon(it) ? esc(itemIcon(it)) + ' ' : '';
+    const txt = esc(stripBlockEmoji(it.text || '', bt) || (bt.label || '')) || '(untitled)';
+    let subs = 0; for (let j = i + 1; j < list.length && list[j].isSubtask; j++) subs++;
+    const time = (it.isEvent && it.eventStart) ? ` <span style="font-family:'DM Mono',monospace">${esc(it.eventStart)}</span>` : '';
+    out.push(`<div>• ${emoji}${txt}${subs ? ` <span style="opacity:.65">(${subs})</span>` : ''}${time}</div>`);
+  });
+  return out.length ? out.join('') : '<div style="font-style:italic">(empty)</div>';
+}
+
+// Per-day overwrite / append dialog when loading a template onto non-empty day(s).
+// conflicts: [{ iso, label, items }]. Each day gets its own overwrite/append segmented control,
+// with a "set all" shortcut when there are several. Resolves { iso: 'overwrite'|'append' } | null (cancel).
+let _loadConflictResolve = null;
+let _loadConflictConflicts = null;
+let _loadConflictChoices = null;
+
+function renderLoadConflictList() {
+  el('loadConflictList').innerHTML = _loadConflictConflicts.map(c => {
+    const m = _loadConflictChoices[c.iso];
+    const seg = (val, label) => `<button class="lc-seg${m === val ? ' active' : ''}" onclick="setLoadConflictChoice('${c.iso}','${val}')">${label}</button>`;
+    return `<div style="border:var(--b);border-radius:var(--r);padding:.4rem .5rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem">
+        <span style="font-weight:600;font-size:.82rem;flex:1;min-width:0">${esc(c.label)}</span>
+        <span class="lc-seg-group">${seg('overwrite', 'overwrite')}${seg('append', 'append')}</span>
+      </div>
+      <div style="font-size:.78rem;color:var(--muted);display:flex;flex-direction:column;gap:.08rem">${daySummaryLines(c.items)}</div>
+    </div>`;
+  }).join('');
+}
+function setLoadConflictChoice(iso, val) { _loadConflictChoices[iso] = val; renderLoadConflictList(); }
+function setAllLoadConflict(val) { _loadConflictConflicts.forEach(c => _loadConflictChoices[c.iso] = val); renderLoadConflictList(); }
+
+function askLoadConflict(conflicts, singular) {
+  return new Promise(resolve => {
+    if (_loadConflictResolve) { const o = _loadConflictResolve; _loadConflictResolve = null; o(null); }
+    _loadConflictConflicts = conflicts;
+    _loadConflictChoices = {};
+    conflicts.forEach(c => { _loadConflictChoices[c.iso] = 'overwrite'; });   // default overwrite
+    el('loadConflictTitle').textContent = singular ? 'This day already has content' : 'Some days already have content';
+    el('loadConflictBulkRow').style.display = conflicts.length > 1 ? 'flex' : 'none';
+    renderLoadConflictList();
+    const fin = v => { el('loadConflictModal').classList.remove('open'); _loadConflictResolve = null; _loadConflictConflicts = null; _loadConflictChoices = null; resolve(v); };
+    el('loadConflictApplyBtn').onclick  = () => _loadConflictResolve && _loadConflictResolve({ ..._loadConflictChoices });
+    el('loadConflictCancelBtn').onclick = () => _loadConflictResolve && _loadConflictResolve(null);
+    el('loadConflictModal').classList.add('open');
+    _loadConflictResolve = fin;
+  });
+}
+
 // ── MODALS ────────────────────────────────────────────────────────────────────
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
@@ -4785,6 +4902,11 @@ document.addEventListener('keydown', e => {
     const cm = el('confirmModal');
     if (cm && cm.classList.contains('open')) {
       if (_confirmResolve) _confirmResolve(false);
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
+    const lcm = el('loadConflictModal');
+    if (lcm && lcm.classList.contains('open')) {
+      if (_loadConflictResolve) _loadConflictResolve(null);   // resolve the await as cancel, not just hide
       e.preventDefault(); e.stopImmediatePropagation(); return;
     }
     const openModals = document.querySelectorAll('.modal-bg.open');
