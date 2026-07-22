@@ -1449,11 +1449,9 @@ function renderMain() {
   </div>`;
   if (wk.type === 'cardio') {
     // cardio = a sequence of segments (warm-up, intervals…), each with its planned time
-    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapAfterExHtml(ei - 1, false, 'segment (with ×repeats it also runs between the repeats)') : '') + exBlockHtml(ex, ei)).join('');
-    // a repeated LAST segment rests between its repeats too — without a next block there is
-    // no between-segment gap to edit that rest in, so show a trailing one
-    const lastEi = (wk.exercises || []).length - 1;
-    if (lastEi >= 0 && exRepeat(wk.exercises[lastEi]) > 1) html += restGapAfterExHtml(lastEi, true, 'repeat (between the repeats of this segment)');
+    // between-repeats rest is drawn inside each segment block (after its last interval); this
+    // gap is the between-SEGMENTS rest (sameEx=false) sitting between two blocks
+    html += (wk.exercises || []).map((ex, ei) => (ei ? restGapAfterExHtml(ei - 1, false, 'segment (before the next segment)') : '') + exBlockHtml(ex, ei)).join('');
     html += `<button class="btn-lib" onclick="addExercise()" style="margin-top:.2rem">+ add segment</button>`;
   } else if (wk.order === 'seq') {
     // "same exercise in a row" — one block per exercise, its sets listed underneath
@@ -1604,7 +1602,10 @@ function exBlockHtml(ex, ei) {
     (si ? restGapEditHtml(ei, si - 1, true) : '')
     + dataRowHtml(s, ei, si, true, true)
     + `<textarea class="ex-note-in iv-cue" rows="1" oninput="autoResizeTA(this);wk.exercises[${ei}].sets[${si}].cue=this.value;schedSave()" placeholder="· interval note (shown during this interval)">${esc(s.cue || '')}</textarea>`
-  ).join('');
+  ).join('')
+    // a repeated segment rests between its repeats too — after the last interval the sequence
+    // loops back into the SAME segment (sameEx=true), so show that rest right here at the bottom
+    + (R > 1 && (ex.sets || []).length ? restGapEditHtml(ei, (ex.sets || []).length - 1, true, 'repeat (between the repeats of this segment)') : '');
   return `<div class="ex-block" data-ei="${ei}">
     <div class="ex-head">
       <button class="rnd-tgl" onclick="toggleSegment(${ei})" title="${coll ? 'expand' : 'collapse'} segment">${coll ? '▸' : '▾'}</button>
