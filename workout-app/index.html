@@ -2172,7 +2172,26 @@ function updateRunUi() {
   const sb = el('wkStartBtn'), fb = el('wkFinishBtn');
   if (sb) sb.style.display = started ? 'none' : '';
   if (fb) fb.style.display = started ? '' : 'none';
+  syncWakeLock();
   tick();
+}
+// keep the screen awake while a workout runs (no screensaver/sleep on PC & mobile)
+let _wakeLock = null, _wakeWant = false;
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator) || _wakeLock) return;
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', () => { _wakeLock = null; });   // dropped when the tab hides → reacquire on return
+  } catch (e) { _wakeLock = null; }   // denied (e.g. low battery) — silent, the timer still runs
+}
+function releaseWakeLock() {
+  const wl = _wakeLock; _wakeLock = null;
+  if (wl) { try { wl.release(); } catch (e) {} }
+}
+function syncWakeLock() {
+  _wakeWant = !!(wk.run && wk.run.startedAt);
+  if (_wakeWant && document.visibilityState === 'visible') acquireWakeLock();
+  else releaseWakeLock();
 }
 function tick() {
   const r = wk.run;
@@ -4004,7 +4023,7 @@ init();
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
   // PULL ON FOCUS — returning to the tab/window immediately downloads changes from another device
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autosyncEnabled()) silentPull(); });
+  document.addEventListener('visibilitychange', () => { syncWakeLock(); if (document.visibilityState === 'visible' && autosyncEnabled()) silentPull(); });
   window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
   // PULL every 5 minutes (only when the tab is visible)
   setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
