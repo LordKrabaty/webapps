@@ -623,13 +623,13 @@ textarea::placeholder{color:var(--mid)}
     <button class="modal-btn" id="musicOnBtn" onclick="toggleMusic()">♪ music: on</button>
     <div class="modal-row">
       <div class="jb-field" style="flex:1"><label>work track</label>
-        <div class="jb-sub">plays during exercises</div>
+        <div class="jb-sub">during exercises · this workout</div>
         <div style="display:flex;gap:.3rem;align-items:center">
           <select id="musWorkSel" style="flex:1;min-width:0" onchange="setMusicTrack('work', this.value)"></select>
           <button class="btn-sm" id="musWorkPrev" onclick="previewMusic('work')" title="preview the selected file (click again to stop)">▶</button>
         </div></div>
       <div class="jb-field" style="flex:1"><label>rest track</label>
-        <div class="jb-sub">plays during pauses</div>
+        <div class="jb-sub">during pauses · this workout</div>
         <div style="display:flex;gap:.3rem;align-items:center">
           <select id="musRestSel" style="flex:1;min-width:0" onchange="setMusicTrack('rest', this.value)"></select>
           <button class="btn-sm" id="musRestPrev" onclick="previewMusic('rest')" title="preview the selected file (click again to stop)">▶</button>
@@ -793,7 +793,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 5;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push
+const APP_SCHEMA = 6;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1398,9 +1398,9 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
+    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '', music: w.music ?? null,
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
-      pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
+      pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))}))
   };
 }
@@ -1417,9 +1417,9 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
+  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '', music: d.music ?? null,
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
-      pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
+      pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))})),
     run: null};
   prefillFromLast(id);
@@ -1863,6 +1863,8 @@ function openExSettings(ei) {
   exSetEi = ei;
   renderExSettings();
   el('exSetModal').classList.add('open');
+  // the music dropdown needs the discovered file list — probe once, then re-render
+  if (!musicFiles) probeMusicFiles().then(() => { if (el('exSetModal').classList.contains('open')) renderExSettings(); });
 }
 function exSetMove(dir) {
   const ex = wk.exercises[exSetEi]; if (!ex) return;
@@ -1892,6 +1894,8 @@ function renderExSettings() {
       <input type="text" inputmode="numeric" value="${ex.pauseSec != null ? ex.pauseSec : ''}" placeholder="${esc(wk.pauseSec ?? '')}" title="rest before the next ${cardio ? 'segment' : 'exercise'}; without the 'between' value above it also applies inside" onchange="setExPause(${exSetEi},'pauseSec',this.value);renderExSettings()"></div>
     ${ex.side ? `<div class="jb-field"><label>L↔R switch pause (s) — empty = workout default</label>
       <input type="text" inputmode="numeric" value="${ex.sidePauseSec != null ? ex.sidePauseSec : ''}" placeholder="${esc(wk.sidePauseSec ?? 0)}" onchange="setExPause(${exSetEi},'sidePauseSec',this.value);renderExSettings()"></div>` : ''}
+    <div class="jb-field"><label>music during this ${cardio ? 'segment' : 'exercise'}</label>
+      <select onchange="setExMusic(${exSetEi},this.value)" title="file that plays during the work phases of this ${cardio ? 'segment' : 'exercise'} — rest-kind intervals keep the rest track">${exMusicOptions(ex)}</select></div>
     <button class="modal-btn danger" onclick="closeModal('exSetModal');removeExercise(${exSetEi})">✕ remove ${cardio ? 'segment' : 'exercise'}</button>`;
 }
 // reorder exercises — `to` is the insertion index in the ORIGINAL array (drop above = target index,
@@ -2409,33 +2413,50 @@ function beep() {
 const MUSIC_KEY = 'workout-music';
 const MUSIC_SEL_KEY = 'workout-music-sel';
 let musicOn = true; try { musicOn = localStorage.getItem(MUSIC_KEY) !== '0'; } catch(e) {}
-// which file plays for each kind — stems in music/ ('work', 'work2'… / 'rest', 'rest3'…), per device
-let musicSel = { work: 'work', rest: 'rest' };
-try { const s = JSON.parse(localStorage.getItem(MUSIC_SEL_KEY) || '{}'); if (s.work) musicSel.work = s.work; if (s.rest) musicSel.rest = s.rest; } catch(e) {}
-const musicTracks = {};   // lazily created looping <audio> elements, keyed 'work' | 'rest'
-function musicAudio(kind) {
-  let a = musicTracks[kind];
-  if (a && a._file !== musicSel[kind]) { if (!a.paused) a.pause(); a = null; }   // selection changed → rebuild
+// device-level choice from before tracks became per-workout — kept only as the
+// fallback for workouts that carry no wk.music of their own; no longer written
+let musicSelDev = { work: 'work', rest: 'rest' };
+try { const s = JSON.parse(localStorage.getItem(MUSIC_SEL_KEY) || '{}'); if (s.work) musicSelDev.work = s.work; if (s.rest) musicSelDev.rest = s.rest; } catch(e) {}
+// stem (file in music/, no extension) the current workout uses for a kind
+function musicStem(kind) { return (wk && wk.music && wk.music[kind]) || musicSelDev[kind] || kind; }
+const musicTracks = {};   // lazily created looping <audio> elements, keyed by file stem
+function musicAudio(stem) {
+  let a = musicTracks[stem];
   if (!a) {
-    const file = musicSel[kind];
-    a = musicTracks[kind] = new Audio('music/' + file + '.mp3');
-    a._file = file;
+    a = musicTracks[stem] = new Audio('music/' + stem + '.mp3');
     a.loop = true; a.preload = 'none';
     // missing/unreachable file → give up quietly until the ♪ toggle retries (load() below)
     a.addEventListener('error', () => {
       a._dead = true;
-      if (!a._deadMsg) { a._deadMsg = true; showStatusMsg('⚠ music/' + file + '.mp3 not found — add it to the repo', 4000); }
+      if (!a._deadMsg) { a._deadMsg = true; showStatusMsg('⚠ music/' + stem + '.mp3 not found — add it to the repo', 4000); }
     });
   }
   return a;
 }
+// stored in the workout (syncs with it), not in localStorage
 function setMusicTrack(kind, stem) {
-  if (musicSel[kind] === stem) return;
-  musicSel[kind] = stem;
-  try { localStorage.setItem(MUSIC_SEL_KEY, JSON.stringify(musicSel)); } catch(e) {}
-  showStatusMsg('♪ ' + kind + ' track → ' + stem + '.mp3');
-  updateMusic();   // if that kind is playing right now, musicAudio() swaps to the new file
+  if (musicStem(kind) === stem) return;
+  wk.music = wk.music || {};
+  wk.music[kind] = stem;
+  schedSave();
+  showStatusMsg('♪ ' + kind + ' track of this workout → ' + stem + '.mp3');
+  updateMusic();
   if (musicPrev && musicPrev.kind === kind) { stopMusicPreview(); previewMusic(kind); }   // audition follows the dropdown
+}
+// per-exercise override — that exercise's work phases play this file instead
+function setExMusic(ei, stem) {
+  const ex = wk.exercises[ei]; if (!ex) return;
+  if (stem) ex.musTrack = stem; else delete ex.musTrack;
+  schedSave(); updateMusic();
+  showStatusMsg(stem ? '♪ this exercise plays ' + stem + '.mp3' : '♪ exercise follows the workout track');
+}
+// options for the exercise-settings dropdown: workout default + every discovered file
+function exMusicOptions(ex) {
+  const cur = (ex && ex.musTrack) || '';
+  const stems = musicFiles ? [...musicFiles.work, ...musicFiles.rest] : ['work', 'rest'];
+  if (cur && !stems.includes(cur)) { stems.push(cur); stems.sort(); }
+  return `<option value="">workout default (${esc(musicStem('work'))}.mp3)</option>`
+    + stems.map(s => `<option value="${esc(s)}"${s === cur ? ' selected' : ''}>${esc(s)}.mp3</option>`).join('');
 }
 // preview in the ♪… modal — audition the file picked in the dropdown; musicTarget()
 // yields while it plays, so any running workout music pauses and resumes afterwards
@@ -2496,9 +2517,10 @@ function renderMusicModal() {
   const lists = musicFiles || { work: ['work'], rest: ['rest'] };
   ['work', 'rest'].forEach(kind => {
     const list = lists[kind].slice();
-    if (!list.includes(musicSel[kind])) { list.push(musicSel[kind]); list.sort(); }   // keep the offline-selected file visible
+    const sel = musicStem(kind);
+    if (!list.includes(sel)) { list.push(sel); list.sort(); }   // keep the offline-selected file visible
     el(kind === 'work' ? 'musWorkSel' : 'musRestSel').innerHTML =
-      list.map(s => `<option value="${s}"${s === musicSel[kind] ? ' selected' : ''}>${s}.mp3</option>`).join('')
+      list.map(s => `<option value="${s}"${s === sel ? ' selected' : ''}>${s}.mp3</option>`).join('')
       + (musicFiles ? '' : '<option disabled>scanning…</option>');
   });
 }
@@ -2515,28 +2537,27 @@ function toggleSetMusic(ei, si) {
   schedSave(); renderMain(); updateMusic();
   showStatusMsg('♪ interval plays the ' + s.mus + ' track');
 }
-// which track the current run phase wants (null = silence)
+// which FILE (stem) the current run phase wants (null = silence)
 function musicTarget() {
   const r = wk && wk.run;
-  if (musicPrev) return null;   // a ♪… modal preview is auditioning — main music yields
+  if (musicPrev) return null;   // a ♪ modal preview is auditioning — main music yields
   if (!musicOn || !r || !r.startedAt || r.pausedLeft != null) return null;
   if (r.phase === 'work' || r.phase === 'manual') {
     const ex = r.ei != null ? wk.exercises[r.ei] : null;
-    return setMusicKind(ex && (ex.sets || [])[r.si]);
+    const kind = setMusicKind(ex && (ex.sets || [])[r.si]);
+    if (kind === 'work' && ex && ex.musTrack) return ex.musTrack;   // per-exercise override
+    return musicStem(kind);
   }
-  if (r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') return 'rest';
+  if (r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') return musicStem('rest');
   return null;
 }
 // idempotent — safe to call from every tick; play() rejection (autoplay policy
-// before the first user gesture) is ignored, the next tap-driven call succeeds
+// before the first user gesture) is ignored, the next tap-driven call succeeds.
+// Paused tracks keep their position, so switching back resumes where they left off.
 function updateMusic() {
   const want = musicTarget();
-  ['work', 'rest'].forEach(kind => {
-    const a = want === kind ? musicAudio(kind) : musicTracks[kind];
-    if (!a || a._dead) return;
-    if (want === kind) { if (a.paused) a.play().catch(() => {}); }
-    else if (!a.paused) a.pause();
-  });
+  Object.entries(musicTracks).forEach(([stem, a]) => { if (stem !== want && !a.paused) a.pause(); });
+  if (want) { const a = musicAudio(want); if (!a._dead && a.paused) a.play().catch(() => {}); }
 }
 function toggleMusic() {
   musicOn = !musicOn;
