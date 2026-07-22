@@ -331,6 +331,7 @@ textarea::placeholder{color:var(--mid)}
 .score-cap{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);min-height:1.1em}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
+.set-unit{color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace;flex-shrink:0;margin-left:-.05rem}
 .set-t{width:4.5em;min-width:3.2em}
 .set-dur{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* rounds view (strength: one round = each exercise once) */
@@ -355,6 +356,30 @@ textarea::placeholder{color:var(--mid)}
 .set-go,.set-mus{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.65rem;line-height:1;padding:0}
 .set-mus{width:auto;min-width:26px;padding:0 .25rem;font-family:'DM Mono',monospace;font-size:.6rem}
 .set-mus.on{color:var(--black)}
+/* equipment picker (⚖) — bar chips, plate/add-on −/+ steppers, inline editor */
+.set-eq{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.8rem;line-height:1;padding:0}
+.set-eq.on{color:var(--black);border-color:var(--dark)}
+@media(hover:hover){.set-eq:hover{background:var(--off);color:var(--black)}}
+.eq-sec{font-size:.66rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-top:.15rem}
+.eq-chips{display:flex;gap:.35rem;flex-wrap:wrap}
+.eq-chip{font-family:'DM Mono',monospace;font-size:.76rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.32rem .55rem;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq-chip.sel{background:var(--black);border-color:var(--black);color:var(--w)}
+@media(hover:hover){.eq-chip:not(.sel):hover{background:var(--off)}}
+.eq-row{display:flex;align-items:center;gap:.4rem;min-width:0}
+.eq-name{flex:1;min-width:0;font-size:.82rem;color:var(--black);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq-kg{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--dark);flex-shrink:0}
+.eq-step{width:28px;height:28px;border:var(--b);border-radius:var(--r);background:none;color:var(--black);cursor:pointer;font-size:.9rem;line-height:1;padding:0;flex-shrink:0}
+.eq-step:disabled{opacity:.3;cursor:default}
+@media(hover:hover){.eq-step:not(:disabled):hover{background:var(--off)}}
+.eq-cnt{font-family:'DM Mono',monospace;font-size:.78rem;min-width:2.6em;text-align:center;flex-shrink:0;color:var(--muted)}
+.eq-cnt.on{color:var(--black);font-weight:600}
+.eq-total{font-family:'DM Mono',monospace;font-size:1rem;font-weight:600;color:var(--black);border-top:1.5px solid var(--black);padding-top:.45rem;margin-top:.2rem;display:flex;justify-content:space-between;align-items:baseline;gap:.6rem}
+.eq-sum{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);word-break:break-word}
+.eq-ed{display:flex;flex-direction:column;gap:.2rem;border-bottom:1px solid var(--off);padding-bottom:.35rem}
+.eq-ed-row{display:grid;grid-template-columns:5.4em 1fr 3.2em 2.6em 22px;gap:.3rem;align-items:center}
+.eq-ed-row input,.eq-ed-row select,.eq-ed-note{font-family:'DM Mono',monospace;font-size:.76rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.28rem .3rem;outline:none;min-width:0;width:100%}
+.eq-ed-hdr span{font-size:.6rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.eq-ed-note{font-family:'DM Sans',sans-serif}
 .set-rep{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
 @media(hover:hover){.set-go:hover,.set-mus:hover{background:var(--off);color:var(--black)}}
 .rest-gap{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);padding:.12rem .2rem .12rem 1.55rem;display:flex;align-items:center;gap:.35rem}
@@ -727,6 +752,15 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 
+<!-- Equipment picker / editor — ⚖ next to a set's weight: pick a bar + plates, the kg is computed -->
+<div class="modal-bg" id="eqModal">
+  <div class="modal" style="max-width:420px;gap:.6rem">
+    <h2 id="eqTitle">Load weight</h2>
+    <div id="eqBody" style="display:flex;flex-direction:column;gap:.45rem;overflow-y:auto;max-height:60vh;min-height:0"></div>
+    <div class="modal-row" id="eqActions"></div>
+  </div>
+</div>
+
 <script>
 // ── SCHEMA VERSION (forward-compat guard) ─────────────────────────────────
 // Bump when the synced data shape changes in a way older clients can't fully
@@ -735,7 +769,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 4;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push
+const APP_SCHEMA = 5;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -917,7 +951,7 @@ function updateUndoBtn() {
 // ── CLEAR STORAGE ─────────────────────────────────────────────────────────
 function clearStorage() { el('clearStorageModal').classList.add('open'); }
 function toggleAllClear() {
-  const boxes = ['clr-session','clr-library','clr-archive','clr-body','clr-appearance'].map(id => el(id));
+  const boxes = ['clr-session','clr-library','clr-archive','clr-body','clr-equip','clr-appearance'].map(id => el(id));
   const anyUnchecked = boxes.some(b => !b.checked);
   boxes.forEach(b => b.checked = anyUnchecked);
 }
@@ -927,6 +961,7 @@ async function doSelectiveClear() {
   if (el('clr-library').checked)    toDelete.push('workout-v1-library','workout-v1-seeded');   // clearing the library also restores the default templates on reload
   if (el('clr-archive').checked)    toDelete.push('workout-v1-archive');
   if (el('clr-body').checked)       toDelete.push('workout-v1-body','workout-v1-bodyfields');
+  if (el('clr-equip').checked)      toDelete.push('workout-v1-equip');   // whole-object LWW, mt resets to 0 → the cloud copy wins on the next pull
   if (el('clr-appearance').checked) toDelete.push('workout-fs','workout-dark','workout-panel-fs');
   // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
   // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
@@ -1154,7 +1189,7 @@ function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
   if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields}, null, 2);
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields, equip}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
   let downloaded = false;
@@ -1261,6 +1296,11 @@ function doImport() {
     bodyFields = {fields: rec.bodyFields.fields, mt: Date.now()};
     saveBodyFields(); renderBody();
   }
+  // equipment: adopt from the file (import wins on sync)
+  if (rec.equip && Array.isArray(rec.equip.items)) {
+    equip = {items: JSON.parse(JSON.stringify(rec.equip.items)), mt: Date.now()};
+    saveEquip();
+  }
   closeModal('importModal');
   showSave('↓ imported: ' + (added + updated) + ' workouts' + (logAdded ? ' +' + logAdded + ' log' : '') + (bodyAdded ? ' +' + bodyAdded + ' body' : ''));
 }
@@ -1270,7 +1310,7 @@ function init() {
   initFs();
   initDark();
   loadPanelFs();
-  loadLibrary(); loadArchive(); loadBody(); loadBodyFields();
+  loadLibrary(); loadArchive(); loadBody(); loadBodyFields(); loadEquip();
   seedLibrary();
   const restored = loadSession();
   if (activeLibId) markSaved();
@@ -1334,7 +1374,7 @@ function tplFromWk(w) {
     type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '',
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null}))}))
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))}))
   };
 }
 function applySessionData(d) {
@@ -1353,7 +1393,7 @@ function loadFromLibrary(id) {
   wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '',
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null}))})),
+      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))})),
     run: null};
   prefillFromLast(id);
   activeLibId = e.id; markSaved();
@@ -1368,7 +1408,7 @@ function prefillFromLast(tplId) {
     ex.sets.forEach((s, i) => {
       const ls = (le.sets || [])[i]; if (!ls) return;
       if (ls.reps != null && ls.reps !== '') s.reps = ls.reps;
-      if (ls.weight) s.weight = ls.weight;
+      if (ls.weight) { s.weight = ls.weight; if (ls.eq) s.eq = JSON.parse(JSON.stringify(ls.eq)); }
       if (ls.durSec != null) s.durSec = ls.durSec;
     });
   });
@@ -1657,7 +1697,8 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
     <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
     : `<input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
-    <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–">`;
+    <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–"><span class="set-unit">kg</span>
+    <button class="set-eq${s.eq ? ' on' : ''}" onclick="openEqPicker(${ei},${si})" title="${s.eq ? esc(eqSummaryOf(s.eq)) + ' — tap to adjust' : 'load the weight from your equipment (bar + plates)'}">⚖︎</button>`;
   return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
     ${numbered ? `<span class="set-num">${si + 1}</span>` : ''}
     ${mid}
@@ -1687,7 +1728,8 @@ function setDurInput(ei, si, inp) {
 function setSetVal(ei, si, field, val) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   ex.sets[si][field] = val;
-  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s[field] = val; });
+  if (field === 'weight') delete ex.sets[si].eq;   // a manually typed weight detaches the ⚖ equipment combo
+  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s[field] = val; if (field === 'weight') delete s.eq; });
   schedSave(); renderMain();
 }
 // = rounds share reps/weight/time ↔ ≠ each round independent; re-linking copies round 1 to all
@@ -2449,7 +2491,7 @@ function confirmFinish() {
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
     entries: wk.exercises.map((ex, ei) => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
       tech: ex.tech ?? undefined, rir: ex.rir ?? undefined,
-      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, durSec: s.durSec, iname: s.iname || undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
+      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, eq: s.eq || undefined, durSec: s.durSec, iname: s.iname || undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
     note: wk.note || '',
@@ -2915,7 +2957,7 @@ function renderLogEdit() {
           ${s.iname != null ? `<input class="set-in iv-name" type="text" value="${esc(s.iname)}" title="interval name" placeholder="work / rest…" oninput="logEditDraft.entries[${ei}].sets[${si}].iname=this.value">`
           : `<input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" title="reps" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].reps=this.value">
           <span class="set-x">×</span>
-          <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" title="weight" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].weight=this.value">`}
+          <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" title="weight" placeholder="–" oninput="const t=logEditDraft.entries[${ei}].sets[${si}];t.weight=this.value;delete t.eq"><span class="set-unit">kg</span>`}
           <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" title="time (m:ss or seconds)" placeholder="m:ss" onchange="leDur(${ei},${si},this)">
           <span class="set-x" title="rest after this ${s.iname != null ? 'interval' : 'set'}">↳</span>
           <input class="set-in set-t" type="text" inputmode="numeric" value="${s.restSec != null ? mmss(s.restSec) : ''}" title="rest after this ${s.iname != null ? 'interval' : 'set'} (m:ss or seconds, empty = not logged)" placeholder="rest" onchange="leRest(${ei},${si},this)">
@@ -2978,7 +3020,7 @@ function logEntryToWk(a) {
       const te = tplEx(e.code);
       return {code: e.code || '', name: e.name || '', note: te ? (te.note || '') : '', snote: '',
         linked: te ? te.linked !== false : true, side: !!e.side,
-        sets: (e.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', restSec: s.restSec ?? null}))};
+        sets: (e.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', restSec: s.restSec ?? null, eq: s.eq ?? null}))};
     })
   };
 }
@@ -3318,6 +3360,169 @@ function seedLibrary() {
   try { localStorage.setItem('workout-v1-seeded','1'); } catch(e) {}
 }
 
+// ── EQUIPMENT (bars, plates, add-ons → computed set weight) ─────────────────
+// equip = {mt, items:[{id, kind:'bar'|'plate'|'add', name, kg, count, note}]} — whole-object
+// LWW on sync (like bodyFields). A set stores its combo as s.eq = {bar:<id|null>, pl:{<id>:count}};
+// the weight itself stays plain text in s.weight, so the log survives later equipment edits.
+const EQUIP_KEY = 'workout-v1-equip';
+const EQUIP_DEFAULT = [
+  {id:'bar2',  kind:'bar',   name:'two-hand bar',    kg:1.5,  count:1, note:'25 mm · max 5 plates per side'},
+  {id:'bar1',  kind:'bar',   name:'single-hand bar', kg:6,    count:1, note:'25 mm'},
+  {id:'st5',   kind:'plate', name:'steel',           kg:5,    count:4, note:''},
+  {id:'st25',  kind:'plate', name:'steel',           kg:2.5,  count:4, note:''},
+  {id:'st125', kind:'plate', name:'steel',           kg:1.25, count:6, note:''},
+  {id:'st05',  kind:'plate', name:'steel',           kg:0.5,  count:6, note:''},
+  {id:'co3',   kind:'plate', name:'concrete',        kg:3,    count:7, note:'bulky — fits the screw, better on the single-hand bar'},
+  {id:'co25',  kind:'plate', name:'concrete',        kg:2.5,  count:3, note:''},
+  {id:'co125', kind:'plate', name:'concrete',        kg:1.25, count:2, note:''},
+  {id:'wr15',  kind:'add',   name:'wrist weight',    kg:1.5,  count:2, note:''},
+  {id:'wr25',  kind:'add',   name:'wrist weight',    kg:2.5,  count:2, note:''},
+];
+const EQ_KINDS = [['bar','bar'],['plate','plate'],['add','add-on']];
+let equip = null;
+let eqCtx = null;                       // {ei, si} — the set the picker writes into
+let eqSel = {bar:null, pl:{}};          // live picker selection
+let eqMode = 'pick';                    // 'pick' | 'edit'
+function loadEquip() {
+  try { equip = JSON.parse(localStorage.getItem(EQUIP_KEY) || 'null'); } catch(e) { equip = null; }
+  if (!equip || !Array.isArray(equip.items)) equip = {mt: 0, items: EQUIP_DEFAULT.map(x => ({...x}))};
+}
+function saveEquip() { try { localStorage.setItem(EQUIP_KEY, JSON.stringify(equip)); } catch(e) {} }
+function eqItem(id) { return equip.items.find(x => String(x.id) === String(id)); }
+function fmtKg(v) { return String(Math.round((+v || 0) * 100) / 100); }
+function eqTotal(sel) {
+  let t = 0;
+  const bar = sel && sel.bar != null ? eqItem(sel.bar) : null;
+  if (bar) t += +bar.kg || 0;
+  Object.entries((sel && sel.pl) || {}).forEach(([id, n]) => { const it = eqItem(id); if (it) t += (+it.kg || 0) * (+n || 0); });
+  return Math.round(t * 100) / 100;
+}
+function eqSummaryOf(sel) {
+  const parts = [];
+  const bar = sel && sel.bar != null ? eqItem(sel.bar) : null;
+  if (bar) parts.push('bar ' + fmtKg(bar.kg));
+  Object.entries((sel && sel.pl) || {}).forEach(([id, n]) => { const it = eqItem(id); if (it && n > 0) parts.push(n + '×' + fmtKg(it.kg)); });
+  return parts.length ? parts.join(' + ') + ' = ' + fmtKg(eqTotal(sel)) + ' kg' : '';
+}
+function openEqPicker(ei, si) {
+  const ex = wk.exercises[ei]; if (!ex || !(ex.sets || [])[si]) return;
+  eqCtx = {ei, si};
+  eqSel = {bar: null, pl: {}};
+  const cur = ex.sets[si].eq;
+  if (cur) {   // restore the stored combo — silently drop items that no longer exist
+    if (cur.bar != null && eqItem(cur.bar)) eqSel.bar = cur.bar;
+    Object.entries(cur.pl || {}).forEach(([id, n]) => {
+      const it = eqItem(id); if (!it) return;
+      const m = Math.min(+n || 0, +it.count || 0); if (m > 0) eqSel.pl[id] = m;
+    });
+  }
+  eqMode = 'pick';
+  renderEqModal();
+  el('eqModal').classList.add('open');
+}
+function eqPickBar(id) { eqSel.bar = String(eqSel.bar) === String(id) ? null : id; renderEqModal(); }
+function eqStep(id, d) {
+  const it = eqItem(id); if (!it) return;
+  const n = Math.max(0, Math.min((+eqSel.pl[id] || 0) + d, +it.count || 0));
+  if (n) eqSel.pl[id] = n; else delete eqSel.pl[id];
+  renderEqModal();
+}
+function eqClearSel() { eqSel = {bar:null, pl:{}}; renderEqModal(); }
+function applyEqPick() {
+  if (!eqCtx) { closeModal('eqModal'); return; }
+  const ex = wk.exercises[eqCtx.ei];
+  if (!ex || !(ex.sets || [])[eqCtx.si]) { closeModal('eqModal'); return; }
+  pushUndo();
+  const any = eqSel.bar != null || Object.values(eqSel.pl).some(n => n > 0);
+  const w = any ? fmtKg(eqTotal(eqSel)) : '';
+  const put = s => { s.weight = w; if (any) s.eq = JSON.parse(JSON.stringify(eqSel)); else delete s.eq; };
+  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(put); else put(ex.sets[eqCtx.si]);
+  schedSave(); renderMain();
+  closeModal('eqModal');
+}
+function renderEqModal() {
+  const body = el('eqBody'), actions = el('eqActions'), title = el('eqTitle');
+  if (!body || !actions) return;
+  if (eqMode === 'edit') { renderEqEditor(body, actions, title); return; }
+  const ex = eqCtx && wk.exercises[eqCtx.ei];
+  title.textContent = 'Load weight' + (ex ? ' — ' + (ex.code || ex.name || 'exercise') + ' · set ' + (eqCtx.si + 1) : '');
+  const bars = equip.items.filter(x => x.kind === 'bar');
+  const rows = kind => equip.items.filter(x => x.kind === kind).map(it => {
+    const n = +eqSel.pl[it.id] || 0, max = +it.count || 0;
+    return `<div class="eq-row"${it.note ? ` title="${esc(it.note)}"` : ''}>
+      <span class="eq-name">${esc(it.name || '?')}</span>
+      <span class="eq-kg">${fmtKg(it.kg)} kg</span>
+      <button class="eq-step" onclick="eqStep(${jsArg(it.id)},-1)"${n ? '' : ' disabled'} title="one piece less">−</button>
+      <span class="eq-cnt${n ? ' on' : ''}" title="picked / owned">${n}/${max}</span>
+      <button class="eq-step" onclick="eqStep(${jsArg(it.id)},1)"${n >= max ? ' disabled' : ''} title="one piece more">+</button>
+    </div>`;
+  }).join('');
+  const plates = rows('plate'), adds = rows('add');
+  const any = eqSel.bar != null || Object.values(eqSel.pl).some(n => n > 0);
+  const sum = eqSummaryOf(eqSel);
+  body.innerHTML = `
+    ${bars.length ? `<div class="eq-sec">bar</div><div class="eq-chips">${bars.map(b =>
+      `<button class="eq-chip${String(eqSel.bar) === String(b.id) ? ' sel' : ''}" onclick="eqPickBar(${jsArg(b.id)})"${b.note ? ` title="${esc(b.note)}"` : ''}>${esc(b.name || '?')} · ${fmtKg(b.kg)} kg</button>`).join('')}</div>` : ''}
+    ${plates ? `<div class="eq-sec">plates</div>${plates}` : ''}
+    ${adds ? `<div class="eq-sec">add-ons</div>${adds}` : ''}
+    ${!equip.items.length ? '<p style="font-size:.8rem;color:var(--muted)">No equipment yet — add your bars and plates via ✎.</p>' : ''}
+    <div class="eq-total"><span>total</span><span>${fmtKg(eqTotal(eqSel))} kg</span></div>
+    ${sum ? `<div class="eq-sum">${esc(sum)}</div>` : ''}`;
+  actions.innerHTML = `
+    <button class="modal-btn" onclick="eqMode='edit';renderEqModal()" title="edit your equipment — bars, plates, counts">✎ equipment</button>
+    <button class="modal-btn" onclick="eqClearSel()">clear</button>
+    <button class="modal-btn" onclick="closeModal('eqModal')">cancel</button>
+    <button class="modal-btn primary" onclick="applyEqPick()">${any ? '✓ use ' + fmtKg(eqTotal(eqSel)) + ' kg' : '✓ clear weight'}</button>`;
+}
+function renderEqEditor(body, actions, title) {
+  title.textContent = 'My equipment';
+  body.innerHTML = `<div class="eq-ed-row eq-ed-hdr"><span>type</span><span>name</span><span>kg</span><span>own</span><span></span></div>`
+    + (equip.items.map(it => `
+    <div class="eq-ed">
+      <div class="eq-ed-row">
+        <select onchange="eqEdSet(${jsArg(it.id)},'kind',this.value)" title="type — one bar per set, plates & add-ons count per piece">
+          ${EQ_KINDS.map(([v, l]) => `<option value="${v}"${it.kind === v ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>
+        <input type="text" value="${esc(it.name || '')}" placeholder="name" onchange="eqEdSet(${jsArg(it.id)},'name',this.value)">
+        <input type="text" inputmode="decimal" value="${esc(fmtKg(it.kg))}" title="weight per piece (kg)" onchange="eqEdSet(${jsArg(it.id)},'kg',this.value)">
+        <input type="text" inputmode="numeric" value="${esc(it.count ?? 1)}" title="how many you own" onchange="eqEdSet(${jsArg(it.id)},'count',this.value)">
+        <button class="set-del" onclick="eqEdDel(${jsArg(it.id)})" title="remove this item">✕</button>
+      </div>
+      <input class="eq-ed-note" type="text" value="${esc(it.note || '')}" placeholder="note (optional)" onchange="eqEdSet(${jsArg(it.id)},'note',this.value)">
+    </div>`).join('') || '<p style="font-size:.8rem;color:var(--muted)">No equipment yet.</p>');
+  actions.innerHTML = `
+    <button class="modal-btn" onclick="eqEdAdd()">+ add item</button>
+    <button class="modal-btn primary" onclick="eqEdDone()">done</button>`;
+}
+function eqEdSet(id, field, val) {
+  const it = eqItem(id); if (!it) return;
+  let v;
+  if (field === 'kg') { v = parseNum(normDec(val)); if (isNaN(v) || v < 0) v = 0; }
+  else if (field === 'count') { v = Math.max(0, parseInt(val, 10) || 0); }
+  else v = val;
+  if (it[field] === v) return;
+  it[field] = v;
+  equip.mt = Date.now(); saveEquip();   // mt only on a real change — onchange fires only when the value differs
+  // keep the live selection consistent with the edit
+  if (field === 'count' && (+eqSel.pl[id] || 0) > v) { if (v > 0) eqSel.pl[id] = v; else delete eqSel.pl[id]; }
+  if (field === 'kind') { if (v === 'bar') delete eqSel.pl[id]; else if (String(eqSel.bar) === String(id)) eqSel.bar = null; }
+}
+function eqEdAdd() {
+  equip.items.push({id: 'e' + Date.now(), kind: 'plate', name: '', kg: 0, count: 1, note: ''});
+  equip.mt = Date.now(); saveEquip();
+  renderEqModal();
+}
+async function eqEdDel(id) {
+  const it = eqItem(id); if (!it) return;
+  if (!await customConfirm('Remove "' + (it.name || fmtKg(it.kg) + ' kg') + '" from your equipment? Logged weights keep their kg value.', 'remove')) return;
+  equip.items = equip.items.filter(x => String(x.id) !== String(id));
+  equip.mt = Date.now(); saveEquip();
+  if (String(eqSel.bar) === String(id)) eqSel.bar = null;
+  delete eqSel.pl[id];
+  renderEqModal();
+}
+function eqEdDone() { eqMode = 'pick'; if (eqCtx) renderEqModal(); else closeModal('eqModal'); }
+
 init();
 </script>
 
@@ -3331,6 +3536,7 @@ init();
       <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>library</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>workout log</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-body" checked><span>body measurements</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-equip" checked><span>equipment (bars &amp; plates — resets to the defaults)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings (font, dark mode)</span></label>
     </div>
     <div class="modal-row" style="margin-top:.25rem">
@@ -3566,13 +3772,13 @@ init();
   // which applies tombstones itself; kept as a no-op extension point
   function applyTombstones() { return 0; }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(items, arch, bod, bf, tomb) {
+  function sigOf(items, arch, bod, bf, eq, tomb) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
-    return [idS(items), idS(arch), idS(bod), 'bf@' + ((bf && bf.mt) || 0), tS(tomb)].join('||');   // archive with mt — log note edits must sync
+    return [idS(items), idS(arch), idS(bod), 'bf@' + ((bf && bf.mt) || 0), 'eq@' + ((eq && eq.mt) || 0), tS(tomb)].join('||');   // archive with mt — log note edits must sync
   }
-  function localSig() { return sigOf(library, archive, body, bodyFields, tombstones); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.bodyFields, r.tombstones || {}); }
+  function localSig() { return sigOf(library, archive, body, bodyFields, equip, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.bodyFields, r.equip, r.tombstones || {}); }
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn() {
@@ -3613,7 +3819,7 @@ init();
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
-    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, body: body, bodyFields: bodyFields, tombstones: tombstones, device: getDeviceName() };
+    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, body: body, bodyFields: bodyFields, equip: equip, tombstones: tombstones, device: getDeviceName() };
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
@@ -3723,6 +3929,12 @@ init();
       bodyFields = JSON.parse(JSON.stringify(cbf));
       saveBodyFields(); updated++;
     }
+    // equipment (bars & plates) — whole-object LWW by mt
+    const ceq = record.equip;
+    if (ceq && Array.isArray(ceq.items) && (+ceq.mt || 0) > (+(equip && equip.mt) || 0)) {
+      equip = JSON.parse(JSON.stringify(ceq));
+      saveEquip(); updated++;
+    }
     // NOTE: the live workout (wk) is intentionally NOT refreshed from a merged template —
     // it is a working copy with the user's in-progress sets; a manual save (LWW, mt=now) wins.
 
@@ -3803,7 +4015,7 @@ init();
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields};
+    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields, equip};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
@@ -4019,7 +4231,7 @@ init();
   window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
-  ['saveLibrary','saveArchive','saveBody','saveBodyFields'].forEach(fn => {
+  ['saveLibrary','saveArchive','saveBody','saveBodyFields','saveEquip'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
