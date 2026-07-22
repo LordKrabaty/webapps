@@ -616,6 +616,30 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 
+<!-- Music tracks modal (which mp3 plays during work / rest) -->
+<div class="modal-bg" id="musicModal">
+  <div class="modal" style="max-width:360px;gap:.6rem">
+    <h2>Music</h2>
+    <button class="modal-btn" id="musicOnBtn" onclick="toggleMusic()">♪ music: on</button>
+    <div class="modal-row">
+      <div class="jb-field" style="flex:1"><label>work track</label>
+        <div class="jb-sub">plays during exercises</div>
+        <div style="display:flex;gap:.3rem;align-items:center">
+          <select id="musWorkSel" style="flex:1;min-width:0" onchange="setMusicTrack('work', this.value)"></select>
+          <button class="btn-sm" id="musWorkPrev" onclick="previewMusic('work')" title="preview the selected file (click again to stop)">▶</button>
+        </div></div>
+      <div class="jb-field" style="flex:1"><label>rest track</label>
+        <div class="jb-sub">plays during pauses</div>
+        <div style="display:flex;gap:.3rem;align-items:center">
+          <select id="musRestSel" style="flex:1;min-width:0" onchange="setMusicTrack('rest', this.value)"></select>
+          <button class="btn-sm" id="musRestPrev" onclick="previewMusic('rest')" title="preview the selected file (click again to stop)">▶</button>
+        </div></div>
+    </div>
+    <p style="font-size:.78rem;color:var(--muted);line-height:1.5;margin:0">More tracks: push mp3 files named <b>work2.mp3 … work9.mp3</b> and <b>rest2.mp3 … rest9.mp3</b> into the <b>music/</b> folder next to work.mp3 — they appear here automatically.</p>
+    <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('musicModal')">close</button></div>
+  </div>
+</div>
+
 <!-- Finish workout modal (log or discard) -->
 <div class="modal-bg" id="finishModal">
   <div class="modal" style="max-width:360px">
@@ -1104,9 +1128,12 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal','musicModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
+  // a track preview must not outlive the ♪… modal (covers close button + backdrop click)
+  const mm = el('musicModal');
+  if (musicPrev && (!mm || !mm.classList.contains('open'))) stopMusicPreview();
   const cm = el('confirmModal');
   if (cm && cm.classList.contains('open') && e.target === cm && _confirmResolve) _confirmResolve(false);
 });
@@ -1459,7 +1486,7 @@ function renderMain() {
     <span class="wk-elapsed" id="wkElapsed">0:00</span>
     ${(() => { const est = estimateDur(wk); return est.sec ? `<span class="wk-est" title="estimated total with the current settings (planned times + rests + prep)">${est.partial ? '≥' : '~'}${fmtEst(est.sec)}</span>` : ''; })()}
     <button class="btn-sm" id="wkFinishBtn" onclick="finishWorkout()" style="display:none">■ finish &amp; log</button>
-    <button class="btn-sm" id="musicBtn" onclick="toggleMusic()" title="workout music — music/work.mp3 during exercises, music/rest.mp3 during pauses (files pushed to the repo)">${musicOn ? '♪ on' : '♪ off'}</button>
+    <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="workout music — on/off toggle and track selection (the work track plays during exercises, the rest track during pauses)">${musicOn ? '♪' : '♪ off'}</button>
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
   <div class="rest-bar" id="nowBar" style="display:none">
@@ -2372,25 +2399,108 @@ function beep() {
 }
 
 // ── MUSIC (repo-hosted MP3 loops) ───────────────────────────────────────────
-// music/work.mp3 plays during exercises (work/manual), music/rest.mp3 during
-// pauses (rest/prep/srest). Files live in the repo next to index.html →
-// zero per-device setup, the browser caches them. Each track keeps its
-// position while the other plays, so it resumes where it left off.
+// one selectable track plays during exercises (work/manual), another during
+// pauses (rest/prep/srest). Files live in the repo's music/ folder next to
+// index.html → zero per-device setup, the browser caches them. Defaults are
+// work.mp3 / rest.mp3; extra files named work2…work9 / rest2…rest9 are
+// auto-discovered and pickable in the ♪… modal (choice stored per device).
+// Each track keeps its position while the other plays, so it resumes where
+// it left off.
 const MUSIC_KEY = 'workout-music';
+const MUSIC_SEL_KEY = 'workout-music-sel';
 let musicOn = true; try { musicOn = localStorage.getItem(MUSIC_KEY) !== '0'; } catch(e) {}
+// which file plays for each kind — stems in music/ ('work', 'work2'… / 'rest', 'rest3'…), per device
+let musicSel = { work: 'work', rest: 'rest' };
+try { const s = JSON.parse(localStorage.getItem(MUSIC_SEL_KEY) || '{}'); if (s.work) musicSel.work = s.work; if (s.rest) musicSel.rest = s.rest; } catch(e) {}
 const musicTracks = {};   // lazily created looping <audio> elements, keyed 'work' | 'rest'
 function musicAudio(kind) {
   let a = musicTracks[kind];
+  if (a && a._file !== musicSel[kind]) { if (!a.paused) a.pause(); a = null; }   // selection changed → rebuild
   if (!a) {
-    a = musicTracks[kind] = new Audio('music/' + kind + '.mp3');
+    const file = musicSel[kind];
+    a = musicTracks[kind] = new Audio('music/' + file + '.mp3');
+    a._file = file;
     a.loop = true; a.preload = 'none';
     // missing/unreachable file → give up quietly until the ♪ toggle retries (load() below)
     a.addEventListener('error', () => {
       a._dead = true;
-      if (!a._deadMsg) { a._deadMsg = true; showStatusMsg('⚠ music/' + kind + '.mp3 not found — add it to the repo', 4000); }
+      if (!a._deadMsg) { a._deadMsg = true; showStatusMsg('⚠ music/' + file + '.mp3 not found — add it to the repo', 4000); }
     });
   }
   return a;
+}
+function setMusicTrack(kind, stem) {
+  if (musicSel[kind] === stem) return;
+  musicSel[kind] = stem;
+  try { localStorage.setItem(MUSIC_SEL_KEY, JSON.stringify(musicSel)); } catch(e) {}
+  showStatusMsg('♪ ' + kind + ' track → ' + stem + '.mp3');
+  updateMusic();   // if that kind is playing right now, musicAudio() swaps to the new file
+  if (musicPrev && musicPrev.kind === kind) { stopMusicPreview(); previewMusic(kind); }   // audition follows the dropdown
+}
+// preview in the ♪… modal — audition the file picked in the dropdown; musicTarget()
+// yields while it plays, so any running workout music pauses and resumes afterwards
+let musicPrev = null;   // { a, kind, stem } while a preview plays
+function previewMusic(kind) {
+  if (musicPrev && musicPrev.kind === kind) { stopMusicPreview(); return; }   // toggle off
+  stopMusicPreview();
+  const stem = el(kind === 'work' ? 'musWorkSel' : 'musRestSel').value;
+  const a = new Audio('music/' + stem + '.mp3');
+  a.loop = true;
+  a.addEventListener('error', () => {
+    if (musicPrev && musicPrev.a === a) { showStatusMsg('⚠ music/' + stem + '.mp3 not found', 4000); stopMusicPreview(); }
+  });
+  musicPrev = { a, kind, stem };
+  a.play().catch(() => {});
+  updateMusic();
+  updatePreviewBtns();
+}
+function stopMusicPreview() {
+  if (!musicPrev) return;
+  musicPrev.a.pause(); musicPrev = null;
+  updateMusic();
+  updatePreviewBtns();
+}
+function updatePreviewBtns() {
+  [['work', 'musWorkPrev'], ['rest', 'musRestPrev']].forEach(([kind, id]) => {
+    const b = el(id); if (b) b.textContent = musicPrev && musicPrev.kind === kind ? '■' : '▶';
+  });
+}
+// numbered variants (work2…work9, rest2…rest9) probed with HEAD requests — GitHub Pages
+// can't list a directory, so the app checks which files exist; re-scanned on every modal open
+const MUSIC_MAX = 9;
+let musicFiles = null;   // { work: [stems], rest: [stems] } once a probe finished
+function probeMusicFiles() {
+  const found = { work: ['work'], rest: ['rest'] };
+  const checks = [];
+  ['work', 'rest'].forEach(kind => {
+    for (let n = 2; n <= MUSIC_MAX; n++) {
+      const stem = kind + n;
+      checks.push(fetch('music/' + stem + '.mp3', { method: 'HEAD' })
+        .then(r => { if (r.ok) found[kind].push(stem); }).catch(() => {}));
+    }
+  });
+  return Promise.all(checks).then(() => {
+    found.work.sort(); found.rest.sort();
+    musicFiles = found;
+    return found;
+  });
+}
+async function openMusicModal() {
+  renderMusicModal();
+  el('musicModal').classList.add('open');
+  await probeMusicFiles();
+  renderMusicModal();
+}
+function renderMusicModal() {
+  const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOn ? '♪ music: on' : '♪ music: off';
+  const lists = musicFiles || { work: ['work'], rest: ['rest'] };
+  ['work', 'rest'].forEach(kind => {
+    const list = lists[kind].slice();
+    if (!list.includes(musicSel[kind])) { list.push(musicSel[kind]); list.sort(); }   // keep the offline-selected file visible
+    el(kind === 'work' ? 'musWorkSel' : 'musRestSel').innerHTML =
+      list.map(s => `<option value="${s}"${s === musicSel[kind] ? ' selected' : ''}>${s}.mp3</option>`).join('')
+      + (musicFiles ? '' : '<option disabled>scanning…</option>');
+  });
 }
 // music kind of one interval/set: explicit override (s.mus) beats auto-detection
 // from the interval name — a cardio interval called "rest" gets the rest track
@@ -2408,6 +2518,7 @@ function toggleSetMusic(ei, si) {
 // which track the current run phase wants (null = silence)
 function musicTarget() {
   const r = wk && wk.run;
+  if (musicPrev) return null;   // a ♪… modal preview is auditioning — main music yields
   if (!musicOn || !r || !r.startedAt || r.pausedLeft != null) return null;
   if (r.phase === 'work' || r.phase === 'manual') {
     const ex = r.ei != null ? wk.exercises[r.ei] : null;
@@ -2431,7 +2542,8 @@ function toggleMusic() {
   musicOn = !musicOn;
   try { localStorage.setItem(MUSIC_KEY, musicOn ? '1' : '0'); } catch(e) {}
   if (musicOn) Object.values(musicTracks).forEach(a => { if (a._dead) { a._dead = false; a.load(); } });   // retry files added since
-  const b = el('musicBtn'); if (b) b.textContent = musicOn ? '♪ on' : '♪ off';
+  const b = el('musicBtn'); if (b) b.textContent = musicOn ? '♪' : '♪ off';
+  const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOn ? '♪ music: on' : '♪ music: off';
   showStatusMsg(musicOn ? '♪ music on' : '♪ music off');
   updateMusic();
 }
