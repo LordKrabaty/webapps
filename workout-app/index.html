@@ -654,6 +654,9 @@ textarea::placeholder{color:var(--mid)}
         </div></div>
     </div>
     <p style="font-size:.78rem;color:var(--muted);line-height:1.5;margin:0">More tracks: push mp3 files named <b>work2.mp3 … work9.mp3</b> and <b>rest2.mp3 … rest9.mp3</b> into the <b>music/</b> folder next to work.mp3 — they appear here automatically.</p>
+    <div style="border-top:var(--b);margin:.15rem 0 0"></div>
+    <label class="modal-item" id="sndScopeRow"><input type="checkbox" id="sndScope" onchange="toggleSndScope(this.checked)"><span>alerts &amp; volumes for this workout only</span></label>
+    <div class="jb-sub" id="sndScopeCap" style="margin:-.2rem 0 .05rem"></div>
     <div class="jb-field"><label>end countdown (s) — empty = off</label>
       <div class="jb-sub">high ticks in the last seconds of a timed exercise</div>
       <div style="display:flex;gap:.3rem;align-items:center">
@@ -835,7 +838,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 6;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push
+const APP_SCHEMA = 7;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1440,7 +1443,7 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '', music: w.music ?? null,
+    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))}))
@@ -1459,7 +1462,7 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '', music: d.music ?? null,
+  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))})),
@@ -2450,7 +2453,7 @@ function tone(freq, at, dur, vol) {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
     o.frequency.value = freq;
-    const v = Math.min(1, vol * ((sndCfg.vol || 100) / 100));
+    const v = Math.min(1, vol * ((effSnd().vol || 100) / 100));
     g.gain.setValueAtTime(v, ctx.currentTime + at);
     g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + at + dur);
     o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + dur + .05);
@@ -2462,43 +2465,65 @@ function cdBeep()   { tone(1470, 0, .1, .4); }                              // e
 function halfBeep() { tone(523, 0, .18, .4); tone(392, .2, .3, .4); }       // halfway — falling two-tone
 function repBeep()  { tone(660, 0, .06, .22); }                             // rep pacer — tiny soft blip
 
-// ── ALERT SOUNDS (end countdown / halfway / rep pacer) — device-level prefs ──
+// ── ALERT SOUNDS (end countdown / halfway / rep pacer / volumes) ─────────────
+// Two scopes: sndCfg = the general device default (localStorage), wk.snd = an
+// optional per-workout override (travels with the workout, syncs). effSnd()
+// resolves the one in force — the override wins when the current workout has
+// one. The ♪ modal's scope toggle edits whichever is active.
 const SND_KEY = 'workout-sounds';
-let sndCfg = { cd: 0, half: false, rep: false, vol: 100, mus: 100 };
+const SND_DEFAULTS = { cd: 0, half: false, rep: false, vol: 100, mus: 100 };
+let sndCfg = { ...SND_DEFAULTS };
 try { const s = JSON.parse(localStorage.getItem(SND_KEY) || '{}'); if (s.cd > 0) sndCfg.cd = +s.cd; sndCfg.half = !!s.half; sndCfg.rep = !!s.rep; if (s.vol > 0) sndCfg.vol = +s.vol; if (s.mus > 0) sndCfg.mus = +s.mus; } catch(e) {}
 function saveSndCfg() { try { localStorage.setItem(SND_KEY, JSON.stringify(sndCfg)); } catch(e) {} }
+// the config in force for the current workout — override if it has one, else the general default
+function effSnd() { return (wk && wk.snd) || sndCfg; }
+function sndPerWorkout() { return !!(wk && wk.snd); }
+// persist an edit to whichever scope is active
+function persistSnd() { if (sndPerWorkout()) schedSave(); else saveSndCfg(); }
+// scope toggle: ON seeds the override from the current general values, OFF drops it back to the default
+function toggleSndScope(on) {
+  if (on && !(wk && wk.snd)) { wk.snd = { ...sndCfg }; schedSave(); }
+  else if (!on && wk && wk.snd) { delete wk.snd; schedSave(); }
+  applyMusVolNow();   // effective music volume may differ between the two scopes
+  renderMusicModal();
+  showStatusMsg(sndPerWorkout() ? '♪ editing this workout’s sounds' : '♪ editing the general sounds');
+}
+function applyMusVolNow() {
+  const v = (effSnd().mus || 100) / 100;
+  Object.values(musicTracks).forEach(a => { a.volume = v; });
+  if (musicPrev) musicPrev.a.volume = v;
+}
 function setSndVol(v) {
-  sndCfg.vol = Math.max(10, Math.min(300, parseInt(v, 10) || 100));
-  saveSndCfg(); renderMusicModal();
+  effSnd().vol = Math.max(10, Math.min(300, parseInt(v, 10) || 100));
+  persistSnd(); renderMusicModal();
   beep();   // instant feedback at the new level, over the music if it plays
 }
 function setMusVol(v) {
-  sndCfg.mus = Math.max(5, Math.min(100, parseInt(v, 10) || 100));
-  saveSndCfg(); renderMusicModal();
-  Object.values(musicTracks).forEach(a => { a.volume = sndCfg.mus / 100; });
-  if (musicPrev) musicPrev.a.volume = sndCfg.mus / 100;
+  effSnd().mus = Math.max(5, Math.min(100, parseInt(v, 10) || 100));
+  persistSnd(); renderMusicModal(); applyMusVolNow();
 }
 function setSndCd(v) {
-  sndCfg.cd = Math.max(0, Math.min(10, parseInt(v, 10) || 0));
-  saveSndCfg(); renderMusicModal();
-  showStatusMsg(sndCfg.cd ? '♪ countdown ticks in the last ' + sndCfg.cd + ' s' : '♪ end countdown off');
+  effSnd().cd = Math.max(0, Math.min(10, parseInt(v, 10) || 0));
+  persistSnd(); renderMusicModal();
+  showStatusMsg(effSnd().cd ? '♪ countdown ticks in the last ' + effSnd().cd + ' s' : '♪ end countdown off');
 }
-function setSndFlag(k, on) { sndCfg[k] = !!on; saveSndCfg(); }
+function setSndFlag(k, on) { effSnd()[k] = !!on; persistSnd(); }
 // fired from every tick during a timed work phase; state resets per phase instance
 let _al = { key: null, prevS: Infinity, cdFired: {}, halfFired: false, repFired: {} };
 function phaseAlerts() {
   const r = wk.run;
   if (!r || !r.startedAt || r.pausedLeft != null) return;
   if (r.phase !== 'work' || !r.endTs || !r.totMs) { _al.key = null; return; }
+  const c = effSnd();
   const key = r.ei + ':' + r.si + ':' + (r.half || '') + ':' + (r.rep || 0);
   if (_al.key !== key) _al = { key, prevS: Infinity, cdFired: {}, halfFired: false, repFired: {} };
   const remMs = r.endTs - Date.now();
   const S = Math.ceil(remMs / 1000);
   if (S > _al.prevS) _al.cdFired = {};   // +time pressed → the countdown may run again
   _al.prevS = S;
-  if (sndCfg.cd > 0 && S >= 1 && S <= sndCfg.cd && !_al.cdFired[S]) { _al.cdFired[S] = true; cdBeep(); }
-  if (sndCfg.half && !_al.halfFired && remMs <= r.totMs / 2) { _al.halfFired = true; halfBeep(); }
-  if (sndCfg.rep) {
+  if (c.cd > 0 && S >= 1 && S <= c.cd && !_al.cdFired[S]) { _al.cdFired[S] = true; cdBeep(); }
+  if (c.half && !_al.halfFired && remMs <= r.totMs / 2) { _al.halfFired = true; halfBeep(); }
+  if (c.rep) {
     const ex = wk.exercises[r.ei], st = ex && (ex.sets || [])[r.si];
     const reps = st ? parseInt(st.reps, 10) : 0;
     if (reps > 1) {
@@ -2532,13 +2557,13 @@ function musicAudio(stem) {
   if (!a) {
     a = musicTracks[stem] = new Audio('music/' + stem + '.mp3');
     a.loop = true; a.preload = 'none';
-    a.volume = (sndCfg.mus || 100) / 100;
     // missing/unreachable file → give up quietly until the ♪ toggle retries (load() below)
     a.addEventListener('error', () => {
       a._dead = true;
       if (!a._deadMsg) { a._deadMsg = true; showStatusMsg('⚠ music/' + stem + '.mp3 not found — add it to the repo', 4000); }
     });
   }
+  a.volume = (effSnd().mus || 100) / 100;   // refresh each fetch — the effective volume can change (scope toggle, load)
   return a;
 }
 // stored in the workout (syncs with it), not in localStorage
@@ -2575,7 +2600,7 @@ function previewMusic(kind) {
   const stem = el(kind === 'work' ? 'musWorkSel' : 'musRestSel').value;
   const a = new Audio('music/' + stem + '.mp3');
   a.loop = true;
-  a.volume = (sndCfg.mus || 100) / 100;
+  a.volume = (effSnd().mus || 100) / 100;
   a.addEventListener('error', () => {
     if (musicPrev && musicPrev.a === a) { showStatusMsg('⚠ music/' + stem + '.mp3 not found', 4000); stopMusicPreview(); }
   });
@@ -2623,13 +2648,17 @@ async function openMusicModal() {
 }
 function renderMusicModal() {
   const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOn ? '♪ music: on' : '♪ music: off';
-  const cd = el('sndCd'); if (cd) cd.value = sndCfg.cd || '';
-  const h = el('sndHalf'); if (h) h.checked = !!sndCfg.half;
-  const rp = el('sndRep'); if (rp) rp.checked = !!sndCfg.rep;
-  const hr = el('sndHalfRow'); if (hr) hr.classList.toggle('sel', !!sndCfg.half);
-  const rr = el('sndRepRow'); if (rr) rr.classList.toggle('sel', !!sndCfg.rep);
-  const sv = el('sndVol'); if (sv) sv.value = sndCfg.vol || 100;
-  const mv = el('musVol'); if (mv) mv.value = sndCfg.mus || 100;
+  const per = sndPerWorkout(), c = effSnd();
+  const sc = el('sndScope'); if (sc) sc.checked = per;
+  const scr = el('sndScopeRow'); if (scr) scr.classList.toggle('sel', per);
+  const cap = el('sndScopeCap'); if (cap) cap.textContent = per ? '▸ these alerts & volumes apply to THIS workout' : '▸ general — used by every workout without its own';
+  const cd = el('sndCd'); if (cd) cd.value = c.cd || '';
+  const h = el('sndHalf'); if (h) h.checked = !!c.half;
+  const rp = el('sndRep'); if (rp) rp.checked = !!c.rep;
+  const hr = el('sndHalfRow'); if (hr) hr.classList.toggle('sel', !!c.half);
+  const rr = el('sndRepRow'); if (rr) rr.classList.toggle('sel', !!c.rep);
+  const sv = el('sndVol'); if (sv) sv.value = c.vol || 100;
+  const mv = el('musVol'); if (mv) mv.value = c.mus || 100;
   const lists = musicFiles || { work: ['work'], rest: ['rest'] };
   ['work', 'rest'].forEach(kind => {
     const list = lists[kind].slice();
