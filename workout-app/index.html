@@ -639,15 +639,17 @@ textarea::placeholder{color:var(--mid)}
   <div class="modal" style="max-width:360px;gap:.6rem">
     <h2>Sound &amp; music</h2>
     <button class="modal-btn" id="musicOnBtn" onclick="toggleMusic()">♪ music: on</button>
+    <label class="modal-item" id="sndScopeRow"><input type="checkbox" id="sndScope" onchange="toggleSndScope(this.checked)"><span>tracks, alerts &amp; volumes for this workout only</span></label>
+    <div class="jb-sub" id="sndScopeCap" style="margin:-.2rem 0 .05rem"></div>
     <div class="modal-row">
       <div class="jb-field" style="flex:1"><label>work track</label>
-        <div class="jb-sub">during exercises · this workout</div>
+        <div class="jb-sub">during exercises</div>
         <div style="display:flex;gap:.3rem;align-items:center">
           <select id="musWorkSel" style="flex:1;min-width:0" onchange="setMusicTrack('work', this.value)"></select>
           <button class="btn-sm" id="musWorkPrev" onclick="previewMusic('work')" title="preview the selected file (click again to stop)">▶</button>
         </div></div>
       <div class="jb-field" style="flex:1"><label>rest track</label>
-        <div class="jb-sub">during pauses · this workout</div>
+        <div class="jb-sub">during pauses</div>
         <div style="display:flex;gap:.3rem;align-items:center">
           <select id="musRestSel" style="flex:1;min-width:0" onchange="setMusicTrack('rest', this.value)"></select>
           <button class="btn-sm" id="musRestPrev" onclick="previewMusic('rest')" title="preview the selected file (click again to stop)">▶</button>
@@ -655,8 +657,6 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <p style="font-size:.78rem;color:var(--muted);line-height:1.5;margin:0">More tracks: push mp3 files named <b>work2.mp3 … work9.mp3</b> and <b>rest2.mp3 … rest9.mp3</b> into the <b>music/</b> folder next to work.mp3 — they appear here automatically.</p>
     <div style="border-top:var(--b);margin:.15rem 0 0"></div>
-    <label class="modal-item" id="sndScopeRow"><input type="checkbox" id="sndScope" onchange="toggleSndScope(this.checked)"><span>alerts &amp; volumes for this workout only</span></label>
-    <div class="jb-sub" id="sndScopeCap" style="margin:-.2rem 0 .05rem"></div>
     <div class="jb-field"><label>end countdown (s) — empty = off</label>
       <div class="jb-sub">high ticks in the last seconds of a timed exercise</div>
       <div style="display:flex;gap:.3rem;align-items:center">
@@ -1453,6 +1453,7 @@ function applySessionData(d) {
   wk = JSON.parse(JSON.stringify(d || {}));   // deep copy — never share a reference with a stored record
   if (!wk.exercises) wk = blankWorkout();
   if (wk.prepSec == null) wk.prepSec = 120;   // sessions saved before the preparation phase existed
+  migrateWkAudio();
   renderMain(); renderNotes();
 }
 
@@ -1467,6 +1468,7 @@ function loadFromLibrary(id) {
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
       sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))})),
     run: null};
+  migrateWkAudio();
   prefillFromLast(id);
   activeLibId = e.id; markSaved();
   renderMain(); renderNotes(); renderLibrary(); schedSave();
@@ -2480,13 +2482,28 @@ function effSnd() { return (wk && wk.snd) || sndCfg; }
 function sndPerWorkout() { return !!(wk && wk.snd); }
 // persist an edit to whichever scope is active
 function persistSnd() { if (sndPerWorkout()) schedSave(); else saveSndCfg(); }
-// scope toggle: ON seeds the override from the current general values, OFF drops it back to the default
+// scope toggle: ON captures the current general values (alerts + tracks) onto the
+// workout, OFF drops the override so the workout follows the general defaults again
 function toggleSndScope(on) {
-  if (on && !(wk && wk.snd)) { wk.snd = { ...sndCfg }; schedSave(); }
-  else if (!on && wk && wk.snd) { delete wk.snd; schedSave(); }
+  if (on && !(wk && wk.snd)) {
+    const w0 = musicStem('work'), r0 = musicStem('rest');   // effective tracks under the general scope (before wk.snd exists)
+    wk.snd = { ...sndCfg };
+    wk.music = { work: w0, rest: r0 };
+    schedSave();
+  } else if (!on && wk && wk.snd) {
+    delete wk.snd; delete wk.music;
+    schedSave();
+  }
   applyMusVolNow();   // effective music volume may differ between the two scopes
+  updateMusic();      // effective track may differ too
   renderMusicModal();
   showStatusMsg(sndPerWorkout() ? '♪ editing this workout’s sounds' : '♪ editing the general sounds');
+}
+// legacy upgrade: a workout that carried a per-workout track (wk.music) from before
+// tracks joined the scope switch is now treated as per-workout — materialize wk.snd
+// so its scope reads consistently and its track override keeps applying
+function migrateWkAudio() {
+  if (wk && wk.music && (wk.music.work || wk.music.rest) && !wk.snd) wk.snd = { ...sndCfg };
 }
 function applyMusVolNow() {
   const v = (effSnd().mus || 100) / 100;
@@ -2539,18 +2556,25 @@ function phaseAlerts() {
 // pauses (rest/prep/srest). Files live in the repo's music/ folder next to
 // index.html → zero per-device setup, the browser caches them. Defaults are
 // work.mp3 / rest.mp3; extra files named work2…work9 / rest2…rest9 are
-// auto-discovered and pickable in the ♪… modal (choice stored per device).
+// auto-discovered and pickable in the ♪ modal. The choice follows the same
+// general/per-workout scope as the alerts: general default in localStorage
+// (musicSelDev) or a per-workout override (wk.music) that syncs with it.
 // Each track keeps its position while the other plays, so it resumes where
 // it left off.
 const MUSIC_KEY = 'workout-music';
 const MUSIC_SEL_KEY = 'workout-music-sel';
 let musicOn = true; try { musicOn = localStorage.getItem(MUSIC_KEY) !== '0'; } catch(e) {}
-// device-level choice from before tracks became per-workout — kept only as the
-// fallback for workouts that carry no wk.music of their own; no longer written
+// the GENERAL (device-level) default tracks — used by any workout in general
+// scope; the per-workout override (wk.music) applies only when that workout is
+// in per-workout scope. Symmetric with sndCfg vs wk.snd for the alerts.
 let musicSelDev = { work: 'work', rest: 'rest' };
 try { const s = JSON.parse(localStorage.getItem(MUSIC_SEL_KEY) || '{}'); if (s.work) musicSelDev.work = s.work; if (s.rest) musicSelDev.rest = s.rest; } catch(e) {}
+function saveMusSelDev() { try { localStorage.setItem(MUSIC_SEL_KEY, JSON.stringify(musicSelDev)); } catch(e) {} }
 // stem (file in music/, no extension) the current workout uses for a kind
-function musicStem(kind) { return (wk && wk.music && wk.music[kind]) || musicSelDev[kind] || kind; }
+function musicStem(kind) {
+  if (sndPerWorkout() && wk.music && wk.music[kind]) return wk.music[kind];   // per-workout override
+  return musicSelDev[kind] || kind;                                          // general default
+}
 const musicTracks = {};   // lazily created looping <audio> elements, keyed by file stem
 function musicAudio(stem) {
   let a = musicTracks[stem];
@@ -2566,14 +2590,21 @@ function musicAudio(stem) {
   a.volume = (effSnd().mus || 100) / 100;   // refresh each fetch — the effective volume can change (scope toggle, load)
   return a;
 }
-// stored in the workout (syncs with it), not in localStorage
+// writes to whichever scope is active: per-workout override (wk.music, syncs) or
+// the general device default (musicSelDev, localStorage)
 function setMusicTrack(kind, stem) {
   if (musicStem(kind) === stem) return;
-  wk.music = wk.music || {};
-  wk.music[kind] = stem;
-  schedSave();
-  showStatusMsg('♪ ' + kind + ' track of this workout → ' + stem + '.mp3');
-  updateMusic();
+  if (sndPerWorkout()) {
+    wk.music = wk.music || {};
+    wk.music[kind] = stem;
+    schedSave();
+    showStatusMsg('♪ ' + kind + ' track of this workout → ' + stem + '.mp3');
+  } else {
+    musicSelDev[kind] = stem;
+    saveMusSelDev();
+    showStatusMsg('♪ general ' + kind + ' track → ' + stem + '.mp3');
+  }
+  updateMusic(); renderMusicModal();
   if (musicPrev && musicPrev.kind === kind) { stopMusicPreview(); previewMusic(kind); }   // audition follows the dropdown
 }
 // per-exercise override — that exercise's work phases play this file instead
@@ -2651,7 +2682,7 @@ function renderMusicModal() {
   const per = sndPerWorkout(), c = effSnd();
   const sc = el('sndScope'); if (sc) sc.checked = per;
   const scr = el('sndScopeRow'); if (scr) scr.classList.toggle('sel', per);
-  const cap = el('sndScopeCap'); if (cap) cap.textContent = per ? '▸ these alerts & volumes apply to THIS workout' : '▸ general — used by every workout without its own';
+  const cap = el('sndScopeCap'); if (cap) cap.textContent = per ? '▸ tracks, alerts & volumes apply to THIS workout' : '▸ general — used by every workout without its own';
   const cd = el('sndCd'); if (cd) cd.value = c.cd || '';
   const h = el('sndHalf'); if (h) h.checked = !!c.half;
   const rp = el('sndRep'); if (rp) rp.checked = !!c.rep;
