@@ -666,6 +666,14 @@ textarea::placeholder{color:var(--mid)}
       <label class="modal-item" id="sndRepRow" style="flex:1"><input type="checkbox" id="sndRep" onchange="setSndFlag('rep', this.checked);renderMusicModal()"><span>rep pacer — soft blip per rep, computed from reps × the set timer</span></label>
       <button class="btn-sm" onclick="repBeep()" title="preview the rep blip">♪</button>
     </div>
+    <div class="modal-row">
+      <div class="jb-field" style="flex:1"><label>alert volume (%)</label>
+        <div class="jb-sub">10–300 · beeps over the music</div>
+        <input id="sndVol" type="text" inputmode="numeric" onchange="setSndVol(this.value)"></div>
+      <div class="jb-field" style="flex:1"><label>music volume (%)</label>
+        <div class="jb-sub">5–100 · lower it under the beeps</div>
+        <input id="musVol" type="text" inputmode="numeric" onchange="setMusVol(this.value)"></div>
+    </div>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('musicModal')">close</button></div>
   </div>
 </div>
@@ -2428,7 +2436,8 @@ function updateNowBar() {
     cueEl.style.display = cue ? 'block' : 'none';
   }
 }
-// WebAudio tones mix with the <audio> music — an alert never pauses the tracks
+// WebAudio tones mix with the <audio> music — an alert never pauses the tracks.
+// `vol` is the tone's base level; the user's alert-volume % scales it (capped at 1).
 function tone(freq, at, dur, vol) {
   try {
     const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
@@ -2437,22 +2446,34 @@ function tone(freq, at, dur, vol) {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
     o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, ctx.currentTime + at);
+    const v = Math.min(1, vol * ((sndCfg.vol || 100) / 100));
+    g.gain.setValueAtTime(v, ctx.currentTime + at);
     g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + at + dur);
     o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + dur + .05);
   } catch(e) {}
 }
 // each alert has its own voice so they can't be mistaken for one another
-function beep()     { tone(880, 0, .25, .25); tone(880, .35, .25, .25); }   // phase end — two mid pulses
-function cdBeep()   { tone(1470, 0, .09, .2); }                             // end countdown — short high tick
-function halfBeep() { tone(523, 0, .18, .22); tone(392, .2, .3, .22); }     // halfway — falling two-tone
-function repBeep()  { tone(660, 0, .05, .12); }                             // rep pacer — tiny soft blip
+function beep()     { tone(880, 0, .25, .4); tone(880, .35, .25, .4); }     // phase end — two mid pulses
+function cdBeep()   { tone(1470, 0, .1, .4); }                              // end countdown — short high tick
+function halfBeep() { tone(523, 0, .18, .4); tone(392, .2, .3, .4); }       // halfway — falling two-tone
+function repBeep()  { tone(660, 0, .06, .22); }                             // rep pacer — tiny soft blip
 
 // ── ALERT SOUNDS (end countdown / halfway / rep pacer) — device-level prefs ──
 const SND_KEY = 'workout-sounds';
-let sndCfg = { cd: 0, half: false, rep: false };
-try { const s = JSON.parse(localStorage.getItem(SND_KEY) || '{}'); if (s.cd > 0) sndCfg.cd = +s.cd; sndCfg.half = !!s.half; sndCfg.rep = !!s.rep; } catch(e) {}
+let sndCfg = { cd: 0, half: false, rep: false, vol: 100, mus: 100 };
+try { const s = JSON.parse(localStorage.getItem(SND_KEY) || '{}'); if (s.cd > 0) sndCfg.cd = +s.cd; sndCfg.half = !!s.half; sndCfg.rep = !!s.rep; if (s.vol > 0) sndCfg.vol = +s.vol; if (s.mus > 0) sndCfg.mus = +s.mus; } catch(e) {}
 function saveSndCfg() { try { localStorage.setItem(SND_KEY, JSON.stringify(sndCfg)); } catch(e) {} }
+function setSndVol(v) {
+  sndCfg.vol = Math.max(10, Math.min(300, parseInt(v, 10) || 100));
+  saveSndCfg(); renderMusicModal();
+  beep();   // instant feedback at the new level, over the music if it plays
+}
+function setMusVol(v) {
+  sndCfg.mus = Math.max(5, Math.min(100, parseInt(v, 10) || 100));
+  saveSndCfg(); renderMusicModal();
+  Object.values(musicTracks).forEach(a => { a.volume = sndCfg.mus / 100; });
+  if (musicPrev) musicPrev.a.volume = sndCfg.mus / 100;
+}
 function setSndCd(v) {
   sndCfg.cd = Math.max(0, Math.min(10, parseInt(v, 10) || 0));
   saveSndCfg(); renderMusicModal();
@@ -2507,6 +2528,7 @@ function musicAudio(stem) {
   if (!a) {
     a = musicTracks[stem] = new Audio('music/' + stem + '.mp3');
     a.loop = true; a.preload = 'none';
+    a.volume = (sndCfg.mus || 100) / 100;
     // missing/unreachable file → give up quietly until the ♪ toggle retries (load() below)
     a.addEventListener('error', () => {
       a._dead = true;
@@ -2549,6 +2571,7 @@ function previewMusic(kind) {
   const stem = el(kind === 'work' ? 'musWorkSel' : 'musRestSel').value;
   const a = new Audio('music/' + stem + '.mp3');
   a.loop = true;
+  a.volume = (sndCfg.mus || 100) / 100;
   a.addEventListener('error', () => {
     if (musicPrev && musicPrev.a === a) { showStatusMsg('⚠ music/' + stem + '.mp3 not found', 4000); stopMusicPreview(); }
   });
@@ -2601,6 +2624,8 @@ function renderMusicModal() {
   const rp = el('sndRep'); if (rp) rp.checked = !!sndCfg.rep;
   const hr = el('sndHalfRow'); if (hr) hr.classList.toggle('sel', !!sndCfg.half);
   const rr = el('sndRepRow'); if (rr) rr.classList.toggle('sel', !!sndCfg.rep);
+  const sv = el('sndVol'); if (sv) sv.value = sndCfg.vol || 100;
+  const mv = el('musVol'); if (mv) mv.value = sndCfg.mus || 100;
   const lists = musicFiles || { work: ['work'], rest: ['rest'] };
   ['work', 'rest'].forEach(kind => {
     const list = lists[kind].slice();
