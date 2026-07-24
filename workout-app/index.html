@@ -261,6 +261,10 @@ textarea::placeholder{color:var(--mid)}
   .app{padding:.75rem .65rem;gap:.7rem}
   .setup-grid{grid-template-columns:1fr}
   .checks-row{gap:.35rem}
+  .rest-bar{padding:.5rem .55rem;gap:.5rem}
+  .np-z{width:2.6em}
+  .now-prog-txt{font-size:1.15rem}
+  .iv-name{min-width:3.5em}
 }
 
 /* NOTES TABS (optional — keep for multi-pane notes) */
@@ -282,9 +286,21 @@ textarea::placeholder{color:var(--mid)}
 .wk-est{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);flex-shrink:0}
 .rest-bar{display:flex;align-items:center;gap:.8rem;border:var(--bh);border-radius:var(--r);padding:.5rem .9rem;margin-bottom:.75rem;flex-wrap:wrap}
 .rest-bar.over{background:var(--black)}
-.rest-bar.over .rest-time,.rest-bar.over .rest-label{color:var(--w)}
+.rest-bar.over .now-prog-txt,.rest-bar.over .rest-label{color:var(--w)}
+.rest-bar.over .now-prog{border-color:var(--w)}
 .rest-label{font-size:.72rem;font-weight:600;letter-spacing:.09em;color:var(--muted);text-transform:uppercase;font-family:'DM Mono',monospace;max-width:11em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rest-time{font-family:'DM Mono',monospace;font-size:2.4rem;line-height:1;color:var(--black)}
+.now-prog{flex:1 1 12rem;min-width:min(10rem,100%);height:3.2rem;position:relative;border:var(--bh);border-radius:var(--r);overflow:hidden;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.now-prog-fill{position:absolute;top:0;left:0;bottom:0;width:0;background:var(--mid)}
+.now-prog.paused .now-prog-fill{background:var(--light)}
+.now-prog-txt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;font-family:'DM Mono',monospace;font-size:1.3rem;color:var(--black)}
+.np-total{font-size:.66rem;color:var(--muted)}
+.rest-bar.over .np-total{color:var(--mid)}
+.np-z{position:absolute;width:3.2em;height:50%;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--dark);cursor:pointer}
+.np-tl{top:0;left:0;border-right:1px solid var(--light);border-bottom:1px solid var(--light)}
+.np-bl{bottom:0;left:0;border-right:1px solid var(--light)}
+.np-tr{top:0;right:0;border-left:1px solid var(--light);border-bottom:1px solid var(--light)}
+.np-br{bottom:0;right:0;border-left:1px solid var(--light)}
+.rest-bar.over .np-z{color:var(--w);border-color:var(--muted)}
 .now-ex{flex-basis:100%;font-size:.82rem;color:var(--dark);line-height:1.4;word-break:break-word}
 .now-set{flex-basis:100%;font-family:'DM Mono',monospace;font-size:1.05rem;color:var(--black);line-height:1.3}
 .now-next{flex-basis:100%;font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);line-height:1.4;word-break:break-word}
@@ -293,7 +309,7 @@ textarea::placeholder{color:var(--mid)}
 
 /* WORKOUT — exercise blocks + set rows */
 .ex-block{border:var(--b);border-radius:var(--r);padding:.55rem .7rem;display:flex;flex-direction:column;gap:.4rem;margin-bottom:.6rem;min-width:0}
-.ex-head{display:flex;align-items:center;gap:.45rem;min-width:0}
+.ex-head{display:flex;align-items:center;gap:.45rem;min-width:0;flex-wrap:wrap}
 .ex-code{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;width:5.5em;flex-shrink:0;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.15rem 0}
 .ex-name{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.92rem;font-weight:500;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.15rem 0}
 .ex-code:focus,.ex-name:focus{border-bottom:1px solid var(--black)}
@@ -306,7 +322,7 @@ textarea::placeholder{color:var(--mid)}
 .ex-snote-in{font-size:.74rem;font-style:italic;color:var(--dark)}
 .ex-snote-in:focus{outline:none;border-bottom:1px solid var(--black)}
 .ex-sets{display:flex;flex-direction:column;gap:.3rem}
-.set-row{display:flex;align-items:center;gap:.3rem;min-width:0}
+.set-row{display:flex;align-items:center;gap:.3rem;min-width:0;flex-wrap:wrap}
 .set-row.done{opacity:.55}
 .set-num{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--muted);width:1.2em;text-align:right;flex-shrink:0}
 /* inputs must be allowed to shrink, otherwise the row overflows the panel and gets clipped */
@@ -333,7 +349,7 @@ textarea::placeholder{color:var(--mid)}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-unit{color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace;flex-shrink:0;margin-left:-.05rem}
 .set-t{width:4.5em;min-width:3.2em}
-.set-dur{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.set-dur{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);flex:1 0 auto;white-space:nowrap}
 /* rounds view (strength: one round = each exercise once) */
 .round-head{display:flex;align-items:center;gap:.4rem;border-bottom:1px solid var(--light);padding-bottom:.25rem;margin-bottom:.15rem}
 .rnd-tgl{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.75rem;line-height:1;padding:0;flex-shrink:0}
@@ -1491,13 +1507,14 @@ function renderMain() {
   </div>
   <div class="rest-bar" id="nowBar" style="display:none">
     <span class="rest-label" id="nowLabel">rest</span>
-    <span class="rest-time" id="nowTime">0:00</span>
-    <span style="flex:1"></span>
-    <button class="btn-sm" onclick="stepBack()" title="back to the previous exercise / side">⏮</button>
-    <button class="btn-sm" id="pauseBtn" onclick="pauseResume()" title="pause / resume the sequence">⏸</button>
-    <button class="btn-sm" onclick="skipPhase()" title="skip to the next phase">⏭</button>
-    <button class="btn-sm" onclick="addPhase(-${adj})" title="shorten the current phase by ${adj} s (configurable via ±step)">−${adj}s</button>
-    <button class="btn-sm" onclick="addPhase(${adj})" title="add ${adj} s to the current phase (configurable via ±step)">+${adj}s</button>
+    <div class="now-prog" id="nowProg" onclick="pauseResume()" title="tap the middle to pause / resume">
+      <div class="now-prog-fill" id="nowProgFill"></div>
+      <div class="now-prog-txt"><span id="nowTime">0:00</span><span class="np-total" id="nowTotal"></span></div>
+      <div class="np-z np-tl" onclick="event.stopPropagation();stepBack()" title="back to the previous exercise / side">⏮</div>
+      <div class="np-z np-bl" onclick="event.stopPropagation();addPhase(-${adj})" title="shorten the current phase by ${adj} s (configurable via ±step)">−${adj}</div>
+      <div class="np-z np-tr" onclick="event.stopPropagation();skipPhase()" title="skip to the next phase">⏭</div>
+      <div class="np-z np-br" onclick="event.stopPropagation();addPhase(${adj})" title="add ${adj} s to the current phase (configurable via ±step)">+${adj}</div>
+    </div>
     <div class="now-ex" id="nowEx"></div>
     <div class="now-set" id="nowSet" style="display:none"></div>
     <div class="now-next" id="nowNext" style="display:none"></div>
@@ -2052,7 +2069,7 @@ function removeSet(ei, si) {
 // Planned times drive the countdowns; a step without a time waits for a manual ✓.
 // Absolute timestamps (endTs) → the sequence survives a reload; pausedLeft = paused remainder in ms.
 function ensureRun() {
-  if (!wk.run) wk.run = {startedAt:null, phase:null, ei:null, si:null, rep:0, endTs:null, pausedLeft:null, half:null};
+  if (!wk.run) wk.run = {startedAt:null, phase:null, ei:null, si:null, rep:0, endTs:null, totMs:null, pausedLeft:null, half:null};
   return wk.run;
 }
 // execution order of [exercise, interval, repetition] steps — strength runs round-major
@@ -2095,8 +2112,8 @@ function beginWorkPhase(ei, si, rep) {
   const ex = wk.exercises[ei], s = ex.sets[si];
   r.ei = ei; r.si = si; r.rep = rep || 0; r.pausedLeft = null;
   r.half = ex.side ? 'L' : null;
-  if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
-  else { r.phase = 'manual'; r.endTs = null; }
+  if (s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.totMs = s.durSec * 1000; r.endTs = Date.now() + r.totMs; }
+  else { r.phase = 'manual'; r.endTs = null; r.totMs = null; }
 }
 // ▶ on a row: jump to that interval (its first pending repetition) and continue from there
 function jumpToStep(ei, si) {
@@ -2115,7 +2132,7 @@ function startWorkout() {
   if (r.startedAt) return;
   r.startedAt = Date.now();
   const prep = +wk.prepSec || 0;
-  if (prep > 0 && nextPending()) { r.phase = 'prep'; r.ei = null; r.si = null; r.endTs = Date.now() + prep * 1000; r.pausedLeft = null; }
+  if (prep > 0 && nextPending()) { r.phase = 'prep'; r.ei = null; r.si = null; r.totMs = prep * 1000; r.endTs = Date.now() + r.totMs; r.pausedLeft = null; }
   else startNextWork();
   schedSave(); renderMain(); updateMusic();
   showStatusMsg('▶ workout started');
@@ -2123,7 +2140,7 @@ function startWorkout() {
 function startNextWork() {
   const r = ensureRun();
   const nxt = nextPending();
-  if (!nxt) { r.phase = r.startedAt ? 'done' : null; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
+  if (!nxt) { r.phase = r.startedAt ? 'done' : null; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.totMs = null; r.pausedLeft = null; r.half = null; return; }
   beginWorkPhase(nxt[0], nxt[1], nxt[2]);
 }
 // work countdown elapsed / skip: on a per-side exercise the left half hands over to the right
@@ -2134,7 +2151,7 @@ function advanceWorkStep() {
   if (ex && ex.side && r.half === 'L') {
     r.half = 'R'; r.pausedLeft = null;
     const sp = ex.sidePauseSec != null ? +ex.sidePauseSec : (+wk.sidePauseSec || 0);
-    if (sp > 0) { r.phase = 'srest'; r.endTs = Date.now() + sp * 1000; return; }   // switch-side pause, then the right side
+    if (sp > 0) { r.phase = 'srest'; r.totMs = sp * 1000; r.endTs = Date.now() + r.totMs; return; }   // switch-side pause, then the right side
     startRightHalf();
     return;
   }
@@ -2144,13 +2161,13 @@ function startRightHalf() {
   const r = ensureRun();
   const ex = wk.exercises[r.ei], s = ex && ex.sets[r.si];
   r.pausedLeft = null;
-  if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
-  else { r.phase = 'manual'; r.endTs = null; }
+  if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.totMs = s.durSec * 1000; r.endTs = Date.now() + r.totMs; }
+  else { r.phase = 'manual'; r.endTs = null; r.totMs = null; }
 }
 function startRestPhase() {
   const r = ensureRun();
   const nxt = nextPending();
-  if (!nxt) { r.phase = 'done'; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.pausedLeft = null; r.half = null; return; }
+  if (!nxt) { r.phase = 'done'; r.ei = null; r.si = null; r.rep = 0; r.endTs = null; r.totMs = null; r.pausedLeft = null; r.half = null; return; }
   // rest hierarchy after the just-completed step: its own per-step override (restSec, the ↳ gap)
   // beats the ⚙ inside-rest (same exercise) beats the ⚙ after-rest beats the workout-level values
   const cex = r.ei != null ? wk.exercises[r.ei] : null;
@@ -2158,7 +2175,7 @@ function startRestPhase() {
   const sameEx = r.ei != null && nxt[0] === r.ei;
   const p = plannedRestSec(cex, cs, sameEx);
   // ei/si stay pointing at the completed step during the rest — nextPending continues after it
-  if (p > 0) { r.phase = 'rest'; r.endTs = Date.now() + p * 1000; r.pausedLeft = null; r.half = null; }
+  if (p > 0) { r.phase = 'rest'; r.totMs = p * 1000; r.endTs = Date.now() + r.totMs; r.pausedLeft = null; r.half = null; }
   else startNextWork();
 }
 function completeCurrentWork() {   // both halves done (or ✓ on the current row) → count the repetition, rest
@@ -2196,6 +2213,9 @@ function addPhase(sec) {
   if (r.pausedLeft != null) r.pausedLeft = Math.max(0, r.pausedLeft + sec * 1000);
   else if (r.endTs) r.endTs = Math.max(Date.now(), r.endTs + sec * 1000);   // shortening below zero ends the phase on the next tick
   else return;
+  // the strip's total shifts with the phase so its fill fraction stays continuous
+  const rem = r.pausedLeft != null ? r.pausedLeft : Math.max(0, r.endTs - Date.now());
+  r.totMs = Math.max((r.totMs || 0) + sec * 1000, rem, 1000);
   schedSave(); tick();
 }
 // ⏮ one phase back: R half → restart the left side; otherwise re-open the most recently
@@ -2217,8 +2237,8 @@ function stepBack() {
     r.half = 'L';   // right side (or the switch pause) → back to the left side
     const s = wk.exercises[r.ei] && wk.exercises[r.ei].sets[r.si];
     r.pausedLeft = null;
-    if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.endTs = Date.now() + s.durSec * 1000; }
-    else { r.phase = 'manual'; r.endTs = null; }
+    if (s && s.durSec != null && s.durSec > 0) { r.phase = 'work'; r.totMs = s.durSec * 1000; r.endTs = Date.now() + r.totMs; }
+    else { r.phase = 'manual'; r.endTs = null; r.totMs = null; }
   } else {
     // during the rest the position still points at the just-completed step → reopen exactly that repetition
     const rex = r.ei != null ? wk.exercises[r.ei] : null;
@@ -2314,10 +2334,16 @@ function updateNowBar() {
   const bar = el('nowBar'); if (!bar) return;
   if (!r || !r.startedAt || !r.phase) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
-  const lbl = el('nowLabel'), exl = el('nowEx'), t = el('nowTime'), pb = el('pauseBtn');
+  const lbl = el('nowLabel'), exl = el('nowEx'), t = el('nowTime');
   const remMs = r.pausedLeft != null ? r.pausedLeft : (r.endTs ? r.endTs - Date.now() : null);
   bar.classList.toggle('over', r.phase === 'done');
-  if (pb) { pb.textContent = r.pausedLeft != null ? '▶' : '⏸'; pb.style.display = (r.phase === 'work' || r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') ? '' : 'none'; }
+  // progress strip: the fill is the remaining share of the phase, tapping it pauses/resumes
+  const prog = el('nowProg'), fill = el('nowProgFill');
+  const frac = (remMs != null && r.totMs > 0) ? Math.max(0, Math.min(1, remMs / r.totMs)) : 0;
+  if (fill) fill.style.width = (frac * 100).toFixed(1) + '%';
+  if (prog) prog.classList.toggle('paused', r.pausedLeft != null);
+  const tot = el('nowTotal');
+  if (tot) tot.textContent = 'total ' + mmss((Date.now() - r.startedAt) / 1000);
   const repTag = (ex, rep) => (ex && exRepeat(ex) > 1) ? ' · rep ' + ((rep || 0) + 1) + '/' + exRepeat(ex) : '';
   if (r.phase === 'prep') {
     lbl.textContent = 'prep';
@@ -2351,6 +2377,7 @@ function updateNowBar() {
     exl.textContent = 'all exercises complete — ■ finish & log';
     t.textContent = '✓';
   }
+  if (r.pausedLeft != null) t.textContent = '▶ ' + t.textContent;
   // current set numbers + a preview of what comes next (kept to one line each)
   const setEl = el('nowSet'), nextEl = el('nowNext');
   let setTxt = '', nextTxt = '';
