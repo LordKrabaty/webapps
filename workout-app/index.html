@@ -635,7 +635,7 @@ textarea::placeholder{color:var(--mid)}
 <!-- Music tracks modal (which mp3 plays during work / rest) -->
 <div class="modal-bg" id="musicModal">
   <div class="modal" style="max-width:360px;gap:.6rem">
-    <h2>Music</h2>
+    <h2>Sound &amp; music</h2>
     <button class="modal-btn" id="musicOnBtn" onclick="toggleMusic()">♪ music: on</button>
     <div class="modal-row">
       <div class="jb-field" style="flex:1"><label>work track</label>
@@ -652,6 +652,20 @@ textarea::placeholder{color:var(--mid)}
         </div></div>
     </div>
     <p style="font-size:.78rem;color:var(--muted);line-height:1.5;margin:0">More tracks: push mp3 files named <b>work2.mp3 … work9.mp3</b> and <b>rest2.mp3 … rest9.mp3</b> into the <b>music/</b> folder next to work.mp3 — they appear here automatically.</p>
+    <div class="jb-field"><label>end countdown (s) — empty = off</label>
+      <div class="jb-sub">high ticks in the last seconds of a timed exercise</div>
+      <div style="display:flex;gap:.3rem;align-items:center">
+        <input id="sndCd" type="text" inputmode="numeric" style="flex:1;min-width:0" placeholder="off" onchange="setSndCd(this.value)">
+        <button class="btn-sm" onclick="cdBeep()" title="preview the countdown tick">♪</button>
+      </div></div>
+    <div style="display:flex;gap:.3rem;align-items:stretch">
+      <label class="modal-item" id="sndHalfRow" style="flex:1"><input type="checkbox" id="sndHalf" onchange="setSndFlag('half', this.checked);renderMusicModal()"><span>halfway alert — falling beep at half of a timed exercise</span></label>
+      <button class="btn-sm" onclick="halfBeep()" title="preview the halfway sound">♪</button>
+    </div>
+    <div style="display:flex;gap:.3rem;align-items:stretch">
+      <label class="modal-item" id="sndRepRow" style="flex:1"><input type="checkbox" id="sndRep" onchange="setSndFlag('rep', this.checked);renderMusicModal()"><span>rep pacer — soft blip per rep, computed from reps × the set timer</span></label>
+      <button class="btn-sm" onclick="repBeep()" title="preview the rep blip">♪</button>
+    </div>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('musicModal')">close</button></div>
   </div>
 </div>
@@ -1502,7 +1516,7 @@ function renderMain() {
     <span class="wk-elapsed" id="wkElapsed">0:00</span>
     ${(() => { const est = estimateDur(wk); return est.sec ? `<span class="wk-est" title="estimated total with the current settings (planned times + rests + prep)">${est.partial ? '≥' : '~'}${fmtEst(est.sec)}</span>` : ''; })()}
     <button class="btn-sm" id="wkFinishBtn" onclick="finishWorkout()" style="display:none">■ finish &amp; log</button>
-    <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="workout music — on/off toggle and track selection (the work track plays during exercises, the rest track during pauses)">${musicOn ? '♪' : '♪ off'}</button>
+    <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="sound &amp; music — music on/off, track selection, end countdown, halfway alert, rep pacer">${musicOn ? '♪' : '♪ off'}</button>
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
   <div class="rest-bar" id="nowBar" style="display:none">
@@ -2297,6 +2311,7 @@ function tick() {
     if (r.phase === 'rest' || r.phase === 'prep') { beep(); startNextWork(); saveSession(); renderMain(); updateMusic(); return; }
   }
   updateNowBar();
+  phaseAlerts();
   updateMusic();
 }
 // "10 × 20kg · 2:00" for a step — what the user needs to grab/do
@@ -2413,20 +2428,60 @@ function updateNowBar() {
     cueEl.style.display = cue ? 'block' : 'none';
   }
 }
-function beep() {
+// WebAudio tones mix with the <audio> music — an alert never pauses the tracks
+function tone(freq, at, dur, vol) {
   try {
     const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
     const ctx = window._actx || (window._actx = new C());
     if (ctx.state === 'suspended') ctx.resume();
-    [0, .35].forEach(t => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value = 880;
-      g.gain.setValueAtTime(.25, ctx.currentTime + t);
-      g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + t + .25);
-      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + .3);
-    });
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, ctx.currentTime + at);
+    g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + at + dur);
+    o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + dur + .05);
   } catch(e) {}
+}
+// each alert has its own voice so they can't be mistaken for one another
+function beep()     { tone(880, 0, .25, .25); tone(880, .35, .25, .25); }   // phase end — two mid pulses
+function cdBeep()   { tone(1470, 0, .09, .2); }                             // end countdown — short high tick
+function halfBeep() { tone(523, 0, .18, .22); tone(392, .2, .3, .22); }     // halfway — falling two-tone
+function repBeep()  { tone(660, 0, .05, .12); }                             // rep pacer — tiny soft blip
+
+// ── ALERT SOUNDS (end countdown / halfway / rep pacer) — device-level prefs ──
+const SND_KEY = 'workout-sounds';
+let sndCfg = { cd: 0, half: false, rep: false };
+try { const s = JSON.parse(localStorage.getItem(SND_KEY) || '{}'); if (s.cd > 0) sndCfg.cd = +s.cd; sndCfg.half = !!s.half; sndCfg.rep = !!s.rep; } catch(e) {}
+function saveSndCfg() { try { localStorage.setItem(SND_KEY, JSON.stringify(sndCfg)); } catch(e) {} }
+function setSndCd(v) {
+  sndCfg.cd = Math.max(0, Math.min(10, parseInt(v, 10) || 0));
+  saveSndCfg(); renderMusicModal();
+  showStatusMsg(sndCfg.cd ? '♪ countdown ticks in the last ' + sndCfg.cd + ' s' : '♪ end countdown off');
+}
+function setSndFlag(k, on) { sndCfg[k] = !!on; saveSndCfg(); }
+// fired from every tick during a timed work phase; state resets per phase instance
+let _al = { key: null, prevS: Infinity, cdFired: {}, halfFired: false, repFired: {} };
+function phaseAlerts() {
+  const r = wk.run;
+  if (!r || !r.startedAt || r.pausedLeft != null) return;
+  if (r.phase !== 'work' || !r.endTs || !r.totMs) { _al.key = null; return; }
+  const key = r.ei + ':' + r.si + ':' + (r.half || '') + ':' + (r.rep || 0);
+  if (_al.key !== key) _al = { key, prevS: Infinity, cdFired: {}, halfFired: false, repFired: {} };
+  const remMs = r.endTs - Date.now();
+  const S = Math.ceil(remMs / 1000);
+  if (S > _al.prevS) _al.cdFired = {};   // +time pressed → the countdown may run again
+  _al.prevS = S;
+  if (sndCfg.cd > 0 && S >= 1 && S <= sndCfg.cd && !_al.cdFired[S]) { _al.cdFired[S] = true; cdBeep(); }
+  if (sndCfg.half && !_al.halfFired && remMs <= r.totMs / 2) { _al.halfFired = true; halfBeep(); }
+  if (sndCfg.rep) {
+    const ex = wk.exercises[r.ei], st = ex && (ex.sets || [])[r.si];
+    const reps = st ? parseInt(st.reps, 10) : 0;
+    if (reps > 1) {
+      const per = r.totMs / reps;
+      const done = Math.floor((r.totMs - remMs) / per);   // reps completed so far
+      if (done >= 1 && done < reps && !_al.repFired[done]) { _al.repFired[done] = true; repBeep(); }
+    }
+  }
 }
 
 // ── MUSIC (repo-hosted MP3 loops) ───────────────────────────────────────────
@@ -2541,6 +2596,11 @@ async function openMusicModal() {
 }
 function renderMusicModal() {
   const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOn ? '♪ music: on' : '♪ music: off';
+  const cd = el('sndCd'); if (cd) cd.value = sndCfg.cd || '';
+  const h = el('sndHalf'); if (h) h.checked = !!sndCfg.half;
+  const rp = el('sndRep'); if (rp) rp.checked = !!sndCfg.rep;
+  const hr = el('sndHalfRow'); if (hr) hr.classList.toggle('sel', !!sndCfg.half);
+  const rr = el('sndRepRow'); if (rr) rr.classList.toggle('sel', !!sndCfg.rep);
   const lists = musicFiles || { work: ['work'], rest: ['rest'] };
   ['work', 'rest'].forEach(kind => {
     const list = lists[kind].slice();
