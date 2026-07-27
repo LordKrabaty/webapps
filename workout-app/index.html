@@ -447,6 +447,10 @@ textarea::placeholder{color:var(--mid)}
 /* log edit modal */
 .le-ex{display:flex;gap:.4rem;align-items:center;margin-top:.35rem;border-bottom:1px solid var(--light);padding-bottom:.15rem}
 .le-row{display:flex;gap:.4rem;align-items:center;padding:.15rem 0}
+.le-note{width:100%;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.3rem .4rem;outline:none;resize:none;overflow:hidden;line-height:1.4;flex:0 0 auto;min-height:0}
+.le-note:focus{outline:none;border-color:var(--black)}
+.le-note-ex{font-size:.74rem;color:var(--dark);margin-top:.2rem}
+.le-note-set{font-size:.72rem;color:var(--muted);margin:.05rem 0 .2rem 1.4rem;width:auto}
 .log-tools{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.1rem}
 .log-filter{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.35rem}
 
@@ -2858,7 +2862,8 @@ function confirmFinish() {
   wk.run = null; wk.note = '';
   wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });   // planned times (durSec) stay for next time
   schedSave(); renderMain(); renderNotes(); renderLibrary(); updateMusic();   // the weekly badge counts logged sessions
-  openLogEntry(entry.id, true);   // pop the just-logged entry open in the log tab so notes can be added right away
+  openLogEntry(entry.id);         // switch to the log tab + expand the entry in the background
+  openLogEdit(entry.id);          // pop the full editor right away — ratings + notes can be added/adjusted
   showSave('✓ workout logged (' + mmss(totalSec) + ')');
 }
 // jump to the log tab, expand one entry (clearing any collapse hiding it), scroll it in & focus its note
@@ -3321,7 +3326,8 @@ function renderLogEdit() {
   el('logEditBody').innerHTML = `
     <div class="jb-field"><label>name</label><input type="text" value="${esc(d.name || '')}" spellcheck="false" oninput="logEditDraft.name=this.value"></div>
     <div class="jb-field"><label>total time (m:ss)</label><input type="text" value="${mmss(d.totalSec || 0)}" onchange="const v=parseDur(this.value);if(v!=null)logEditDraft.totalSec=v;this.value=mmss(logEditDraft.totalSec||0)"></div>
-    ${scoreRow}`
+    ${scoreRow}
+    <div class="jb-field"><label>session note</label><textarea class="le-note" rows="2" oninput="autoResizeTA(this);logEditDraft.note=this.value" placeholder="how it went — feel, PBs, aches…">${esc(d.note || '')}</textarea></div>`
     + (d.entries || []).map((e, ei) => `
       <div class="le-ex">
         <input class="ex-code" value="${esc(e.code || '')}" placeholder="CODE" oninput="logEditDraft.entries[${ei}].code=this.value">
@@ -3330,6 +3336,7 @@ function renderLogEdit() {
         <button class="btn-add" onclick="leAddSet(${ei})" title="add a round to this exercise">+</button>
         <button class="ex-del" onclick="leDelEx(${ei})" title="remove this exercise">✕</button>
       </div>
+      <textarea class="le-note le-note-ex" rows="1" oninput="autoResizeTA(this);logEditDraft.entries[${ei}].note=this.value" placeholder="· exercise note">${esc(e.note || '')}</textarea>
       ${(e.sets || []).map((s, si) => `
         <div class="le-row">
           <span class="set-num">${s.rd || si + 1}</span>
@@ -3341,8 +3348,10 @@ function renderLogEdit() {
           <span class="set-x" title="rest after this ${s.iname != null ? 'interval' : 'set'}">↳</span>
           <input class="set-in set-t" type="text" inputmode="numeric" value="${s.restSec != null ? mmss(s.restSec) : ''}" title="rest after this ${s.iname != null ? 'interval' : 'set'} (m:ss or seconds, empty = not logged)" placeholder="rest" onchange="leRest(${ei},${si},this)">
           <button class="set-del" onclick="leDelSet(${ei},${si})" title="remove this round">✕</button>
-        </div>`).join('')}`).join('')
+        </div>
+        <textarea class="le-note le-note-set" rows="1" oninput="autoResizeTA(this);logEditDraft.entries[${ei}].sets[${si}].note=this.value" placeholder="· note (${s.iname != null ? 'interval' : 'round'} ${s.rd || si + 1})">${esc(s.note || '')}</textarea>`).join('')}`).join('')
     + `<button class="btn-io" style="margin-top:.4rem" onclick="leAddEx()">+ add exercise</button>`;
+  requestAnimationFrame(() => el('logEditBody') && el('logEditBody').querySelectorAll('.le-note').forEach(autoResizeTA));
 }
 function leDur(ei, si, inp) {
   const v = parseDur(inp.value);
