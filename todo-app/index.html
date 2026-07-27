@@ -264,7 +264,16 @@ textarea::placeholder{color:var(--mid)}
 .tl-now-v::before{content:'';position:absolute;top:-1px;left:-2px;width:5px;height:5px;border-radius:50%;background:var(--black)}
 
 /* ── ITEM LIST ── */
-.item-row{display:flex;align-items:center;gap:.3rem;padding:.3rem .35rem;border-radius:var(--r);border:1px solid transparent;min-width:0;cursor:default}
+/* flex-shrink:0 — the lists (#item-list, #inbox-list, .later-rows, inline previews) are scrollable
+   flex columns; without it an overflowing list squeezes rows below their natural height and the
+   2-line name overlaps its neighbours (same trap as #blockTypeList below) */
+.item-row{display:flex;align-items:center;gap:.3rem;row-gap:.1rem;flex-wrap:wrap;flex-shrink:0;padding:.3rem .35rem;border-radius:var(--r);border:1px solid transparent;min-width:0;cursor:default}
+/* text group + controls group: when the row gets narrow (phone, split panels) the controls
+   drop to their own second line instead of squeezing the name down to a couple of characters.
+   The break is driven by the text group's flex-basis (its hypothetical size decides wrapping),
+   so it reacts to the real panel width — no media query / container query needed. */
+.item-main{display:flex;align-items:center;gap:.3rem;flex:1 1 15rem;min-width:0}
+.item-ctrls{display:flex;align-items:center;gap:.3rem;flex:0 0 auto;margin-left:auto}
 @media(hover:hover){.item-row:hover{background:var(--off)}}
 .item-row.is-block{border-color:var(--light);background:var(--off);margin-top:.25rem}
 .item-row.is-block:first-child{margin-top:0}
@@ -326,7 +335,7 @@ textarea::placeholder{color:var(--mid)}
 .later-sel-month{flex:1 1 auto;font-weight:600;font-size:.82rem}
 .later-sel-horizon{flex:0 0 auto;color:var(--muted);font-size:.72rem;padding:.25rem .2rem}
 .later-icon-btn{flex:0 0 auto;padding:.34rem .5rem;font-size:.98rem;line-height:1}
-.later-month-hdr{display:flex;align-items:center;gap:.35rem;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem;cursor:pointer;user-select:none;-webkit-user-select:none}
+.later-month-hdr{display:flex;align-items:center;gap:.35rem;flex-shrink:0;font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .2rem;border-top:1.5px solid var(--light);margin-top:.35rem;cursor:pointer;user-select:none;-webkit-user-select:none}
 .later-month-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .later-month-toggle{display:inline-block;width:.85rem;text-align:center;font-size:.78rem;line-height:1}
 .later-month-hdr.empty{opacity:.55}
@@ -337,11 +346,11 @@ textarea::placeholder{color:var(--mid)}
 .later-month-add{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--muted);background:var(--w);border:var(--bh);border-radius:var(--r);padding:0 .3rem;cursor:pointer}
 .later-month-add:hover{color:var(--black);border-color:var(--black)}
 .later-month-sum{margin-left:auto;font-family:'DM Mono',monospace;font-weight:400;text-transform:none;letter-spacing:0}
-.later-year-hdr{display:flex;align-items:center;gap:.4rem;font-family:'DM Mono',monospace;font-size:.95rem;font-weight:600;color:var(--black);letter-spacing:.03em;padding:.5rem .1rem .3rem;border-top:2.5px solid var(--black);margin-top:.85rem;cursor:pointer;user-select:none;-webkit-user-select:none}
+.later-year-hdr{display:flex;align-items:center;gap:.4rem;flex-shrink:0;font-family:'DM Mono',monospace;font-size:.95rem;font-weight:600;color:var(--black);letter-spacing:.03em;padding:.5rem .1rem .3rem;border-top:2.5px solid var(--black);margin-top:.85rem;cursor:pointer;user-select:none;-webkit-user-select:none}
 .later-year-hdr.first{border-top:none;margin-top:.1rem}
 .later-year-hdr.overdue{opacity:.7}
 .later-year-hdr .later-month-sum{margin-left:auto;font-size:.78rem;color:var(--muted)}
-.later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem}
+.later-rows{display:flex;flex-direction:column;gap:.1rem;margin:.15rem 0 .1rem;flex-shrink:0}
 .later-week-hdr{font-size:.65rem;color:var(--muted);padding:.3rem .15rem .1rem;border-top:1px dashed var(--light);margin-top:.1rem;letter-spacing:.04em}
 .later-week-hdr.first-in-month{border-top:none;margin-top:0;padding-top:.05rem}
 .later-week-hdr.none{color:var(--dark);font-style:italic;border-top:none;margin-top:0;padding-top:.05rem;text-transform:none}
@@ -408,7 +417,7 @@ textarea::placeholder{color:var(--mid)}
 .holiday-name{color:var(--muted);font-style:italic}
 .later-month-holidays{font-size:.66rem;color:var(--muted);font-style:italic;line-height:1.45;padding:.05rem .15rem .25rem}
 /* ── PREVIEW ── */
-.preview-item{display:flex;align-items:center;gap:.35rem;padding:.28rem .1rem;border-bottom:1px solid var(--light)}
+.preview-item{display:flex;align-items:center;gap:.35rem;padding:.28rem .1rem;border-bottom:1px solid var(--light);flex-shrink:0}
 .preview-item:last-child{border-bottom:none}
 .preview-item.block{background:var(--off);padding-left:.4rem;padding-right:.35rem;margin-top:.25rem}
 .preview-item.block:first-child{margin-top:0}
@@ -467,7 +476,7 @@ textarea::placeholder{color:var(--mid)}
    No inner scroll on .preview-item-list on purpose: the Done list (#week-list) is the only
    scrollable ancestor, same as #item-list on Week/Next — a nested scroller here made touch
    drag-reorder fight two scrollable containers at once. */
-.week-row-wrap{display:flex;flex-direction:column;gap:0}
+.week-row-wrap{display:flex;flex-direction:column;gap:0;flex-shrink:0}
 .inline-preview{margin:.3rem 0 .5rem;padding:.4rem .5rem .5rem;border:1px dashed var(--mid);border-radius:var(--r);background:var(--w)}
 /* multi-row mini timeline: one row = 4h, so long days wrap instead of squeezing into one bar */
 .inline-tl{display:flex;flex-direction:column;width:100%;border:1.5px solid var(--dark);border-radius:var(--r);overflow:hidden;margin-bottom:.35rem;flex-shrink:0;background:var(--w)}
@@ -1668,12 +1677,16 @@ function rowsHtml(ctx, insertBefore = {}) {
       const tg = item.done ? '☑' : '☐';
       const c = ['item-row', 'is-line', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : ''].filter(Boolean).join(' ');
       return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" draggable="true">
-        <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
-        <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
-        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
-        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
-        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="insert into the buffer (move to another card) · then add it on the target card; &quot;.del&quot; in the field = move (deletes the source)">→</button>
-        <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="delete">✕</button>
+        <span class="item-main">
+          <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
+          <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
+        </span>
+        <span class="item-ctrls">
+          <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
+          <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="insert into the buffer (move to another card) · then add it on the target card; &quot;.del&quot; in the field = move (deletes the source)">→</button>
+          <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="delete">✕</button>
+        </span>
       </div>`;
     }
     // ── MONTH (Later): plain row; date + optional event time on the LEFT, no time on the right ──
@@ -1690,13 +1703,17 @@ function rowsHtml(ctx, insertBefore = {}) {
         ? `<span class="recur-ghost-badge is-confirm" onclick="${ctx.call('mConfirmGhost', idx)}" title="recurrence — click to confirm into this month">🔃</span>`
         : (item.recurId != null ? '<span class="recur-ghost-badge" title="recurring task (confirmed)">🔃</span>' : '');
       return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" ${item.isGhost ? '' : 'draggable="true"'}>
-        ${dayBadge}${timeBadge}${gBadge}
-        <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
-        <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
-        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
-        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
-        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="insert into the buffer (move to another card) · then add it on the target card; &quot;.del&quot; in the field = move (deletes the source)">→</button>
-        <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="delete">✕</button>
+        <span class="item-main">
+          ${dayBadge}${timeBadge}${gBadge}
+          <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
+          <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
+        </span>
+        <span class="item-ctrls">
+          <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
+          <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="insert into the buffer (move to another card) · then add it on the target card; &quot;.del&quot; in the field = move (deletes the source)">→</button>
+          <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="delete">✕</button>
+        </span>
       </div>`;
     }
     // ── DAY (Week/Next): blocks from presets + subtasks + events; border only for a real block/event ──
@@ -1746,14 +1763,18 @@ function rowsHtml(ctx, insertBefore = {}) {
     const draggable = !item.isGhost ? 'draggable="true"' : '';
 
     return (insertBefore[idx] || '') + `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
-      <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${toggle}</span>
-      ${ghostBadge}${emoji}
-      <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, blockAbbrById[item.id]) : esc(item.text)}</span>
-      ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
-      <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx===0?'disabled':''}>↑</button>
-      <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="down" ${idx===list.length-1?'disabled':''}>↓</button>
-      <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="insert into the buffer (move to another card) · then add it on the target card; &quot;.del&quot; in the field = move (deletes the source)">→</button>
-      <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="delete">✕</button>
+      <span class="item-main">
+        <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${toggle}</span>
+        ${ghostBadge}${emoji}
+        <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, blockAbbrById[item.id]) : esc(item.text)}</span>
+      </span>
+      <span class="item-ctrls">
+        ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
+        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx===0?'disabled':''}>↑</button>
+        <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="down" ${idx===list.length-1?'disabled':''}>↓</button>
+        <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="insert into the buffer (move to another card) · then add it on the target card; &quot;.del&quot; in the field = move (deletes the source)">→</button>
+        <button class="item-del" onclick="${ctx.call(ctx.h.del, idx)}" title="delete">✕</button>
+      </span>
     </div>`;
   }).join('');
 }
