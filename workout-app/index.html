@@ -266,6 +266,7 @@ textarea::placeholder{color:var(--mid)}
   .rest-bar{padding:.5rem .55rem;gap:.5rem}
   .np-z{width:2.6em}
   .now-prog-txt{font-size:1.15rem}
+  .now-ov-txt{font-size:.6rem;padding:0 .4rem}
   .iv-name{min-width:3.5em}
 }
 
@@ -284,24 +285,28 @@ textarea::placeholder{color:var(--mid)}
 .wk-setup{display:flex;gap:.6rem .9rem;flex-wrap:wrap;margin-bottom:.75rem}
 .wk-setup .field>label{flex:1}   /* multi-line labels wrap upward — inputs stay bottom-aligned across the row */
 .wk-runbar{display:flex;align-items:center;gap:.7rem;margin-bottom:.75rem;flex-wrap:wrap}
-.wk-elapsed{font-family:'DM Mono',monospace;font-size:1.55rem;line-height:1;color:var(--black);min-width:4ch}
-.wk-est{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);flex-shrink:0}
 .rest-bar{display:flex;align-items:center;gap:.8rem;border:var(--bh);border-radius:var(--r);padding:.5rem .9rem;margin-bottom:.75rem;flex-wrap:wrap}
 .rest-bar.over{background:var(--black)}
 .rest-bar.over .now-prog-txt,.rest-bar.over .rest-label{color:var(--w)}
 .rest-bar.over .now-prog{border-color:var(--w)}
+.rest-bar.over .now-ov{border-color:var(--muted)}
+.rest-bar.over .now-ov-txt{color:var(--w)}
 .rest-label{font-size:.72rem;font-weight:600;letter-spacing:.09em;color:var(--muted);text-transform:uppercase;font-family:'DM Mono',monospace;max-width:11em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.now-prog{flex:1 1 12rem;min-width:min(10rem,100%);height:3.2rem;position:relative;border:var(--bh);border-radius:var(--r);overflow:hidden;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.now-prog{flex:1 1 12rem;min-width:min(10rem,100%);height:3.7rem;position:relative;display:flex;flex-direction:column;border:var(--bh);border-radius:var(--r);overflow:hidden;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.now-phase{position:relative;flex:1 1 auto;cursor:pointer}
 .now-prog-fill{position:absolute;top:0;left:0;bottom:0;width:0;background:var(--mid)}
 .now-prog.paused .now-prog-fill{background:var(--light)}
-.now-prog-txt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;font-family:'DM Mono',monospace;font-size:1.3rem;color:var(--black)}
-.np-total{font-size:.66rem;color:var(--muted)}
-.rest-bar.over .np-total{color:var(--mid)}
+.now-prog-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:1.3rem;color:var(--black)}
 .np-z{position:absolute;width:3.2em;height:50%;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--dark);cursor:pointer}
 .np-tl{top:0;left:0;border-right:1px solid var(--light);border-bottom:1px solid var(--light)}
 .np-bl{bottom:0;left:0;border-right:1px solid var(--light)}
 .np-tr{top:0;right:0;border-left:1px solid var(--light);border-bottom:1px solid var(--light)}
 .np-br{bottom:0;right:0;border-left:1px solid var(--light)}
+.now-prog.pre .np-z{display:none}
+/* overall workout progress (bottom sub-strip) — doubles as ▶ start / ■ finish */
+.now-ov{position:relative;flex:0 0 1.2rem;border-top:1px solid var(--light);cursor:pointer;overflow:hidden}
+.now-ov-fill{position:absolute;top:0;left:0;bottom:0;width:0;background:var(--light)}
+.now-ov-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 .55rem;font-family:'DM Mono',monospace;font-size:.66rem;color:var(--dark);pointer-events:none;white-space:nowrap}
 .rest-bar.over .np-z{color:var(--w);border-color:var(--muted)}
 .now-ex{flex-basis:100%;font-size:.82rem;color:var(--dark);line-height:1.4;word-break:break-word}
 .now-set{flex-basis:100%;font-family:'DM Mono',monospace;font-size:1.05rem;color:var(--black);line-height:1.3}
@@ -1529,22 +1534,24 @@ function renderMain() {
       <input type="number" value="${wk.weekTarget != null ? esc(wk.weekTarget) : ''}" min="0" placeholder="–" title="optional weekly goal — the library shows done/target for the current week (Mon–Sun)" oninput="wk.weekTarget=this.value===''?null:(parseInt(this.value)||0);schedSave();renderLibrary()"></div>
   </div>
   <div class="wk-runbar">
-    <button class="btn-sm" id="wkStartBtn" onclick="startWorkout()">▶ start workout</button>
-    <span class="wk-elapsed" id="wkElapsed">0:00</span>
-    ${(() => { const est = estimateDur(wk); return est.sec ? `<span class="wk-est" title="estimated total with the current settings (planned times + rests + prep)">${est.partial ? '≥' : '~'}${fmtEst(est.sec)}</span>` : ''; })()}
-    <button class="btn-sm" id="wkFinishBtn" onclick="finishWorkout()" style="display:none">■ finish &amp; log</button>
     <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="sound &amp; music — music on/off, track selection, end countdown, halfway alert, rep pacer">${musicOn ? '♪' : '♪ off'}</button>
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
   <div class="rest-bar" id="nowBar" style="display:none">
-    <span class="rest-label" id="nowLabel">rest</span>
-    <div class="now-prog" id="nowProg" onclick="pauseResume()" title="tap the middle to pause / resume">
-      <div class="now-prog-fill" id="nowProgFill"></div>
-      <div class="now-prog-txt"><span id="nowTime">0:00</span><span class="np-total" id="nowTotal"></span></div>
-      <div class="np-z np-tl" onclick="event.stopPropagation();stepBack()" title="back to the previous exercise / side">⏮</div>
-      <div class="np-z np-bl" onclick="event.stopPropagation();addPhase(-${adj})" title="shorten the current phase by ${adj} s (configurable via ±step)">−${adj}</div>
-      <div class="np-z np-tr" onclick="event.stopPropagation();skipPhase()" title="skip to the next phase">⏭</div>
-      <div class="np-z np-br" onclick="event.stopPropagation();addPhase(${adj})" title="add ${adj} s to the current phase (configurable via ±step)">+${adj}</div>
+    <span class="rest-label" id="nowLabel">ready</span>
+    <div class="now-prog" id="nowProg">
+      <div class="now-phase" id="nowPhase" onclick="phaseTap()" title="tap to pause / resume">
+        <div class="now-prog-fill" id="nowProgFill"></div>
+        <span class="now-prog-txt" id="nowTime">0:00</span>
+        <div class="np-z np-tl" onclick="event.stopPropagation();stepBack()" title="back to the previous exercise / side">⏮</div>
+        <div class="np-z np-bl" onclick="event.stopPropagation();addPhase(-${adj})" title="shorten the current phase by ${adj} s (configurable via ±step)">−${adj}</div>
+        <div class="np-z np-tr" onclick="event.stopPropagation();skipPhase()" title="skip to the next phase">⏭</div>
+        <div class="np-z np-br" onclick="event.stopPropagation();addPhase(${adj})" title="add ${adj} s to the current phase (configurable via ±step)">+${adj}</div>
+      </div>
+      <div class="now-ov" id="nowOv" onclick="overallTap()" title="overall workout progress — tap to start / finish &amp; log">
+        <div class="now-ov-fill" id="nowOvFill"></div>
+        <div class="now-ov-txt"><span id="nowOvTime"></span><span id="nowOvAct"></span></div>
+      </div>
     </div>
     <div class="now-ex" id="nowEx"></div>
     <div class="now-set" id="nowSet" style="display:none"></div>
@@ -2291,12 +2298,18 @@ function skipPhase() {
   schedSave(); renderMain(); updateMusic();
 }
 function updateRunUi() {
-  const started = !!(wk.run && wk.run.startedAt);
-  const sb = el('wkStartBtn'), fb = el('wkFinishBtn');
-  if (sb) sb.style.display = started ? 'none' : '';
-  if (fb) fb.style.display = started ? '' : 'none';
   syncWakeLock();
   tick();
+}
+// the now-prog strip is the run control: the phase area starts (before start) or
+// pauses/resumes (while running); the overall sub-strip starts / finishes & logs
+function phaseTap() {
+  if (!(wk.run && wk.run.startedAt)) startWorkout();
+  else pauseResume();
+}
+function overallTap() {
+  if (!(wk.run && wk.run.startedAt)) startWorkout();
+  else finishWorkout();
 }
 // keep the screen awake while a workout runs (no screensaver/sleep on PC & mobile)
 let _wakeLock = null, _wakeWant = false;
@@ -2318,9 +2331,7 @@ function syncWakeLock() {
 }
 function tick() {
   const r = wk.run;
-  const elapsed = el('wkElapsed');
-  if (elapsed) elapsed.textContent = (r && r.startedAt) ? mmss((Date.now() - r.startedAt) / 1000) : '0:00';
-  if (!r || !r.startedAt) { const nb = el('nowBar'); if (nb) nb.style.display = 'none'; updateMusic(); return; }
+  if (!r || !r.startedAt) { updateNowBar(); updateMusic(); return; }   // pre-start: the strip shows ▶ start (or hides if no exercises)
   // countdown expired → beep + advance (each transition fires exactly once: endTs/phase change immediately)
   if (r.pausedLeft == null && r.endTs && Date.now() >= r.endTs) {
     if (r.phase === 'work') { beep(); advanceWorkStep(); saveSession(); renderMain(); updateMusic(); return; }
@@ -2361,21 +2372,54 @@ function nextPreview() {
   const info = stepInfo(nxt[0], nxt[1], true);
   return (p > 0 ? 'rest ' + mmss(p) + ' → ' : '→ ') + nlabel + (info ? ' · ' + info : '');
 }
+// bottom sub-strip: fill = elapsed share of the estimate, text = elapsed / ~est,
+// and it doubles as the ▶ start / ■ finish control
+function updateOverallBar(started) {
+  const ovFill = el('nowOvFill'), ovT = el('nowOvTime'), ovA = el('nowOvAct');
+  const est = estimateDur(wk);
+  const estTxt = est.sec ? (est.partial ? '≥' : '~') + fmtEst(est.sec) : '';
+  if (!started) {
+    if (ovFill) ovFill.style.width = '0%';
+    if (ovT) ovT.textContent = estTxt ? 'est ' + estTxt : '';
+    if (ovA) ovA.textContent = '▶ start';
+    return;
+  }
+  const elapsed = (Date.now() - wk.run.startedAt) / 1000;
+  const frac = est.sec ? Math.max(0, Math.min(1, elapsed / est.sec)) : 0;
+  if (ovFill) ovFill.style.width = (frac * 100).toFixed(1) + '%';
+  if (ovT) ovT.textContent = mmss(elapsed) + (estTxt ? ' / ' + estTxt : '');
+  if (ovA) ovA.textContent = wk.run.phase === 'done' ? '■ finish & log' : '■ finish';
+}
 function updateNowBar() {
   const r = wk.run;
   const bar = el('nowBar'); if (!bar) return;
-  if (!r || !r.startedAt || !r.phase) { bar.style.display = 'none'; return; }
+  const prog = el('nowProg');
+  const hasEx = (wk.exercises || []).some(ex => (ex.sets || []).length);
+  const started = !!(r && r.startedAt && r.phase);
+  if (!hasEx) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
   const lbl = el('nowLabel'), exl = el('nowEx'), t = el('nowTime');
+  if (prog) prog.classList.toggle('pre', !started);   // hide the corner controls before start
+  updateOverallBar(started);
+  if (!started) {   // ready to start — the whole strip starts, corners hidden
+    bar.classList.remove('over');
+    if (prog) prog.classList.remove('paused');
+    const fill0 = el('nowProgFill'); if (fill0) fill0.style.width = '0%';
+    lbl.textContent = 'ready';
+    t.textContent = '▶ start';
+    const nxt = nextPending();
+    const nx = nxt ? wk.exercises[nxt[0]] : null;
+    exl.textContent = nx ? 'first: ' + (nx.code || nx.name || '') : 'add exercises to begin';
+    ['nowSet','nowNext','nowCue'].forEach(id => { const e = el(id); if (e) e.style.display = 'none'; });
+    return;
+  }
   const remMs = r.pausedLeft != null ? r.pausedLeft : (r.endTs ? r.endTs - Date.now() : null);
   bar.classList.toggle('over', r.phase === 'done');
   // progress strip: the fill is the remaining share of the phase, tapping it pauses/resumes
-  const prog = el('nowProg'), fill = el('nowProgFill');
+  const fill = el('nowProgFill');
   const frac = (remMs != null && r.totMs > 0) ? Math.max(0, Math.min(1, remMs / r.totMs)) : 0;
   if (fill) fill.style.width = (frac * 100).toFixed(1) + '%';
   if (prog) prog.classList.toggle('paused', r.pausedLeft != null);
-  const tot = el('nowTotal');
-  if (tot) tot.textContent = 'total ' + mmss((Date.now() - r.startedAt) / 1000);
   const repTag = (ex, rep) => (ex && exRepeat(ex) > 1) ? ' · rep ' + ((rep || 0) + 1) + '/' + exRepeat(ex) : '';
   if (r.phase === 'prep') {
     lbl.textContent = 'prep';
