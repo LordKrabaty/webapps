@@ -753,7 +753,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div class="jb-field"><label>counts as (substitute for a workout)</label>
       <select id="actTpl" title="optional — the activity then counts into that template's weekly done/target and is found when filtering by its name"></select></div>
-    <div class="jb-field"><label>description</label><input id="actNote" type="text" placeholder="optional" spellcheck="false"></div>
+    <div class="jb-field"><label>description</label><textarea id="actNote" class="le-note" rows="1" placeholder="optional" spellcheck="false" oninput="autoResizeTA(this)"></textarea></div>
     <div class="modal-row">
       <button class="modal-btn" onclick="closeModal('actModal')">cancel</button>
       <button class="modal-btn primary" onclick="saveActivity()">save</button>
@@ -3215,6 +3215,7 @@ function openActivityModal(id) {
     + library.map(t => `<option value="${esc(t.id)}"${a && String(a.tplId) === String(t.id) ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
   el('actNote').value = a ? (a.note || '') : '';
   el('actModal').classList.add('open');
+  requestAnimationFrame(() => autoResizeTA(el('actNote')));   // grow to fit once the modal (and the field) is visible
   if (!a) setTimeout(() => { try { el('actName').focus(); } catch(e) {} }, 50);
 }
 function saveActivity() {
