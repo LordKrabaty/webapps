@@ -107,6 +107,36 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .recur-rule-btns{display:flex;gap:.35rem;margin-top:.2rem}
 .recur-rule-btns .btn-io{flex:0 0 auto;padding:.26rem .6rem}
 #itemEditRecurRow .btn-io{flex:0 0 auto;padding:.3rem .7rem}
+/* ── CHECKLIST IN A DESCRIPTION (item edit modal) ────────────────────────────
+   Only a rendered view of the note text — a line like "- [ ] milk" is an item,
+   any other line is shown dimmed as context. The text stays the single source. */
+.ie-pane{display:none;flex-direction:column;gap:.35rem}
+.ie-pane.active{display:flex}
+.ie-bar{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
+.ie-bar .btn-io{flex:0 0 auto;padding:.28rem .6rem}
+.ie-bar-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-right:auto}
+.ie-hint{font-size:.7rem;color:var(--muted);line-height:1.5}
+.ie-hint code{font-family:'DM Mono',monospace;background:var(--off);border-radius:var(--r);padding:0 .22rem}
+.ie-tab-count{font-family:'DM Mono',monospace;font-size:.7rem;opacity:.7}
+.chk-list{display:flex;flex-direction:column}
+.chk-row{display:flex;align-items:center;gap:.4rem;padding:.3rem .15rem;border-bottom:1px solid var(--light)}
+.chk-row:last-child{border-bottom:none}
+.chk-row.dragging{opacity:.3}
+.chk-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.chk-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+.chk-grip{flex-shrink:0;width:15px;text-align:center;color:var(--mid);font-size:.82rem;line-height:1;cursor:grab;user-select:none;touch-action:none}
+.chk-box{flex-shrink:0;width:15px;height:15px;accent-color:var(--black);cursor:pointer}
+.chk-text{flex:1;font-size:.86rem;line-height:1.4;cursor:text;word-break:break-word;min-width:0}
+.chk-text.done{text-decoration:line-through;color:var(--muted)}
+.chk-text.blank{color:var(--mid);font-style:italic}
+.chk-edit{flex:1;font-family:'DM Sans',sans-serif;font-size:.86rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;padding:.05rem 0;min-width:0}
+.chk-plain{font-size:.8rem;color:var(--muted);line-height:1.45;padding:.32rem .15rem .16rem 2.2rem;word-break:break-word;white-space:pre-wrap}
+.chk-move{display:flex;flex-direction:column;flex-shrink:0;opacity:.5}
+.chk-move button{border:none;background:none;cursor:pointer;padding:0;font-size:.6rem;line-height:1;color:var(--black);width:17px;height:14px;display:flex;align-items:center;justify-content:center}
+.chk-move button:disabled{opacity:.2;cursor:default}
+.chk-del{width:18px;height:18px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;opacity:.45}
+.chk-del svg{width:8px;height:8px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
+.chk-empty{font-size:.78rem;color:var(--muted);font-style:italic;padding:.35rem 0}
 .btn-io.danger{border-color:#c0392b;color:#c0392b}
 @media(hover:hover){.btn-io.danger:hover{background:#c0392b;color:var(--w)}}
 .recur-legend{font-size:.76rem;color:var(--muted);line-height:1.55;border:var(--b);border-radius:var(--r);padding:.5rem .6rem}
@@ -287,6 +317,10 @@ textarea::placeholder{color:var(--mid)}
 .item-row.is-subtask{padding-left:1.4rem}
 /* item containing a note (description / subtasks) — distinguished by an italic name */
 .item-row.has-note .item-text{font-style:italic}
+/* progress of a checklist inside the description ("2/6") — a click opens the item on its checklist */
+.chk-badge{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);flex:0 0 auto;white-space:nowrap;cursor:pointer;border-bottom:1px dashed var(--light)}
+@media(hover:hover){.chk-badge:hover{color:var(--black);border-bottom-color:var(--black)}}
+.chk-badge.full{color:var(--dark);border-bottom-color:transparent}
 .item-row.is-done .item-text{opacity:.45;text-decoration:line-through}
 .item-row.is-urgent .item-text{font-weight:600}
 .item-row.tl-highlight{background:var(--light)!important;border-color:var(--mid)!important}
@@ -1019,7 +1053,27 @@ textarea::placeholder{color:var(--mid)}
       </div>
       <div class="field">
         <label>Description / subtasks</label>
-        <textarea id="itemEditNote" rows="7" placeholder="More text — description, notes, subtasks…" oninput="autoGrowTextarea(this)"></textarea>
+        <div class="notes-tabs">
+          <button class="notes-tab active" id="ieTabText" onclick="switchItemEditTab('text')">Text</button>
+          <button class="notes-tab" id="ieTabList" onclick="switchItemEditTab('list')">Checklist <span class="ie-tab-count" id="ieTabCount"></span></button>
+        </div>
+        <div class="ie-pane active" id="iePaneText">
+          <textarea id="itemEditNote" rows="7" placeholder="More text — description, notes, subtasks…"
+            oninput="autoGrowTextarea(this);renderChkList()" onkeydown="noteKeydown(event,this)"></textarea>
+          <div class="ie-bar">
+            <button class="btn-io" onclick="toggleChkOnSelection()" title="turn the current line (or the selected lines) into a checklist item — and back">☑ checklist line</button>
+            <span class="ie-hint">or type <code>[] milk</code> · Enter continues the list</span>
+          </div>
+        </div>
+        <div class="ie-pane" id="iePaneList">
+          <div class="ie-bar">
+            <span class="ie-bar-count" id="ieChkCount"></span>
+            <button class="btn-io" onclick="setAllChkItems(true)" title="check every item">☑ all</button>
+            <button class="btn-io" onclick="setAllChkItems(false)" title="uncheck every item">☐ none</button>
+            <button class="btn-io" onclick="addChkItem()" title="add a checklist item">+ item</button>
+          </div>
+          <div class="chk-list" id="ieChkList"></div>
+        </div>
       </div>
       <div class="modal-row" id="itemEditRecurRow" style="display:none;justify-content:flex-start;gap:.4rem">
         <button class="btn-io" onclick="editGhostRule()" title="edit the recurrence rule this occurrence belongs to">↻ edit rule</button>
@@ -1674,6 +1728,18 @@ const INBOXCTX = {
 let addCtx = DAYCTX;                              // target for menu/quick-add
 function setAddCtx(x) { addCtx = (x === 'day') ? DAYCTX : (x === 'inbox') ? INBOXCTX : MCTX(x); }
 
+// "2/6" — how much of the checklist in the item's description is ticked off (nothing when it has none)
+function chkBadge(item, clickAttr = '') {
+  let total = 0, done = 0;
+  (item.note || '').split('\n').forEach(ln => {
+    const it = parseChkLine(ln);
+    if (it) { total++; if (it.done) done++; }
+  });
+  if (!total) return '';
+  return `<span class="chk-badge${done === total ? ' full' : ''}" ${clickAttr}`
+    + ` title="checklist in the description — ${done} of ${total} done">${done}/${total}</span>`;
+}
+
 // item-row HTML for any context (shares the .item-row look with the day plan)
 function rowsHtml(ctx, insertBefore = {}) {
   const list = ctx.list;
@@ -1687,6 +1753,7 @@ function rowsHtml(ctx, insertBefore = {}) {
         <span class="item-main">
           <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
           <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
+          ${chkBadge(item, `onclick="${ctx.call(ctx.h.edit, idx)}"`)}
         </span>
         <span class="item-ctrls">
           <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -1714,6 +1781,7 @@ function rowsHtml(ctx, insertBefore = {}) {
           ${dayBadge}${timeBadge}${gBadge}
           <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
           <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
+          ${chkBadge(item, `onclick="${ctx.call(ctx.h.edit, idx)}"`)}
         </span>
         <span class="item-ctrls">
           <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -1774,6 +1842,7 @@ function rowsHtml(ctx, insertBefore = {}) {
         <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${toggle}</span>
         ${ghostBadge}${emoji}
         <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, blockAbbrById[item.id]) : esc(item.text)}</span>
+        ${chkBadge(item, `onclick="${ctx.call(ctx.h.edit, idx)}"`)}
       </span>
       <span class="item-ctrls">
         ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
@@ -2389,7 +2458,8 @@ function openItemEdit(ctx, idx) {
   el('itemEditModal').classList.add('open');
   const nameEl = el('itemEditName');
   autoGrowTextarea(nameEl);                  // name first — the note's cap is measured against it
-  autoGrowTextarea(el('itemEditNote'));
+  // a note that already holds a checklist opens on the list (that's what you came to tick off)
+  switchItemEditTab(noteHasChkItems() ? 'list' : 'text');
   nameEl.focus(); nameEl.select();
 }
 // The textarea grows with content (rows attribute = minimum), capped so it stays inside the screen.
@@ -2399,6 +2469,7 @@ function openItemEdit(ctx, idx) {
 const MODAL_MAX_VH = 0.9;   // mirrors max-height:90vh on .modal
 function autoGrowTextarea(ta) {
   if (!ta) return;
+  if (!ta.offsetParent) return;             // hidden (closed modal, inactive tab) → measures 0 and would collapse
   ta.style.height = 'auto';                 // collapse first → the modal shrinks back to its content
   let cap = Math.round(window.innerHeight * 0.7);
   const modal = ta.closest('.modal-scroll') && ta.closest('.modal');
@@ -2408,6 +2479,233 @@ function autoGrowTextarea(ta) {
   }
   ta.style.height = Math.min(ta.scrollHeight, cap) + 'px';
 }
+
+// ── CHECKLIST INSIDE A DESCRIPTION ───────────────────────────────────────────
+// A checklist is nothing but the note text: a line that reads "- [ ] milk" (or the
+// hand-typed short forms "[] milk", "[x] milk", "* [X] milk") is an item, every other
+// line is context. Nothing new is stored, so sync, export and older clients keep
+// treating a note as the plain string it has always been — the Checklist tab only
+// rewrites those lines. Canonical form written back: "- [ ] text" / "- [x] text".
+const CHK_RE  = /^(\s*)(?:[-–—*•]\s*)?\[([ xX✓✔]?)\]\s?(.*)$/;
+const BULLET_RE = /^(\s*)(?:[-–—*•]\s*)?(.*)$/;
+function parseChkLine(line) {
+  const m = CHK_RE.exec(line || '');
+  return m ? { indent: m[1], done: m[2] !== '' && m[2] !== ' ', text: m[3] } : null;
+}
+function chkLine(indent, done, text) { return indent + '- [' + (done ? 'x' : ' ') + '] ' + text; }
+function ieNoteLines() { return (el('itemEditNote')?.value || '').split('\n'); }
+function ieChkIdxs(lines) { return lines.map((ln, i) => parseChkLine(ln) ? i : -1).filter(i => i >= 0); }
+function noteHasChkItems() { return ieNoteLines().some(ln => parseChkLine(ln)); }
+// every change goes through here: the textarea stays the single source of truth
+function ieSetNoteLines(lines) {
+  const ta = el('itemEditNote'); if (!ta) return;
+  ta.value = lines.join('\n');
+  autoGrowTextarea(ta);
+  renderChkList();
+}
+
+function switchItemEditTab(which) {
+  const isList = which === 'list';
+  el('ieTabList').classList.toggle('active', isList);
+  el('ieTabText').classList.toggle('active', !isList);
+  el('iePaneList').classList.toggle('active', isList);
+  el('iePaneText').classList.toggle('active', !isList);
+  renderChkList();
+  if (!isList) autoGrowTextarea(el('itemEditNote'));   // the field was hidden → re-grow it now that it shows
+}
+
+function updateChkCounts() {
+  const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
+  const done = idxs.filter(i => parseChkLine(lines[i]).done).length;
+  const badge = el('ieTabCount'); if (badge) badge.textContent = idxs.length ? done + '/' + idxs.length : '';
+  const cnt = el('ieChkCount');   if (cnt)   cnt.textContent   = idxs.length ? done + ' / ' + idxs.length + ' done' : '';
+}
+// Rebuilding the rows removes whatever is focused inside them, and that fires blur → an open
+// inline edit would re-enter this function in the middle of the innerHTML write (DOM exception,
+// lost change). So: never nest — a nested call only marks the render dirty and the outer one repeats.
+let _chkRendering = false, _chkDirty = false;
+function renderChkList() {
+  updateChkCounts();
+  const box = el('ieChkList');
+  if (!box || !el('iePaneList')?.classList.contains('active')) return;   // hidden pane → the counters are enough
+  if (_chkRendering) { _chkDirty = true; return; }
+  _chkRendering = true;
+  try { do { _chkDirty = false; buildChkRows(box); } while (_chkDirty); }
+  finally { _chkRendering = false; }
+}
+function buildChkRows(box) {
+  const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
+  if (!idxs.length) {
+    box.innerHTML = '<div class="chk-empty">No checklist items yet — use “+ item”, or write “[] milk” on the Text tab.</div>';
+    return;
+  }
+  box.innerHTML = lines.map((ln, i) => {
+    const it = parseChkLine(ln);
+    if (!it) return ln.trim() ? `<div class="chk-plain">${esc(ln.trim())}</div>` : '';   // heading / prose — editable on the Text tab
+    const pos = idxs.indexOf(i);
+    return `<div class="chk-row" draggable="true" data-idx="${i}">
+      <span class="chk-grip" title="drag to reorder">⠿</span>
+      <input type="checkbox" class="chk-box" ${it.done ? 'checked' : ''} onchange="toggleChkItem(${i})">
+      <span class="chk-text${it.done ? ' done' : ''}${it.text.trim() ? '' : ' blank'}" onclick="startChkEdit(${i},this)"
+        title="edit the text">${it.text.trim() ? esc(it.text) : 'empty'}</span>
+      <div class="chk-move">
+        <button onclick="moveChkItem(${i},-1)" ${pos === 0 ? 'disabled' : ''} title="move up">▲</button>
+        <button onclick="moveChkItem(${i},1)" ${pos === idxs.length - 1 ? 'disabled' : ''} title="move down">▼</button>
+      </div>
+      <button class="chk-del" onclick="deleteChkItem(${i})" title="delete the item">
+        <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+  initChkDnd();
+}
+
+function toggleChkItem(lineIdx) {
+  const lines = ieNoteLines(), it = parseChkLine(lines[lineIdx]);
+  if (!it) return;
+  lines[lineIdx] = chkLine(it.indent, !it.done, it.text);
+  ieSetNoteLines(lines);
+}
+// all / none at once — only the lines that actually change are rewritten
+function setAllChkItems(done) {
+  const lines = ieNoteLines(); let n = 0;
+  lines.forEach((ln, i) => {
+    const it = parseChkLine(ln);
+    if (it && it.done !== done) { lines[i] = chkLine(it.indent, done, it.text); n++; }
+  });
+  if (n) ieSetNoteLines(lines);
+}
+// ↑/↓ swaps with the neighbouring ITEM — headings and prose between them stay where they are
+function moveChkItem(lineIdx, dir) {
+  const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
+  const pos = idxs.indexOf(lineIdx);
+  if (pos < 0) return;
+  const other = idxs[pos + dir];
+  if (other == null) return;
+  [lines[lineIdx], lines[other]] = [lines[other], lines[lineIdx]];
+  ieSetNoteLines(lines);
+}
+// drag: a true line move (the item can cross a heading), raw = insertion line from initDnd
+function moveChkLineTo(fromLine, rawLine) {
+  const lines = ieNoteLines();
+  if (fromLine < 0 || fromLine >= lines.length) return;
+  const [ln] = lines.splice(fromLine, 1);
+  let at = rawLine; if (fromLine < at) at--;
+  lines.splice(Math.max(0, Math.min(at, lines.length)), 0, ln);
+  ieSetNoteLines(lines);
+}
+function initChkDnd() {
+  const box = el('ieChkList');
+  if (!box || box._chkDnd) return;    // the container survives every re-render → attach once
+  box._chkDnd = true;
+  initDnd(box, (src, _final, raw) => moveChkLineTo(src, raw));
+}
+function deleteChkItem(lineIdx) {
+  const lines = ieNoteLines();
+  if (!parseChkLine(lines[lineIdx])) return;
+  lines.splice(lineIdx, 1);
+  ieSetNoteLines(lines);
+}
+// new item under `afterLine` (default: under the last item, or at the end of the text)
+function addChkItem(afterLine) {
+  const lines = ieNoteLines();
+  const idxs = ieChkIdxs(lines);
+  let at = (afterLine != null && parseChkLine(lines[afterLine])) ? afterLine
+         : (idxs.length ? idxs[idxs.length - 1] : -1);
+  let indent = '';
+  if (at >= 0) indent = parseChkLine(lines[at]).indent;
+  else { while (lines.length && !lines[lines.length - 1].trim()) lines.pop(); at = lines.length - 1; }
+  lines.splice(at + 1, 0, chkLine(indent, false, ''));
+  ieSetNoteLines(lines);
+  const span = el('ieChkList')?.querySelector('.chk-row[data-idx="' + (at + 1) + '"] .chk-text');
+  if (span) startChkEdit(at + 1, span);
+}
+// inline edit of one item's text (Enter = confirm + next item, Esc = cancel, empty = delete)
+function startChkEdit(lineIdx, span) {
+  const it = parseChkLine(ieNoteLines()[lineIdx]);
+  if (!it) return;
+  const inp = document.createElement('input');
+  inp.className = 'chk-edit';
+  inp.value = it.text;
+  span.replaceWith(inp);
+  inp.focus(); inp.select();
+  let closed = false, addNext = false;
+  const finish = commit => {
+    if (closed) return; closed = true;
+    const lines = ieNoteLines(), cur = parseChkLine(lines[lineIdx]);
+    if (!commit || !cur) { renderChkList(); return; }
+    const v = inp.value.trim();
+    if (!v) { lines.splice(lineIdx, 1); ieSetNoteLines(lines); return; }   // emptied → the item goes away
+    lines[lineIdx] = chkLine(cur.indent, cur.done, v);
+    // swap the input back for a plain span instead of rebuilding the list: blur usually comes from
+    // a click on another row, and that row must survive to receive the click
+    const ta = el('itemEditNote');
+    ta.value = lines.join('\n');
+    autoGrowTextarea(ta);
+    const fresh = document.createElement('span');
+    fresh.className = 'chk-text' + (cur.done ? ' done' : '');
+    fresh.title = 'edit the text';
+    fresh.textContent = v;
+    fresh.onclick = () => startChkEdit(lineIdx, fresh);
+    inp.replaceWith(fresh);
+    updateChkCounts();
+    if (addNext) addChkItem(lineIdx);
+  };
+  inp.addEventListener('blur', () => finish(true));
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')       { e.preventDefault(); addNext = true; finish(true); }
+    else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }   // don't let the modal close
+  });
+}
+
+// read-only rendering of a note: checklist lines get a real box instead of the "- [ ]" markup
+function noteDisplay(s) {
+  return esc(s || '').split('\n').map(ln => {
+    const it = parseChkLine(ln);
+    return it ? it.indent + (it.done ? '☑' : '☐') + ' ' + it.text : ln;
+  }).join('\n');
+}
+
+// Text tab: Enter on an item line continues the list (an empty item ends it)
+function noteKeydown(e, ta) {
+  if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+  const pos = ta.selectionStart;
+  if (pos !== ta.selectionEnd) return;                       // a selection → plain Enter
+  const val = ta.value;
+  const from = val.lastIndexOf('\n', pos - 1) + 1;
+  const nl = val.indexOf('\n', pos);
+  const line = val.slice(from, nl < 0 ? val.length : nl);
+  const it = parseChkLine(line);
+  if (!it) return;
+  e.preventDefault();
+  if (it.text.trim()) ta.setRangeText('\n' + it.indent + '- [ ] ', pos, pos, 'end');
+  else ta.setRangeText('', from, from + line.length, 'end');  // empty item → drop the marker, end the list
+  autoGrowTextarea(ta);
+  renderChkList();
+}
+// Text tab button: current line (or every selected line) plain text ⇄ checklist item
+function toggleChkOnSelection() {
+  const ta = el('itemEditNote'); if (!ta) return;
+  const val = ta.value;
+  const from = val.lastIndexOf('\n', ta.selectionStart - 1) + 1;
+  let to = val.indexOf('\n', Math.max(ta.selectionStart, ta.selectionEnd));
+  if (to < 0) to = val.length;
+  const seg = val.slice(from, to).split('\n');
+  const toItems = seg.some(ln => ln.trim() && !parseChkLine(ln));   // any plain line → make items, else strip
+  ta.setRangeText(seg.map(ln => {
+    const it = parseChkLine(ln);
+    if (toItems) {
+      if (it || !ln.trim()) return ln;
+      const m = BULLET_RE.exec(ln);                                 // an existing bullet becomes the marker
+      return chkLine(m[1], false, m[2]);
+    }
+    return it ? it.indent + it.text : ln;
+  }).join('\n'), from, to, 'end');
+  autoGrowTextarea(ta);
+  renderChkList();
+  ta.focus();
+}
+
 function saveItemEdit() {
   const ctx = _itemEditCtx, item = _itemEditItem;
   if (!ctx || !item) { closeModal('itemEditModal'); return; }
@@ -3688,7 +3986,7 @@ function renderPreviewList() {
       <button class="preview-item-del" onclick="deletePreviewItem(${i})" title="delete">
         <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
       </button>
-    </div>` + (item.note ? `<div class="preview-item-note" onclick="startPreviewNoteEdit(${i},this)" title="edit description / note">${esc(item.note)}</div>` : '');
+    </div>` + (item.note ? `<div class="preview-item-note" onclick="startPreviewNoteEdit(${i},this)" title="edit description / note">${noteDisplay(item.note)}</div>` : '');
   }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">No items.</div>';
   // visual mini timeline — same strip as the Done inline preview (re-rendered on every change)
   const tl = renderInlineTlStrip(arr, times, _previewSource.windowStart, _previewSource.windowEnd);
@@ -5470,8 +5768,8 @@ function addRecur() {
   el('raRule').value = '';
   el('raFrom').value = todayIso();                       // anchor defaults to today (= valid from now on)
   el('raNote').value = '';
-  autoGrowTextarea(el('raNote'));
   el('recurAddModal').classList.add('open');
+  autoGrowTextarea(el('raNote'));                         // after opening — a hidden field cannot be measured
   setTimeout(() => el('raText').focus(), 0);
 }
 function cancelAddRecur() { closeModal('recurAddModal'); openRecurManage(); }
