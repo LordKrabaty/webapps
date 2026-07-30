@@ -82,6 +82,11 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .sel-grp-leaves{display:flex;flex-direction:column;gap:.3rem}
 .week-hdr-toggle{display:flex;align-items:center;gap:.4rem;flex:1;cursor:pointer;min-width:0}
 .week-section-body{display:flex;flex-direction:column;gap:.15rem}
+/* scrolling body of a modal — the title and the action row stay pinned, only the fields
+   scroll (a long description used to push the buttons out of the visible modal) */
+.modal-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem}
+.modal-scroll>*{flex:0 0 auto}
+.modal-scroll textarea{flex:0 0 auto}   /* never let flex override the height set by autoGrowTextarea */
 .modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
 .modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
 @media(hover:hover){.modal-btn:hover{background:var(--light)}}
@@ -1004,20 +1009,22 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Item detail / rename modal -->
 <div class="modal-bg" id="itemEditModal">
-  <div class="modal" style="max-width:min(900px,94vw);gap:.6rem;max-height:90vh;overflow-y:auto">
+  <div class="modal" style="max-width:min(900px,94vw);gap:.6rem;max-height:90vh;overflow:hidden">
     <h2 id="itemEditTitle">Edit item</h2>
-    <div class="field">
-      <label>Name</label>
-      <textarea id="itemEditName" rows="1" placeholder="Item name" oninput="autoGrowTextarea(this)"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();saveItemEdit();}"></textarea>
-    </div>
-    <div class="field">
-      <label>Description / subtasks</label>
-      <textarea id="itemEditNote" rows="7" placeholder="More text — description, notes, subtasks…" oninput="autoGrowTextarea(this)"></textarea>
-    </div>
-    <div class="modal-row" id="itemEditRecurRow" style="display:none;justify-content:flex-start;gap:.4rem">
-      <button class="btn-io" onclick="editGhostRule()" title="edit the recurrence rule this occurrence belongs to">↻ edit rule</button>
-      <button class="btn-io" onclick="revertItemToGhost()" title="discard this occurrence and turn it back into a recurrence ghost">↺ back to ghost</button>
+    <div class="modal-scroll">
+      <div class="field">
+        <label>Name</label>
+        <textarea id="itemEditName" rows="1" placeholder="Item name" oninput="autoGrowTextarea(this)"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();saveItemEdit();}"></textarea>
+      </div>
+      <div class="field">
+        <label>Description / subtasks</label>
+        <textarea id="itemEditNote" rows="7" placeholder="More text — description, notes, subtasks…" oninput="autoGrowTextarea(this)"></textarea>
+      </div>
+      <div class="modal-row" id="itemEditRecurRow" style="display:none;justify-content:flex-start;gap:.4rem">
+        <button class="btn-io" onclick="editGhostRule()" title="edit the recurrence rule this occurrence belongs to">↻ edit rule</button>
+        <button class="btn-io" onclick="revertItemToGhost()" title="discard this occurrence and turn it back into a recurrence ghost">↺ back to ghost</button>
+      </div>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" onclick="deleteItemEdit()">delete</button>
@@ -2380,14 +2387,26 @@ function openItemEdit(ctx, idx) {
   el('itemEditNote').value = item.note || '';
   el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
   el('itemEditModal').classList.add('open');
+  const nameEl = el('itemEditName');
+  autoGrowTextarea(nameEl);                  // name first — the note's cap is measured against it
   autoGrowTextarea(el('itemEditNote'));
-  const nameEl = el('itemEditName'); autoGrowTextarea(nameEl); nameEl.focus(); nameEl.select();
+  nameEl.focus(); nameEl.select();
 }
-// The textarea grows with content (rows attribute = minimum), capped at ~70% of screen height so the buttons stay visible
+// The textarea grows with content (rows attribute = minimum), capped so it stays inside the screen.
+// In a modal with a pinned action row (.modal-scroll) the cap is the space actually left over next to
+// the title, the other fields and the buttons — the field scrolls internally instead of pushing the
+// whole modal past the viewport, so only one scrollbar is ever in play.
+const MODAL_MAX_VH = 0.9;   // mirrors max-height:90vh on .modal
 function autoGrowTextarea(ta) {
   if (!ta) return;
-  ta.style.height = 'auto';
-  ta.style.height = Math.min(ta.scrollHeight, Math.round(window.innerHeight * 0.7)) + 'px';
+  ta.style.height = 'auto';                 // collapse first → the modal shrinks back to its content
+  let cap = Math.round(window.innerHeight * 0.7);
+  const modal = ta.closest('.modal-scroll') && ta.closest('.modal');
+  if (modal && ta.offsetParent) {           // hidden field measures as 0 — leave the plain cap
+    const rest = modal.getBoundingClientRect().height - ta.getBoundingClientRect().height;
+    cap = Math.max(120, Math.round(window.innerHeight * MODAL_MAX_VH) - rest);
+  }
+  ta.style.height = Math.min(ta.scrollHeight, cap) + 'px';
 }
 function saveItemEdit() {
   const ctx = _itemEditCtx, item = _itemEditItem;
