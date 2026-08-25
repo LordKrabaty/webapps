@@ -431,6 +431,7 @@ textarea::placeholder{color:var(--mid)}
 .log-note-in{width:100%;font-size:.72rem;font-style:italic;color:var(--muted);border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.08rem .2rem;flex:0 0 auto;min-height:0;resize:none;overflow:hidden;line-height:1.5;font-family:'DM Sans',sans-serif}
 .log-note-in:focus{outline:none;border-bottom:1px solid var(--black);color:var(--black)}
 .log-note-wk{margin-top:.2rem;border-top:1px solid var(--off);padding-top:.2rem}
+.log-note-week{margin-top:-.3rem;padding-left:.55rem}   /* note of a whole ISO week — sits right under its header */
 .log-set-note{display:flex;gap:.3rem;align-items:flex-start;padding-left:.4rem}
 .log-rn{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-top:.16rem;flex-shrink:0}
 .log-month-hdr{display:flex;align-items:center;gap:.45rem;font-size:.72rem;font-weight:600;letter-spacing:.06em;color:var(--dark);padding:.3rem .1rem 0;cursor:pointer;user-select:none}
@@ -847,7 +848,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 7;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push
+const APP_SCHEMA = 8;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1037,7 +1038,7 @@ async function doSelectiveClear() {
   const toDelete = [];
   if (el('clr-session').checked)    toDelete.push('workout-v1-session');
   if (el('clr-library').checked)    toDelete.push('workout-v1-library','workout-v1-seeded');   // clearing the library also restores the default templates on reload
-  if (el('clr-archive').checked)    toDelete.push('workout-v1-archive');
+  if (el('clr-archive').checked)    toDelete.push('workout-v1-archive','workout-v1-weeknotes');   // week notes are log annotations — they go with it
   if (el('clr-body').checked)       toDelete.push('workout-v1-body','workout-v1-bodyfields');
   if (el('clr-equip').checked)      toDelete.push('workout-v1-equip');   // whole-object LWW, mt resets to 0 → the cloud copy wins on the next pull
   if (el('clr-appearance').checked) toDelete.push('workout-fs','workout-dark','workout-panel-fs');
@@ -1270,7 +1271,7 @@ function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
   if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields, equip}, null, 2);
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields, equip, weekNotes}, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
   let downloaded = false;
@@ -1316,7 +1317,7 @@ function parseImportJson(text) {
     const parsed = JSON.parse(text);
     importRecord = parsed;
     const items = parsed.items || parsed.teas || [];
-    if (!items.length && !(parsed.archive || []).length && !(parsed.body || []).length) throw new Error('No items in the file');
+    if (!items.length && !(parsed.archive || []).length && !(parsed.body || []).length && !(parsed.weekNotes || []).length) throw new Error('No items in the file');
     importData = items;
     importSelected = new Set(items.map(x => x.id));
     el('importList').innerHTML = items.map(x => `
@@ -1342,7 +1343,7 @@ function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.
 function doImport() {
   const rec = importRecord || {};
   const toAdd = importData.filter(x => importSelected.has(x.id));
-  const hasExtra = (rec.archive || []).length || (rec.body || []).length;
+  const hasExtra = (rec.archive || []).length || (rec.body || []).length || (rec.weekNotes || []).length;
   if (!toAdd.length && !hasExtra) { customAlert('Nothing is selected.'); return; }
   // dedup by id — update an existing item in place, do not duplicate; mt = now (import wins on sync)
   let added = 0, updated = 0;
@@ -1382,8 +1383,18 @@ function doImport() {
     equip = {items: JSON.parse(JSON.stringify(rec.equip.items)), mt: Date.now()};
     saveEquip();
   }
+  // week notes: overwrite/add by week key; mt = now (import wins on sync)
+  let wnAdded = 0;
+  (rec.weekNotes || []).forEach(n => {
+    if (!n || !isWeekKey(n.id) || !String(n.note || '').trim()) return;
+    const e = {...n, id: String(n.id), note: String(n.note).trim(), mt: Date.now()};   // spread first — unknown/newer fields survive
+    const i = weekNotes.findIndex(x => String(x.id) === e.id);
+    if (i >= 0) weekNotes[i] = e; else weekNotes.push(e);
+    wnAdded++;
+  });
+  if (wnAdded) { saveWeekNotes(); renderLog(); }
   closeModal('importModal');
-  showSave('↓ imported: ' + (added + updated) + ' workouts' + (logAdded ? ' +' + logAdded + ' log' : '') + (bodyAdded ? ' +' + bodyAdded + ' body' : ''));
+  showSave('↓ imported: ' + (added + updated) + ' workouts' + (logAdded ? ' +' + logAdded + ' log' : '') + (bodyAdded ? ' +' + bodyAdded + ' body' : '') + (wnAdded ? ' +' + wnAdded + ' week notes' : ''));
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
@@ -1391,7 +1402,7 @@ function init() {
   initFs();
   initDark();
   loadPanelFs();
-  loadLibrary(); loadArchive(); loadBody(); loadBodyFields(); loadEquip();
+  loadLibrary(); loadArchive(); loadBody(); loadBodyFields(); loadEquip(); loadWeekNotes();
   seedLibrary();
   const restored = loadSession();
   if (activeLibId) markSaved();
@@ -2968,13 +2979,42 @@ function getISOWeekYear(t) { const d = new Date(t); d.setDate(d.getDate() + 3 - 
 function logWeekKey(t) { return getISOWeekYear(t) + '-W' + String(getISOWeek(t)).padStart(2, '0'); }
 function logMonthKey(t) { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function logMonthLabel(mk) { const [y, m] = mk.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-GB', {month:'long'}).toUpperCase() + ' ' + y; }
-function logWeekLabel(wkk) {   // "Week 29 · 13.07–19.07" (Mon–Sun of the ISO week)
-  const m = wkk.match(/^(\d+)-W(\d+)$/); if (!m) return wkk;
+function isWeekKey(wkk) { return /^\d+-W\d+$/.test(String(wkk)); }
+function weekMonday(wkk) {   // Monday 00:00 of an ISO week key ("2026-W34")
+  const m = String(wkk).match(/^(\d+)-W(\d+)$/); if (!m) return new Date(NaN);
   const j4 = new Date(+m[1], 0, 4);
-  const mon = new Date(+m[1], 0, 4 - (j4.getDay() + 6) % 7 + (+m[2] - 1) * 7);
+  return new Date(+m[1], 0, 4 - (j4.getDay() + 6) % 7 + (+m[2] - 1) * 7);
+}
+function logWeekLabel(wkk) {   // "Week 29 · 13.07–19.07" (Mon–Sun of the ISO week)
+  const m = String(wkk).match(/^(\d+)-W(\d+)$/); if (!m) return wkk;
+  const mon = weekMonday(wkk);
   const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
   const f = d => String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
   return 'Week ' + +m[2] + ' · ' + f(mon) + '–' + f(sun);
+}
+// ── WEEK NOTES: one editable note per ISO week (synced collection, LWW by mt) ──
+const WEEKNOTES_KEY = 'workout-v1-weeknotes';
+let weekNotes = [];   // [{id:"2026-W34", note, mt}] — an emptied note is deleted, the tombstone propagates it
+function loadWeekNotes() { try { weekNotes = JSON.parse(localStorage.getItem(WEEKNOTES_KEY) || '[]') || []; } catch(e) { weekNotes = []; } }
+function saveWeekNotes() { try { localStorage.setItem(WEEKNOTES_KEY, JSON.stringify(weekNotes)); } catch(e) {} }
+function weekNoteOf(wkk) { const n = weekNotes.find(x => x && String(x.id) === String(wkk)); return (n && n.note) || ''; }
+// mt only on a REAL change — a blind stamp would beat a newer note from the other device.
+// rerender: only for a note-less week (a cleared note makes the whole week header disappear)
+function updateWeekNote(wkk, val, rerender) {
+  if (!isWeekKey(wkk)) return;
+  val = String(val || '').trim();
+  const i = weekNotes.findIndex(x => x && String(x.id) === String(wkk));
+  if (i >= 0) {
+    if ((weekNotes[i].note || '') === val) return;
+    if (val) { weekNotes[i].note = val; weekNotes[i].mt = Date.now(); }
+    else weekNotes.splice(i, 1);   // cleared = deleted → the save hook records a tombstone
+  } else {
+    if (!val) return;
+    weekNotes.push({id: wkk, note: val, mt: Date.now()});
+  }
+  saveWeekNotes();
+  showSave('✓ week note saved');
+  if (rerender) renderLog();
 }
 let logMonthColl = null;   // Set of collapsed month keys; null = not initialized (everything but the current month starts collapsed)
 function toggleLogMonth(mk) {
@@ -3049,21 +3089,26 @@ function openWeekDetail(wkk) {
     });
   });
   el('weekDetailTitle').textContent = logWeekLabel(wkk);
-  el('weekDetailBody').innerHTML = map.size
+  // the same week note as in the log — editing it here rerenders the log
+  const wnote = `<textarea class="le-note" rows="1" placeholder="· week note" title="note for this week — the same one as in the log" oninput="autoResizeTA(this)" onchange="updateWeekNote('${wkk}',this.value,true)">${esc(weekNoteOf(wkk))}</textarea>`;
+  el('weekDetailBody').innerHTML = wnote + (map.size
     ? [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([cd, g]) => {
         const t = codeWeekTarget(cd);
         const state = t ? (g.n >= t ? ' met' : g.n ? '' : ' miss') : '';
         return `<div class="log-ex"><span class="log-code">${esc(cd)}</span> ${esc(g.name)} <span class="log-wk-badge${state}" title="sessions that week${t ? ' / weekly goal (summed from templates using this code)' : ''}">${g.n}${t ? '/' + t : '×'}</span></div>`;
       }).join('')
-    : '<p class="lib-empty">No coded exercises this week.</p>';
+    : '<p class="lib-empty">No coded exercises this week.</p>');
   el('weekDetailModal').classList.add('open');
+  autoResizeTA(el('weekDetailBody').querySelector('.le-note'));   // hidden while closed → grow it once open
 }
 // text export of one grouped section — 'm' = calendar month, 'w' = the WHOLE ISO week
 // (even the part rendered under the neighbouring month); both honor the active filter
 function copyLogGroup(kind, key) {
   const items = filteredLog().filter(a => (kind === 'm' ? logMonthKey(a.date || a.id) : logWeekKey(a.date || a.id)) === key);
-  if (!items.length) { showStatusMsg('⚠ nothing to copy in this group'); return; }
-  copyText(items.map(logEntryText).join('\n\n'), '✓ ' + (kind === 'm' ? logMonthLabel(key) : logWeekLabel(key)) + ' copied as text');
+  const wnote = kind === 'w' ? weekNoteOf(key) : '';   // the week note leads the copied text
+  if (!items.length && !wnote) { showStatusMsg('⚠ nothing to copy in this group'); return; }
+  const head = wnote ? logWeekLabel(key) + '\n' + wnote + '\n\n' : '';
+  copyText(head + items.map(logEntryText).join('\n\n'), '✓ ' + (kind === 'm' ? logMonthLabel(key) : logWeekLabel(key)) + ' copied as text');
 }
 function renderLog() {
   const c = el('logList'); if (!c) return;
@@ -3078,8 +3123,14 @@ function renderLog() {
     ab.textContent = allOpen ? '▾ all' : '▸ all';
     ab.title = allOpen ? 'collapse all months & entries' : 'expand all months & entries';
   }
-  if (!archive.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
-  if (!items.length) { c.innerHTML = '<p class="lib-empty">Nothing matches the filter.</p>'; return; }
+  // an active text filter ignores month collapse (matches are never hidden behind a closed
+  // header) and hides the entry-less week headers, week notes included
+  const searching = !!logFilter.trim();
+  const rangeFrom = logRange > 0 ? Date.now() - logRange * 864e5 : 0;   // the date range hides older note weeks too
+  const noteWeeks = searching ? [] : weekNotes.filter(n => n && n.note && isWeekKey(n.id)
+    && (!rangeFrom || weekMonday(n.id).getTime() + 7 * 864e5 >= rangeFrom));
+  if (!archive.length && !noteWeeks.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
+  if (!items.length && !noteWeeks.length) { c.innerHTML = '<p class="lib-empty">Nothing matches the filter.</p>'; return; }
   const itemHtml = a => {
     const open = !!logOpen[a.id];
     const isAct = a.type === 'activity';
@@ -3122,9 +3173,7 @@ function renderLog() {
       ${actions}
     </div>`;
   };
-  // group the (already date-desc) entries: month → ISO week → entries; an active text
-  // filter ignores month collapse so matches are never hidden behind a closed header
-  const searching = !!logFilter.trim();
+  // group the (already date-desc) entries: month → ISO week → entries
   let months = new Map();
   items.forEach(a => {
     const t = a.date || a.id;
@@ -3134,15 +3183,25 @@ function renderLog() {
     if (!wm.has(wkk)) wm.set(wkk, []);
     wm.get(wkk).push(a);
   });
-  // the current ISO week renders even with nothing logged yet, so the owed weekly
-  // goals (0/t badges) stay visible — only when some template carries a weekly goal
-  if (!searching && library.some(e => e.data && +e.data.weekTarget > 0)) {
-    const cmk = logMonthKey(Date.now()), cwk = logWeekKey(Date.now());
-    if (!months.has(cmk) || !months.get(cmk).has(cwk)) {
-      const wm = new Map([[cwk, []], ...(months.get(cmk) || new Map())]);   // current week first (newest)
-      const m2 = new Map([[cmk, wm]]);
-      months.forEach((v, k) => { if (k !== cmk) m2.set(k, v); });
-      months = m2;
+  // weeks with nothing logged that must still render: the current ISO week (so the owed
+  // weekly goals — the 0/t badges — stay visible, only when some template carries a goal)
+  // and every week carrying a note, so a note never disappears with its last entry
+  if (!searching) {
+    const have = new Set();
+    months.forEach(wm => wm.forEach((_, k) => have.add(k)));
+    const extra = [];
+    const cwk = logWeekKey(Date.now());
+    if (!have.has(cwk) && library.some(e => e.data && +e.data.weekTarget > 0)) { extra.push(cwk); have.add(cwk); }
+    noteWeeks.forEach(n => { if (!have.has(n.id)) { extra.push(n.id); have.add(n.id); } });
+    if (extra.length) {
+      extra.forEach(wkk => {
+        const mk = logMonthKey(weekMonday(wkk));   // a note-only week lands under the month of its Monday
+        if (!months.has(mk)) months.set(mk, new Map());
+        months.get(mk).set(wkk, []);
+      });
+      // the inserted keys broke the date-desc order — both levels sort newest first
+      const desc = (a, b) => a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0;
+      months = new Map([...months.entries()].sort(desc).map(([mk, wm]) => [mk, new Map([...wm.entries()].sort(desc))]));
     }
   }
   c.innerHTML = [...months.entries()].map(([mk, weeks]) => {
@@ -3161,7 +3220,11 @@ function renderLog() {
         <span class="log-grp-sum">${arr.length}×</span>
         ${weekWorkoutBadges(wkk, items)}
         <button class="log-del" onclick="event.stopPropagation();copyLogGroup('w','${wkk}')" title="copy this week as text (the whole ISO week)">⧉</button></div>`;
-      return wcoll ? whead : whead + arr.map(itemHtml).join('');
+      // week note: always editable on an expanded week, kept visible on a collapsed one
+      const wnote = weekNoteOf(wkk);
+      const wnoteHtml = (wcoll && !wnote) ? '' :
+        `<textarea class="log-note-in log-note-week" rows="1" placeholder="· week note" title="note for this week — editable" oninput="autoResizeTA(this)" onchange="updateWeekNote('${wkk}',this.value,${arr.length ? 'false' : 'true'})">${esc(wnote)}</textarea>`;
+      return wcoll ? whead + wnoteHtml : whead + wnoteHtml + arr.map(itemHtml).join('');
     }).join('');
   }).join('');
   c.querySelectorAll('.log-note-in').forEach(autoResizeTA);   // hidden pane → resized again on tab switch
@@ -3923,7 +3986,7 @@ init();
     <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
       <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>current session</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>library</span></label>
-      <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>workout log</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-archive" checked><span>workout log (incl. week notes)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-body" checked><span>body measurements</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-equip" checked><span>equipment (bars &amp; plates — resets to the defaults)</span></label>
       <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings (font, dark mode)</span></label>
@@ -4138,6 +4201,7 @@ init();
     library.forEach(e => { if (e && e.id != null) s.add('lib:' + e.id); });
     archive.forEach(e => { if (e && e.id != null) s.add('arc:' + e.id); });
     body.forEach(e => { if (e && e.id != null) s.add('bod:' + e.id); });
+    weekNotes.forEach(e => { if (e && e.id != null) s.add('wkn:' + e.id); });
     return s;
   }
   function pruneTombstones() {
@@ -4157,17 +4221,17 @@ init();
     if (!cloudTomb || typeof cloudTomb !== 'object') return;
     Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
   }
-  // no append-only collections left — all three (library, archive, body) merge via lwwMerge,
-  // which applies tombstones itself; kept as a no-op extension point
+  // no append-only collections left — all four (library, archive, body, weekNotes) merge via
+  // lwwMerge, which applies tombstones itself; kept as a no-op extension point
   function applyTombstones() { return 0; }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(items, arch, bod, bf, eq, tomb) {
+  function sigOf(items, arch, bod, bf, eq, wn, tomb) {
     const idS  = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS   = o => Object.keys(o || {}).sort().join(',');
-    return [idS(items), idS(arch), idS(bod), 'bf@' + ((bf && bf.mt) || 0), 'eq@' + ((eq && eq.mt) || 0), tS(tomb)].join('||');   // archive with mt — log note edits must sync
+    return [idS(items), idS(arch), idS(bod), 'bf@' + ((bf && bf.mt) || 0), 'eq@' + ((eq && eq.mt) || 0), idS(wn), tS(tomb)].join('||');   // archive and week notes with mt — note edits must sync
   }
-  function localSig() { return sigOf(library, archive, body, bodyFields, equip, tombstones); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.bodyFields, r.equip, r.tombstones || {}); }
+  function localSig() { return sigOf(library, archive, body, bodyFields, equip, weekNotes, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], r.body || [], r.bodyFields, r.equip, r.weekNotes || [], r.tombstones || {}); }
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn() {
@@ -4208,7 +4272,7 @@ init();
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
-    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, body: body, bodyFields: bodyFields, equip: equip, tombstones: tombstones, device: getDeviceName() };
+    return { v:1, schema: APP_SCHEMA, items: library, archive: archive, body: body, bodyFields: bodyFields, equip: equip, weekNotes: weekNotes, tombstones: tombstones, device: getDeviceName() };
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
@@ -4312,6 +4376,9 @@ init();
     // body measurements — LWW by id (identity normalize → unknown/newer fields survive)
     const bodR = lwwMerge(body, record.body || [], 'bod', x => x.id, c => c);
     body = bodR.arr; added += bodR.added; updated += bodR.updated; removed += bodR.removed;
+    // week notes — LWW by ISO week key; a cleared note is a deletion (tombstone)
+    const wnR = lwwMerge(weekNotes, (record.weekNotes || []).filter(n => n && n.id != null), 'wkn', x => x.id, c => c);
+    weekNotes = wnR.arr; added += wnR.added; updated += wnR.updated; removed += wnR.removed;
     // body column config — whole-object LWW by mt
     const cbf = record.bodyFields;
     if (cbf && Array.isArray(cbf.fields) && (+cbf.mt || 0) > (+(bodyFields && bodyFields.mt) || 0)) {
@@ -4328,7 +4395,7 @@ init();
     // it is a working copy with the user's in-progress sets; a manual save (LWW, mt=now) wins.
 
     if (added || updated || removed) {
-      saveLibrary(); saveArchive(); saveBody();
+      saveLibrary(); saveArchive(); saveBody(); saveWeekNotes();
       if (typeof renderLibrary === 'function') renderLibrary();
       if (typeof renderLog === 'function') renderLog();
       if (typeof renderBody === 'function') renderBody();
@@ -4404,7 +4471,7 @@ init();
     const items    = library.filter(e => exportSelected.has(e.id));
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields, equip};
+    const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields, equip, weekNotes};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
@@ -4620,7 +4687,7 @@ init();
   window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
-  ['saveLibrary','saveArchive','saveBody','saveBodyFields','saveEquip'].forEach(fn => {
+  ['saveLibrary','saveArchive','saveBody','saveBodyFields','saveEquip','saveWeekNotes'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
