@@ -27,6 +27,19 @@ Zpětně-kompatibilní data (migrační mapy starých hodnot, legacy regexy) sm�
 
 ---
 
+## Týden — VŽDY od pondělí
+
+Týden ve **všech** appkách začíná **pondělím** a končí nedělí (ISO-8601), pokud výslovně neurčím jinak. Platí to všude: seskupení v logu, klíče týdne (`2026-W36`), popisky rozsahu (`Mon–Sun`), počítadla „tento týden", plánovací mřížky, filtry, badge i textové exporty.
+
+- **Číslo týdne** = ISO (čtvrtek-based): `getISOWeek()` / `getISOWeekYear()` — referenční implementace `workout-app` ([logWeekKey](workout-app/index.html)) i `todo-app` (`isoWeekKey`). První týden roku je ten, který obsahuje 4. leden.
+- **Pondělí daného data:** `d.setHours(0,0,0,0); d.setDate(d.getDate() - (d.getDay() + 6) % 7);`
+  - ❌ nikdy `getDay()` přímo jako offset — `0` je **neděle**, ne pondělí
+  - ❌ nikdy odčítání milisekund (`- n * 864e5`) od půlnoci — na přechodu letního času vyjde 01:00 / 23:00 a hranice týdne se posune o hodinu (položky z pondělního rána vypadnou z „tohoto týdne"). Vždy `setDate()` — počítá v lokálních dnech.
+- **Pondělí z klíče týdne** (`YYYY-Www`): `new Date(y, 0, 4 - (new Date(y,0,4).getDay() + 6) % 7 + (w - 1) * 7)`.
+- **Pole dnů** indexovaná `getDay()` musí začínat nedělí (`['Su','Mo',…]`), nebo index přemapuj — `DAY_ORDER` v `todo-app` je Mo-first a používá se s mapou `DAY_KEY_TO_NUM`, ne přímým indexem.
+
+---
+
 ## Nová aplikace — postup
 
 1. Zkopíruj `_template\index.html` do `nova-app\index.html`

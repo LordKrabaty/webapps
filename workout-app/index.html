@@ -961,9 +961,10 @@ function renderLibrary() {
   if (!library.length) { list.innerHTML = '<p class="lib-empty">No workouts yet.</p>'; }
   else {
     const typeOf = e => ((e.data && e.data.type) === 'cardio') ? 'cardio' : 'strength';
-    // Monday 00:00 of the current week — the done/target badge counts this week's logged sessions
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    const wkStart = d.getTime() - ((d.getDay() + 6) % 7) * 864e5;
+    // Monday 00:00 of the current week — the done/target badge counts this week's logged sessions.
+    // setDate (local days), not a ms subtraction — that lands on 01:00/23:00 across a DST switch.
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+    const wkStart = d.getTime();
     const badge = e => {
       const t = e.data && e.data.weekTarget;
       if (t == null || t <= 0) return '';
