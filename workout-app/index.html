@@ -880,7 +880,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 9;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session
+const APP_SCHEMA = 10;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1519,14 +1519,15 @@ function tplFromWk(w) {
   w = w || wk;
   return {
     type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
-    exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
+    exercises: (w.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))}))
+      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))}, ex))
   };
 }
-// a not-yet-trained reps/weight edit rides along with the template (and so with the sync);
-// only when there is one — an untouched set keeps the plain shape
-function withChg(o, s) { return s.chg ? Object.assign(o, {chg: s.chg, pw: s.pw ?? null, pr: s.pr ?? null}) : o; }
+// a not-yet-trained reps/weight/time edit rides along with the template (and so with the sync);
+// only when there is one — an untouched set / exercise keeps the plain shape
+function withChg(o, s) { return s.chg ? Object.assign(o, {chg: s.chg, pw: s.pw ?? null, pr: s.pr ?? null, pd: s.pd ?? null}) : o; }
+function withExChg(o, ex) { return ex.schg ? Object.assign(o, {schg: ex.schg, psn: ex.psn ?? null}) : o; }
 function applySessionData(d) {
   wk = JSON.parse(JSON.stringify(d || {}));   // deep copy — never share a reference with a stored record
   if (!wk.exercises) wk = blankWorkout();
@@ -1542,9 +1543,9 @@ function loadFromLibrary(id) {
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
   wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
-    exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
+    exercises: (d.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))})),
+      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))}, ex)),
     run: null};
   migrateWkAudio();
   prefillFromLast(id);
@@ -1560,6 +1561,8 @@ function prefillFromLast(tplId) {
   const lastT = last.date || last.id || 0;
   wk.exercises.forEach(ex => {
     const le = (last.entries || []).find(x => x.code === ex.code); if (!le) return;
+    if (ex.schg && ex.schg > lastT) return;   // sets added/removed since — the log's index mapping is stale
+    clearExStructure(ex);
     ex.sets.forEach((s, i) => {
       if (s.chg && s.chg > lastT) return;   // planned change newer than that session — keep it
       const ls = (le.sets || [])[i]; if (!ls) return;
@@ -1863,7 +1866,7 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
     ${numbered ? `<span class="set-num">${si + 1}</span>` : ''}
     ${mid}${setChgHtml(s)}
-    <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="${sr ? sr + ' · ' : ''}time — m:ss or seconds, editable any time" placeholder="m:ss">
+    <input class="set-in set-t${s.pd != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="${sr ? sr + ' · ' : ''}time — m:ss or seconds, editable any time" placeholder="m:ss">
     <span class="set-dur" title="${sr}">${sr}</span>
     ${(() => { const ex = wk.exercises[ei], R = exRepeat(ex); return R > 1 ? `<span class="set-rep" title="completed repetitions of this interval">${setDn(s)}/${R}</span>` : ''; })()}
     <button class="set-go" onclick="jumpToStep(${ei},${si})" title="jump here — start this exercise now and continue from it">▶</button>
@@ -1879,8 +1882,10 @@ function parseDur(v) {
 function setDurInput(ei, si, inp) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   const v = parseDur(inp.value);
-  ex.sets[si].durSec = v;
-  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s.durSec = v; });   // linked rounds share the time (cardio intervals are distinct)
+  // linked rounds share the time (cardio intervals are distinct); a hand-typed time is a
+  // planned change like reps/weight — it must not be prefilled away before it is trained
+  const targets = (ex.linked !== false && wk.type !== 'cardio') ? ex.sets : [ex.sets[si]];
+  targets.forEach(s => { stampSetChange(s, 'durSec', s.durSec, v); s.durSec = v; });
   const r = wk.run;
   if (r && r.phase === 'manual' && r.ei === ei && r.si === si) startNextWork();   // time filled for the waiting step → its countdown starts right away
   schedSave(); renderMain();
@@ -1892,18 +1897,27 @@ function setDurInput(ei, si, inp) {
 // lists them so a change made days ago is not forgotten. Cleared when the set is
 // logged as done, or when a session logged AFTER the edit prefills over it.
 function stampSetChange(s, field, oldVal, newVal) {
-  const key = field === 'weight' ? 'pw' : field === 'reps' ? 'pr' : null;
+  const key = field === 'weight' ? 'pw' : field === 'reps' ? 'pr' : field === 'durSec' ? 'pd' : null;
   if (!key || String(oldVal ?? '') === String(newVal ?? '')) return;
   if (s[key] == null) s[key] = oldVal ?? '';                     // keep the ORIGINAL value across repeated edits
   if (String(s[key]) === String(newVal ?? '')) delete s[key];    // edited back to where it started
-  if (s.pw == null && s.pr == null) clearSetChange(s); else s.chg = Date.now();
+  if (s.pw == null && s.pr == null && s.pd == null) clearSetChange(s); else s.chg = Date.now();
 }
-function clearSetChange(s) { delete s.chg; delete s.pw; delete s.pr; }
+function clearSetChange(s) { delete s.chg; delete s.pw; delete s.pr; delete s.pd; }
+// adding / removing a set makes the log's index → set mapping stale, so the whole exercise
+// stops being prefilled until it is trained again; psn = the count before the first change
+function stampExStructure(ex, prevN) {
+  if (ex.psn == null) ex.psn = prevN;
+  if (+ex.psn === (ex.sets || []).length) clearExStructure(ex); else ex.schg = Date.now();
+}
+function clearExStructure(ex) { delete ex.schg; delete ex.psn; }
 function setChgLabel(s) {
   const p = [];
   const was = v => v === '' || v == null ? '–' : v;
+  const wasT = v => v === '' || v == null ? '–' : mmss(+v);
   if (s.pw != null) p.push(was(s.pw) + ' → ' + was(s.weight) + ' kg');
   if (s.pr != null) p.push(was(s.pr) + ' → ' + was(s.reps) + ' reps');
+  if (s.pd != null) p.push(wasT(s.pd) + ' → ' + wasT(s.durSec) + ' time');
   return p.join(' · ');
 }
 function chgAgo(t) {
@@ -1919,6 +1933,17 @@ function setChgHtml(s) {
 // one line per exercise (linked rounds carry the same change → they collapse into one)
 function pendingStripHtml() {
   const rows = [];
+  const exLabel = ex => (ex.code || '').trim() || (ex.name || '').trim() || 'exercise';
+  // structure first — "+ add round" hits every exercise at once, so an identical change
+  // across all of them collapses into a single row
+  const struct = [];
+  (wk.exercises || []).forEach(ex => {
+    if (!ex.schg) return;
+    struct.push({ex, t: (ex.psn ?? '?') + ' → ' + (ex.sets || []).length + (wk.type === 'cardio' ? ' intervals' : ' sets') + ' · ' + chgAgo(ex.schg)});
+  });
+  if (struct.length > 1 && struct.length === (wk.exercises || []).length && new Set(struct.map(r => r.t)).size === 1)
+    rows.push('all · ' + struct[0].t);
+  else struct.forEach(r => rows.push(exLabel(r.ex) + ' · ' + r.t));
   (wk.exercises || []).forEach(ex => {
     const groups = new Map();   // change label → set numbers carrying it
     (ex.sets || []).forEach((s, si) => {
@@ -1927,7 +1952,7 @@ function pendingStripHtml() {
       if (!groups.has(t)) groups.set(t, []);
       groups.get(t).push(si + 1);
     });
-    groups.forEach((nums, t) => rows.push(((ex.code || '').trim() || (ex.name || '').trim() || 'exercise')
+    groups.forEach((nums, t) => rows.push(exLabel(ex)
       + (nums.length === (ex.sets || []).length ? '' : ' (' + (wk.type === 'cardio' ? 'int ' : 'set ') + nums.join(',') + ')') + ' · ' + t));
   });
   if (!rows.length) return '';
@@ -1939,7 +1964,7 @@ function pendingStripHtml() {
 }
 function clearPendingChanges() {
   pushUndo();
-  (wk.exercises || []).forEach(ex => (ex.sets || []).forEach(clearSetChange));
+  (wk.exercises || []).forEach(ex => { clearExStructure(ex); (ex.sets || []).forEach(clearSetChange); });
   schedSave(); renderMain();
 }
 // write reps/weight into a set; linked exercises (default) mirror the value into every round
@@ -2188,15 +2213,16 @@ function addRound() {
   if (!wk.exercises.length) { showStatusMsg('⚠ add an exercise first'); return; }
   pushUndo();
   wk.exercises.forEach(ex => {
-    const p = ex.sets[ex.sets.length - 1];
+    const p = ex.sets[ex.sets.length - 1], n = ex.sets.length;
     ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: '', iname: p ? (p.iname ?? '') : '', cue: '', restSec: p ? (p.restSec ?? null) : null});
+    stampExStructure(ex, n);
   });
   schedSave(); renderMain();
 }
 async function removeRound(si) {
   if (!await customConfirm('Remove round ' + (si + 1) + '?','remove')) return;
   pushUndo();
-  wk.exercises.forEach(ex => { if (ex.sets.length > si) ex.sets.splice(si, 1); });
+  wk.exercises.forEach(ex => { if (ex.sets.length > si) { const n = ex.sets.length; ex.sets.splice(si, 1); stampExStructure(ex, n); } });
   wk.exercises = wk.exercises.filter(ex => ex.sets.length);
   schedSave(); renderMain();
 }
@@ -2210,8 +2236,9 @@ async function removeExercise(ei) {
 function addSet(ei) {
   const ex = wk.exercises[ei]; if (!ex) return;
   pushUndo();
-  const prev = ex.sets[ex.sets.length - 1];
+  const prev = ex.sets[ex.sets.length - 1], n = ex.sets.length;
   ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: '', iname: '', cue: '', restSec: prev ? (prev.restSec ?? null) : null});
+  stampExStructure(ex, n);
   schedSave(); renderMain();
 }
 // cardio: how many times the WHOLE segment (its interval sequence) runs before the next segment
@@ -2238,7 +2265,9 @@ function removeSet(ei, si) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
   if (ex.sets.length === 1) { removeExercise(ei); return; }   // last interval → remove the whole segment
   pushUndo();
+  const n = ex.sets.length;
   ex.sets.splice(si, 1);
+  stampExStructure(ex, n);
   schedSave(); renderMain();
 }
 
@@ -2997,7 +3026,12 @@ function confirmFinish() {
   wk.run = null; wk.note = '';
   // planned times (durSec) stay for next time; a set that WAS trained drops its planned-change
   // mark (the log now carries that value) — a skipped one keeps it, it is still pending
-  wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { if (!anyDone || s.done) clearSetChange(s); s.done = false; s.dn = 0; s.snote = ''; }); });
+  wk.exercises.forEach(ex => {
+    const trained = !anyDone || (ex.sets || []).some(s => s.done);   // read before the done flags are reset
+    ex.snote = ''; ex.tech = null; ex.rir = null;
+    ex.sets.forEach(s => { if (!anyDone || s.done) clearSetChange(s); s.done = false; s.dn = 0; s.snote = ''; });
+    if (trained) clearExStructure(ex);   // this session logged the new set count → the log matches again
+  });
   schedSave(); renderMain(); renderNotes(); renderLibrary(); updateMusic();   // the weekly badge counts logged sessions
   openLogEntry(entry.id);         // switch to the log tab + expand the entry in the background
   openLogEdit(entry.id);          // pop the full editor right away — ratings + notes can be added/adjusted
