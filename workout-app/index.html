@@ -79,6 +79,9 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
 @media(hover:hover){.modal-item:hover{background:var(--off)}}
 .modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
+.lp-week{margin-left:1.05rem}   /* period picker: ISO weeks nested under their month */
+.lp-cnt{margin-left:auto;font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0}
+.modal-item.sel .lp-cnt{color:var(--w)}
 .modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
 .modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
 .modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
@@ -189,6 +192,7 @@ textarea::placeholder{color:var(--mid)}
 /* dirty / undo */
 .btn-lib.dirty{background:var(--w);color:var(--black);border:var(--bh);font-weight:600}
 .btn-lib.dirty::before{content:'! ';color:var(--black)}
+.btn-io.dirty{background:var(--black);border-color:var(--black);color:var(--w)}   /* an active period pick */
 .btn-sm.dirty{font-weight:700}
 .btn-sm.dirty::before{content:'! '}
 .btn-sm.saved{color:var(--muted);border-color:var(--light);pointer-events:none}
@@ -578,12 +582,13 @@ textarea::placeholder{color:var(--mid)}
       </div>
       <div class="log-filter">
         <input type="text" class="bf-in" placeholder="filter — workout / exercise / note…" title="matches the workout name, exercise codes & names and notes" oninput="logFilter=this.value;renderLog()">
-        <select class="bf-in" style="flex:0 0 auto;width:auto" onchange="logRange=+this.value;renderLog()" title="time range">
+        <select class="bf-in" id="logRangeSel" style="flex:0 0 auto;width:auto" onchange="logRangeChange(this.value)" title="time range — picking one clears a month/week selection">
           <option value="0">all time</option>
           <option value="30">30 days</option>
           <option value="90">90 days</option>
           <option value="365">1 year</option>
         </select>
+        <button class="btn-io" id="logPickBtn" style="flex:0 0 auto" onclick="openLogPick()" title="show only the months / weeks you tick">▤</button>
       </div>
       <div id="logList" class="log-list"></div>
     </div>
@@ -797,6 +802,20 @@ textarea::placeholder{color:var(--mid)}
       <div class="score-cap" id="scoreRirCap"></div></div>
     <p style="font-size:.74rem;color:var(--muted);margin:0">Technique: tap again = +0.5, third tap clears · RIR: tap again clears.</p>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exScoreModal')">done</button></div>
+  </div>
+</div>
+
+<!-- Period picker — tick the months / ISO weeks the log should show (from the log filter row) -->
+<div class="modal-bg" id="logPickModal">
+  <div class="modal" style="max-width:420px;max-height:86vh;gap:.6rem">
+    <h2>Months &amp; weeks</h2>
+    <p id="logPickNote"></p>
+    <div id="logPickBody" style="display:flex;flex-direction:column;gap:.25rem;overflow-y:auto;min-height:0"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="logPickReset('none')" title="untick everything — back to the plain time range">clear</button>
+      <button class="modal-btn" onclick="logPickReset('month')" title="show only the current calendar month">this month</button>
+      <button class="modal-btn primary" onclick="closeModal('logPickModal')">done</button>
+    </div>
   </div>
 </div>
 
@@ -1184,7 +1203,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal','musicModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal','musicModal','logPickModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   // a track preview must not outlive the ♪… modal (covers close button + backdrop click)
@@ -2940,10 +2959,23 @@ function logDateStr(a, longYear) {
   return d.toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year: longYear ? 'numeric' : '2-digit'})
     + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
 }
-// log filter: free text matches the workout name, exercise codes/names and all notes; range in days (0 = all)
+// log filter: free text matches the workout name, exercise codes/names and all notes.
+// The period is EITHER a rolling range in days (logRange, 0 = all) OR an explicit pick of months / ISO weeks.
 let logFilter = '', logRange = 0;
+let logPick = null;   // null = the rolling range applies; else a Set of '2026-08' (month) and '2026-W36' (ISO week) keys
+function logPickOn() { return !!(logPick && logPick.size); }
+function logPeriodOk(t) {   // one entry's timestamp against the active period filter
+  if (logPickOn()) return logPick.has(logMonthKey(t)) || logPick.has(logWeekKey(t));
+  return !(logRange > 0 && (t || 0) < Date.now() - logRange * 864e5);
+}
+// a note-only week follows the same filter — its Monday decides which month it belongs to
+function logPeriodOkWeek(wkk) {
+  const mon = weekMonday(wkk).getTime();
+  if (logPickOn()) return logPick.has(wkk) || logPick.has(logMonthKey(mon));
+  return !(logRange > 0 && mon + 7 * 864e5 < Date.now() - logRange * 864e5);
+}
 function logMatches(a) {
-  if (logRange > 0 && (a.date || a.id || 0) < Date.now() - logRange * 864e5) return false;
+  if (!logPeriodOk(a.date || a.id || 0)) return false;
   const q = logFilter.trim().toLowerCase();
   if (!q) return true;
   const tpl = a.tplId != null ? library.find(x => String(x.id) === String(a.tplId)) : null;
@@ -2992,6 +3024,82 @@ function logWeekLabel(wkk) {   // "Week 29 · 13.07–19.07" (Mon–Sun of the I
   const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
   const f = d => String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
   return 'Week ' + +m[2] + ' · ' + f(mon) + '–' + f(sun);
+}
+// ── PERIOD PICKER: tick individual months / ISO weeks to show ───────────────
+// Session-only (like the range select) — a filter that survived a reload would
+// look like missing data. A ticked month = its whole calendar month; a ticked
+// week = the whole ISO week, including the part under the neighbouring month.
+function logPeriodIndex() {
+  const months = new Map();   // monthKey → {n, weeks: Map(weekKey → n)}
+  const touch = mk => { if (!months.has(mk)) months.set(mk, {n: 0, weeks: new Map()}); return months.get(mk); };
+  archive.forEach(a => {
+    const t = a.date || a.id || 0, m = touch(logMonthKey(t)), wkk = logWeekKey(t);
+    m.n++; m.weeks.set(wkk, (m.weeks.get(wkk) || 0) + 1);
+  });
+  weekNotes.forEach(n => {   // a week carrying only a note is pickable too
+    if (!n || !n.note || !isWeekKey(n.id)) return;
+    const m = touch(logMonthKey(weekMonday(n.id)));
+    if (!m.weeks.has(n.id)) m.weeks.set(n.id, 0);
+  });
+  const desc = ([a], [b]) => a < b ? 1 : a > b ? -1 : 0;
+  return [...months.entries()].sort(desc).map(([mk, m]) => [mk, {n: m.n, weeks: [...m.weeks.entries()].sort(desc)}]);
+}
+function renderLogPick() {
+  const body = el('logPickBody'), note = el('logPickNote'); if (!body) return;
+  const idx = logPeriodIndex(), scroll = body.scrollTop;   // every tick re-renders — keep the place in a long list
+  body.innerHTML = idx.length ? idx.map(([mk, m]) => {
+    const on = logPickOn() && logPick.has(mk);
+    return `<label class="modal-item${on ? ' sel' : ''}" title="show this whole calendar month">
+        <input type="checkbox"${on ? ' checked' : ''} onchange="toggleLogPick('${mk}')">
+        <span>${esc(logMonthLabel(mk))}</span><span class="lp-cnt">${m.n}×</span></label>`
+      + m.weeks.map(([wkk, n]) => {
+        const wo = logPickOn() && logPick.has(wkk);
+        return `<label class="modal-item lp-week${wo ? ' sel' : ''}" title="show this whole ISO week (Mon–Sun), even the part under the neighbouring month">
+          <input type="checkbox"${wo ? ' checked' : ''} onchange="toggleLogPick('${wkk}')">
+          <span>${esc(logWeekLabel(wkk))}</span><span class="lp-cnt">${n ? n + '×' : 'note'}</span></label>`;
+      }).join('');
+  }).join('') : '<p class="lib-empty">Nothing logged yet.</p>';
+  body.scrollTop = scroll;
+  if (note) note.textContent = logPickOn()
+    ? logPick.size + ' ticked — the log shows only these'
+    : 'Nothing ticked — the time range from the filter row applies.';
+}
+// ticking a period also expands it — otherwise the pick can land on a collapsed header
+function expandPicked(k) {
+  if (isWeekKey(k)) {
+    if (logWeekColl) logWeekColl.delete(k);
+    const mon = weekMonday(k), sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    if (logMonthColl) { logMonthColl.delete(logMonthKey(mon)); logMonthColl.delete(logMonthKey(sun)); }
+  } else if (logMonthColl) logMonthColl.delete(k);
+}
+function toggleLogPick(k) {
+  if (!logPick) logPick = new Set();
+  if (logPick.has(k)) logPick.delete(k); else { logPick.add(k); expandPicked(k); }
+  if (!logPick.size) logPick = null;   // emptied = back to the rolling range
+  renderLogPick(); renderLog();
+}
+function logPickReset(mode) {
+  logPick = mode === 'month' ? new Set([logMonthKey(Date.now())]) : null;
+  if (logPick) logPick.forEach(expandPicked);
+  renderLogPick(); renderLog();
+}
+function openLogPick() { renderLogPick(); el('logPickModal').classList.add('open'); }
+function logRangeChange(v) {
+  logRange = +v || 0;
+  logPick = null;                      // a plain range replaces an explicit tick list
+  renderLog();
+}
+// the ▤ button carries the pick state; the range select stays usable as the way back
+function syncLogPeriodUi() {
+  const s = el('logRangeSel'), b = el('logPickBtn');
+  if (s) s.value = String(logRange);
+  if (b) {
+    b.textContent = logPickOn() ? '▤ ' + logPick.size : '▤';
+    b.classList.toggle('dirty', logPickOn());
+    b.title = logPickOn()
+      ? logPick.size + ' months / weeks ticked — click to change, the time range is ignored'
+      : 'show only the months / weeks you tick';
+  }
 }
 // ── WEEK NOTES: one editable note per ISO week (synced collection, LWW by mt) ──
 const WEEKNOTES_KEY = 'workout-v1-weeknotes';
@@ -3127,9 +3235,8 @@ function renderLog() {
   // an active text filter ignores month collapse (matches are never hidden behind a closed
   // header) and hides the entry-less week headers, week notes included
   const searching = !!logFilter.trim();
-  const rangeFrom = logRange > 0 ? Date.now() - logRange * 864e5 : 0;   // the date range hides older note weeks too
-  const noteWeeks = searching ? [] : weekNotes.filter(n => n && n.note && isWeekKey(n.id)
-    && (!rangeFrom || weekMonday(n.id).getTime() + 7 * 864e5 >= rangeFrom));
+  syncLogPeriodUi();
+  const noteWeeks = searching ? [] : weekNotes.filter(n => n && n.note && isWeekKey(n.id) && logPeriodOkWeek(n.id));
   if (!archive.length && !noteWeeks.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
   if (!items.length && !noteWeeks.length) { c.innerHTML = '<p class="lib-empty">Nothing matches the filter.</p>'; return; }
   const itemHtml = a => {
@@ -3192,7 +3299,7 @@ function renderLog() {
     months.forEach(wm => wm.forEach((_, k) => have.add(k)));
     const extra = [];
     const cwk = logWeekKey(Date.now());
-    if (!have.has(cwk) && library.some(e => e.data && +e.data.weekTarget > 0)) { extra.push(cwk); have.add(cwk); }
+    if (!have.has(cwk) && logPeriodOkWeek(cwk) && library.some(e => e.data && +e.data.weekTarget > 0)) { extra.push(cwk); have.add(cwk); }
     noteWeeks.forEach(n => { if (!have.has(n.id)) { extra.push(n.id); have.add(n.id); } });
     if (extra.length) {
       extra.forEach(wkk => {
