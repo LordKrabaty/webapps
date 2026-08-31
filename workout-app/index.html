@@ -289,6 +289,11 @@ textarea::placeholder{color:var(--mid)}
 .wk-setup{display:flex;gap:.6rem .9rem;flex-wrap:wrap;margin-bottom:.75rem}
 .wk-setup .field>label{flex:1}   /* multi-line labels wrap upward — inputs stay bottom-aligned across the row */
 .wk-runbar{display:flex;align-items:center;gap:.7rem;margin-bottom:.75rem;flex-wrap:wrap}
+/* reps/weight changed but not trained yet — the strip above the workout + the row marker */
+.wk-chg{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;border:var(--bh);border-radius:var(--r);padding:.3rem .45rem;margin-bottom:.7rem;min-width:0}
+.wk-chg-t{font-size:.62rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);flex-shrink:0}
+.wk-chg-i{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--black);border:var(--b);border-radius:var(--r);padding:.08rem .3rem;overflow-wrap:anywhere}
+.wk-chg .btn-sm{margin-left:auto}
 .rest-bar{display:flex;align-items:center;gap:.8rem;border:var(--bh);border-radius:var(--r);padding:.5rem .9rem;margin-bottom:.75rem;flex-wrap:wrap}
 .rest-bar.over{background:var(--black)}
 .rest-bar.over .now-prog-txt,.rest-bar.over .rest-label{color:var(--w)}
@@ -357,6 +362,8 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.score-opt:not(.sel):hover{background:var(--off)}}
 .score-cap{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);min-height:1.1em}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
+.set-in.chg{border:var(--bh)}
+.set-chg{font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--black);flex-shrink:0;cursor:help}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-unit{color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace;flex-shrink:0;margin-left:-.05rem}
 .set-t{width:4.5em;min-width:3.2em}
@@ -867,7 +874,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 8;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push
+const APP_SCHEMA = 9;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1486,9 +1493,12 @@ function tplFromWk(w) {
     type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
     exercises: (w.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))}))
+      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))}))
   };
 }
+// a not-yet-trained reps/weight edit rides along with the template (and so with the sync);
+// only when there is one — an untouched set keeps the plain shape
+function withChg(o, s) { return s.chg ? Object.assign(o, {chg: s.chg, pw: s.pw ?? null, pr: s.pr ?? null}) : o; }
 function applySessionData(d) {
   wk = JSON.parse(JSON.stringify(d || {}));   // deep copy — never share a reference with a stored record
   if (!wk.exercises) wk = blankWorkout();
@@ -1506,24 +1516,29 @@ function loadFromLibrary(id) {
   wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
     exercises: (d.exercises || []).map(ex => ({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}))})),
+      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))})),
     run: null};
   migrateWkAudio();
   prefillFromLast(id);
   activeLibId = e.id; markSaved();
   renderMain(); renderNotes(); renderLibrary(); schedSave();
 }
-// progression: prefill reps/weight from the most recent logged session of this template
+// progression: prefill reps/weight from the most recent logged session of this template.
+// A set you edited AFTER that session (s.chg) is left alone — its planned value is the newer
+// one, and overwriting it here used to throw away a change that was never trained.
 function prefillFromLast(tplId) {
   const last = archive.filter(a => String(a.tplId) === String(tplId)).sort((a,b) => (b.date || b.id || 0) - (a.date || a.id || 0))[0];
   if (!last) return;
+  const lastT = last.date || last.id || 0;
   wk.exercises.forEach(ex => {
     const le = (last.entries || []).find(x => x.code === ex.code); if (!le) return;
     ex.sets.forEach((s, i) => {
+      if (s.chg && s.chg > lastT) return;   // planned change newer than that session — keep it
       const ls = (le.sets || [])[i]; if (!ls) return;
       if (ls.reps != null && ls.reps !== '') s.reps = ls.reps;
       if (ls.weight) { s.weight = ls.weight; if (ls.eq) s.eq = JSON.parse(JSON.stringify(ls.eq)); }
       if (ls.durSec != null) s.durSec = ls.durSec;
+      clearSetChange(s);   // that session is the newer truth → an older mark is stale
     });
   });
 }
@@ -1572,6 +1587,7 @@ function renderMain() {
     <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="sound &amp; music — music on/off, track selection, end countdown, halfway alert, rep pacer">${musicOn ? '♪' : '♪ off'}</button>
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
+  ${pendingStripHtml()}
   <div class="rest-bar" id="nowBar" style="display:none">
     <span class="rest-label" id="nowLabel">ready</span>
     <div class="now-prog" id="nowProg">
@@ -1812,13 +1828,13 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   const mid = cardio
     ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">
     <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
-    : `<input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
+    : `<input class="set-in${s.pr != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
-    <input class="set-in set-w" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–"><span class="set-unit">kg</span>
+    <input class="set-in set-w${s.pw != null ? ' chg' : ''}" type="text" value="${esc(s.weight ?? '')}" onchange="setSetVal(${ei},${si},'weight',this.value)" title="weight" placeholder="–"><span class="set-unit">kg</span>
     <button class="set-eq${s.eq ? ' on' : ''}" onclick="openEqPicker(${ei},${si})" title="${s.eq ? esc(eqSummaryOf(s.eq)) + ' — tap to adjust' : 'load the weight from your equipment (bar + plates)'}">⚖︎</button>`;
   return `<div class="set-row${s.done ? ' done' : ''}${cur ? ' current' : ''}">
     ${numbered ? `<span class="set-num">${si + 1}</span>` : ''}
-    ${mid}
+    ${mid}${setChgHtml(s)}
     <input class="set-in set-t" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="${sr ? sr + ' · ' : ''}time — m:ss or seconds, editable any time" placeholder="m:ss">
     <span class="set-dur" title="${sr}">${sr}</span>
     ${(() => { const ex = wk.exercises[ei], R = exRepeat(ex); return R > 1 ? `<span class="set-rep" title="completed repetitions of this interval">${setDn(s)}/${R}</span>` : ''; })()}
@@ -1841,12 +1857,72 @@ function setDurInput(ei, si, inp) {
   if (r && r.phase === 'manual' && r.ei === ei && r.si === si) startNextWork();   // time filled for the waiting step → its countdown starts right away
   schedSave(); renderMain();
 }
+// ── PLANNED CHANGES (a reps/weight edit that has not been trained yet) ─────
+// A hand-typed weight/reps carries s.chg (when) + s.pw/s.pr (the value before it).
+// Two reasons: prefillFromLast must NOT overwrite such a set with an older logged
+// session (that silently threw the plan away), and the strip above the workout
+// lists them so a change made days ago is not forgotten. Cleared when the set is
+// logged as done, or when a session logged AFTER the edit prefills over it.
+function stampSetChange(s, field, oldVal, newVal) {
+  const key = field === 'weight' ? 'pw' : field === 'reps' ? 'pr' : null;
+  if (!key || String(oldVal ?? '') === String(newVal ?? '')) return;
+  if (s[key] == null) s[key] = oldVal ?? '';                     // keep the ORIGINAL value across repeated edits
+  if (String(s[key]) === String(newVal ?? '')) delete s[key];    // edited back to where it started
+  if (s.pw == null && s.pr == null) clearSetChange(s); else s.chg = Date.now();
+}
+function clearSetChange(s) { delete s.chg; delete s.pw; delete s.pr; }
+function setChgLabel(s) {
+  const p = [];
+  const was = v => v === '' || v == null ? '–' : v;
+  if (s.pw != null) p.push(was(s.pw) + ' → ' + was(s.weight) + ' kg');
+  if (s.pr != null) p.push(was(s.pr) + ' → ' + was(s.reps) + ' reps');
+  return p.join(' · ');
+}
+function chgAgo(t) {
+  const days = Math.round((new Date().setHours(0,0,0,0) - new Date(t).setHours(0,0,0,0)) / 864e5);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days <= 13) return days + ' days ago';
+  return new Date(t).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit'});
+}
+function setChgHtml(s) {
+  return s.chg ? `<span class="set-chg" title="planned change (${esc(chgAgo(s.chg))}), not trained yet: ${esc(setChgLabel(s))}">•</span>` : '';
+}
+// one line per exercise (linked rounds carry the same change → they collapse into one)
+function pendingStripHtml() {
+  const rows = [];
+  (wk.exercises || []).forEach(ex => {
+    const groups = new Map();   // change label → set numbers carrying it
+    (ex.sets || []).forEach((s, si) => {
+      if (!s.chg) return;
+      const t = setChgLabel(s) + ' · ' + chgAgo(s.chg);
+      if (!groups.has(t)) groups.set(t, []);
+      groups.get(t).push(si + 1);
+    });
+    groups.forEach((nums, t) => rows.push(((ex.code || '').trim() || (ex.name || '').trim() || 'exercise')
+      + (nums.length === (ex.sets || []).length ? '' : ' (' + (wk.type === 'cardio' ? 'int ' : 'set ') + nums.join(',') + ')') + ' · ' + t));
+  });
+  if (!rows.length) return '';
+  return `<div class="wk-chg" title="reps/weight you changed but have not trained yet — they survive reloading the template and clear themselves once you log the set as done">
+    <span class="wk-chg-t">planned</span>
+    ${rows.map(r => `<span class="wk-chg-i">${esc(r)}</span>`).join('')}
+    <button class="btn-sm" onclick="clearPendingChanges()" title="clear the marks — the values themselves stay">✓ noted</button>
+  </div>`;
+}
+function clearPendingChanges() {
+  pushUndo();
+  (wk.exercises || []).forEach(ex => (ex.sets || []).forEach(clearSetChange));
+  schedSave(); renderMain();
+}
 // write reps/weight into a set; linked exercises (default) mirror the value into every round
 function setSetVal(ei, si, field, val) {
   const ex = wk.exercises[ei]; if (!ex || !ex.sets[si]) return;
-  ex.sets[si][field] = val;
-  if (field === 'weight') delete ex.sets[si].eq;   // a manually typed weight detaches the ⚖ equipment combo
-  if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(s => { s[field] = val; if (field === 'weight') delete s.eq; });
+  const targets = (ex.linked !== false && wk.type !== 'cardio') ? ex.sets : [ex.sets[si]];
+  targets.forEach(s => {
+    stampSetChange(s, field, s[field], val);
+    s[field] = val;
+    if (field === 'weight') delete s.eq;   // a manually typed weight detaches the ⚖ equipment combo
+  });
   schedSave(); renderMain();
 }
 // = rounds share reps/weight/time ↔ ≠ each round independent; re-linking copies round 1 to all
@@ -2891,7 +2967,9 @@ function confirmFinish() {
   };
   archive.push(entry); saveArchive();
   wk.run = null; wk.note = '';
-  wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });   // planned times (durSec) stay for next time
+  // planned times (durSec) stay for next time; a set that WAS trained drops its planned-change
+  // mark (the log now carries that value) — a skipped one keeps it, it is still pending
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { if (!anyDone || s.done) clearSetChange(s); s.done = false; s.dn = 0; s.snote = ''; }); });
   schedSave(); renderMain(); renderNotes(); renderLibrary(); updateMusic();   // the weekly badge counts logged sessions
   openLogEntry(entry.id);         // switch to the log tab + expand the entry in the background
   openLogEdit(entry.id);          // pop the full editor right away — ratings + notes can be added/adjusted
@@ -4017,7 +4095,7 @@ function applyEqPick() {
   const w = any ? fmtKg(eqTotal(eqSel)) : '';
   const combo = {bar: eqSel.bar, pl: JSON.parse(JSON.stringify(eqSel.pl))};
   if (eqBarN(eqSel) > 1) combo.barN = eqBarN(eqSel);   // omitted when 1 → the stored shape stays as before
-  const put = s => { s.weight = w; if (any) s.eq = JSON.parse(JSON.stringify(combo)); else delete s.eq; };
+  const put = s => { stampSetChange(s, 'weight', s.weight, w); s.weight = w; if (any) s.eq = JSON.parse(JSON.stringify(combo)); else delete s.eq; };
   if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(put); else put(ex.sets[eqCtx.si]);
   schedSave(); renderMain();
   closeModal('eqModal');
