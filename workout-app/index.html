@@ -3814,12 +3814,16 @@ function seedLibrary() {
 
 // ── EQUIPMENT (bars, plates, add-ons → computed set weight) ─────────────────
 // equip = {mt, items:[{id, kind:'bar'|'plate'|'add', name, kg, count, note}]} — whole-object
-// LWW on sync (like bodyFields). A set stores its combo as s.eq = {bar:<id|null>, pl:{<id>:count}};
+// LWW on sync (like bodyFields). A set stores its combo as
+// s.eq = {bar:<id|null>, barN:<how many of that bar, omitted when 1>, pl:{<id>:count}};
 // the weight itself stays plain text in s.weight, so the log survives later equipment edits.
+// barN covers a bar in each hand (two single-hand bars) — plates are picked for both together,
+// so the total is everything lifted; the summary adds the per-bar figure. It is a purely
+// additive field (whole-object merge preserves it) → no APP_SCHEMA bump needed.
 const EQUIP_KEY = 'workout-v1-equip';
 const EQUIP_DEFAULT = [
   {id:'bar2',  kind:'bar',   name:'two-hand bar',    kg:1.5,  count:1, note:'25 mm · max 5 plates per side'},
-  {id:'bar1',  kind:'bar',   name:'single-hand bar', kg:6,    count:1, note:'25 mm'},
+  {id:'bar1',  kind:'bar',   name:'single-hand bar', kg:6,    count:2, note:'25 mm · a pair — one per hand'},
   {id:'st5',   kind:'plate', name:'steel',           kg:5,    count:4, note:''},
   {id:'st25',  kind:'plate', name:'steel',           kg:2.5,  count:4, note:''},
   {id:'st125', kind:'plate', name:'steel',           kg:1.25, count:6, note:''},
@@ -3833,7 +3837,7 @@ const EQUIP_DEFAULT = [
 const EQ_KINDS = [['bar','bar'],['plate','plate'],['add','add-on']];
 let equip = null;
 let eqCtx = null;                       // {ei, si} — the set the picker writes into
-let eqSel = {bar:null, pl:{}};          // live picker selection
+let eqSel = {bar:null, barN:0, pl:{}};  // live picker selection (barN = how many of that bar)
 let eqMode = 'pick';                    // 'pick' | 'edit'
 function loadEquip() {
   try { equip = JSON.parse(localStorage.getItem(EQUIP_KEY) || 'null'); } catch(e) { equip = null; }
@@ -3842,27 +3846,32 @@ function loadEquip() {
 function saveEquip() { try { localStorage.setItem(EQUIP_KEY, JSON.stringify(equip)); } catch(e) {} }
 function eqItem(id) { return equip.items.find(x => String(x.id) === String(id)); }
 function fmtKg(v) { return String(Math.round((+v || 0) * 100) / 100); }
+function eqBarMax(it) { return Math.max(1, +(it && it.count) || 1); }              // a bar is always pickable at least once
+function eqBarN(sel) { return sel && sel.bar != null ? Math.max(1, +sel.barN || 1) : 0; }
 function eqTotal(sel) {
   let t = 0;
   const bar = sel && sel.bar != null ? eqItem(sel.bar) : null;
-  if (bar) t += +bar.kg || 0;
+  if (bar) t += (+bar.kg || 0) * eqBarN(sel);
   Object.entries((sel && sel.pl) || {}).forEach(([id, n]) => { const it = eqItem(id); if (it) t += (+it.kg || 0) * (+n || 0); });
   return Math.round(t * 100) / 100;
 }
 function eqSummaryOf(sel) {
   const parts = [];
-  const bar = sel && sel.bar != null ? eqItem(sel.bar) : null;
-  if (bar) parts.push('bar ' + fmtKg(bar.kg));
+  const bar = sel && sel.bar != null ? eqItem(sel.bar) : null, bn = eqBarN(sel);
+  if (bar) parts.push((bn > 1 ? bn + '×' : '') + 'bar ' + fmtKg(bar.kg));
   Object.entries((sel && sel.pl) || {}).forEach(([id, n]) => { const it = eqItem(id); if (it && n > 0) parts.push(n + '×' + fmtKg(it.kg)); });
-  return parts.length ? parts.join(' + ') + ' = ' + fmtKg(eqTotal(sel)) + ' kg' : '';
+  if (!parts.length) return '';
+  const tot = eqTotal(sel);
+  return parts.join(' + ') + ' = ' + fmtKg(tot) + ' kg' + (bn > 1 ? ' · ' + fmtKg(tot / bn) + ' kg per bar' : '');
 }
 function openEqPicker(ei, si) {
   const ex = wk.exercises[ei]; if (!ex || !(ex.sets || [])[si]) return;
   eqCtx = {ei, si};
-  eqSel = {bar: null, pl: {}};
+  eqSel = {bar: null, barN: 0, pl: {}};
   const cur = ex.sets[si].eq;
   if (cur) {   // restore the stored combo — silently drop items that no longer exist
-    if (cur.bar != null && eqItem(cur.bar)) eqSel.bar = cur.bar;
+    const b = cur.bar != null ? eqItem(cur.bar) : null;
+    if (b) { eqSel.bar = cur.bar; eqSel.barN = Math.min(Math.max(1, +cur.barN || 1), eqBarMax(b)); }
     Object.entries(cur.pl || {}).forEach(([id, n]) => {
       const it = eqItem(id); if (!it) return;
       const m = Math.min(+n || 0, +it.count || 0); if (m > 0) eqSel.pl[id] = m;
@@ -3872,14 +3881,25 @@ function openEqPicker(ei, si) {
   renderEqModal();
   el('eqModal').classList.add('open');
 }
-function eqPickBar(id) { eqSel.bar = String(eqSel.bar) === String(id) ? null : id; renderEqModal(); }
+// the chip picks WHICH bar (one kind per set); a second tap drops it again
+function eqPickBar(id) {
+  if (String(eqSel.bar) === String(id)) { eqSel.bar = null; eqSel.barN = 0; }
+  else { eqSel.bar = id; eqSel.barN = 1; }
+  renderEqModal();
+}
+// …and the counter under the chips picks HOW MANY of it (one bar per hand)
+function eqStepBar(d) {
+  const it = eqSel.bar != null ? eqItem(eqSel.bar) : null; if (!it) return;
+  eqSel.barN = Math.max(1, Math.min(eqBarN(eqSel) + d, eqBarMax(it)));
+  renderEqModal();
+}
 function eqStep(id, d) {
   const it = eqItem(id); if (!it) return;
   const n = Math.max(0, Math.min((+eqSel.pl[id] || 0) + d, +it.count || 0));
   if (n) eqSel.pl[id] = n; else delete eqSel.pl[id];
   renderEqModal();
 }
-function eqClearSel() { eqSel = {bar:null, pl:{}}; renderEqModal(); }
+function eqClearSel() { eqSel = {bar:null, barN:0, pl:{}}; renderEqModal(); }
 function applyEqPick() {
   if (!eqCtx) { closeModal('eqModal'); return; }
   const ex = wk.exercises[eqCtx.ei];
@@ -3887,7 +3907,9 @@ function applyEqPick() {
   pushUndo();
   const any = eqSel.bar != null || Object.values(eqSel.pl).some(n => n > 0);
   const w = any ? fmtKg(eqTotal(eqSel)) : '';
-  const put = s => { s.weight = w; if (any) s.eq = JSON.parse(JSON.stringify(eqSel)); else delete s.eq; };
+  const combo = {bar: eqSel.bar, pl: JSON.parse(JSON.stringify(eqSel.pl))};
+  if (eqBarN(eqSel) > 1) combo.barN = eqBarN(eqSel);   // omitted when 1 → the stored shape stays as before
+  const put = s => { s.weight = w; if (any) s.eq = JSON.parse(JSON.stringify(combo)); else delete s.eq; };
   if (ex.linked !== false && wk.type !== 'cardio') ex.sets.forEach(put); else put(ex.sets[eqCtx.si]);
   schedSave(); renderMain();
   closeModal('eqModal');
@@ -3910,11 +3932,23 @@ function renderEqModal() {
     </div>`;
   }).join('');
   const plates = rows('plate'), adds = rows('add');
+  // a bar you own more than one of gets a count row → one in each hand
+  const selBar = eqSel.bar != null ? eqItem(eqSel.bar) : null;
+  const bn = eqBarN(eqSel), bnMax = selBar ? eqBarMax(selBar) : 1;
+  const barCnt = selBar && bnMax > 1 ? `<div class="eq-row" title="how many of this bar — 2 = one in each hand · pick the plates for both together">
+      <span class="eq-name">${esc(selBar.name || '?')}</span>
+      <span class="eq-kg">${fmtKg(selBar.kg)} kg</span>
+      <button class="eq-step" onclick="eqStepBar(-1)"${bn > 1 ? '' : ' disabled'} title="one bar less">−</button>
+      <span class="eq-cnt on" title="picked / owned">${bn}/${bnMax}</span>
+      <button class="eq-step" onclick="eqStepBar(1)"${bn >= bnMax ? ' disabled' : ''} title="one bar more">+</button>
+    </div>` : '';
   const any = eqSel.bar != null || Object.values(eqSel.pl).some(n => n > 0);
   const sum = eqSummaryOf(eqSel);
   body.innerHTML = `
-    ${bars.length ? `<div class="eq-sec">bar</div><div class="eq-chips">${bars.map(b =>
-      `<button class="eq-chip${String(eqSel.bar) === String(b.id) ? ' sel' : ''}" onclick="eqPickBar(${jsArg(b.id)})"${b.note ? ` title="${esc(b.note)}"` : ''}>${esc(b.name || '?')} · ${fmtKg(b.kg)} kg</button>`).join('')}</div>` : ''}
+    ${bars.length ? `<div class="eq-sec">bar</div><div class="eq-chips">${bars.map(b => {
+      const on = String(eqSel.bar) === String(b.id);
+      return `<button class="eq-chip${on ? ' sel' : ''}" onclick="eqPickBar(${jsArg(b.id)})"${b.note ? ` title="${esc(b.note)}"` : ''}>${on && bn > 1 ? bn + '× ' : ''}${esc(b.name || '?')} · ${fmtKg(b.kg)} kg</button>`;
+    }).join('')}</div>${barCnt}` : ''}
     ${plates ? `<div class="eq-sec">plates</div>${plates}` : ''}
     ${adds ? `<div class="eq-sec">add-ons</div>${adds}` : ''}
     ${!equip.items.length ? '<p style="font-size:.8rem;color:var(--muted)">No equipment yet — add your bars and plates via ✎.</p>' : ''}
@@ -3932,7 +3966,7 @@ function renderEqEditor(body, actions, title) {
     + (equip.items.map(it => `
     <div class="eq-ed">
       <div class="eq-ed-row">
-        <select onchange="eqEdSet(${jsArg(it.id)},'kind',this.value)" title="type — one bar per set, plates & add-ons count per piece">
+        <select onchange="eqEdSet(${jsArg(it.id)},'kind',this.value)" title="type — one bar kind per set (own 2+ → pick one per hand), plates & add-ons count per piece">
           ${EQ_KINDS.map(([v, l]) => `<option value="${v}"${it.kind === v ? ' selected' : ''}>${l}</option>`).join('')}
         </select>
         <input type="text" value="${esc(it.name || '')}" placeholder="name" onchange="eqEdSet(${jsArg(it.id)},'name',this.value)">
@@ -3956,8 +3990,11 @@ function eqEdSet(id, field, val) {
   it[field] = v;
   equip.mt = Date.now(); saveEquip();   // mt only on a real change — onchange fires only when the value differs
   // keep the live selection consistent with the edit
-  if (field === 'count' && (+eqSel.pl[id] || 0) > v) { if (v > 0) eqSel.pl[id] = v; else delete eqSel.pl[id]; }
-  if (field === 'kind') { if (v === 'bar') delete eqSel.pl[id]; else if (String(eqSel.bar) === String(id)) eqSel.bar = null; }
+  if (field === 'count') {
+    if ((+eqSel.pl[id] || 0) > v) { if (v > 0) eqSel.pl[id] = v; else delete eqSel.pl[id]; }
+    if (String(eqSel.bar) === String(id)) eqSel.barN = Math.min(eqBarN(eqSel), eqBarMax(it));
+  }
+  if (field === 'kind') { if (v === 'bar') delete eqSel.pl[id]; else if (String(eqSel.bar) === String(id)) { eqSel.bar = null; eqSel.barN = 0; } }
 }
 function eqEdAdd() {
   equip.items.push({id: 'e' + Date.now(), kind: 'plate', name: '', kg: 0, count: 1, note: ''});
@@ -3969,7 +4006,7 @@ async function eqEdDel(id) {
   if (!await customConfirm('Remove "' + (it.name || fmtKg(it.kg) + ' kg') + '" from your equipment? Logged weights keep their kg value.', 'remove')) return;
   equip.items = equip.items.filter(x => String(x.id) !== String(id));
   equip.mt = Date.now(); saveEquip();
-  if (String(eqSel.bar) === String(id)) eqSel.bar = null;
+  if (String(eqSel.bar) === String(id)) { eqSel.bar = null; eqSel.barN = 0; }
   delete eqSel.pl[id];
   renderEqModal();
 }
