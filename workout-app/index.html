@@ -616,10 +616,16 @@ textarea::placeholder{color:var(--mid)}
 <div class="modal-bg" id="exportModal">
   <div class="modal" style="max-width:460px">
     <h2>Export</h2>
-    <p style="font-size:.8rem;color:var(--muted)">Workouts from the library (body measurements are always included)</p>
+    <p style="font-size:.8rem;color:var(--muted)">Workouts from the library</p>
     <div class="modal-list" id="exportList"></div>
     <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Archived</p>
     <div class="modal-list" id="exportArchList"></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Also in the file <span style="font-size:.72rem">(the Gist upload always sends all of it)</span></p>
+    <div class="modal-row" style="gap:.35rem">
+      <label class="modal-item sel" id="ex-inc-body"><input type="checkbox" checked onchange="toggleExportInc('body',this.checked)"><span>body measurements</span></label>
+      <label class="modal-item sel" id="ex-inc-weekNotes"><input type="checkbox" checked onchange="toggleExportInc('weekNotes',this.checked)"><span>week notes</span></label>
+      <label class="modal-item sel" id="ex-inc-equip"><input type="checkbox" checked onchange="toggleExportInc('equip',this.checked)"><span>equipment</span></label>
+    </div>
     <div style="margin-top:.8rem">
       <label style="font-size:.78rem;color:var(--muted)">File name</label>
       <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
@@ -1263,6 +1269,7 @@ let exportSelected = new Set(), exportArchSelected = new Set();
 function openExportModal() {
   exportSelected = new Set(library.map(e => e.id));
   exportArchSelected = new Set(archive.map(e => e.id));
+  Object.keys(exportInc).forEach(k => setExportInc(k, true));   // the extras start included, as before
   el('exportList').innerHTML = library.length
     ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
@@ -1275,8 +1282,20 @@ function openExportModal() {
 function updateExportFilename() {
   const d = new Date();
   const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-  el('exportFilename').value = 'workout_'+yymmdd+'_I'+exportSelected.size+'A'+exportArchSelected.size+'.json';
+  const extras = (exportInc.body ? 'B' : '') + (exportInc.weekNotes ? 'W' : '') + (exportInc.equip ? 'E' : '');
+  el('exportFilename').value = 'workout_'+yymmdd+'_I'+exportSelected.size+'A'+exportArchSelected.size+extras+'.json';
 }
+// the non-workout collections that ride along in the exported file — the JSON download
+// honors these; doCloudUpload does NOT (it rewrites the whole gist file, so dropping a
+// collection there would strip it for every device that pulls it next)
+let exportInc = {body: true, weekNotes: true, equip: true};
+function setExportInc(k, on) {
+  exportInc[k] = on;
+  const row = el('ex-inc-' + k); if (!row) return;
+  row.classList.toggle('sel', on);
+  const cb = row.querySelector('input'); if (cb) cb.checked = on;
+}
+function toggleExportInc(k, on) { setExportInc(k, on); updateExportFilename(); }
 function toggleExportSel(id, on) {
   on ? exportSelected.add(id) : exportSelected.delete(id);
   el('ei-'+id)?.classList.toggle('sel', on);
@@ -1289,16 +1308,25 @@ function toggleExportArchSel(id, on) {
 }
 function toggleAllExport() {
   // anything unchecked → select all, otherwise deselect all
-  const on = library.some(e => !exportSelected.has(e.id)) || archive.some(e => !exportArchSelected.has(e.id));
+  const on = library.some(e => !exportSelected.has(e.id)) || archive.some(e => !exportArchSelected.has(e.id))
+    || Object.values(exportInc).some(v => !v);
   library.forEach(e => { on ? exportSelected.add(e.id) : exportSelected.delete(e.id); const el2=el('ei-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
   archive.forEach(e => { on ? exportArchSelected.add(e.id) : exportArchSelected.delete(e.id); const el2=el('eai-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  Object.keys(exportInc).forEach(k => setExportInc(k, on));
   updateExportFilename();
 }
 function doExport() {
   const items = library.filter(e => exportSelected.has(e.id));
   const archItems = archive.filter(e => exportArchSelected.has(e.id));
-  if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
-  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, archive: archItems, body, bodyFields, equip, weekNotes}, null, 2);
+  const anyInc = Object.values(exportInc).some(v => v);
+  if (!items.length && !archItems.length && !anyInc) { customAlert('Nothing is selected.'); return; }
+  // an unchecked collection is left OUT of the file entirely — the importer treats a missing
+  // key as "nothing to merge", an empty array would look like a deliberate wipe on re-import
+  const rec = {v:1, schema: APP_SCHEMA, items, archive: archItems};
+  if (exportInc.body) { rec.body = body; rec.bodyFields = bodyFields; }
+  if (exportInc.equip) rec.equip = equip;
+  if (exportInc.weekNotes) rec.weekNotes = weekNotes;
+  const json = JSON.stringify(rec, null, 2);
   const rawName = (el('exportFilename').value.trim() || 'export');
   const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
   let downloaded = false;
@@ -3854,6 +3882,7 @@ function renderBodyChart() {
     <select class="bf-in" onchange="bcMetric=this.value;renderBodyChart()" title="metric to plot">${fields.map(f => `<option value="${esc(f.key)}"${f.key === bcMetric ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
     <input type="date" class="bf-in" value="${esc(bcFrom)}" onchange="bcFrom=this.value;renderBodyChart()" title="from">
     <input type="date" class="bf-in" value="${esc(bcTo)}" onchange="bcTo=this.value;renderBodyChart()" title="to">
+    <button class="btn-io" style="flex:0 0 auto" onclick="copyBodyText()" title="copy every measurement in this from–to range as plain text — all metrics, notes and the change across the range">⧉ text</button>
   </div>`;
   const pts = body
     .filter(b => valOf(b, bcMetric) != null && b.date >= bcFrom && b.date <= bcTo)
@@ -3917,6 +3946,38 @@ function initBcHover(pts) {
   svg.addEventListener('pointermove', show);
   svg.addEventListener('pointerdown', show);
   svg.addEventListener('pointerleave', hide);
+}
+// ── BODY TEXT EXPORT — the measurements inside the chart's from–to range ────
+// Every metric (not just the plotted one) + notes, newest first like the table
+// below the chart, closed by the change across the range.
+function bodyRangeText() {
+  const fields = bodyFieldList();
+  const items = body.filter(b => b.date && (!bcFrom || b.date >= bcFrom) && (!bcTo || b.date <= bcTo))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || ((b.id || 0) - (a.id || 0)));
+  if (!items.length) return '';
+  const n = v => { const x = Math.round(+v * 100) / 100; return isNaN(x) ? String(v) : String(x); };
+  const lines = ['BODY · ' + fmtDate(bcFrom) + ' – ' + fmtDate(bcTo) + ' · ' + items.length + '×', ''];
+  items.forEach(b => {
+    const vals = fields.map(f => valOf(b, f.key) != null ? f.label + ' ' + n(valOf(b, f.key)) : null).filter(Boolean);
+    lines.push(fmtDate(b.date) + (b.time ? ' ' + b.time : '') + (vals.length ? ' · ' + vals.join(' · ') : ''));
+    if ((b.note || '').trim()) lines.push('  ' + b.note.trim());
+  });
+  // change across the range: oldest vs newest value of each metric (items are newest first)
+  const chg = fields.map(f => {
+    const vs = items.filter(b => valOf(b, f.key) != null);
+    if (vs.length < 2) return null;
+    const last = +valOf(vs[0], f.key), first = +valOf(vs[vs.length - 1], f.key);
+    if (isNaN(first) || isNaN(last)) return null;
+    const d = Math.round((last - first) * 100) / 100;
+    return f.label + ' ' + n(first) + ' → ' + n(last) + ' (' + (d > 0 ? '+' : d < 0 ? '−' : '±') + n(Math.abs(d)) + ')';
+  }).filter(Boolean);
+  if (chg.length) lines.push('', 'change: ' + chg.join(' · '));
+  return lines.join('\n');
+}
+function copyBodyText() {
+  const t = bodyRangeText();
+  if (!t) { showStatusMsg('⚠ no measurements in this range'); return; }
+  copyText(t, '✓ body measurements copied as text');
 }
 function renderBody() {
   renderBodyForm();
