@@ -354,6 +354,28 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 .log-entry textarea:focus{background:var(--off)}
 .log-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.2rem 0}
 
+/* SELLERS */
+.seller-add-input{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .6rem;outline:none}
+.seller-head{cursor:pointer;user-select:none;align-items:center}
+.seller-name{font-size:.88rem;font-weight:500;color:var(--black);word-break:break-word}
+.seller-rename-input{width:100%;min-width:0;box-sizing:border-box;font-family:'DM Sans',sans-serif;font-size:.88rem;font-weight:500;color:var(--black);background:var(--w);border:1px solid var(--dark);border-radius:2px;padding:.05rem .25rem;outline:none}
+.seller-head-right{display:flex;align-items:center;gap:.25rem;flex-shrink:0}
+.seller-head .arch-btn{opacity:.55}   /* the rename pencil is the only affordance for it — .3 is too faint on e-ink */
+.seller-link{font-size:.85rem;color:var(--black);text-decoration:none;padding:.05rem .2rem;border-radius:2px;line-height:1}
+@media(hover:hover){.seller-link:hover{background:var(--light)}}
+.seller-toggle{font-size:.62rem;color:var(--muted);width:14px;text-align:center}
+.seller-body{padding:.55rem .7rem;display:flex;flex-direction:column;gap:.5rem}
+.seller-url{width:100%;box-sizing:border-box;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .5rem;outline:none}
+.seller-ta{width:100%;box-sizing:border-box;flex:0 0 auto;min-height:64px;font-family:'DM Sans',sans-serif;font-size:.83rem;line-height:1.65;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.5rem .65rem;outline:none;resize:none;overflow-y:hidden}
+.seller-note-preview{font-size:.75rem;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;word-break:break-word}
+.seller-sub{font-size:.66rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.seller-teas{display:flex;flex-wrap:wrap;gap:.28rem;margin-top:.25rem}
+.seller-tea{font-size:.78rem;color:var(--black);border:var(--b);border-radius:var(--r);padding:.18rem .42rem;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(hover:hover){.seller-tea:hover{background:var(--off);border-color:var(--mid)}}
+.seller-tea.arch{color:var(--muted)}
+.seller-tea-arch{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.06em}
+.seller-actions{display:flex;justify-content:flex-end}
+
 /* dirty / undo */
 .btn-lib.dirty{background:var(--w);color:var(--black);border:var(--bh);font-weight:600}
 .btn-lib.dirty::before{content:'! ';color:var(--black)}
@@ -1002,6 +1024,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <div class="notes-tabs">
       <button class="notes-tab active" onclick="switchTab('general')">General</button>
       <button class="notes-tab" onclick="switchTab('log')">Log</button>
+      <button class="notes-tab" onclick="switchTab('sellers')">Sellers</button>
     </div>
 
     <!-- General notes -->
@@ -1019,6 +1042,16 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       </div>
       <div class="log-list" id="logList"></div>
     </div>
+
+    <!-- Sellers — notes / web link per shop + the teas already bought there -->
+    <div class="notes-pane" id="pane-sellers">
+      <div class="log-toolbar">
+        <input type="text" id="newSellerName" class="seller-add-input" placeholder="new seller…" autocomplete="off" onkeydown="if(event.key==='Enter')addSellerRecord()" />
+        <button class="btn-log" onclick="addSellerRecord()" title="add a seller you have not bought from yet">+</button>
+        <span class="log-count" id="sellerCount"></span>
+      </div>
+      <div class="log-list" id="sellerList"></div>
+    </div>
   </div>
 </div>
 
@@ -1031,10 +1064,12 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 // 2: coolProfiles collection added to the payload (older builds rebuild the payload from scratch and would strip it)
 // 3: the archive is merged LWW instead of union (favourites/notes/name edits on archived teas now propagate);
 //    an older build would keep its stale copy and push it back, undoing the newer edit
-const APP_SCHEMA=3;
+// 4: sellers collection added to the payload (older builds rebuild the payload from scratch and would strip it)
+const APP_SCHEMA=4;
 const SESSION_KEY='cajovy-v3-session';
 const LIBRARY_KEY='cajovy-v3-library';
 const ARCHIVE_KEY='cajovy-v3-archive';
+const SELLERS_KEY='cajovy-v3-sellers';
 let steeps=[],timers={},nextId=1;
 let warmDone=false,measureDone=false;
 let rinseTimer=null,rinseState={remaining:15,state:'idle'};
@@ -1150,6 +1185,7 @@ function updateCoolGuide(){
 }
 let library=[],activeLibId=null;
 let archive=[],archiveOpen=false;
+let sellers=[];   // per-shop notes: [{id,name,url,notes,mt}] — keyed to teas by the (normalized) seller name
 let undoStack=[],redoStack=[],savedSnapshot=null;
 const UNDO_MAX=40;
 const defaultSteeps=[45,55,70,90];
@@ -1295,6 +1331,7 @@ function expandPanel(panel){
     btn&&btn.parentNode.appendChild(hint);
   }
   document.addEventListener('keydown',onExpandEsc);
+  panel.querySelectorAll('textarea').forEach(autoResizeTA);   // the panel got wider / the font scaled → auto-grown fields need re-measuring
 }
 function collapsePanel(panel){
   panel.classList.remove('panel-expanded');
@@ -1305,6 +1342,7 @@ function collapsePanel(panel){
   const hint=panel.querySelector('.expand-esc');
   if(hint)hint.remove();
   document.removeEventListener('keydown',onExpandEsc);
+  panel.querySelectorAll('textarea').forEach(autoResizeTA);
 }
 function onExpandEsc(e){if(e.key==='Escape'&&expandedPanel)collapsePanel(expandedPanel);}
 /* ── UNDO ─── */
@@ -1389,6 +1427,10 @@ function loadLibrary(){try{library=JSON.parse(localStorage.getItem(LIBRARY_KEY)|
 function saveLibrary(){try{localStorage.setItem(LIBRARY_KEY,JSON.stringify(library));}catch(e){}}
 function loadArchive(){try{archive=JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]');}catch(e){archive=[];}}
 function saveArchive(){try{localStorage.setItem(ARCHIVE_KEY,JSON.stringify(archive));}catch(e){}}
+// spread first → fields added by a newer version survive a round-trip through this build (preserve-unknown)
+function normSeller(s){return{...s,id:s.id,name:String(s.name||''),url:String(s.url||''),notes:String(s.notes||''),mt:+s.mt||0};}
+function loadSellers(){try{sellers=(JSON.parse(localStorage.getItem(SELLERS_KEY)||'[]')||[]).map(normSeller);}catch(e){sellers=[];}}
+function saveSellers(){try{localStorage.setItem(SELLERS_KEY,JSON.stringify(sellers));}catch(e){}}
 
 function entryData(){
   const d=getSessionData();
@@ -1539,6 +1581,7 @@ function updateArchNotePreview(id,notes){
 }
 function renderArchive(){
   renderFavourites();   // archived teas are listed in the favourites section too — refresh it on every archive change (incl. the empty-archive early return below)
+  renderSellers();      // …and they count towards the seller tea lists
   const count=archive.length;
   el('archiveCount').textContent=count?'('+count+')':'';
   const list=el('archiveList');
@@ -1817,27 +1860,27 @@ function updateDynamicFilter(selId,dataKey,placeholder,multi=false,src=library){
   sel.classList.toggle('has-options',vals.length>0);
   sel.classList.toggle('active',!!sel.value);
 }
-function fillDatalist(id,dataKey,multi=true){
+function fillDatalist(id,dataKey,multi=true,extra=[]){
   const dl=el(id);if(!dl)return;
-  const html=uniqueTagVals(dataKey,multi).map(v=>`<option value="${esc(v)}"></option>`).join('');
+  const m=new Map(uniqueTagVals(dataKey,multi).map(v=>[normTag(v),v]));
+  extra.forEach(v=>{const k=normTag(v);if(k&&!m.has(k))m.set(k,v);});   // e.g. a seller that only has notes so far, no tea yet
+  const html=[...m.values()].sort((a,b)=>a.localeCompare(b,'en')).map(v=>`<option value="${esc(v)}"></option>`).join('');
   if(dl.innerHTML===html)return;   // skip a no-op rewrite so the native popup isn't disturbed while typing
   dl.innerHTML=html;
 }
 function updateSellerFilter(){
   updateDynamicFilter('libSellerFilter','seller','seller',true);
   updateDynamicFilter('libLocationFilter','location','location',true);
-  fillDatalist('sellerOptions','seller');
+  fillDatalist('sellerOptions','seller',true,sellers.map(s=>s.name));
   fillDatalist('locationOptions','location');
   fillDatalist('vesselOptions','vesselType',false);   // vessel names are single values — don't split on commas
 }
 
-// ── Rename a seller/location tag across the whole library (sync-aware: stamps mt only on real changes) ──
-function tagUsageCount(kind,val){const n=normTag(val);return library.filter(e=>tagsOf(e.data?.[kind],true).some(p=>normTag(p)===n)).length;}
-function renameTagValue(kind,oldVal,newVal){
-  const no=normTag(oldVal);newVal=(newVal||'').trim();
-  if(!no||!newVal)return 0;
+// ── Rename a seller/location tag across the library AND the archive (sync-aware: stamps mt only on real changes) ──
+function tagUsageCount(kind,val){const n=normTag(val);const hit=e=>tagsOf(e.data?.[kind],true).some(p=>normTag(p)===n);return library.filter(hit).length+archive.filter(hit).length;}
+function renameTagInRecords(arr,kind,no,newVal){
   let changed=0;
-  library.forEach(e=>{
+  arr.forEach(e=>{
     if(!e.data)return;
     const parts=tagsOf(e.data[kind],true);
     if(!parts.some(p=>normTag(p)===no))return;
@@ -1850,23 +1893,45 @@ function renameTagValue(kind,oldVal,newVal){
     const joined=out.join(', ');
     if(joined!==(e.data[kind]||'')){e.data[kind]=joined;e.mt=Date.now();changed++;}
   });
-  if(!changed)return 0;
-  // keep the open form in sync if the active tea was affected
-  if(activeLibId){
-    const cur=library.find(e=>e.id===activeLibId);
-    if(cur){el(kind==='seller'?'teaSeller':'teaLocation').value=cur.data[kind]||'';saveSession();}
-  }
-  // carry an active filter / its remembered value over to the new name
-  const fsel=el(kind==='seller'?'libSellerFilter':'libLocationFilter');
-  if(fsel&&normTag(fsel.value)===no)fsel.value=newVal;
-  const fkey=kind==='seller'?FILTER_SELLER_KEY:FILTER_LOCATION_KEY;
-  try{if(normTag(localStorage.getItem(fkey)||'')===no)localStorage.setItem(fkey,newVal);}catch(e){}
-  saveLibrary();          // wrapped → triggers autosync push
-  renderLibrary();
   return changed;
 }
+function renameTagValue(kind,oldVal,newVal){
+  const no=normTag(oldVal);newVal=(newVal||'').trim();
+  if(!no||!newVal)return 0;
+  const libChanged=renameTagInRecords(library,kind,no,newVal);
+  const arcChanged=renameTagInRecords(archive,kind,no,newVal);   // archived teas carry the same tags — otherwise the old name would live on there
+  // the shop's notes are keyed by name → carry them over to the new one
+  if(kind==='seller'){
+    const rec=sellers.find(s=>normTag(s.name)===no);
+    if(rec){
+      const target=sellers.find(s=>s!==rec&&normTag(s.name)===normTag(newVal));
+      if(target){   // the new name already has notes of its own → fold both into one record
+        target.notes=[target.notes,rec.notes].map(s=>(s||'').trim()).filter(Boolean).join('\n\n---\n\n');
+        target.url=target.url||rec.url;target.mt=Date.now();
+        sellers=sellers.filter(s=>s!==rec);
+      }else{rec.name=newVal;rec.mt=Date.now();}
+      saveSellers();   // wrapped → triggers autosync push
+    }
+  }
+  if(libChanged){
+    // keep the open form in sync if the active tea was affected
+    if(activeLibId){
+      const cur=library.find(e=>e.id===activeLibId);
+      if(cur){el(kind==='seller'?'teaSeller':'teaLocation').value=cur.data[kind]||'';saveSession();}
+    }
+    // carry an active filter / its remembered value over to the new name
+    const fsel=el(kind==='seller'?'libSellerFilter':'libLocationFilter');
+    if(fsel&&normTag(fsel.value)===no)fsel.value=newVal;
+    const fkey=kind==='seller'?FILTER_SELLER_KEY:FILTER_LOCATION_KEY;
+    try{if(normTag(localStorage.getItem(fkey)||'')===no)localStorage.setItem(fkey,newVal);}catch(e){}
+    saveLibrary();        // wrapped → triggers autosync push
+    renderLibrary();
+  }
+  if(arcChanged){saveArchive();renderArchive();}
+  return libChanged+arcChanged;
+}
 function tagMgrSectionHtml(kind,label){
-  const vals=uniqueTagVals(kind,true);
+  const vals=uniqueTagVals(kind,true,library.concat(archive));   // a value that only survives on archived teas is renameable too
   let body;
   if(!vals.length)body='<div class="lib-empty">none yet</div>';
   else body=vals.map(v=>
@@ -1936,6 +2001,7 @@ function renderLibrary(){
     }).join('');
   }
   renderFavourites();
+  renderSellers();   // seller names and the "teas from this seller" lists come straight out of the library
   const hSave=el('headerSaveBtn'),hNew=el('headerSaveNewBtn');
   hSave.style.display='none';   // changes are saved automatically → manual button not needed
   hNew.textContent=activeLibId?'save as new':'+ save as new tea';
@@ -2401,7 +2467,7 @@ function clearStorage(){
 }
 
 function toggleAllClear(){
-  const boxes=['clr-session','clr-library','clr-templates','clr-archive','clr-appearance'].map(id=>el(id));
+  const boxes=['clr-session','clr-library','clr-templates','clr-archive','clr-sellers','clr-appearance'].map(id=>el(id));
   const anyUnchecked=boxes.some(b=>!b.checked);
   boxes.forEach(b=>b.checked=anyUnchecked);
 }
@@ -2412,12 +2478,13 @@ async function doSelectiveClear(){
   if(el('clr-library').checked) toDelete.push('cajovy-v3-library');
   if(el('clr-templates').checked) toDelete.push('cajovy-v3-templates');
   if(el('clr-archive').checked) toDelete.push('cajovy-v3-archive');
+  if(el('clr-sellers').checked) toDelete.push('cajovy-v3-sellers');
   if(el('clr-appearance').checked) toDelete.push('cajovy-fs','cajovy-dark','cajovy-panel-fs','cajovy-filter-seller','cajovy-filter-location','cajovy-filter-arch-cat','cajovy-filter-arch-seller','cajovy-filter-arch-location','cajovy-lib-group-cat');
   if(!toDelete.length){closeModal('clearStorageModal');return;}
   // If a synced collection is cleared, also reset the autosync baseline + tombstones — otherwise a local
   // reset would generate tombstones and silently delete data on other devices too. After reload the content
   // is downloaded again from the cloud (if autosync is on), instead of unwanted propagation of deletions.
-  if(el('clr-library').checked||el('clr-templates').checked||el('clr-archive').checked){
+  if(el('clr-library').checked||el('clr-templates').checked||el('clr-archive').checked||el('clr-sellers').checked){
     toDelete.push('cajovy-syncknown','cajovy-tombstones');
   }
   closeModal('clearStorageModal');
@@ -2624,7 +2691,7 @@ function doExport(){
   const tpls=templates.filter(t=>exportTplSelected.has(t.id));
   const archItems=archive.filter(e=>exportArchSelected.has(e.id));
   if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
-  const json=JSON.stringify({v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems,coolProfiles:coolProfiles},null,2);
+  const json=JSON.stringify({v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems,coolProfiles:coolProfiles,sellers:sellers},null,2);
   const rawName=(el('exportFilename').value.trim()||'export');
   const fname=rawName.endsWith('.json')?rawName:rawName+'.json';
 
@@ -3207,9 +3274,10 @@ function updatePer100(){
 
 /* ── NOTES TABS ─── */
 function switchTab(tab){
-  document.querySelectorAll('.notes-tab').forEach((t,i)=>t.classList.toggle('active',['general','log'][i]===tab));
+  document.querySelectorAll('.notes-tab').forEach((t,i)=>t.classList.toggle('active',['general','log','sellers'][i]===tab));
   document.querySelectorAll('.notes-pane').forEach(p=>p.classList.remove('active'));
   el('pane-'+tab).classList.add('active');
+  if(tab==='sellers')renderSellers();   // may have gone stale while the pane was hidden (the focus guard skips renders)
   // textareas that were auto-sized while this pane was hidden have a wrong height — recompute now that it's visible
   el('pane-'+tab).querySelectorAll('textarea').forEach(autoResizeTA);
 }
@@ -3811,6 +3879,152 @@ function renderLog(){
   list.querySelectorAll('textarea').forEach(autoResizeTA);
 }
 
+/* ── SELLERS — notes + web link per shop, with the teas already bought there ─── */
+let sellerView=[];              // [{key,name,rec}] rebuilt by renderSellers — the inline handlers address a row by its index
+let sellerOpenKeys=new Set();   // expanded cards (this session only)
+let sellerRenderPending=false;
+// every seller name that exists anywhere: on a tea, on an archived tea, or as a standalone note record
+function allSellerNames(){
+  const m=new Map();
+  const add=v=>tagsOf(v,true).forEach(p=>{const k=normTag(p);if(k&&!m.has(k))m.set(k,p);});
+  library.forEach(e=>add(e.data?.seller));
+  archive.forEach(e=>add(e.data?.seller));
+  sellers.forEach(s=>add(s.name));
+  return[...m.entries()].map(([key,name])=>({key,name})).sort((a,b)=>a.name.localeCompare(b.name,'en'));
+}
+function sellerRec(key){return sellers.find(s=>normTag(s.name)===key)||null;}
+// the record is created lazily — a seller only gets one once something is actually written about them.
+// Always re-resolve from the live array: a sync merge may have replaced the record instance in the meantime.
+function sellerRecEnsure(i){
+  const row=sellerView[i];if(!row)return null;
+  let rec=sellerRec(row.key);
+  if(!rec){rec={id:Date.now()+i,name:row.name,url:'',notes:'',mt:Date.now()};sellers.push(rec);}
+  row.rec=rec;
+  return rec;
+}
+function sellerTeas(name){
+  return[
+    ...library.filter(e=>tagMatch(e.data?.seller,name)).map(e=>({id:e.id,name:e.name,arch:false})),
+    ...archive.filter(e=>tagMatch(e.data?.seller,name)).map(e=>({id:e.id,name:e.name,arch:true})),
+  ];
+}
+// a bare domain is still a valid link; anything that isn't http(s) gets the prefix too (so javascript: can't sneak in)
+function sellerHref(u){
+  const v=(u||'').trim();
+  if(!v)return'';
+  return /^https?:\/\//i.test(v)?v:'https://'+v.replace(/^\/+/,'');
+}
+function toggleSellerOpen(i){
+  const row=sellerView[i];if(!row)return;
+  if(sellerOpenKeys.has(row.key))sellerOpenKeys.delete(row.key);else sellerOpenKeys.add(row.key);
+  renderSellers();
+}
+function updateSellerUrl(i,inp){
+  const rec=sellerRecEnsure(i);if(!rec)return;
+  const v=inp.value.trim();
+  if(rec.url===v)return;               // stamp mt only on a real change, otherwise an empty re-save could beat a newer version from another device
+  rec.url=v;rec.mt=Date.now();
+  saveSellers();
+  const a=el('seller-link-'+i);        // update the header link in place — a re-render would eat the focus
+  if(a){a.href=sellerHref(v);a.style.display=v?'':'none';}
+}
+function updateSellerNotes(i,ta){
+  const rec=sellerRecEnsure(i);if(!rec)return;
+  if(rec.notes===ta.value)return;
+  rec.notes=ta.value;rec.mt=Date.now();
+  saveSellers();
+  autoResizeTA(ta);
+}
+async function deleteSellerRec(i){
+  const row=sellerView[i];if(!row||!row.rec)return;
+  if(!await customConfirm('Delete the notes for "'+row.name+'"?\nThe teas themselves stay untouched.','delete'))return;
+  sellers=sellers.filter(s=>normTag(s.name)!==row.key);   // by key, not by reference — a merge may have swapped the instance
+  saveSellers();renderSellers();updateSellerFilter();
+  showSave('notes deleted');
+}
+function addSellerRecord(){
+  const inp=el('newSellerName');if(!inp)return;
+  const name=(inp.value||'').trim();
+  if(!name){showStatusMsg('enter a seller name first',1800);return;}
+  const k=normTag(name);
+  inp.value='';
+  sellerOpenKeys.add(k);
+  if(allSellerNames().some(r=>r.key===k)){showStatusMsg('this seller is already in the list',2000);renderSellers();return;}
+  sellers.push({id:Date.now(),name,url:'',notes:'',mt:Date.now()});
+  saveSellers();renderSellers();
+  updateSellerFilter();   // the seller datalist in the form offers the new name right away
+  showSave('✓ seller added');
+}
+// inline rename straight from the card — renames the seller on every tea (library + archive) and carries the notes over
+function startSellerRename(i){
+  const row=sellerView[i];if(!row)return;
+  const span=el('seller-name-'+i);if(!span)return;
+  const inp=document.createElement('input');
+  inp.type='text';inp.className='seller-rename-input';inp.value=row.name;
+  span.replaceWith(inp);inp.focus();inp.select();
+  inp.addEventListener('click',ev=>ev.stopPropagation());   // the header itself toggles the card
+  let done=false;
+  const commit=()=>{
+    if(done)return;
+    done=true;
+    inp.blur();   // renderSellers skips a re-render while the focus sits inside the pane
+    const v=inp.value.trim();
+    if(!v||v===row.name){renderSellers();return;}
+    if(sellerOpenKeys.delete(row.key))sellerOpenKeys.add(normTag(v));   // keep the card open under the new name — set it BEFORE the rename re-renders
+    const n=renameTagValue('seller',row.name,v);
+    renderSellers();
+    showSave(n?'✓ renamed on '+n+(n===1?' tea':' teas'):'✓ renamed');
+  };
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();commit();}
+    if(ev.key==='Escape'){done=true;inp.blur();renderSellers();}
+  });
+}
+function sellerTeaChipHtml(t){
+  return`<span class="seller-tea${t.arch?' arch':''}" title="${esc(t.name)}${t.arch?' — archived':''}" onclick="${t.arch?`openArchPreview(${t.id})`:`loadFromLibrary(${t.id})`}">${esc(t.name)}${t.arch?' <span class="seller-tea-arch">arch</span>':''}</span>`;
+}
+function renderSellers(){
+  const pane=el('pane-sellers');if(!pane)return;
+  if(pane.contains(document.activeElement)){sellerRenderPending=true;return;}   // typing in a card → re-render only after the focus leaves
+  sellerRenderPending=false;
+  const list=el('sellerList'),count=el('sellerCount');
+  sellerView=allSellerNames().map(r=>({...r,rec:sellerRec(r.key)}));
+  count.textContent=sellerView.length?sellerView.length+(sellerView.length===1?' seller':' sellers'):'';
+  if(!sellerView.length){list.innerHTML='<div class="log-empty">No sellers yet — fill in the seller field of a tea, or add one here.</div>';return;}
+  list.innerHTML=sellerView.map((row,i)=>{
+    const rec=row.rec,open=sellerOpenKeys.has(row.key);
+    const teas=sellerTeas(row.name);
+    const url=sellerHref(rec&&rec.url);
+    const notes=((rec&&rec.notes)||'').trim();
+    return`
+    <div class="log-entry">
+      <div class="log-entry-head seller-head" onclick="toggleSellerOpen(${i})">
+        <div class="log-entry-meta">
+          <span class="seller-name" id="seller-name-${i}">${esc(row.name)}</span>
+          ${!open&&notes?`<span class="seller-note-preview">${esc(notes)}</span>`:''}
+        </div>
+        <div class="seller-head-right">
+          <span class="log-flag">${teas.length} ${teas.length===1?'tea':'teas'}</span>
+          <button class="arch-btn" onclick="event.stopPropagation();startSellerRename(${i})" title="rename this seller everywhere">✎</button>
+          <a class="seller-link" id="seller-link-${i}" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="open the shop website" onclick="event.stopPropagation()"${url?'':' style="display:none"'}>↗</a>
+          <span class="seller-toggle">${open?'▲':'▼'}</span>
+        </div>
+      </div>
+      ${open?`<div class="seller-body">
+        <input class="seller-url" type="text" inputmode="url" placeholder="shop website — teashop.com" value="${esc((rec&&rec.url)||'')}" oninput="updateSellerUrl(${i},this)" />
+        <textarea class="seller-ta" placeholder="What to buy here, what to skip, shipping, prices…" oninput="updateSellerNotes(${i},this)">${esc((rec&&rec.notes)||'')}</textarea>
+        <div>
+          <span class="seller-sub">teas from this seller</span>
+          <div class="seller-teas">${teas.length?teas.map(sellerTeaChipHtml).join(''):'<span class="log-empty">none yet</span>'}</div>
+        </div>
+        ${rec?`<div class="seller-actions"><button class="btn-sm" onclick="deleteSellerRec(${i})" title="delete the notes for this seller">× delete notes</button></div>`:''}
+      </div>`:''}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('textarea').forEach(autoResizeTA);
+}
+
 function init(){
   try{libGroupByCat=!!localStorage.getItem('cajovy-lib-group-cat');}catch(e){}
   try{const v=localStorage.getItem(FAV_OPEN_KEY);favOpen=(v===null||v==='1');}catch(e){}   // the favourites section is open by default
@@ -3819,9 +4033,14 @@ function init(){
   loadPanelFs();
   loadCoolCurves();
   loadTemplates();renderTemplates();
+  loadSellers();   // before the first renderLibrary — it renders the sellers pane as well
   loadLibrary();restoreLibFilters();renderLibrary();
   loadArchive();restoreArchFilters();renderArchive();
   initLibLongPress();
+  // a re-render while a seller card is being typed into is deferred (it would eat the focus) → catch up once the focus leaves
+  el('pane-sellers').addEventListener('focusout',()=>setTimeout(()=>{
+    if(sellerRenderPending&&!el('pane-sellers').contains(document.activeElement))renderSellers();
+  },0));
   const restored=loadSession();
   if(!restored)defaultSteeps.forEach(s=>addSteep(s,'',true));
   if(activeLibId){
@@ -3884,6 +4103,10 @@ document.addEventListener('keydown',e=>{
       <label class="modal-item">
         <input type="checkbox" id="clr-archive" checked>
         <span>archive</span>
+      </label>
+      <label class="modal-item">
+        <input type="checkbox" id="clr-sellers" checked>
+        <span>seller notes</span>
       </label>
       <label class="modal-item">
         <input type="checkbox" id="clr-appearance">
@@ -4042,7 +4265,7 @@ document.addEventListener('keydown',e=>{
 /* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
    Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
    Data lives in a single private gist (file cajovy-sync.json).
-   Collections: teas (library) + templates + coolProfiles = LWW by id; archive = union (append-only).
+   Collections: teas (library) + templates + archive + coolProfiles + sellers = LWW by id.
    coolProfiles sync their CONTENT only — which profile is active stays per-device. */
 (function(){
   const GHTOKEN='cajovy-gist-token';        // GitHub token (scope gist)
@@ -4113,6 +4336,7 @@ document.addEventListener('keydown',e=>{
     templates.forEach(t=>{if(t&&t.id!=null)s.add('tpl:'+t.id);});
     archive.forEach(e=>{if(e&&e.id!=null)s.add('arc:'+e.id);});
     coolProfiles.forEach(p=>{if(p&&p.id!=null)s.add('cp:'+p.id);});
+    sellers.forEach(x=>{const k=normTag(x&&x.name);if(k)s.add('sel:'+k);});   // sellers are keyed by name, see the merge below
     return s;
   }
   function pruneTombstones(){
@@ -4136,13 +4360,13 @@ document.addEventListener('keydown',e=>{
   // collection is LWW now and lwwMerge deletes tombstoned records itself (respecting resurrection)
   function applyTombstones(){return 0;}
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(teas,tpls,arch,tomb,profs){
+  function sigOf(teas,tpls,arch,tomb,profs,sell){
     const idS=arr=>arr.map(x=>String((x&&x.id)||'')+'@'+((x&&x.mt)||0)).sort().join(',')+':'+arr.length;
     const tS=o=>Object.keys(o||{}).sort().join(',');
-    return [idS(teas),idS(tpls),idS(arch),tS(tomb),idS(profs||[])].join('||');   // archive carries mt too → an edit in the archive is detected as a difference
+    return [idS(teas),idS(tpls),idS(arch),tS(tomb),idS(profs||[]),idS(sell||[])].join('||');   // archive carries mt too → an edit in the archive is detected as a difference
   }
-  function localStateSig(){return sigOf(library,templates,archive,tombstones,coolProfiles);}
-  function cloudStateSig(r){return sigOf(r.teas||r.items||[],r.templates||[],r.archive||[],r.tombstones||{},r.coolProfiles||[]);}
+  function localStateSig(){return sigOf(library,templates,archive,tombstones,coolProfiles,sellers);}
+  function cloudStateSig(r){return sigOf(r.teas||r.items||[],r.templates||[],r.archive||[],r.tombstones||{},r.coolProfiles||[],r.sellers||[]);}
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn(){
@@ -4182,7 +4406,7 @@ document.addEventListener('keydown',e=>{
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload(){
-    return {v:1,schema:APP_SCHEMA,teas:library,templates:templates,archive:archive,coolProfiles:coolProfiles,tombstones:tombstones,device:getDeviceName()};
+    return {v:1,schema:APP_SCHEMA,teas:library,templates:templates,archive:archive,coolProfiles:coolProfiles,sellers:sellers,tombstones:tombstones,device:getDeviceName()};
   }
   function scheduleAutoPush(){
     if(!autosyncEnabled()||!hasToken())return;
@@ -4280,6 +4504,10 @@ document.addEventListener('keydown',e=>{
       // so those edits have to reach the other devices as well; a plain union would silently keep the old copy
       const arcR=lwwMerge(archive,(record.archive||[]),'arc',x=>x.id,c=>c);
       archive=arcR.arr;added+=arcR.added;updated+=arcR.updated;removed+=arcR.removed;
+      // seller notes — LWW keyed by the NORMALIZED NAME, not by id: the teas reference a shop by name, and the
+      // same shop written up on two devices gets two ids — name-keying folds them into one record (newer mt wins)
+      const selR=lwwMerge(sellers,(record.sellers||[]),'sel',x=>normTag(x.name)||null,normSeller);
+      sellers=selR.arr;added+=selR.added;updated+=selR.updated;removed+=selR.removed;
       // cooling calibration profiles — LWW by id (which profile is ACTIVE stays per-device)
       const cpR=lwwMerge(coolProfiles,(record.coolProfiles||[]),'cp',x=>x.id,normCoolProfile);
       const cpChanged=(cpR.added+cpR.updated+cpR.removed)>0;
@@ -4298,10 +4526,11 @@ document.addEventListener('keydown',e=>{
       }
 
       if(added||updated||removed){
-        saveLibrary();saveTemplates();saveArchive();
+        saveLibrary();saveTemplates();saveArchive();saveSellers();
         if(typeof renderLibrary==='function')renderLibrary();
         if(typeof renderTemplates==='function')renderTemplates();
         if(typeof renderArchive==='function')renderArchive();
+        if(typeof renderSellers==='function')renderSellers();
         // if the merge changed/deleted the currently edited tea, reflect it in the form (otherwise the next flush overwrites it with the old version)
         if(activeLibId){
           const cur=library.find(e=>e.id===activeLibId);
@@ -4470,8 +4699,8 @@ document.addEventListener('keydown',e=>{
     const tpls=templates.filter(t=>exportTplSelected.has(t.id));
     const archItems=archive.filter(e=>exportArchSelected.has(e.id));
     if(!items.length&&!tpls.length&&!archItems.length){customAlert('Nothing is selected.');return;}
-    // cooling profiles always ride along complete — the upload REPLACES the gist file, omitting them would wipe them from the cloud
-    const payload={v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems,coolProfiles:coolProfiles};
+    // cooling profiles and seller notes always ride along complete — the upload REPLACES the gist file, omitting them would wipe them from the cloud
+    const payload={v:1,schema:APP_SCHEMA,teas:items,templates:tpls,archive:archItems,coolProfiles:coolProfiles,sellers:sellers};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try{
@@ -4614,6 +4843,7 @@ document.addEventListener('keydown',e=>{
     const tp=(rec.templates||[]).length;       if(tp)parts.push(tp+' tpl');
     const ar=(rec.archive||[]).length;          if(ar)parts.push(ar+' arch');
     const cp=(rec.coolProfiles||[]).length;     if(cp)parts.push(cp+' cal');
+    const se=(rec.sellers||[]).length;           if(se)parts.push(se+' sell');
     return parts.join(' · ');
   }
   function renderGistHistory(){
@@ -4730,7 +4960,7 @@ document.addEventListener('keydown',e=>{
   window.autoSyncOnSave=autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones();loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
-  ['saveLibrary','saveTemplates','saveArchive','saveCoolCurves'].forEach(fn=>{
+  ['saveLibrary','saveTemplates','saveArchive','saveCoolCurves','saveSellers'].forEach(fn=>{
     const orig=window[fn];
     if(typeof orig==='function')window[fn]=function(){const r=orig.apply(this,arguments);try{autoSyncOnSave();}catch(e){}return r;};
   });
