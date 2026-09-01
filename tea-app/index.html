@@ -166,6 +166,17 @@ header{
 .lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
 .lib-cat-header{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.55rem .55rem .1rem;margin-top:.1rem}
 .lib-cat-header:first-child{margin-top:0;padding-top:.1rem}
+/* FAVOURITES */
+.fav-btn{width:20px;height:20px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:2px;padding:0;font-size:.85rem;line-height:1;color:var(--mid)}
+.fav-btn.on{color:var(--black)}
+.lib-item.active .fav-btn{color:var(--mid)}
+.lib-item.active .fav-btn.on{color:var(--w)}
+@media(hover:hover){.fav-btn:hover{background:var(--light)}}
+.fav-section{margin-bottom:.45rem;padding-bottom:.45rem;border-bottom:var(--b)}
+.fav-section-hd{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.3rem;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+@media(hover:hover){.fav-section-hd:hover{color:var(--black)}}
+.fav-src{font-size:.6rem;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;white-space:nowrap;letter-spacing:.06em}
+.lib-item.active .fav-src{color:var(--mid)}
 .lib-sort-btn{background:none;border:var(--bh);border-radius:var(--r);padding:.18rem .42rem;font-family:'DM Sans',sans-serif;font-size:.68rem;color:var(--muted);cursor:pointer;line-height:1.3;letter-spacing:.03em;transition:background .12s,color .12s}
 @media(hover:hover){.lib-sort-btn:hover{background:var(--off);color:var(--black)}}
 .lib-sort-btn.active{background:var(--black);color:var(--w);border-color:var(--black)}
@@ -295,7 +306,7 @@ textarea::placeholder{color:var(--mid)}
   .header-tea-name,.header-sep{font-size:1.15rem}
   .header-right{gap:.4rem}
   /* Lib panel — vertical list on mobile */
-  #libList{display:flex;flex-direction:column;gap:.15rem}
+  #libList,#favList{display:flex;flex-direction:column;gap:.15rem}
   /* Steeps: temp on a sub-row on mobile */
   .col-header-temp{display:none}
   .steep-row{grid-template-columns:22px minmax(0,1fr) 54px 46px 28px 20px;gap:.3rem .32rem;padding:.48rem .5rem;grid-template-rows:auto auto}
@@ -553,6 +564,14 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       <select id="libSellerFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filter by seller"></select>
       <select id="libLocationFilter" class="lib-seller-filter" onchange="onLibFilterChange()" title="filter by location"></select>
     </div>
+    <!-- Favourites — teas starred in the library AND in the archive; hidden while there is none -->
+    <div class="fav-section" id="favSection" style="display:none">
+      <div class="fav-section-hd" onclick="toggleFavSection()">
+        <span>★ favourites <span id="favCount" style="font-weight:400"></span></span>
+        <span id="favToggleIcon" style="font-size:.65rem">▲</span>
+      </div>
+      <div id="favList"></div>
+    </div>
     <div id="libList"></div>
     <!-- Templates section -->
     <div class="lib-section">
@@ -671,7 +690,10 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 <div class="modal-bg" id="archPreviewModal" onclick="if(event.target===this)closeModal('archPreviewModal')">
   <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;gap:.75rem">
     <div style="display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;justify-content:space-between">
-      <h2>Archived tea</h2>
+      <div style="display:flex;align-items:center;gap:.35rem">
+        <h2>Archived tea</h2>
+        <button class="fav-btn" id="apm-fav-btn" onclick="toggleArchPreviewFav()">☆</button>
+      </div>
       <span id="apm-archived" style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace"></span>
     </div>
     <div class="field">
@@ -1007,7 +1029,9 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 // own push (so it can't overwrite newer data) and warns the user to reload. tea-app keeps whole
 // objects on merge/import (identity normalize), so additive fields already round-trip losslessly.
 // 2: coolProfiles collection added to the payload (older builds rebuild the payload from scratch and would strip it)
-const APP_SCHEMA=2;
+// 3: the archive is merged LWW instead of union (favourites/notes/name edits on archived teas now propagate);
+//    an older build would keep its stale copy and push it back, undoing the newer edit
+const APP_SCHEMA=3;
 const SESSION_KEY='cajovy-v3-session';
 const LIBRARY_KEY='cajovy-v3-library';
 const ARCHIVE_KEY='cajovy-v3-archive';
@@ -1514,6 +1538,7 @@ function updateArchNotePreview(id,notes){
   if(box){box.textContent=t;box.style.display=t?'':'none';}
 }
 function renderArchive(){
+  renderFavourites();   // archived teas are listed in the favourites section too — refresh it on every archive change (incl. the empty-archive early return below)
   const count=archive.length;
   el('archiveCount').textContent=count?'('+count+')':'';
   const list=el('archiveList');
@@ -1532,7 +1557,7 @@ function renderArchive(){
     return`
     <div class="lib-item arch-item" data-id="${e.id}">
       <div class="arch-item-main">
-        <span class="lib-item-name" title="${esc(e.name)} — open notes" onclick="openArchPreview(${e.id})">${esc(e.name)}</span>
+        ${favBtnHtml(e,true)}<span class="lib-item-name" title="${esc(e.name)} — open notes" onclick="openArchPreview(${e.id})">${esc(e.name)}</span>
         ${logN?`<span class="log-flag" title="${logN} log ${logN===1?'entry':'entries'}">✎${logN}</span>`:''}
         <span class="arch-date" id="arch-date-${e.id}" onclick="startArchDateEdit(${e.id})" title="click to change archive date">${e.archivedAt||'—'}</span>
         <button class="lib-item-del" style="opacity:.2" onclick="deleteFromArchive(${e.id})" title="permanently delete"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -1553,6 +1578,7 @@ function openArchPreview(id){
   if(cat&&![...catSel.options].some(o=>o.value===cat))catSel.insertAdjacentHTML('beforeend',`<option value="${esc(cat)}">${esc(cat)}</option>`); // non-canonical legacy value — keep it selectable
   el('apm-name-edit').value=entry.name||'';
   catSel.value=cat;
+  updateArchFavBtn();
   el('apm-seller-edit').value=entry.data?.seller||'';
   el('apm-location-edit').value=entry.data?.location||'';
   el('apm-setup').textContent=buildArchSetupText(entry.data);
@@ -1579,6 +1605,16 @@ function openArchPreview(id){
     el('apm-log-list').querySelectorAll('.arch-log-ta').forEach(autoResizeTA);
   });
 }
+function toggleArchPreviewFav(){if(archPreviewId)toggleArchFav(archPreviewId);}
+// the star in the archive preview modal mirrors the one in the list
+function updateArchFavBtn(){
+  const b=el('apm-fav-btn');if(!b)return;
+  const entry=archive.find(e=>e.id===archPreviewId);
+  const on=!!(entry&&entry.fav);
+  b.classList.toggle('on',on);
+  b.textContent=on?'★':'☆';
+  b.title=on?'remove from favourites':'mark as favourite';
+}
 // edit an archived tea's identity field (name / category / seller / location) in place
 function updateArchField(key,val){
   const entry=archive.find(e=>e.id===archPreviewId);if(!entry)return;
@@ -1596,7 +1632,7 @@ function updateArchField(key,val){
   saveArchive();
   renderArchive();   // live-update the list name + filter options (focus stays in the modal, the list re-render doesn't touch it)
 }
-// edit the general notes of an archived tea in place (archive is local — union-synced, so edits stay on this device)
+// edit the general notes of an archived tea in place (mt is stamped → the LWW merge carries the edit to the other devices)
 function updateArchNotes(ta){
   const entry=archive.find(e=>e.id===archPreviewId);if(!entry)return;
   if(!entry.data)entry.data={};
@@ -1686,7 +1722,51 @@ function toggleLibGroupCat(){
 }
 function libItemHtml(e){
   const logN=(e.logs||[]).length;
-  return`<div class="lib-item ${activeLibId===e.id?'active':''}" data-id="${e.id}" onclick="loadFromLibrary(${e.id})"><span class="lib-item-name" title="${esc(e.name)}">${esc(e.name)}</span>${logN?`<span class="log-flag" title="${logN} log ${logN===1?'entry':'entries'}">✎${logN}</span>`:''}<button class="lib-item-del" onclick="event.stopPropagation();deleteFromLibrary(${e.id})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
+  return`<div class="lib-item ${activeLibId===e.id?'active':''}" data-id="${e.id}" onclick="loadFromLibrary(${e.id})">${favBtnHtml(e,false)}<span class="lib-item-name" title="${esc(e.name)}">${esc(e.name)}</span>${logN?`<span class="log-flag" title="${logN} log ${logN===1?'entry':'entries'}">✎${logN}</span>`:''}<button class="lib-item-del" onclick="event.stopPropagation();deleteFromLibrary(${e.id})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
+}
+/* ── FAVOURITES — a star on the record itself (library + archive), listed together above the library ─── */
+const FAV_OPEN_KEY='cajovy-fav-open';
+let favOpen=true;
+function favBtnHtml(e,isArch){
+  const on=!!e.fav;
+  return`<button class="fav-btn${on?' on':''}" onclick="event.stopPropagation();${isArch?'toggleArchFav':'toggleFav'}(${e.id})" title="${on?'remove from favourites':'mark as favourite'}">${on?'★':'☆'}</button>`;
+}
+// fav lives on the record (next to name/logs/mt), not in data{} — data is rebuilt from the form on every save
+function toggleFav(id){
+  const entry=library.find(e=>e.id===id);if(!entry)return;
+  entry.fav=!entry.fav;entry.mt=Date.now();   // a real content change → stamp mt so the star wins in the LWW sync
+  saveLibrary();renderLibrary();
+  showSave(entry.fav?'★ added to favourites':'☆ removed from favourites');
+}
+function toggleArchFav(id){
+  const entry=archive.find(e=>e.id===id);if(!entry)return;
+  entry.fav=!entry.fav;entry.mt=Date.now();
+  saveArchive();renderArchive();
+  if(archPreviewId===id)updateArchFavBtn();
+  showSave(entry.fav?'★ added to favourites':'☆ removed from favourites');
+}
+function toggleFavSection(){
+  favOpen=!favOpen;
+  try{localStorage.setItem(FAV_OPEN_KEY,favOpen?'1':'0');}catch(e){}
+  renderFavourites();
+}
+function favItemHtml(e,isArch){
+  const logN=(e.logs||[]).length;
+  const open=isArch?`openArchPreview(${e.id})`:`loadFromLibrary(${e.id})`;
+  return`<div class="lib-item ${!isArch&&activeLibId===e.id?'active':''}" onclick="${open}"><button class="fav-btn on" onclick="event.stopPropagation();${isArch?'toggleArchFav':'toggleFav'}(${e.id})" title="remove from favourites">★</button><span class="lib-item-name" title="${esc(e.name)}${isArch?' — archived, opens the archive notes':''}">${esc(e.name)}</span>${logN?`<span class="log-flag" title="${logN} log ${logN===1?'entry':'entries'}">✎${logN}</span>`:''}${isArch?'<span class="fav-src" title="archived tea">arch</span>':''}</div>`;
+}
+function renderFavourites(){
+  const sec=el('favSection');if(!sec)return;
+  const libFavs=library.filter(e=>e.fav),arcFavs=archive.filter(e=>e.fav);
+  const total=libFavs.length+arcFavs.length;
+  sec.style.display=total?'':'none';
+  if(!total)return;
+  el('favCount').textContent='('+total+')';
+  el('favToggleIcon').textContent=favOpen?'▲':'▼';
+  const list=el('favList');
+  list.style.display=favOpen?'':'none';
+  if(!favOpen){list.innerHTML='';return;}
+  list.innerHTML=libFavs.map(e=>favItemHtml(e,false)).join('')+arcFavs.map(e=>favItemHtml(e,true)).join('');
 }
 /* ── LONG-PRESS on a lib-item (touch) → delete/archive ─── */
 let _lpTimer=null,_lpFired=false,_lpStartY=0;
@@ -1696,7 +1776,7 @@ function initLibLongPress(){
   list.dataset.lpInit='1';
   list.addEventListener('touchstart',e=>{
     const item=e.target.closest('.lib-item');
-    if(!item||e.target.closest('.lib-item-del')||item.classList.contains('arch-item'))return;
+    if(!item||e.target.closest('.lib-item-del')||e.target.closest('.fav-btn')||item.classList.contains('arch-item'))return;   // the star must not arm the delete/archive long-press
     const id=parseInt(item.dataset.id||'0');
     if(!id)return;
     _lpFired=false;
@@ -1855,6 +1935,7 @@ function renderLibrary(){
       return`<div class="lib-cat-header">${esc(label)}</div>`+groups.get(cat).map(libItemHtml).join('');
     }).join('');
   }
+  renderFavourites();
   const hSave=el('headerSaveBtn'),hNew=el('headerSaveNewBtn');
   hSave.style.display='none';   // changes are saved automatically → manual button not needed
   hNew.textContent=activeLibId?'save as new':'+ save as new tea';
@@ -3732,6 +3813,7 @@ function renderLog(){
 
 function init(){
   try{libGroupByCat=!!localStorage.getItem('cajovy-lib-group-cat');}catch(e){}
+  try{const v=localStorage.getItem(FAV_OPEN_KEY);favOpen=(v===null||v==='1');}catch(e){}   // the favourites section is open by default
   initFs();
   initDark();
   loadPanelFs();
@@ -4024,7 +4106,6 @@ document.addEventListener('keydown',e=>{
   function saveTombstones(){try{localStorage.setItem(TOMB_KEY,JSON.stringify(tombstones));}catch(e){}}
   function loadKnownIds(){try{const s=localStorage.getItem(KNOWN_KEY);knownIds=s?new Set(JSON.parse(s)):null;}catch(e){knownIds=null;}}
   function saveKnownIds(){try{localStorage.setItem(KNOWN_KEY,JSON.stringify([...(knownIds||[])]));}catch(e){}}
-  function isTombstoned(key){return !!tombstones[key];}
   // set of "<ns>:<id>" of all currently existing items
   function currentKeySet(){
     const s=new Set();
@@ -4051,18 +4132,14 @@ document.addEventListener('keydown',e=>{
     if(!cloudTomb||typeof cloudTomb!=='object')return;
     Object.entries(cloudTomb).forEach(([k,ts])=>{const t=+ts||0;if(!tombstones[k]||t>tombstones[k])tombstones[k]=t;});
   }
-  // locally delete append-only collections that have a tombstone (LWW collections are handled by lwwMerge)
-  function applyTombstones(){
-    let removed=0;
-    archive=archive.filter(x=>{if(tombstones['arc:'+x.id]){removed++;return false;}return true;});
-    return removed;
-  }
+  // append-only collections would have their tombstones applied here — there are none left: every synced
+  // collection is LWW now and lwwMerge deletes tombstoned records itself (respecting resurrection)
+  function applyTombstones(){return 0;}
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
   function sigOf(teas,tpls,arch,tomb,profs){
     const idS=arr=>arr.map(x=>String((x&&x.id)||'')+'@'+((x&&x.mt)||0)).sort().join(',')+':'+arr.length;
-    const arcS=arr=>arr.map(x=>String((x&&x.id)||'')).sort().join(',')+':'+arr.length;
     const tS=o=>Object.keys(o||{}).sort().join(',');
-    return [idS(teas),idS(tpls),arcS(arch),tS(tomb),idS(profs||[])].join('||');
+    return [idS(teas),idS(tpls),idS(arch),tS(tomb),idS(profs||[])].join('||');   // archive carries mt too → an edit in the archive is detected as a difference
   }
   function localStateSig(){return sigOf(library,templates,archive,tombstones,coolProfiles);}
   function cloudStateSig(r){return sigOf(r.teas||r.items||[],r.templates||[],r.archive||[],r.tombstones||{},r.coolProfiles||[]);}
@@ -4190,7 +4267,7 @@ document.addEventListener('keydown',e=>{
     applyingRemote=true;
     try{
       mergeCloudTombstones(record.tombstones);
-      let removed=applyTombstones();           // append-only collections (archive)
+      let removed=applyTombstones();           // no append-only collection left — every merge below is LWW
       let added=0,updated=0;
       const beforeActive=activeLibId?JSON.stringify((library.find(e=>e.id===activeLibId)||{}).data||null):null;
       // teas — LWW by id
@@ -4199,11 +4276,10 @@ document.addEventListener('keydown',e=>{
       // templates — LWW by id
       const tplR=lwwMerge(templates,(record.templates||[]),'tpl',x=>x.id,c=>c);
       templates=tplR.arr;added+=tplR.added;updated+=tplR.updated;removed+=tplR.removed;
-      // archive — only add missing (append-only)
-      const arcIds=new Set(archive.map(x=>String(x.id)));
-      (record.archive||[]).forEach(it=>{
-        if(it&&it.id!=null&&!arcIds.has(String(it.id))&&!isTombstoned('arc:'+it.id)){archive.push(it);arcIds.add(String(it.id));added++;}
-      });
+      // archive — LWW by id: archived teas stay editable in the app (favourite, name, notes, archive date),
+      // so those edits have to reach the other devices as well; a plain union would silently keep the old copy
+      const arcR=lwwMerge(archive,(record.archive||[]),'arc',x=>x.id,c=>c);
+      archive=arcR.arr;added+=arcR.added;updated+=arcR.updated;removed+=arcR.removed;
       // cooling calibration profiles — LWW by id (which profile is ACTIVE stays per-device)
       const cpR=lwwMerge(coolProfiles,(record.coolProfiles||[]),'cp',x=>x.id,normCoolProfile);
       const cpChanged=(cpR.added+cpR.updated+cpR.removed)>0;

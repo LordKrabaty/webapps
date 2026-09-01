@@ -4,6 +4,7 @@ A web app for tracking tea brewing sessions.
 
 - Steep timers
 - Tea library with session logs
+- Favourites (library + archive) in one starred list
 - Brew templates
 - JSON export/import
 - GitHub Gist cloud sync

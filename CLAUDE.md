@@ -226,7 +226,7 @@ API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH 
 | dny / plány / šablony | datum / `id` | **LWW** (novější `mt`) |
 | bloky (typy) | `key` | **LWW** (novější `mt`); vestavěný `TASK` nejde smazat, jiné defaulty nejsou |
 | inbox | `id` | **LWW** (novější `mt`) |
-| archiv | `id` | union (jen doplnit chybějící) |
+| archiv | `id` | union (jen doplnit chybějící) — **výjimka `tea-app`: LWW**, archivovaný čaj tam jde dál editovat (favourite, poznámky, název, datum), takže se edit musí přenést; union by tiše nechal starou kopii a zapsal ji zpátky |
 | pracovní dny | week key | union (zatím) |
 | pořadí typů bloků (`blockTypeOrder`) | — | **nesynchronizuje se** (kosmetické) |
 
