@@ -468,7 +468,10 @@ textarea::placeholder{color:var(--mid)}
 
 /* BODY (Tanita measurements) */
 .body-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem;margin-bottom:.55rem}
-.body-list{display:flex;flex-direction:column;gap:.1rem;overflow-y:auto;flex:1;min-height:0;margin-top:.6rem}
+/* the body tab scrolls AS A WHOLE (form + chart + table) — with only the table scrolling,
+   an expanded panel pushed the tall chart out of view with nothing to scroll */
+#pane-body{overflow-y:auto;overflow-x:hidden}
+.body-list{display:flex;flex-direction:column;gap:.1rem;flex:0 0 auto;min-width:0;margin-top:.6rem}
 .body-row{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(5,minmax(0,1fr)) 20px;gap:.25rem;align-items:center;font-family:'DM Mono',monospace;font-size:.76rem;color:var(--black);padding:.22rem .2rem;border-bottom:1px solid var(--light);flex-shrink:0}
 .body-row.body-head{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1.5px solid var(--black)}
 .body-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -483,7 +486,9 @@ textarea::placeholder{color:var(--mid)}
 /* body chart (single-series monochrome line, inline SVG) */
 .bc-ctrls{display:flex;gap:.3rem;margin:.55rem 0 .3rem;flex-wrap:wrap}
 .bc-ctrls select.bf-in{flex:1;min-width:6em}
-.bc-wrap{position:relative;flex-shrink:0}
+/* the svg keeps its 440×180 ratio, so a wide (expanded) panel would make it absurdly tall —
+   cap the WRAPPER width so the chart never exceeds ~46vh, border included */
+.bc-wrap{position:relative;flex-shrink:0;max-width:min(100%,112vh)}
 .bc-svg{width:100%;height:auto;display:block;border:var(--b);border-radius:var(--r);background:var(--w);touch-action:pan-y}
 .bc-lbl{font-family:'DM Mono',monospace;font-size:9px;fill:var(--muted)}
 .bc-vlbl{font-family:'DM Mono',monospace;font-size:10px;fill:var(--black)}
