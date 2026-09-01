@@ -3644,6 +3644,8 @@ function renderLogEdit() {
       <div class="le-ex">
         <input class="ex-code" value="${esc(e.code || '')}" placeholder="CODE" oninput="logEditDraft.entries[${ei}].code=this.value">
         <input class="ex-name" value="${esc(e.name || '')}" placeholder="exercise name" oninput="logEditDraft.entries[${ei}].name=this.value">${e.side ? '<span class="set-x">L/R</span>' : ''}
+        ${cardio || +e.rep > 1 ? `<span class="set-x" title="how many times the whole ${cardio ? 'segment' : 'exercise'} ran">×</span>
+        <input class="set-in" style="width:2.8em" type="text" inputmode="numeric" value="${+e.rep > 1 ? +e.rep : ''}" placeholder="1" title="repetitions of the whole ${cardio ? 'segment (its interval sequence)' : 'exercise'} — logged as one pass ×N" onchange="leRep(${ei},this)">` : ''}
         ${cardio ? '' : exScoreBtnHtml(e, ei, 'log')}
         <button class="btn-add" onclick="leAddSet(${ei})" title="add a round to this exercise">+</button>
         <button class="ex-del" onclick="leDelEx(${ei})" title="remove this exercise">✕</button>
@@ -3664,6 +3666,13 @@ function renderLogEdit() {
         <textarea class="le-note le-note-set" rows="1" oninput="autoResizeTA(this);logEditDraft.entries[${ei}].sets[${si}].note=this.value" placeholder="· note (${s.iname != null ? 'interval' : 'round'} ${s.rd || si + 1})">${esc(s.note || '')}</textarea>`).join('')}`).join('')
     + `<button class="btn-io" style="margin-top:.4rem" onclick="leAddEx()">+ add exercise</button>`;
   requestAnimationFrame(() => el('logEditBody') && el('logEditBody').querySelectorAll('.le-note').forEach(autoResizeTA));
+}
+// how many times the whole segment ran — the log keeps one pass + this count
+function leRep(ei, inp) {
+  const e = logEditDraft && logEditDraft.entries[ei]; if (!e) return;
+  const n = Math.max(1, Math.min(99, parseInt(inp.value, 10) || 1));
+  e.rep = n;
+  inp.value = n > 1 ? n : '';
 }
 function leDur(ei, si, inp) {
   const v = parseDur(inp.value);
@@ -3718,9 +3727,16 @@ function logEntryToWk(a) {
     note: '', run: null,
     exercises: (a.entries || []).map(e => {
       const te = tplEx(e.code);
+      // rep and the interval names ARE logged — they must come back, otherwise a repeating
+      // cardio segment returns as a single unnamed pass; cue/music only live in the template
+      const ts = i => (te && (te.sets || [])[i]) || null;
       return {code: e.code || '', name: e.name || '', note: te ? (te.note || '') : '', snote: '',
         linked: te ? te.linked !== false : true, side: !!e.side,
-        sets: (e.sets || []).map(s => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', restSec: s.restSec ?? null, eq: s.eq ?? null}))};
+        repeat: +e.rep > 1 ? +e.rep : (te ? exRepeat(te) : 1),
+        pauseSec: te ? (te.pauseSec ?? null) : null, innerPauseSec: te ? (te.innerPauseSec ?? null) : null, sidePauseSec: te ? (te.sidePauseSec ?? null) : null,
+        sets: (e.sets || []).map((s, i) => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '',
+          iname: s.iname ?? (ts(i) ? (ts(i).iname ?? '') : ''), cue: ts(i) ? (ts(i).cue ?? '') : '', mus: ts(i) ? (ts(i).mus ?? null) : null,
+          restSec: s.restSec ?? null, eq: s.eq ?? null}))};
     })
   };
 }
