@@ -3748,6 +3748,7 @@ function init(){
     requestAnimationFrame(()=>{document.querySelector('.lib-item.active')?.scrollIntoView({block:'nearest'});});
   }
   renderSteeps();updateHeaderTeaName();updatePer100();updateCoolGuide();
+  renderLog();   // the log pane is empty in the markup — without this the entries of the restored tea show up only after switching records
   // web fonts load after first paint and are taller than the fallback → re-measure visible textareas so they aren't clipped
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>document.querySelectorAll('textarea').forEach(autoResizeTA));
   if(restored)showSave('↓ restored');
