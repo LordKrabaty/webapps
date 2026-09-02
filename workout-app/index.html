@@ -283,6 +283,9 @@ textarea::placeholder{color:var(--mid)}
   .rest-bar{padding:.5rem .55rem;gap:.5rem}
   .np-z{width:2.6em}
   .now-prog-txt{font-size:1.15rem}
+  .now-prog-txt.hr{gap:.3rem}
+  .now-hr{font-size:1.3rem}
+  .now-prog-txt.hr #nowTime{font-size:.78rem}
   .now-ov-txt{font-size:.6rem;padding:0 .4rem}
   .iv-name{min-width:3.5em}
 }
@@ -319,6 +322,11 @@ textarea::placeholder{color:var(--mid)}
 .now-prog-fill{position:absolute;top:0;left:0;bottom:0;width:0;background:var(--mid)}
 .now-prog.paused .now-prog-fill{background:var(--light)}
 .now-prog-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:1.3rem;color:var(--black)}
+/* sensor connected: the pulse takes over as the dominant figure, the countdown stays as a smaller companion */
+.now-prog-txt.hr{gap:.5rem}
+.now-hr{font-size:1.65rem;font-weight:500}
+.now-prog-txt.hr #nowTime{font-size:.92rem;color:var(--dark)}
+.rest-bar.over .now-prog-txt.hr #nowTime{color:var(--light)}
 .np-z{position:absolute;width:3.2em;height:50%;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--dark);cursor:pointer}
 .np-tl{top:0;left:0;border-right:1px solid var(--light);border-bottom:1px solid var(--light)}
 .np-bl{bottom:0;left:0;border-right:1px solid var(--light)}
@@ -1645,7 +1653,7 @@ function renderMain() {
     <div class="now-prog" id="nowProg">
       <div class="now-phase" id="nowPhase" onclick="phaseTap()" title="tap to pause / resume">
         <div class="now-prog-fill" id="nowProgFill"></div>
-        <span class="now-prog-txt" id="nowTime">0:00</span>
+        <span class="now-prog-txt" id="nowTxt"><span class="now-hr" id="nowHr" style="display:none"></span><span id="nowTime">0:00</span></span>
         <div class="np-z np-tl" onclick="event.stopPropagation();stepBack()" title="back to the previous exercise / side">⏮</div>
         <div class="np-z np-bl" onclick="event.stopPropagation();addPhase(-${adj})" title="shorten the current phase by ${adj} s (configurable via ±step)">−${adj}</div>
         <div class="np-z np-tr" onclick="event.stopPropagation();skipPhase()" title="skip to the next phase">⏭</div>
@@ -2538,6 +2546,17 @@ function initHrPanel() {
   bar.className = 'hr-bar';
   renderHrBar();
 }
+// The run strip is what the eye is on mid-set, so the live pulse rides in its big digit —
+// dominant, with the countdown demoted beside it rather than dropped: the progress fill
+// shows the remaining share but never the actual seconds left, which is what you act on.
+function updateNowHr() {
+  const hrEl = el('nowHr'), txtEl = el('nowTxt'); if (!hrEl || !txtEl) return;
+  const show = hrState === 'connected' && hrLive != null;
+  hrEl.textContent = show ? '❤ ' + hrLive : '';
+  hrEl.style.display = show ? 'inline' : 'none';
+  txtEl.classList.toggle('hr', show);
+  return show;
+}
 function hrStatusWord() {
   return { disconnected: 'disconnected', connecting: 'connecting…', connected: 'connected', error: 'error' }[hrState] || hrState;
 }
@@ -2677,6 +2696,7 @@ function updateNowBar() {
   const lbl = el('nowLabel'), exl = el('nowEx'), t = el('nowTime');
   if (prog) prog.classList.toggle('pre', !started);   // hide the corner controls before start
   updateOverallBar(started);
+  const hrShown = updateNowHr();
   if (!started) {   // ready to start — the whole strip starts, corners hidden
     bar.classList.remove('over');
     if (prog) prog.classList.remove('paused');
@@ -2729,7 +2749,9 @@ function updateNowBar() {
     exl.textContent = 'all exercises complete — ■ finish & log';
     t.textContent = '✓';
   }
-  if (r.pausedLeft != null) t.textContent = '▶ ' + t.textContent;
+  // sharing the digit with the pulse leaves no room for the ▶ marker on a phone — and none is
+  // needed: a pause also greys the progress fill and is spelled out in the line below
+  if (r.pausedLeft != null && !hrShown) t.textContent = '▶ ' + t.textContent;
   // current set numbers + a preview of what comes next (kept to one line each)
   const setEl = el('nowSet'), nextEl = el('nowNext');
   let setTxt = '', nextTxt = '';
