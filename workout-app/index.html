@@ -733,6 +733,7 @@ textarea::placeholder{color:var(--mid)}
       <label class="modal-item" id="sndHalfRow" style="flex:1"><input type="checkbox" id="sndHalf" onchange="setSndFlag('half', this.checked);renderMusicModal()"><span>halfway alert — falling beep at half of a timed exercise</span></label>
       <button class="btn-sm" onclick="halfBeep()" title="preview the halfway sound">♪</button>
     </div>
+    <label class="modal-item" id="sndRestRow"><input type="checkbox" id="sndRest" onchange="setSndFlag('rest', this.checked);renderMusicModal()"><span>also during rests — the end countdown &amp; halfway alert run in rest / prep pauses too</span></label>
     <div style="display:flex;gap:.3rem;align-items:stretch">
       <label class="modal-item" id="sndRepRow" style="flex:1"><input type="checkbox" id="sndRep" onchange="setSndFlag('rep', this.checked);renderMusicModal()"><span>rep pacer — soft blip per rep, computed from reps × the set timer</span></label>
       <button class="btn-sm" onclick="repBeep()" title="preview the rep blip">♪</button>
@@ -2955,9 +2956,9 @@ function repBeep()  { tone(660, 0, .06, .22); }                             // r
 // resolves the one in force — the override wins when the current workout has
 // one. The ♪ modal's scope toggle edits whichever is active.
 const SND_KEY = 'workout-sounds';
-const SND_DEFAULTS = { cd: 0, half: false, rep: false, vol: 100, mus: 100 };
+const SND_DEFAULTS = { cd: 0, half: false, rep: false, rest: false, vol: 100, mus: 100 };
 let sndCfg = { ...SND_DEFAULTS };
-try { const s = JSON.parse(localStorage.getItem(SND_KEY) || '{}'); if (s.cd > 0) sndCfg.cd = +s.cd; sndCfg.half = !!s.half; sndCfg.rep = !!s.rep; if (s.vol > 0) sndCfg.vol = +s.vol; if (s.mus > 0) sndCfg.mus = +s.mus; } catch(e) {}
+try { const s = JSON.parse(localStorage.getItem(SND_KEY) || '{}'); if (s.cd > 0) sndCfg.cd = +s.cd; sndCfg.half = !!s.half; sndCfg.rep = !!s.rep; sndCfg.rest = !!s.rest; if (s.vol > 0) sndCfg.vol = +s.vol; if (s.mus > 0) sndCfg.mus = +s.mus; } catch(e) {}
 function saveSndCfg() { try { localStorage.setItem(SND_KEY, JSON.stringify(sndCfg)); } catch(e) {} }
 // the config in force for the current workout — override if it has one, else the general default
 function effSnd() { return (wk && wk.snd) || sndCfg; }
@@ -3007,14 +3008,18 @@ function setSndCd(v) {
   showStatusMsg(effSnd().cd ? '♪ countdown ticks in the last ' + effSnd().cd + ' s' : '♪ end countdown off');
 }
 function setSndFlag(k, on) { effSnd()[k] = !!on; persistSnd(); }
-// fired from every tick during a timed work phase; state resets per phase instance
+// fired from every tick during a timed phase (work always; rest/prep/srest with the
+// "also during rests" flag); state resets per phase instance
 let _al = { key: null, prevS: Infinity, cdFired: {}, halfFired: false, repFired: {} };
 function phaseAlerts() {
   const r = wk.run;
   if (!r || !r.startedAt || r.pausedLeft != null) return;
-  if (r.phase !== 'work' || !r.endTs || !r.totMs) { _al.key = null; return; }
   const c = effSnd();
-  const key = r.ei + ':' + r.si + ':' + (r.half || '') + ':' + (r.rep || 0);
+  const pause = r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest';
+  if ((r.phase !== 'work' && !(c.rest && pause)) || !r.endTs || !r.totMs) { _al.key = null; return; }
+  // phase is part of the key: the rest after a step keeps its ei/si/rep, so without it
+  // the fired flags would carry over from the work phase and mute the rest's alerts
+  const key = r.phase + ':' + r.ei + ':' + r.si + ':' + (r.half || '') + ':' + (r.rep || 0);
   if (_al.key !== key) _al = { key, prevS: Infinity, cdFired: {}, halfFired: false, repFired: {} };
   const remMs = r.endTs - Date.now();
   const S = Math.ceil(remMs / 1000);
@@ -3022,7 +3027,7 @@ function phaseAlerts() {
   _al.prevS = S;
   if (c.cd > 0 && S >= 1 && S <= c.cd && !_al.cdFired[S]) { _al.cdFired[S] = true; cdBeep(); }
   if (c.half && !_al.halfFired && remMs <= r.totMs / 2) { _al.halfFired = true; halfBeep(); }
-  if (c.rep) {
+  if (c.rep && r.phase === 'work') {
     const ex = wk.exercises[r.ei], st = ex && (ex.sets || [])[r.si];
     const reps = st ? parseInt(st.reps, 10) : 0;
     if (reps > 1) {
@@ -3170,6 +3175,8 @@ function renderMusicModal() {
   const rp = el('sndRep'); if (rp) rp.checked = !!c.rep;
   const hr = el('sndHalfRow'); if (hr) hr.classList.toggle('sel', !!c.half);
   const rr = el('sndRepRow'); if (rr) rr.classList.toggle('sel', !!c.rep);
+  const rs = el('sndRest'); if (rs) rs.checked = !!c.rest;
+  const rsr = el('sndRestRow'); if (rsr) rsr.classList.toggle('sel', !!c.rest);
   const sv = el('sndVol'); if (sv) sv.value = c.vol || 100;
   const mv = el('musVol'); if (mv) mv.value = c.mus || 100;
   const lists = musicFiles || { work: ['work'], rest: ['rest'] };
