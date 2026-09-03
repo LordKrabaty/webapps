@@ -402,7 +402,7 @@ textarea::placeholder{color:var(--mid)}
 .exh-body{display:flex;flex-direction:column;gap:.5rem;min-height:0}
 .exh-list{display:flex;flex-direction:column;gap:.5rem;max-height:34vh;overflow-y:auto;min-height:0}
 .exh-grp{display:flex;flex-direction:column;gap:.15rem}
-.exh-head{display:flex;gap:.5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.74rem;min-width:0}
+.exh-head{display:flex;flex-wrap:wrap;gap:.15rem .5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.74rem;min-width:0}
 .exh-sig{font-weight:500;color:var(--black);min-width:0;overflow-wrap:anywhere}
 .exh-n{color:var(--muted);flex-shrink:0}
 .exh-avg{margin-left:auto;color:var(--black);flex-shrink:0;white-space:nowrap}
@@ -411,7 +411,10 @@ textarea::placeholder{color:var(--mid)}
 .exh-score{flex-shrink:0;color:var(--black)}
 .exh-score.none{color:var(--muted)}
 .exh-note{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:1.3rem;overflow-wrap:anywhere;line-height:1.35}
-.exh-more{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:.6rem}
+.exh-sess{color:var(--black);min-width:0;overflow-wrap:anywhere}
+.exh-sess.none{color:var(--muted)}
+.exh-more{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:.6rem;background:none;border:none;text-align:left;cursor:pointer}
+@media(hover:hover){.exh-more:hover{color:var(--black)}}
 .exh-hint{font-size:.7rem;color:var(--muted);margin:0;line-height:1.45}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-in.chg{border:var(--bh)}
@@ -904,6 +907,28 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 
+<!-- Whole-workout history modal (⏱ in the run bar) — past sessions of THIS workout;
+     cardio grouped by interval structure, strength as a flat session trend -->
+<div class="modal-bg" id="wkHistModal">
+  <div class="modal" style="max-width:560px;max-height:86vh;gap:.7rem">
+    <h2 id="wkHistTitle">Workout history</h2>
+    <!-- the LIST scrolls, not the modal — otherwise the shrunk flex body paints over the hint & buttons -->
+    <div class="exh-body" id="wkHistBody" style="overflow-y:auto"></div>
+    <p class="exh-hint" id="wkHistHint"></p>
+    <div class="modal-row">
+      <div class="jb-field" style="flex:1;min-width:8em">
+        <select id="wkHistCopyRange" title="time range for ⧉ copy — group averages in the copied text are computed over this range only">
+          <option value="90">last 3 months</option>
+          <option value="365">last 12 months</option>
+          <option value="0">all sessions</option>
+        </select>
+      </div>
+      <button class="modal-btn" style="flex:0 1 auto" onclick="copyWkHistory()" title="copy the history in the selected range as plain text — every session, full notes">⧉ copy</button>
+      <button class="modal-btn primary" style="flex:0 1 auto" onclick="closeModal('wkHistModal')">done</button>
+    </div>
+  </div>
+</div>
+
 <!-- Period picker — tick the months / ISO weeks the log should show (from the log filter row) -->
 <div class="modal-bg" id="logPickModal">
   <div class="modal" style="max-width:420px;max-height:86vh;gap:.6rem">
@@ -1310,7 +1335,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal','musicModal','logPickModal','hrZonesModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal','wkHistModal','musicModal','logPickModal','hrZonesModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   // a track preview must not outlive the ♪… modal (covers close button + backdrop click)
@@ -1716,6 +1741,7 @@ function renderMain() {
   </div>
   <div class="wk-runbar">
     <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="sound &amp; music — music on/off, track selection, end countdown, halfway alert, rep pacer">${musicOn ? '♪' : '♪ off'}</button>
+    ${wkHistoryFor().length ? `<button class="btn-sm" onclick="openWkHistory()" title="history of this workout — past sessions, ratings, time &amp; heart rate">⏱ history</button>` : ''}
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
   </div>
   ${pendingStripHtml()}
@@ -2155,6 +2181,7 @@ function openExScore(src, ei) {
   el('exScoreTitle').textContent = ((ex.code || '') + ' ' + (ex.name || '')).trim() || 'Rate exercise';
   renderExScore();
   exHistOpen = false;    // history starts collapsed — a peek would bias the rating being entered
+  exHistMore = new Set(); exHistAllGrps = false;
   renderExHistory(ex);   // once per open, not per rating tap — keeps the list's scroll position
   el('exScoreModal').classList.add('open');
 }
@@ -2205,10 +2232,13 @@ function exHistoryFor(ex) {
 }
 const EXH_MAX_GROUPS = 6, EXH_MAX_ROWS = 5;
 let exHistOpen = false;
+let exHistMore = new Set(), exHistAllGrps = false;   // per-group "show older" + "show all settings" (reset on open)
 function toggleExHist() {
   exHistOpen = !exHistOpen;
   const ex = scoreTargetEx(); if (ex) renderExHistory(ex);
 }
+function exHistShowRows(gi) { exHistMore.add(gi); const ex = scoreTargetEx(); if (ex) renderExHistory(ex); }
+function exHistShowGrps() { exHistAllGrps = true; const ex = scoreTargetEx(); if (ex) renderExHistory(ex); }
 function renderExHistory(ex) {
   const sec = el('scoreHistSec'); if (!sec) return;
   const hist = exHistoryFor(ex);
@@ -2232,16 +2262,118 @@ function renderExHistory(ex) {
     return v.length ? Math.round(v.reduce((t, x) => t + +x, 0) / v.length * 10) / 10 : null;
   };
   const fD = t => new Date(t).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'2-digit'});
-  el('scoreHistList').innerHTML = [...groups.entries()].slice(0, EXH_MAX_GROUPS).map(([sig, rows]) => {
+  el('scoreHistList').innerHTML = [...groups.entries()].slice(0, exHistAllGrps ? groups.size : EXH_MAX_GROUPS).map(([sig, rows], gi) => {
     const aT = avg(rows, e => e.tech), aR = avg(rows, e => e.rir);
-    const body = rows.slice(0, EXH_MAX_ROWS).map(h => {
+    const shown = exHistMore.has(gi) ? rows : rows.slice(0, EXH_MAX_ROWS);
+    const body = shown.map(h => {
       const p = [h.e.tech != null ? 'T' + h.e.tech : null, h.e.rir != null ? 'R' + h.e.rir : null].filter(Boolean).join('·');
       // the note wraps on its own full-width line — an ellipsis + tooltip is unreadable on touch
       return `<div class="exh-row"><span class="exh-date">${esc(fD(h.t))}</span><span class="exh-score${p ? '' : ' none'}">${esc(p || 'unrated')}</span></div>`
         + (h.e.note ? `<div class="exh-note">${esc(h.e.note)}</div>` : '');
-    }).join('') + (rows.length > EXH_MAX_ROWS ? `<div class="exh-more">… ${rows.length - EXH_MAX_ROWS} more</div>` : '');
+    }).join('') + (rows.length > shown.length ? `<button class="exh-more" onclick="exHistShowRows(${gi})" title="show the older sessions at this setting">▸ ${rows.length - shown.length} more</button>` : '');
     return `<div class="exh-grp"><div class="exh-head"><span class="exh-sig">${esc(sig)}</span><span class="exh-n">${rows.length}×</span><span class="exh-avg" title="average technique / RIR across the sessions at this exact setting">ø T ${aT ?? '–'} · R ${aR ?? '–'}</span></div>${body}</div>`;
-  }).join('') + (groups.size > EXH_MAX_GROUPS ? `<div class="exh-more">… ${groups.size - EXH_MAX_GROUPS} more setting(s) in the log</div>` : '');
+  }).join('') + (!exHistAllGrps && groups.size > EXH_MAX_GROUPS ? `<button class="exh-more" onclick="exHistShowGrps()" title="show the older settings too">▸ ${groups.size - EXH_MAX_GROUPS} more setting(s) in the log</button>` : '');
+}
+// ── WHOLE-WORKOUT HISTORY (⏱ in the run bar) — the per-exercise idea one level up.
+// Cardio groups by interval structure: falling HR/RPE at the SAME structure = fitness gained.
+// Strength is a flat session trend (energy / focus / duration) — load lives per exercise.
+function wkHistoryFor() {
+  const nm = (wk.name || '').trim().toLowerCase();
+  return archive.filter(a => a.type === wk.type && (a.entries || []).length
+    && ((activeLibId != null && a.tplId != null && String(a.tplId) === String(activeLibId))
+        || (nm && (a.name || '').trim().toLowerCase() === nm)))
+    .sort((a, b) => (b.date || b.id || 0) - (a.date || a.id || 0));
+}
+// structure signature of one logged cardio session: "5:00 · ×4 3:00/3:00" (repeats + interval times)
+function wkHistSig(a) {
+  return (a.entries || []).map(e =>
+    (e.rep > 1 ? '×' + e.rep + ' ' : '')
+      + (e.sets || []).map(s => s.durSec != null ? mmss(s.durSec) : (s.iname || '–')).join('/')
+  ).join(' · ');
+}
+const WKH_MAX_GROUPS = 6, WKH_MAX_ROWS = 5, WKH_MAX_FLAT = 8;
+// shared by the modal render and the ⧉ text copy — one source for grouping & averages
+function wkHistGroups(hist) {
+  const g = new Map();
+  hist.forEach(a => { const s = wkHistSig(a); if (!g.has(s)) g.set(s, []); g.get(s).push(a); });
+  return g;
+}
+function wkHistAvg(rows, f) {
+  const v = rows.map(f).filter(x => x != null);
+  return v.length ? Math.round(v.reduce((t, x) => t + +x, 0) / v.length * 10) / 10 : null;
+}
+function wkHistDate(t) { return new Date(t).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'2-digit'}); }
+function wkGrpAvgText(rows) {   // cardio group header: ø RPE + HR across one structure
+  const aR = wkHistAvg(rows, a => a.rpe), aH = wkHistAvg(rows, a => a.hrAvg), aM = wkHistAvg(rows, a => a.hrMax);
+  return 'ø RPE ' + (aR ?? '–') + ' · HR ' + (aH != null ? Math.round(aH) : '–') + '/' + (aM != null ? Math.round(aM) : '–');
+}
+function wkFlatAvgText(hist) {  // strength summary: ø session ratings + duration
+  const aE = wkHistAvg(hist, a => a.energy), aF = wkHistAvg(hist, a => a.focus), aT = wkHistAvg(hist, a => a.totalSec);
+  return 'ø energy ' + (aE ?? '–') + ' · focus ' + (aF ?? '–') + ' · ' + (aT != null ? mmss(aT) : '–');
+}
+function wkHistTitleText(hist) { return ((wk.name || '').trim() || 'workout') + ' — ' + hist.length + ' session' + (hist.length > 1 ? 's' : ''); }
+let wkHistMore = new Set(), wkHistAllGrps = false, wkHistFlatAll = false;   // "show older" expansion (reset on open)
+function wkHistShowRows(gi) { wkHistMore.add(gi); renderWkHistory(); }
+function wkHistShowGrps() { wkHistAllGrps = true; renderWkHistory(); }
+function wkHistShowFlat() { wkHistFlatAll = true; renderWkHistory(); }
+function openWkHistory() {
+  const hist = wkHistoryFor(); if (!hist.length) return;
+  wkHistMore = new Set(); wkHistAllGrps = false; wkHistFlatAll = false;
+  el('wkHistTitle').textContent = wkHistTitleText(hist);
+  el('wkHistHint').textContent = wk.type === 'cardio'
+    ? 'ø per structure — a falling HR/RPE at the same interval structure means fitness gained: lengthen work, shorten rest or add a repeat.'
+    : 'Whole-session trend — steadily low energy or focus points at recovery, not strength; per-exercise load decisions live behind each rate button.';
+  renderWkHistory();
+  el('wkHistModal').classList.add('open');
+}
+function renderWkHistory() {
+  const hist = wkHistoryFor(); if (!hist.length) return;
+  const cardio = wk.type === 'cardio';
+  const rowHtml = a => {
+    const sc = sessScoreText(a);
+    const zt = cardio ? zoneTimeText(a.hrZoneSec) : '';
+    return `<div class="exh-row"><span class="exh-date">${esc(wkHistDate(a.date || a.id))}</span><span class="exh-n">${mmss(a.totalSec || 0)}</span><span class="exh-sess${sc ? '' : ' none'}">${esc(sc || 'unrated')}</span></div>`
+      + (zt ? `<div class="exh-note" title="time in zones — computed from the sensor trace">${esc(zt)}</div>` : '')
+      + (a.note ? `<div class="exh-note">${esc(a.note)}</div>` : '');
+  };
+  let html;
+  if (cardio) {
+    const groups = wkHistGroups(hist);
+    html = [...groups.entries()].slice(0, wkHistAllGrps ? groups.size : WKH_MAX_GROUPS).map(([sig, rows], gi) => {
+      const shown = wkHistMore.has(gi) ? rows : rows.slice(0, WKH_MAX_ROWS);
+      const body = shown.map(rowHtml).join('')
+        + (rows.length > shown.length ? `<button class="exh-more" onclick="wkHistShowRows(${gi})" title="show the older sessions with this structure">▸ ${rows.length - shown.length} more</button>` : '');
+      return `<div class="exh-grp"><div class="exh-head"><span class="exh-sig">${esc(sig)}</span><span class="exh-n">${rows.length}×</span><span class="exh-avg" title="average RPE and heart rate across the sessions with this exact interval structure">${esc(wkGrpAvgText(rows))}</span></div>${body}</div>`;
+    }).join('') + (!wkHistAllGrps && groups.size > WKH_MAX_GROUPS ? `<button class="exh-more" onclick="wkHistShowGrps()" title="show the older structures too">▸ ${groups.size - WKH_MAX_GROUPS} more structure(s) in the log</button>` : '');
+  } else {
+    const shown = wkHistFlatAll ? hist : hist.slice(0, WKH_MAX_FLAT);
+    html = `<div class="exh-grp"><div class="exh-head"><span class="exh-sig">all sessions</span><span class="exh-n">${hist.length}×</span><span class="exh-avg" title="average session ratings and duration">${esc(wkFlatAvgText(hist))}</span></div>`
+      + shown.map(rowHtml).join('')
+      + (hist.length > shown.length ? `<button class="exh-more" onclick="wkHistShowFlat()" title="show the older sessions too">▸ ${hist.length - shown.length} more in the log</button>` : '') + `</div>`;
+  }
+  el('wkHistBody').innerHTML = html;
+}
+// ⧉ copy as text — same content as the modal but uncapped (every session, full notes);
+// the range select trims it: a paste into notes/AI wants the recent period, and the ø
+// averages recomputed over just that period are the more relevant ones anyway
+function copyWkHistory() {
+  const sel = el('wkHistCopyRange');
+  const days = sel ? parseInt(sel.value) || 0 : 0;
+  let hist = wkHistoryFor();
+  if (days) { const cut = Date.now() - days * 864e5; hist = hist.filter(a => (a.date || a.id) >= cut); }
+  if (!hist.length) { showStatusMsg('⚠ no sessions in the selected range'); return; }
+  const cardio = wk.type === 'cardio';
+  const row = a => {
+    const zt = cardio ? zoneTimeText(a.hrZoneSec) : '';
+    return '  ' + wkHistDate(a.date || a.id) + ' · ' + mmss(a.totalSec || 0) + ' · ' + (sessScoreText(a) || 'unrated')
+      + (zt ? '\n    ' + zt : '')
+      + (a.note ? '\n    ' + a.note.replace(/\n+/g, ' · ') : '');
+  };
+  let out = wkHistTitleText(hist) + (days ? ' (' + sel.options[sel.selectedIndex].text + ')' : '') + '\n\n';
+  if (cardio) out += [...wkHistGroups(hist).entries()].map(([sig, rows]) =>
+    sig + ' — ' + rows.length + '× · ' + wkGrpAvgText(rows) + '\n' + rows.map(row).join('\n')).join('\n\n');
+  else out += wkFlatAvgText(hist) + '\n' + hist.map(row).join('\n');
+  copyText(out, '✓ workout history copied as text');
 }
 // ── ⚙ EXERCISE SETTINGS MODAL — order, L/R, linked sets, repeats, pause overrides, remove ──
 let exSetEi = null;
