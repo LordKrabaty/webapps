@@ -392,6 +392,25 @@ textarea::placeholder{color:var(--mid)}
 .score-opt.sel{background:var(--black);color:var(--w);border-color:var(--black)}
 @media(hover:hover){.score-opt:not(.sel):hover{background:var(--off)}}
 .score-cap{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);min-height:1.1em}
+/* exercise history inside the rating modal — collapsed by default (a peek would bias the
+   rating being entered), grouped by set configuration once expanded */
+.score-sec[hidden],.exh-body[hidden]{display:none}
+.exh-tgl{font-family:'DM Sans',sans-serif;font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;background:none;border:none;padding:0;text-align:left;cursor:pointer}
+@media(hover:hover){.exh-tgl:hover{color:var(--black)}}
+.exh-body{display:flex;flex-direction:column;gap:.5rem;min-height:0}
+.exh-list{display:flex;flex-direction:column;gap:.5rem;max-height:34vh;overflow-y:auto;min-height:0}
+.exh-grp{display:flex;flex-direction:column;gap:.15rem}
+.exh-head{display:flex;gap:.5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.74rem;min-width:0}
+.exh-sig{font-weight:500;color:var(--black);min-width:0;overflow-wrap:anywhere}
+.exh-n{color:var(--muted);flex-shrink:0}
+.exh-avg{margin-left:auto;color:var(--black);flex-shrink:0;white-space:nowrap}
+.exh-row{display:flex;gap:.5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.7rem;padding-left:.6rem;min-width:0}
+.exh-date{color:var(--muted);flex-shrink:0}
+.exh-score{flex-shrink:0;color:var(--black)}
+.exh-score.none{color:var(--muted)}
+.exh-note{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:1.3rem;overflow-wrap:anywhere;line-height:1.35}
+.exh-more{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:.6rem}
+.exh-hint{font-size:.7rem;color:var(--muted);margin:0;line-height:1.45}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-in.chg{border:var(--bh)}
 .set-chg{font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--black);flex-shrink:0;cursor:help}
@@ -861,7 +880,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Exercise rating modal (tech 1–5 + RIR) — opened from the exercise header or the log edit -->
 <div class="modal-bg" id="exScoreModal">
-  <div class="modal" style="max-width:400px;gap:.7rem">
+  <div class="modal" style="max-width:400px;max-height:88vh;gap:.7rem;overflow-y:auto">
     <h2 id="exScoreTitle">Rate exercise</h2>
     <div class="score-sec"><label>technique — whole exercise</label>
       <div class="score-opts" id="scoreTechBtns"></div></div>
@@ -869,6 +888,12 @@ textarea::placeholder{color:var(--mid)}
       <div class="score-opts row" id="scoreRirBtns"></div>
       <div class="score-cap" id="scoreRirCap"></div></div>
     <p style="font-size:.74rem;color:var(--muted);margin:0">Technique: tap again = +0.5, third tap clears · RIR: tap again clears.</p>
+    <div class="score-sec" id="scoreHistSec" hidden>
+      <button class="exh-tgl" id="scoreHistTgl" onclick="toggleExHist()">▸ history</button>
+      <div class="exh-body" id="scoreHistBody" hidden>
+        <div class="exh-list" id="scoreHistList"></div>
+        <p class="exh-hint">ø per setting — avg tech ≥ 4 with avg RIR ≥ 2 usually means room to add load; tech ≤ 3 or RIR 0 → hold or reduce.</p>
+      </div></div>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exScoreModal')">done</button></div>
   </div>
 </div>
@@ -2115,6 +2140,8 @@ function openExScore(src, ei) {
   const ex = scoreTargetEx(); if (!ex) return;
   el('exScoreTitle').textContent = ((ex.code || '') + ' ' + (ex.name || '')).trim() || 'Rate exercise';
   renderExScore();
+  exHistOpen = false;    // history starts collapsed — a peek would bias the rating being entered
+  renderExHistory(ex);   // once per open, not per rating tap — keeps the list's scroll position
   el('exScoreModal').classList.add('open');
 }
 const RIR_CAPS = {0:'0 — went to failure', 1:'1 — one clean rep left in the tank', 2:'2 — two clean reps left', 3:'3 — three clean reps left', 4:'4 — four or more left (too easy)'};
@@ -2137,6 +2164,70 @@ function setExScore(field, v) {
   if (scoreCtx.src === 'log') renderLogEdit();
   else { schedSave(); renderMain(); }       // re-render keeps the round-mirror buttons in sync
   renderExScore();
+}
+// ── EXERCISE HISTORY (inside the rating modal) — past sessions grouped by setting ──
+// answers "can I add load?": sessions of THIS exercise grouped by the exact set
+// configuration (reps @ weight / time), each group with its average tech / RIR.
+// Identity = exercise code (the app-wide convention, see prefillFromLast); the name
+// is the fallback for uncoded exercises. Groups are newest-first (Map keeps the
+// insertion order of the date-desc list).
+function exHistSig(e) {
+  const sets = e.sets || [];
+  const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
+  const w = [...new Set(sets.map(s => s.weight).filter(Boolean))].join(', ');
+  const durs = [...new Set(sets.filter(s => s.durSec != null).map(s => mmss(s.durSec)))].join('/');
+  return (e.rep > 1 ? '×' + e.rep + ' ' : '') + reps + (w ? ' @ ' + w : '') + (durs ? ' · ' + durs : '') + (e.side ? ' · L/R' : '');
+}
+function exHistoryFor(ex) {
+  const code = (ex.code || '').trim().toLowerCase(), name = (ex.name || '').trim().toLowerCase();
+  if (!code && !name) return [];
+  const out = [];
+  archive.forEach(a => (a.entries || []).forEach(e => {
+    if (!(e.sets || []).length) return;
+    const ec = (e.code || '').trim().toLowerCase(), en = (e.name || '').trim().toLowerCase();
+    if (code ? ec === code : (!ec && en === name)) out.push({t: a.date || a.id, e});
+  }));
+  return out.sort((a, b) => b.t - a.t);
+}
+const EXH_MAX_GROUPS = 6, EXH_MAX_ROWS = 5;
+let exHistOpen = false;
+function toggleExHist() {
+  exHistOpen = !exHistOpen;
+  const ex = scoreTargetEx(); if (ex) renderExHistory(ex);
+}
+function renderExHistory(ex) {
+  const sec = el('scoreHistSec'); if (!sec) return;
+  const hist = exHistoryFor(ex);
+  sec.hidden = !hist.length;
+  const open = exHistOpen && !!hist.length;
+  // full-width notes & the per-setting columns need room — widen only while expanded
+  const box = document.querySelector('#exScoreModal .modal');
+  if (box) box.style.maxWidth = open ? '560px' : '400px';
+  if (!hist.length) return;
+  el('scoreHistTgl').textContent = (open ? '▾' : '▸') + ' history — ' + hist.length + ' session' + (hist.length > 1 ? 's' : '');
+  el('scoreHistBody').hidden = !open;
+  if (!open) return;
+  const groups = new Map();
+  hist.forEach(h => {
+    const sig = exHistSig(h.e);
+    if (!groups.has(sig)) groups.set(sig, []);
+    groups.get(sig).push(h);
+  });
+  const avg = (rows, f) => {
+    const v = rows.map(r => f(r.e)).filter(x => x != null);
+    return v.length ? Math.round(v.reduce((t, x) => t + +x, 0) / v.length * 10) / 10 : null;
+  };
+  const fD = t => new Date(t).toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'2-digit'});
+  el('scoreHistList').innerHTML = [...groups.entries()].slice(0, EXH_MAX_GROUPS).map(([sig, rows]) => {
+    const aT = avg(rows, e => e.tech), aR = avg(rows, e => e.rir);
+    const body = rows.slice(0, EXH_MAX_ROWS).map(h => {
+      const p = [h.e.tech != null ? 'T' + h.e.tech : null, h.e.rir != null ? 'R' + h.e.rir : null].filter(Boolean).join('·');
+      // the note wraps on its own full-width line — an ellipsis + tooltip is unreadable on touch
+      return `<div class="exh-row"><span class="exh-date">${esc(fD(h.t))}</span><span class="exh-score${p ? '' : ' none'}">${esc(p || 'unrated')}</span></div>`
+        + (h.e.note ? `<div class="exh-note">${esc(h.e.note)}</div>` : '');
+    }).join('') + (rows.length > EXH_MAX_ROWS ? `<div class="exh-more">… ${rows.length - EXH_MAX_ROWS} more</div>` : '');
+    return `<div class="exh-grp"><div class="exh-head"><span class="exh-sig">${esc(sig)}</span><span class="exh-n">${rows.length}×</span><span class="exh-avg" title="average technique / RIR across the sessions at this exact setting">ø T ${aT ?? '–'} · R ${aR ?? '–'}</span></div>${body}</div>`;
+  }).join('') + (groups.size > EXH_MAX_GROUPS ? `<div class="exh-more">… ${groups.size - EXH_MAX_GROUPS} more setting(s) in the log</div>` : '');
 }
 // ── ⚙ EXERCISE SETTINGS MODAL — order, L/R, linked sets, repeats, pause overrides, remove ──
 let exSetEi = null;
