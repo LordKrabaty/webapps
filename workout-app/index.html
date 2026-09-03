@@ -53,6 +53,7 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 .jb-field input:focus,.jb-field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
 .jb-field textarea{font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.5;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none;min-width:0;width:100%;flex:0 0 auto;min-height:0;resize:none;overflow:hidden}
 .jb-field textarea:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.jb-readout{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;background:var(--off)}
 #importModal.from-cloud .jb-import-hide{display:none!important}
 
 /* export/import buttons */
@@ -115,6 +116,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 .hr-spark{display:block;width:100%;height:2.3rem}
 .log-hr-trace{margin-bottom:.35rem}
 .log-hr-trace .hr-spark{height:2.6rem}
+.log-zone-time{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:.35rem}
 .hr-spark-line{fill:none;stroke:var(--dark);stroke-width:1.5}
 .hr-spark-guide{stroke:var(--light);stroke-width:1}
 .hr-spark-zlabel{fill:var(--muted);font-family:'DM Mono',monospace;font-weight:600}
@@ -812,6 +814,10 @@ textarea::placeholder{color:var(--mid)}
         <input id="finHrAvg" type="number" inputmode="numeric" min="0" placeholder="–" title="average heart rate (from the watch)"></div>
       <div class="jb-field" style="flex:1"><label>HR max</label>
         <input id="finHrMax" type="number" inputmode="numeric" min="0" placeholder="–" title="max heart rate (from the watch)"></div>
+    </div>
+    <div class="jb-field" id="finZoneTimeWrap" style="display:none">
+      <label>time in zones</label>
+      <div class="jb-readout" id="finZoneTime" title="computed from the sensor trace — not editable"></div>
     </div>
     <div class="jb-field" style="margin-top:.2rem"><label>session note</label>
       <textarea id="finNote" rows="2" placeholder="how it went — HR, feel, adjustments… (saved with the logged workout, editable afterwards)" oninput="autoResizeTA(this)"></textarea></div>
@@ -2749,6 +2755,25 @@ function logHrTraceSvg(a) {
   if (!a.hrTrace || a.hrTrace.length < 2) return '';
   return traceSvg(a.hrTrace.map(p => ({ t: p[0], v: p[1] })), 40);
 }
+// time spent in each zone across a {t: ms, v: bpm} series — [Z1..Z5] seconds. The gap between
+// two samples is credited to the EARLIER sample's zone, capped so a reconnect drop (or any
+// unusually long gap) can't get silently counted as minutes spent in whatever zone preceded it.
+const HR_ZONE_GAP_CAP_MS = 5000;
+function hrZoneTimeSec(points) {
+  const sec = [0, 0, 0, 0, 0];
+  if (!hrZonesSet() || !points || points.length < 2) return sec;
+  for (let i = 0; i < points.length - 1; i++) {
+    const z = hrZoneOf(points[i].v);
+    if (!z) continue;
+    sec[z - 1] += Math.min(HR_ZONE_GAP_CAP_MS, points[i + 1].t - points[i].t) / 1000;
+  }
+  return sec.map(Math.round);
+}
+// "Z1 2:15 · Z2 5:40 · …" — only zones that are actually configured
+function zoneTimeText(sec) {
+  if (!sec) return '';
+  return hrZones.zones.map((z, i) => z != null ? 'Z' + (i + 1) + ' ' + mmss(sec[i]) : null).filter(Boolean).join(' · ');
+}
 
 function initHrPanel() {
   const bar = el('hrBar'); if (!bar) return;
@@ -3341,9 +3366,12 @@ function finishWorkout() {
   el('finFocus').innerHTML = anchorOpts(null, FOCUS_ANCHORS);
   ['finEnergy','finFocus','finRpe','finHrAvg','finHrMax'].forEach(i => { el(i).value = ''; });
   // pre-fill from the BLE sensor if it measured anything this run — still editable/overridable
+  const wrap = el('finZoneTimeWrap'); wrap.style.display = 'none';
   if (car && hrStats.count && hrStatsFor === r.startedAt) {
     el('finHrAvg').value = Math.round(hrStats.sum / hrStats.count);
     el('finHrMax').value = hrStats.max;
+    const zt = zoneTimeText(hrZoneTimeSec(hrHistory));   // computed, not editable — it's derived straight from the trace
+    if (zt) { el('finZoneTime').textContent = zt; wrap.style.display = 'flex'; }
   }
   el('finNote').value = wk.note || '';   // carry over anything typed in the notes tab; keep editing here
   el('finishModal').classList.add('open');
@@ -3382,6 +3410,7 @@ function confirmFinish() {
     if (k === order.length - 1 || restAfter[ei][si] !== undefined) return;   // nothing follows the last step; cardio repeats keep the first pass
     restAfter[ei][si] = plannedRestSec(wk.exercises[ei], wk.exercises[ei].sets[si], order[k + 1][0] === ei) || undefined;
   });
+  const hrThisRun = hrStatsFor === r.startedAt && hrHistory.length >= 2;   // the sensor actually tracked THIS run
   const entry = {
     id: Date.now(), date: Date.now(), tplId: activeLibId,
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
@@ -3395,7 +3424,8 @@ function confirmFinish() {
     rpe: num('finRpe'), hrAvg: num('finHrAvg'), hrMax: num('finHrMax'),   // cardio session ratings (hidden fields stay empty)
     // the whole live trend graph, kept for later review — [elapsedSec, bpm] pairs, compact and
     // independent of wall-clock date; only when the sensor actually tracked THIS run
-    hrTrace: (hrStatsFor === r.startedAt && hrHistory.length >= 2) ? hrHistory.map(p => [Math.round((p.t - r.startedAt) / 1000), p.v]) : undefined,
+    hrTrace: hrThisRun ? hrHistory.map(p => [Math.round((p.t - r.startedAt) / 1000), p.v]) : undefined,
+    hrZoneSec: hrThisRun ? hrZoneTimeSec(hrHistory) : undefined,   // [Z1..Z5] seconds — same "finish & log" auto-fill as HR avg/max, see finishWorkout()
     mt: Date.now()   // log entries sync via LWW — notes stay editable afterwards
   };
   archive.push(entry); saveArchive();
@@ -3778,7 +3808,9 @@ function renderLog() {
           <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
       }).join('');
       const trace = logHrTraceSvg(a);
-      body = `${trace ? `<div class="log-hr-trace" title="heart rate over the whole session">${trace}</div>` : ''}${lines}
+      const zoneTxt = zoneTimeText(a.hrZoneSec);
+      body = `${trace ? `<div class="log-hr-trace" title="heart rate over the whole session">${trace}</div>` : ''}
+        ${zoneTxt ? `<div class="log-zone-time" title="time spent in each zone, computed from the sensor trace">${esc(zoneTxt)}</div>` : ''}${lines}
         <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>`;
     } else if (a.note) {
       body = `<textarea class="log-note-in log-note-wk" rows="1" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note)}</textarea>`;
