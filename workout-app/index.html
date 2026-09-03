@@ -112,7 +112,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 .hr-status b{color:var(--black);font-weight:700}
 .hr-value{font-size:1.9rem;font-weight:700;color:var(--black);min-width:2.4ch}
 .hr-zone{font-size:.78rem;font-weight:700;color:var(--black);border:1.5px solid var(--black);border-radius:var(--r);padding:0 .35rem;line-height:1.6}
-.hr-spark{flex:0 0 auto}
+.hr-spark{display:block;width:100%;height:2.3rem}
+.log-hr-trace{margin-bottom:.35rem}
+.log-hr-trace .hr-spark{height:2.6rem}
 .hr-spark-line{fill:none;stroke:var(--dark);stroke-width:1.5}
 .hr-spark-guide{stroke:var(--light);stroke-width:1}
 .hr-stats{font-size:.78rem;color:var(--muted)}
@@ -315,7 +317,7 @@ textarea::placeholder{color:var(--mid)}
 .wk-chg-i{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--black);border:var(--b);border-radius:var(--r);padding:.08rem .3rem;overflow-wrap:anywhere}
 .wk-chg .btn-sm{margin-left:auto}
 /* recent-trend line, sitting right above the run strip — same sensor, closer to where the eye is mid-set */
-.now-hr-row{display:flex;justify-content:center;margin-bottom:.35rem}
+.now-hr-row{padding:0 .9rem;margin-bottom:.35rem}
 .rest-bar{display:flex;align-items:center;gap:.8rem;border:var(--bh);border-radius:var(--r);padding:.5rem .9rem;margin-bottom:.75rem;flex-wrap:wrap}
 .rest-bar.over{background:var(--black)}
 .rest-bar.over .now-prog-txt,.rest-bar.over .rest-label{color:var(--w)}
@@ -2563,8 +2565,8 @@ let hrState = 'disconnected';   // 'disconnected' | 'connecting' | 'connected' |
 let hrAttempts = 0, hrRetryTimer = null, hrManualStop = false;
 let hrLive = null;   // last instantaneous reading — updates even before a workout starts
 let hrStats = { sum: 0, count: 0, max: 0 }, hrStatsFor = null;   // avg/max scoped to the CURRENT run
-let hrHistory = [];                // recent bpm readings, oldest first — capped, just for the sparkline
-const HR_HIST_MAX = 90;            // ~ last minute or two at a ~1/s report rate — a trend, not a log
+let hrHistory = [];                 // {t,v} readings, oldest first — the WHOLE active run, never pruned mid-run (see onHrValueChanged)
+const HR_HIST_MAX_MS = 30 * 60 * 1000;   // idle-only cap: bounds a sensor left connected with no run active (before/after a workout)
 
 // Zone thresholds (bpm lower bound for Z1..Z5) — typed in once from Polar Flow/Beat, not derived
 // from a max-HR formula: the app has no fitness-test data, and a formula would likely disagree
@@ -2593,12 +2595,17 @@ function setHrZone(i, v) {
   hrZones.mt = Date.now();
   saveHrZones(); renderHrBar(); updateNowHr();
 }
-// compact recent-trend line (Polar-Beat-style), scaled against the configured zones when there
-// are any so the trace reads as effort level, not just its own wiggle
-function hrSparklineSvg() {
-  const w = 90, h = 26, pad = 2;
-  const vals = hrHistory;
-  if (vals.length < 2) return '';
+// trend line (Polar-Beat-style) for any {t,v} series — live (hrSparklineSvg, ms timestamps) or a
+// saved log entry (logHrTraceSvg, elapsed seconds) share this. Scaled against the configured
+// zones when there are any so the trace reads as effort level, not just its own wiggle. x is
+// positioned by actual time, not by sample index, so a reconnect gap draws as a gap rather than
+// a misleading straight jump between the two sides. The <svg> stretches to fill its row (see
+// .hr-spark CSS) — the viewBox is just an internal coordinate space.
+function traceSvg(pts_raw, h) {
+  const w = 600; h = h || 34; const pad = 2;
+  if (pts_raw.length < 2) return '';
+  const t0 = pts_raw[0].t, tSpan = Math.max(1, pts_raw[pts_raw.length - 1].t - t0);
+  const vals = pts_raw.map(p => p.v);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (hrZonesSet()) {
     const set = hrZones.zones.filter(z => z != null);
@@ -2606,12 +2613,18 @@ function hrSparklineSvg() {
     hi = Math.max(hi, ...set, set[set.length - 1] + 15);   // headroom above the top configured zone
   }
   if (hi - lo < 10) { const mid = (hi + lo) / 2; lo = mid - 5; hi = mid + 5; }   // a near-flat trace would otherwise look noisy
-  const x = i => pad + i * (w - 2 * pad) / (vals.length - 1);
+  const x = t => pad + (t - t0) * (w - 2 * pad) / tSpan;
   const y = v => h - pad - (v - lo) * (h - 2 * pad) / (hi - lo);
   let guides = '';
   if (hrZonesSet()) hrZones.zones.forEach(z => { if (z != null && z > lo && z < hi) guides += `<line class="hr-spark-guide" x1="0" y1="${y(z).toFixed(1)}" x2="${w}" y2="${y(z).toFixed(1)}"/>`; });
-  const pts = vals.map((v, i) => x(i).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
-  return `<svg class="hr-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${guides}<polyline class="hr-spark-line" points="${pts}"/></svg>`;
+  const pts = pts_raw.map(p => x(p.t).toFixed(1) + ',' + y(p.v).toFixed(1)).join(' ');
+  return `<svg class="hr-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${guides}<polyline class="hr-spark-line" points="${pts}"/></svg>`;
+}
+function hrSparklineSvg() { return traceSvg(hrHistory); }
+// saved per-entry: hrTrace is [elapsedSec, bpm] pairs (compact — see confirmFinish)
+function logHrTraceSvg(a) {
+  if (!a.hrTrace || a.hrTrace.length < 2) return '';
+  return traceSvg(a.hrTrace.map(p => ({ t: p[0], v: p[1] })), 40);
 }
 
 function initHrPanel() {
@@ -2659,7 +2672,7 @@ function renderHrBar() {
     ${hrState === 'connected' ? `<span class="hr-value">❤ ${hrLive == null ? '–' : hrLive}</span>${zone ? `<span class="hr-zone">Z${zone}</span>` : ''}<span class="hr-stats">avg ${avgTxt} · max ${maxTxt}</span>` : ''}`;
 }
 function toggleHrSensor() {
-  if (hrState === 'connecting' || hrState === 'connected') { hrManualStop = true; stopHrRetry(); if (bleDevice && bleDevice.gatt) { try { bleDevice.gatt.disconnect(); } catch (e) {} } hrState = 'disconnected'; renderHrBar(); syncWakeLock(); return; }
+  if (hrState === 'connecting' || hrState === 'connected') { hrManualStop = true; stopHrRetry(); if (bleDevice && bleDevice.gatt) { try { bleDevice.gatt.disconnect(); } catch (e) {} } hrState = 'disconnected'; hrHistory = []; renderHrBar(); syncWakeLock(); return; }   // a deliberate disconnect starts the next trace clean
   connectHrSensor();
 }
 function stopHrRetry() { if (hrRetryTimer) { clearTimeout(hrRetryTimer); hrRetryTimer = null; } hrAttempts = 0; }
@@ -2682,20 +2695,26 @@ async function hrConnectGatt() {
   bleChar.addEventListener('characteristicvaluechanged', onHrValueChanged);
   await bleChar.startNotifications();
   if (hrManualStop) { try { bleDevice.gatt.disconnect(); } catch (e2) {} return; }
-  hrState = 'connected'; hrAttempts = 0; hrHistory = []; renderHrBar(); syncWakeLock();   // fresh trace — a stale point before a reconnect gap would draw a misleading jump
+  // history is intentionally NOT cleared here: an auto-reconnect after a signal drop keeps the
+  // trace going (the x-axis is time-scaled, so the drop just shows as a gap, not a fake jump)
+  hrState = 'connected'; hrAttempts = 0; renderHrBar(); syncWakeLock();
 }
 function onHrValueChanged(e) {
   const v = e.target.value;   // DataView
   const flags = v.getUint8(0);
   const bpm = (flags & 0x1) ? v.getUint16(1, true) : v.getUint8(1);
   hrLive = bpm;
-  hrHistory.push(bpm); if (hrHistory.length > HR_HIST_MAX) hrHistory.shift();
+  const now = Date.now();
   const runStart = wk.run && wk.run.startedAt;
-  if (runStart) {
-    if (hrStatsFor !== runStart) { hrStats = { sum: 0, count: 0, max: 0 }; hrStatsFor = runStart; }   // new workout → fresh stats
-    hrStats.sum += bpm; hrStats.count++; if (bpm > hrStats.max) hrStats.max = bpm;
+  if (runStart && hrStatsFor !== runStart) { hrStats = { sum: 0, count: 0, max: 0 }; hrHistory = []; hrStatsFor = runStart; }   // new workout → fresh stats + fresh trace
+  if (runStart) { hrStats.sum += bpm; hrStats.count++; if (bpm > hrStats.max) hrStats.max = bpm; }
+  hrHistory.push({ t: now, v: bpm });
+  if (!runStart) {   // an active run keeps its FULL trace (see confirmFinish → entry.hrTrace) — only idle monitoring gets pruned
+    const cutoff = now - HR_HIST_MAX_MS;
+    while (hrHistory.length && hrHistory[0].t < cutoff) hrHistory.shift();
   }
   renderHrBar();
+  updateNowBar();   // live BPM + trend graph sit in the run bar too — refresh right away, not just on the next tick()
 }
 function onHrDropped() {
   bleChar = null;
@@ -3245,6 +3264,9 @@ function confirmFinish() {
     note: (el('finNote').value || '').trim(),   // session note — typed/edited right in the finish dialog
     energy: num('finEnergy'), focus: num('finFocus'),          // strength session ratings
     rpe: num('finRpe'), hrAvg: num('finHrAvg'), hrMax: num('finHrMax'),   // cardio session ratings (hidden fields stay empty)
+    // the whole live trend graph, kept for later review — [elapsedSec, bpm] pairs, compact and
+    // independent of wall-clock date; only when the sensor actually tracked THIS run
+    hrTrace: (hrStatsFor === r.startedAt && hrHistory.length >= 2) ? hrHistory.map(p => [Math.round((p.t - r.startedAt) / 1000), p.v]) : undefined,
     mt: Date.now()   // log entries sync via LWW — notes stay editable afterwards
   };
   archive.push(entry); saveArchive();
@@ -3626,7 +3648,8 @@ function renderLog() {
           ${setNotes}
           <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
       }).join('');
-      body = `${lines}
+      const trace = logHrTraceSvg(a);
+      body = `${trace ? `<div class="log-hr-trace" title="heart rate over the whole session">${trace}</div>` : ''}${lines}
         <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>`;
     } else if (a.note) {
       body = `<textarea class="log-note-in log-note-wk" rows="1" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note)}</textarea>`;
