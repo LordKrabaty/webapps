@@ -365,7 +365,11 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 @media(hover:hover){.seller-link:hover{background:var(--light)}}
 .seller-toggle{font-size:.62rem;color:var(--muted);width:14px;text-align:center}
 .seller-body{padding:.55rem .7rem;display:flex;flex-direction:column;gap:.5rem}
-.seller-url{width:100%;box-sizing:border-box;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .5rem;outline:none}
+.seller-url-row{display:flex;align-items:center;gap:calc(.4rem / var(--pzc, 1))}
+.seller-url{flex:1;min-width:0;box-sizing:border-box;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .5rem;outline:none}
+.seller-url-open{flex-shrink:0;font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .5rem;text-decoration:none;white-space:nowrap;line-height:1.2}
+.seller-url-open:active{background:var(--light)}
+@media(hover:hover){.seller-url-open:hover{background:var(--light)}}
 .seller-ta{width:100%;box-sizing:border-box;flex:0 0 auto;min-height:64px;font-family:'DM Sans',sans-serif;font-size:.83rem;line-height:1.65;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.5rem .65rem;outline:none;resize:none;overflow-y:hidden}
 .seller-note-preview{font-size:.75rem;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;word-break:break-word}
 .seller-sub{font-size:.66rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
@@ -3932,8 +3936,9 @@ function updateSellerUrl(i,inp){
   if(rec.url===v)return;               // stamp mt only on a real change, otherwise an empty re-save could beat a newer version from another device
   rec.url=v;rec.mt=Date.now();
   saveSellers();
-  const a=el('seller-link-'+i);        // update the header link in place — a re-render would eat the focus
-  if(a){a.href=sellerHref(v);a.style.display=v?'':'none';}
+  // update both links in place — a re-render would eat the focus while typing the url
+  const href=sellerHref(v);
+  [el('seller-link-'+i),el('seller-open-'+i)].forEach(a=>{if(a){a.href=href;a.style.display=v?'':'none';}});
 }
 function updateSellerNotes(i,ta){
   const rec=sellerRecEnsure(i);if(!rec)return;
@@ -4019,7 +4024,10 @@ function renderSellers(){
         </div>
       </div>
       ${open?`<div class="seller-body">
-        <input class="seller-url" type="text" inputmode="url" placeholder="shop website — teashop.com" value="${esc((rec&&rec.url)||'')}" oninput="updateSellerUrl(${i},this)" />
+        <div class="seller-url-row">
+          <input class="seller-url" type="text" inputmode="url" placeholder="shop website — teashop.com" value="${esc((rec&&rec.url)||'')}" oninput="updateSellerUrl(${i},this)" />
+          <a class="seller-url-open" id="seller-open-${i}" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="open the shop website"${url?'':' style="display:none"'}>open ↗</a>
+        </div>
         <textarea class="seller-ta" placeholder="What to buy here, what to skip, shipping, prices…" oninput="updateSellerNotes(${i},this)">${esc((rec&&rec.notes)||'')}</textarea>
         <div>
           <span class="seller-sub">teas from this seller</span>
