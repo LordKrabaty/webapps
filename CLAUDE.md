@@ -118,6 +118,13 @@ Pouze CSS proměnné, **nikdy hardcoded barvy**:
 - `DM Mono` — čísla, timestamps, kódy
 - `Cormorant Garamond` — dekorativní nadpisy (volitelné)
 
+### Zoom — nad 100 % roste jen text, mezery ne (`--pzc`)
+
+Globální A± i per-panel ± zoom škálují přes `zoom` / `--fs`, ale bílé místo se kompenzuje: JS (`applyFs` / `applyPanelFs`) nastavuje proměnnou `--pzc` (= zoom faktor, jen nad 100 %; u panelu panel-zoom × globální) a klíčová spacing pravidla jsou psaná `calc(.7rem / var(--pzc, 1))` — zoom je vynásobí zpátky na původní vizuální velikost, takže nad 100 % roste jen text (a touch targety), mezery zůstávají. Pod 100 % se vše zmenšuje jako dřív (`--pzc` je 1). Line-height dlouhých textareí: `max(1.4, calc(1.8 / var(--pzc, 1)))`. Hotovo v `_template` i všech appkách.
+
+- **Nové spacing pravidlo** (padding/gap/margin kontejnerů, karet, řádků seznamů) piš rovnou v calc tvaru; vnitřní padding tlačítek/inputů nech bez kompenzace (škáluje s textem).
+- **Past — media queries:** override spacing vlastnosti v media query přebije i calc — kompenzaci v něm zopakuj, jinak na mobilu (kde na ní záleží nejvíc) vypadne.
+
 ---
 
 ## Hotové komponenty — nevynalézej znova
