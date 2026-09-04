@@ -1294,9 +1294,9 @@ function parseItemText(raw, resolvePresent) {
     if (um && _isLetterToken(um[1])) unknownAbbrev = um[1];
   }
 
-  // Detect a block type ONLY by its name at the START of the line ("Deep work", "Deep work: API", "🧠 Deep work") —
-  // a task that merely mentions a type somewhere ("call admin") stays a task. The name must end at a word boundary
-  // ("Administration" is not "Admin"); the longest matching name wins. An emoji neither creates a block nor is it
+  // Detect a block type ONLY from the bare type name or "name: …" at the START of the line ("Deep work",
+  // "Deep work: API", "🧠 Deep work") — any other line is a task, even one that starts with or mentions a type
+  // ("Deep work session", "call admin"). The longest matching name wins. An emoji neither creates a block nor is it
   // stripped (blocks come from the menu/presets, an emoji in a task stays intact). An explicit task (✒ / "x " marker,
   // -abbr target) is never promoted: "✒ reading deep work" sent with → must come back as a task.
   if (!isSubtask) {
@@ -1306,8 +1306,8 @@ function parseItemText(raw, resolvePresent) {
       if (key === 'TASK') continue;
       const lab = (bt.label || '').trim().toUpperCase();
       if (!lab || !plainUpper.startsWith(lab)) continue;
-      const next = plainUpper.charAt(lab.length);
-      if (next && next.toLowerCase() !== next.toUpperCase()) continue;    // a letter follows → a longer word ("Administration")
+      const rest = plainUpper.slice(lab.length);
+      if (rest && !/^\s*:/.test(rest)) continue;                           // only the bare name or "name: …" — "Deep work session" stays a task
       if (!best || lab.length > best.lab.length) best = { key, bt, lab };
     }
     if (best) { blockType = best.key; if (!duration && !isEvent) duration = best.bt.defaultDuration; }
@@ -8725,7 +8725,7 @@ window.addEventListener('resize', updateAppGrid);
         <tr><td><code>-q text</code></td><td>no block starts with <b>q</b> → the line is <b>not added</b>: it stays in the field and the status message names the unknown abbreviation.</td></tr>
         <tr><td><code>- text</code></td><td>dash + space = plain task (pasted bullet lists), no block lookup.</td></tr>
         <tr><td><code>text</code></td><td>plain task → under the last block on the card. In Inbox and Later: a flat item.</td></tr>
-        <tr><td><code>Deep work</code> · <code>Deep work: API</code></td><td>a line that <b>starts with</b> the name of a block type creates that block (with its default length; the whole line becomes its name). A task that only mentions a type (<code>call admin</code>) stays a task.</td></tr>
+        <tr><td><code>Deep work</code> · <code>Deep work: API</code></td><td>the bare name of a block type, or the name followed by a <b>colon</b>, creates that block (with its default length; the whole line becomes its name). Anything else is a task — <code>Deep work session</code>, <code>call admin</code>.</td></tr>
       </table>
       <h3>Markers</h3>
       <table>
