@@ -233,6 +233,7 @@ API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH 
 | dny / plány / šablony | datum / `id` | **LWW** (novější `mt`) |
 | bloky (typy) | `key` | **LWW** (novější `mt`); vestavěný `TASK` nejde smazat, jiné defaulty nejsou |
 | inbox | `id` | **LWW** (novější `mt`) |
+| vyhodnocení (`evals` v `todo-app`) | `id` | **LWW** (novější `mt`) — text, den ukotvení i rozsah od–do cestují jako jeden záznam; prázdný text se nesynchronizuje (a maže se). Předchůdce `weekNotes` (poznámka na ISO týden) se už nikde nezobrazuje, ale dál se načítá/ukládá/slučuje beze změny, aby starší build nepřišel o data — obsah se jednorázově zmigroval do `evals` (deterministické `id` = `wn-<week key>`, aby dvě zařízení nevytvořila duplikát) |
 | archiv | `id` | union (jen doplnit chybějící) — **výjimka `tea-app`: LWW**, archivovaný čaj tam jde dál editovat (favourite, poznámky, název, datum), takže se edit musí přenést; union by tiše nechal starou kopii a zapsal ji zpátky |
 | pracovní dny | week key | union (zatím) |
 | pořadí typů bloků (`blockTypeOrder`) | — | **nesynchronizuje se** (kosmetické) |
