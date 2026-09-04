@@ -182,11 +182,21 @@ Když řeknu „přidej drag and drop" / „ať jdou … přetahovat", použij *
 - `srcRow.style.pointerEvents='none'` během tažení → `elementFromPoint` vidí řádek pod prstem. Globální `touchmove` s `preventDefault` (`{passive:false}`) dokud `dndActive`, aby tažení nescrollovalo stránku. Úchyt-grip má `touch-action:none`.
 - `pointermove`/`pointerup`/`pointercancel` se věší na `document` (capture) při `pointerdown` a odvěšují v `end()`.
 
-**Úchyt vs. celý řádek:** je-li řádek plný editovatelných polí (textarea/input — např. bloky ve vision-app), přidej **vyhrazený grip** (`⠿`, 6-dot SVG) a drag spouštěj jen z něj (`e.target.closest('.grip')`); jinak (řádky bez editace — todo-app) může být tažný celý řádek a `pointerdown` ignoruje start na `button, input, textarea, select, a, [contenteditable]`.
+**Úchyt vs. celý řádek:** je-li řádek plný editovatelných polí (textarea/input — např. bloky ve vision-app), přidej **vyhrazený grip** (`⠿`, 6-dot SVG) a drag spouštěj jen z něj (`e.target.closest('.grip')`); jinak (řádky bez editace — todo-app) může být tažný celý řádek a `pointerdown` ignoruje start na `button, input, textarea, select, a, [contenteditable]`. V `todo-app` to umí sdílený `initDnd(container, onDrop, { grip: '.selector' })` — s gripem navíc dotyk startuje tah **hned** (long-press netřeba, řádek zůstává scrollovatelný a editovatelný).
 
 **Šipky ↑/↓ nech** jako spolehlivou alternativu (Boox e-ink: pomalý refresh, tah je nepřesný).
 
-**Referenční implementace:** `todo-app/index.html` → `initDnd()` + `applyDndReorder()` (tažný celý řádek, long-press na dotyku). `vision-app/index.html` → `initBlockDnd()` + `reorderBlocks()` (tažení za grip, dotyk startuje hned). `_template` zatím nemá — portovat na pokyn.
+### Scrollování během tažení — POVINNÉ, jinak dnd na mobilu „někdy nefunguje"
+
+Tah blokuje scroll (`touchmove` + `preventDefault`), takže **pustit jde jen na to, co je zrovna vidět** — na telefonu dva tři řádky. Bez následujících tří věcí je cíl mimo obrazovku nedosažitelný a uživatel to hlásí jako „drag and drop nefunguje":
+
+1. **Auto-scroll u okrajů** (`dndScroller(container, onStep)` v `todo-app`): drží-li se ukazatel do ~50 px od horního/dolního okraje, rolovací oblast se posouvá (~16 px/snímek přes `requestAnimationFrame`). Scroller se hledá **nahoru od kontejneru** — první předek s `overflow-y:auto|scroll`, který skutečně přetéká, jinak stránka (na mobilu se stackovaným layoutem roluje stránka, ne panel).
+2. **Přepočet cíle v každém snímku rolování.** Na dotyku **nechodí `pointermove`, když prst stojí** — seznam se pod ním roluje, ale indikátor i drop by zůstaly na místě, kde prst přistál. Proto si drag pamatuje poslední `lastX/lastY` a `onStep` callback z `dndScroller` po každém posunu znovu spočítá cíl (`markTarget()`).
+3. **Široké drop zóny + fallback na nejbližší cíl.** Kromě řádku musí brát i prázdnou/sbalenou skupinu (v `todo-app` hlavička měsíce v Later), prostor mezi řádky, podhlavičky a mezeru pod posledním řádkem; když ukazatel není na ničem, ale je ve sloupci seznamu, vezmi **svisle nejbližší** cíl (`nearestYm`). Jinak minutí o pár pixelů = tiše se nestane nic.
+
+**Sbalené skupiny spring-loadem:** co není v DOM, na to se nedá pustit (v Later je sbalený každý rok kromě letošního). Podržení taženého prvku nad hlavičkou skupiny ~550 ms ji rozbalí; po překreslení si **znovu vezmi referenci na tažený řádek** (`list.querySelector('[data-idx=…]')`) a vrať mu `.dragging` + `pointerEvents:'none'`, jinak tah dojede „naslepo".
+
+**Referenční implementace:** `todo-app/index.html` → `initDnd()` + `applyDndReorder()` (tažný celý řádek, long-press na dotyku, volitelný grip), `dndScroller()` (auto-scroll), `initLaterDnd()` (přesun mezi měsíci: zóny + spring-load + nejbližší cíl). `vision-app/index.html` → `initBlockDnd()` + `reorderBlocks()` (tažení za grip, dotyk startuje hned). `_template` zatím nemá — portovat na pokyn.
 
 ---
 

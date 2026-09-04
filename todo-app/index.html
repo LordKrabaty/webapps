@@ -6867,7 +6867,7 @@ function renderLater() {
     const { ins: headers, usedWeeks } = buildWeekHeaders(b.items, ym, byWeekStr);
     // holidays whose week has no dated item (so no week header) → keep them visible at the top of the month
     const leftover = hols.filter(h => !usedWeeks.has(getWeekMondayKey(new Date(h.iso + 'T12:00:00'))));
-    const holHtml = leftover.length ? `<div class="later-month-holidays">${leftover.map(holFmt).join(' · ')}</div>` : '';
+    const holHtml = leftover.length ? `<div class="later-month-holidays" data-ym="${ym}">${leftover.map(holFmt).join(' · ')}</div>` : '';
     html += hdr + holHtml + `<div class="later-rows" data-ym="${ym}">${rowsHtml(MCTX(ym), headers)}</div>`;
   });
   c.innerHTML = html;
@@ -8004,6 +8004,49 @@ function _dndClearIndicators(container) {
     r.classList.remove('drag-over-top', 'drag-over-bottom'));
 }
 
+// AUTO-SCROLL while dragging. A drag blocks page scrolling (touchmove is preventDefault-ed), so
+// without this the only reachable drop targets are the ones already on screen — on a phone that is
+// two or three rows, which is why dragging into a month further down the Later list "did nothing".
+// Holding the pointer near the top/bottom edge of the scrolling area scrolls it under the finger.
+// onStep runs after every scrolled frame: on touch no pointermove arrives while the finger is held
+// still, so the drop target has to be recomputed from the last known position — otherwise the list
+// scrolls under the finger while the indicator (and the drop) stays on whatever was there before.
+const DND_EDGE = 52;    // px from the edge where scrolling kicks in
+const DND_SPEED = 16;   // px per frame
+function dndScroller(container, onStep) {
+  let raf = null, dir = 0;
+  // the nearest ancestor that actually scrolls (the container itself, a wrapper, or the page)
+  const scroller = () => {
+    let e = container;
+    while (e && e !== document.documentElement) {
+      const ov = getComputedStyle(e).overflowY;
+      if ((ov === 'auto' || ov === 'scroll') && e.scrollHeight > e.clientHeight + 1) return e;
+      e = e.parentElement;
+    }
+    const d = document.scrollingElement || document.documentElement;
+    return (d && d.scrollHeight > d.clientHeight + 1) ? d : null;
+  };
+  const step = () => {
+    const s = scroller();
+    if (!s || !dir) { raf = null; return; }
+    const before = s.scrollTop;
+    s.scrollTop += dir * DND_SPEED;
+    if (s.scrollTop !== before && onStep) onStep();   // list moved → the target under the pointer changed
+    raf = requestAnimationFrame(step);
+  };
+  return {
+    update(y) {
+      const s = scroller();
+      if (!s) { dir = 0; return; }
+      const r = (s === document.scrollingElement || s === document.documentElement)
+        ? { top: 0, bottom: window.innerHeight } : s.getBoundingClientRect();
+      dir = y < r.top + DND_EDGE ? -1 : (y > r.bottom - DND_EDGE ? 1 : 0);
+      if (dir && !raf) raf = requestAnimationFrame(step);
+    },
+    stop() { dir = 0; if (raf) cancelAnimationFrame(raf); raf = null; },
+  };
+}
+
 // opts.grip = selector of a dedicated drag handle. Without it the whole row is draggable (a tap on a
 // control never starts a drag) and touch needs a long-press; with a grip the drag can only start there,
 // so on touch it begins immediately — the row itself stays scrollable and its fields stay editable.
@@ -8012,7 +8055,8 @@ function initDnd(container, onDrop, opts = {}) {
   container.addEventListener('dragstart', e => e.preventDefault());   // suppress native drag
 
   let srcRow = null, srcIdx = null, pointerId = null, dragging = false;
-  let startX = 0, startY = 0, holdTimer = null;
+  let startX = 0, startY = 0, holdTimer = null, lastX = 0, lastY = 0;
+  const autoScroll = dndScroller(container, () => { if (dragging) markTarget(); });
   const MOUSE_THRESHOLD = 6;    // px of mouse movement → drag
   const SCROLL_THRESHOLD = 12;  // px of movement before long-press (touch) → scroll, cancel
   const TOUCH_HOLD = 180;       // ms hold (touch/pen) → drag
@@ -8029,8 +8073,17 @@ function initDnd(container, onDrop, opts = {}) {
     srcRow.style.pointerEvents = 'none';            // so elementFromPoint sees the row under the finger
     document.body.style.userSelect = 'none';
   };
+  // indicator for the row under the last known pointer position (also called while auto-scrolling)
+  const markTarget = () => {
+    _dndClearIndicators(container);
+    const row = rowAt(lastX, lastY);
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    row.classList.add(lastY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+  };
   const end = () => {
     clearTimeout(holdTimer); holdTimer = null;
+    autoScroll.stop();
     _dndClearIndicators(container);
     if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents = ''; }
     document.body.style.userSelect = '';
@@ -8052,11 +8105,9 @@ function initDnd(container, onDrop, opts = {}) {
     }
     if (!dragging) return;
     if (e.cancelable) e.preventDefault();
-    _dndClearIndicators(container);
-    const row = rowAt(e.clientX, e.clientY);
-    if (!row) return;
-    const rect = row.getBoundingClientRect();
-    row.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+    lastX = e.clientX; lastY = e.clientY;
+    autoScroll.update(lastY);
+    markTarget();
   };
   const onUp = e => {
     if (e.pointerId !== pointerId) return;
@@ -8133,8 +8184,9 @@ function initEvalDnd() {
   container._evalDndInit = true;
   container.addEventListener('dragstart', e => e.preventDefault());
 
-  let srcCard = null, pointerId = null, dragging = false, startX = 0, startY = 0;
+  let srcCard = null, pointerId = null, dragging = false, startX = 0, startY = 0, lastX = 0, lastY = 0;
   const MOUSE_THRESHOLD = 6;
+  const autoScroll = dndScroller(container, () => { if (dragging) markTarget(); });
   const targetAt = (x, y) => {
     const t = document.elementFromPoint(x, y);
     const r = t && t.closest('[data-eval-day]');
@@ -8148,6 +8200,7 @@ function initEvalDnd() {
     document.body.style.userSelect = 'none';
   };
   const end = () => {
+    autoScroll.stop();
     _dndClearIndicators(container);
     if (srcCard) { srcCard.classList.remove('dragging'); srcCard.style.pointerEvents = ''; }
     document.body.style.userSelect = '';
@@ -8156,6 +8209,11 @@ function initEvalDnd() {
     document.removeEventListener('pointercancel', onUp, true);
     srcCard = null; pointerId = null; dragging = false; _dndActive = false;
   };
+  const markTarget = () => {
+    _dndClearIndicators(container);
+    const row = targetAt(lastX, lastY);
+    if (row) row.classList.add('drag-over-bottom');   // the evaluation lands under that day
+  };
   const onMove = e => {
     if (e.pointerId !== pointerId) return;
     if (!dragging) {
@@ -8163,9 +8221,9 @@ function initEvalDnd() {
       else return;
     }
     if (e.cancelable) e.preventDefault();
-    _dndClearIndicators(container);
-    const row = targetAt(e.clientX, e.clientY);
-    if (row) row.classList.add('drag-over-bottom');   // the evaluation lands under that day
+    lastX = e.clientX; lastY = e.clientY;
+    autoScroll.update(lastY);
+    markTarget();
   };
   const onUp = e => {
     if (e.pointerId !== pointerId) return;
@@ -8204,15 +8262,73 @@ function initLaterDnd() {
   const list = el('later-list'); if (!list || list._laterDnd) return;
   list._laterDnd = true;
   let srcRow = null, srcYm = null, srcIdx = null, pointerId = null, dragging = false;
-  let startX = 0, startY = 0, holdTimer = null;
-  const MOUSE_THRESHOLD = 6, SCROLL_THRESHOLD = 12, TOUCH_HOLD = 180;
+  let startX = 0, startY = 0, holdTimer = null, springYear = null, springTimer = null, lastX = 0, lastY = 0;
+  const MOUSE_THRESHOLD = 6, SCROLL_THRESHOLD = 12, TOUCH_HOLD = 180, SPRING_HOLD = 550;
+  const autoScroll = dndScroller(list, () => { if (dragging) markTarget(); });
   const clearInd = () => list.querySelectorAll('.drag-over-top,.drag-over-bottom,.later-drop-into')
     .forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom', 'later-drop-into'));
   const rowAt = (x, y) => { const t = document.elementFromPoint(x, y); const r = t && t.closest('.later-rows [draggable="true"]'); return (r && list.contains(r)) ? r : null; };
-  const hdrAt = (x, y) => { const t = document.elementFromPoint(x, y); const h = t && t.closest('.later-month-hdr'); return (h && list.contains(h)) ? h : null; };
+  // any point that belongs to a month counts as "drop into this month": its header (also when the month
+  // is empty or collapsed), the rows area — including a week sub-header or the gap after the last row —
+  // and the holiday line. Before, only a row or the header itself worked, so a drop a few pixels off
+  // silently did nothing.
+  const monthAt = (x, y) => {
+    const t = document.elementFromPoint(x, y); if (!t || !list.contains(t)) return null;
+    const z = t.closest('.later-month-hdr, .later-rows, .later-month-holidays');
+    return (z && list.contains(z)) ? (z.dataset.ym || null) : null;
+  };
+  const hdrOf = ym => list.querySelector(`.later-month-hdr[data-ym="${ym}"]`);
+  // Pointer inside the list's column but not on any month (blank space under the last month, the gap
+  // the auto-scroll leaves at the end) → the vertically nearest month. The list is one long column,
+  // so that is always the month the finger is aiming at; without it a drop there did nothing.
+  const nearestYm = (x, y) => {
+    const r0 = list.getBoundingClientRect();
+    if (x < r0.left - 24 || x > r0.right + 24) return null;      // dragged away sideways → cancel, as before
+    let best = null, bestD = Infinity;
+    list.querySelectorAll('.later-month-hdr[data-ym], .later-rows[data-ym]').forEach(z => {
+      const b = z.getBoundingClientRect();
+      if (!b.height) return;
+      const d = y < b.top ? b.top - y : (y > b.bottom ? y - b.bottom : 0);
+      if (d < bestD) { bestD = d; best = z.dataset.ym; }
+    });
+    return best;
+  };
+  // hovering a collapsed year opens it (spring-loading) — its months are not in the DOM, so they
+  // could not be dropped into at all
+  const springLoad = (x, y) => {
+    const t = document.elementFromPoint(x, y);
+    const yh = t && t.closest('.later-year-hdr');
+    const year = yh ? (yh.textContent.match(/\d{4}/) || [])[0] : null;
+    if (!year || !isLaterYearCollapsed(year)) { springYear = null; clearTimeout(springTimer); springTimer = null; return; }
+    if (year === springYear) return;
+    springYear = year; clearTimeout(springTimer);
+    springTimer = setTimeout(() => {
+      toggleLaterYear(year);   // re-renders the Later list
+      // the re-render replaced every node → take hold of the dragged row again
+      srcRow = list.querySelector(`.later-rows[data-ym="${srcYm}"] [data-idx="${srcIdx}"]`);
+      if (srcRow && dragging) { srcRow.classList.add('dragging'); srcRow.style.pointerEvents = 'none'; }
+    }, SPRING_HOLD);
+  };
   const beginDrag = () => { if (dragging || !srcRow) return; dragging = true; _dndActive = true; srcRow.classList.add('dragging'); srcRow.style.pointerEvents = 'none'; document.body.style.userSelect = 'none'; };
+  const cancelSpring = () => { springYear = null; clearTimeout(springTimer); springTimer = null; };
+  // where would the item land right now? Also called on every auto-scrolled frame, because on touch
+  // no pointermove arrives while the finger is held at the edge and the list moves underneath it.
+  const markTarget = () => {
+    clearInd();
+    const row = rowAt(lastX, lastY);
+    if (row) { cancelSpring(); const rect = row.getBoundingClientRect();
+      row.classList.add(lastY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom'); return; }
+    const ym = monthAt(lastX, lastY);
+    if (ym) { cancelSpring(); if (ym !== srcYm) hdrOf(ym)?.classList.add('later-drop-into'); return; }
+    springLoad(lastX, lastY);            // over a year header → hold to open it
+    if (springYear) return;              // waiting for the year to spring open — do not mark a month
+    const near = nearestYm(lastX, lastY);
+    if (near && near !== srcYm) hdrOf(near)?.classList.add('later-drop-into');
+  };
   const end = () => {
-    clearTimeout(holdTimer); holdTimer = null; clearInd();
+    clearTimeout(holdTimer); holdTimer = null;
+    clearTimeout(springTimer); springTimer = null; springYear = null;
+    autoScroll.stop(); clearInd();
     if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents = ''; }
     document.body.style.userSelect = '';
     document.removeEventListener('pointermove', onMove, true);
@@ -8229,11 +8345,9 @@ function initLaterDnd() {
     }
     if (!dragging) return;
     if (e.cancelable) e.preventDefault();
-    clearInd();
-    const row = rowAt(e.clientX, e.clientY);
-    if (row) { const rect = row.getBoundingClientRect(); row.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom'); return; }
-    const hdr = hdrAt(e.clientX, e.clientY);
-    if (hdr && hdr.dataset.ym !== srcYm) hdr.classList.add('later-drop-into');   // drop on another month header
+    lastX = e.clientX; lastY = e.clientY;
+    autoScroll.update(lastY);
+    markTarget();
   };
   const onUp = e => {
     if (e.pointerId !== pointerId) return;
