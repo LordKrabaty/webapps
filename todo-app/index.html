@@ -519,6 +519,9 @@ textarea::placeholder{color:var(--mid)}
 .week-note{font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.55;color:var(--black);background:var(--off);border:1px dashed var(--mid);border-radius:var(--r);padding:.4rem .55rem;outline:none;resize:vertical;width:100%;min-height:2rem;margin-top:.1rem}
 .week-note:focus{outline:2px solid var(--black);outline-offset:1px;background:var(--w)}
 .week-note::placeholder{color:var(--mid)}
+/* per-day note — same look as the week note; lives in the day record, so it follows the day into Done and the export */
+.day-note{flex:0 0 auto;margin-top:calc(.3rem/var(--pzc,1))}
+.day-note-flag{font-size:.72rem;color:var(--muted);flex-shrink:0}
 @media(hover:hover){.week-section-sel:hover{color:var(--black)}}
 .week-day-row{display:flex;align-items:center;gap:.35rem;padding:.35rem .45rem;border:1px solid var(--light);border-radius:var(--r);user-select:none}
 .week-day-date{flex:1;font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -734,6 +737,7 @@ textarea::placeholder{color:var(--mid)}
         <button class="btn-add" id="btnDaySwap" onclick="openDaySwapModal()" title="swap this whole day (all its items and time window) with another day of the week">⇄</button>
       </div>
       <div id="item-list" style="display:flex;flex-direction:column;gap:.1rem;margin-top:.2rem;overflow-y:auto;flex:1;min-height:0"></div>
+      <textarea id="dayNoteTa" class="week-note day-note" placeholder="note for this day…" oninput="onDayNoteInput(this)" onfocus="autoGrowTextarea(this)"></textarea>
     </div>
     <div id="pane-hotovo" class="notes-pane">
       <div id="week-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.25rem"></div>
@@ -1144,6 +1148,7 @@ let blockTypeOrder = [];
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let items = [];
+let dayNote = '';                  // free-text note of the active day — part of the day record (weekDays[].note)
 let activePlanDate = null;
 let planWeekOffset = 0;
 let windowStart = '6:00', windowEnd = '14:00';
@@ -2129,6 +2134,7 @@ function renderAll() {
   renderItemList();
   updateStats();
   renderDayButtons();      // take the time in the active day name from the live state → update immediately on edit
+  syncDayNoteUi();
   updateDirtyState();
   updateAbbrevHint();
 }
@@ -3252,7 +3258,7 @@ function onWindowChange() {
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
 function getSessionData() {
-  return { items: stripGhosts(items), windowStart, windowEnd, planDate: activePlanDate };   // ghosts are not saved
+  return { items: stripGhosts(items), windowStart, windowEnd, note: dayNote, planDate: activePlanDate };   // ghosts are not saved
 }
 function applySessionData(d) {
   if (!d) return;
@@ -3261,8 +3267,26 @@ function applySessionData(d) {
   items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
   windowStart = d.windowStart || '6:00';
   windowEnd   = d.windowEnd   || '14:00';
+  dayNote     = d.note || '';    // always reset — an older record without a note must not inherit the previous day's one
   if (el('winStart')) el('winStart').value = windowStart;
   if (el('winEnd'))   el('winEnd').value   = windowEnd;
+  syncDayNoteUi();
+}
+
+// Pushes dayNote into the field (day switch, undo, sync merge, tab switch). Never while the user
+// is typing in it — that would move the caret; the model is already up to date from oninput.
+function syncDayNoteUi() {
+  const ta = el('dayNoteTa'); if (!ta) return;
+  if (document.activeElement !== ta) ta.value = dayNote;
+  autoGrowTextarea(ta);          // no-op while the Week/Next pane is hidden (offsetParent === null)
+}
+
+// Typing in the day note: update the model + grow, persist debounced (schedSave → autoSavePlanDay
+// stamps mt only on a real change, so LWW sync picks it up). No pushUndo per keystroke.
+function onDayNoteInput(ta) {
+  dayNote = ta.value;
+  autoGrowTextarea(ta);
+  schedSave();
 }
 function sessionSnap() { return JSON.stringify(getSessionData()); }
 function saveSession() {
@@ -3425,7 +3449,7 @@ function activateWindow(id) {
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
   if (todayEntry) applySessionData(todayEntry);
   else {
-    items = []; windowStart = '6:00'; windowEnd = '14:00';
+    items = []; windowStart = '6:00'; windowEnd = '14:00'; dayNote = '';
     if (el('winStart')) el('winStart').value = windowStart;
     if (el('winEnd'))   el('winEnd').value   = windowEnd;
   }
@@ -3790,7 +3814,7 @@ async function saveWeekAsTemplate() {
     const dayKey = PLAN_DAY_SHORT[day.getDay()];
     const wd = weekDays.find(d => d.date === iso);
     if (wd && wd.items.length) {
-      weekData[dayKey] = { items: stripDone(wd.items), windowStart: wd.windowStart, windowEnd: wd.windowEnd };
+      weekData[dayKey] = { items: stripDone(wd.items), windowStart: wd.windowStart, windowEnd: wd.windowEnd, note: wd.note || '' };
     }
   });
   if (!Object.keys(weekData).length) {
@@ -4005,21 +4029,23 @@ async function doLoadWeekTemplate() {
       const hadContent = existing.items && existing.items.length;
       const doAppend = hadContent && choices && choices[iso] === 'append';
       if (doAppend) {
-        existing.items = existing.items.concat(newItems);   // keep the day's own window on append
+        existing.items = existing.items.concat(newItems);   // keep the day's own window and note on append
         appended++;
       } else {
         existing.items = newItems; existing.windowStart = tpl.windowStart; existing.windowEnd = tpl.windowEnd;
+        existing.note = tpl.note || '';
       }
       existing.mt = Date.now();
     } else {
-      weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd, mt: Date.now() });
+      weekDays.push({ id: Date.now() + Math.random(), date: iso, items: newItems, windowStart: tpl.windowStart, windowEnd: tpl.windowEnd, note: tpl.note || '', mt: Date.now() });
     }
     if (iso === activePlanDate) {
       const rec = weekDays.find(d => d.date === iso);
       items = JSON.parse(JSON.stringify(rec.items));   // own copy — do not share a reference with the stored day
-      windowStart = rec.windowStart; windowEnd = rec.windowEnd;
+      windowStart = rec.windowStart; windowEnd = rec.windowEnd; dayNote = rec.note || '';
       if (el('winStart')) el('winStart').value = windowStart;
       if (el('winEnd'))   el('winEnd').value   = windowEnd;
+      syncDayNoteUi();
     }
     loaded++;
   });
@@ -5321,7 +5347,7 @@ function doImport() {
       const ex = weekDays.find(w => w.date === d.date);
       if (ex) {
         if (!importRecordWins(d.mt, ex.mt)) return;   // the local day is newer → keep it (do not overwrite with an older/empty one)
-        ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.mt = importStamp(d.mt);
+        ex.items = d.items; ex.windowStart = d.windowStart; ex.windowEnd = d.windowEnd; ex.note = d.note || ''; ex.mt = importStamp(d.mt);
       } else weekDays.push({ ...d, id: d.id || (Date.now() + Math.random()), mt: importStamp(d.mt) });
     });
     saveWeek(); renderWeekTab(); renderDayButtons();
@@ -5331,7 +5357,7 @@ function doImport() {
       const ex = weekPlans.find(w => w.date === p.date);
       if (ex) {
         if (!importRecordWins(p.mt, ex.mt)) return;   // the local plan is newer → keep it
-        ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.mt = importStamp(p.mt);
+        ex.items = p.items; ex.windowStart = p.windowStart; ex.windowEnd = p.windowEnd; ex.note = p.note || ''; ex.mt = importStamp(p.mt);
       } else weekPlans.push({ ...p, id: p.id || (Date.now() + Math.random()), mt: importStamp(p.mt) });
     });
     saveWeekPlans(); renderWeekTab();
@@ -6699,12 +6725,13 @@ function autoSavePlanDay() {
     // stamp mt (edit time) only on a REAL content change — otherwise an empty re-save would
     // override a newer day version from another device during sync (LWW)
     const changed = existing.windowStart !== windowStart || existing.windowEnd !== windowEnd
+      || (existing.note || '') !== dayNote
       || JSON.stringify(existing.items) !== JSON.stringify(snap);
-    existing.items = snap; existing.windowStart = windowStart; existing.windowEnd = windowEnd;
+    existing.items = snap; existing.windowStart = windowStart; existing.windowEnd = windowEnd; existing.note = dayNote;
     if (changed) existing.mt = Date.now();
   } else {
-    if (!snap.length) return;        // ghosts only (not materialized) → do not create an empty day
-    weekDays.push({ id: Date.now(), date: activePlanDate, items: snap, windowStart, windowEnd, mt: Date.now() });
+    if (!snap.length && !dayNote.trim()) return;   // ghosts only (not materialized) and no note → do not create an empty day
+    weekDays.push({ id: Date.now(), date: activePlanDate, items: snap, windowStart, windowEnd, note: dayNote, mt: Date.now() });
   }
   saveWeek();
 }
@@ -6722,10 +6749,11 @@ function savePlanSnapshot() {
       existing.items = planItems;
       existing.windowStart = wd.windowStart;
       existing.windowEnd = wd.windowEnd;
+      existing.note = wd.note || '';        // the day note is part of the day → the snapshot carries it too
       existing.mt = Date.now();
     } else {
       weekPlans.push({ id: Date.now() + Math.random(), date: iso,
-        items: planItems, windowStart: wd.windowStart, windowEnd: wd.windowEnd, mt: Date.now() });
+        items: planItems, windowStart: wd.windowStart, windowEnd: wd.windowEnd, note: wd.note || '', mt: Date.now() });
     }
     saved++;
   });
@@ -6776,7 +6804,7 @@ function switchPlanDay(iso) {
   pushUndo();
   const target = weekDays.find(d => d.date === iso);
   if (target) { applySessionData(target); }
-  else { items = []; }
+  else { items = []; dayNote = ''; syncDayNoteUi(); }
   activePlanDate = iso;
   // a different day is no longer tied to the previously loaded template
   activeLibId = null; savedSnapshot = null;
@@ -6812,13 +6840,13 @@ function swapDayWith(targetIso) {
   const recA = weekDays.find(d => d.date === a);
   const recB = weekDays.find(d => d.date === b);
   // capture both payloads by reference BEFORE mutating (recA/recB are distinct arrays → no aliasing)
-  const dataA = recA ? { items: recA.items, windowStart: recA.windowStart, windowEnd: recA.windowEnd }
-                     : { items: [], windowStart, windowEnd };
-  const dataB = recB ? { items: recB.items, windowStart: recB.windowStart, windowEnd: recB.windowEnd }
-                     : { items: [], windowStart: '6:00', windowEnd: '14:00' };
+  const dataA = recA ? { items: recA.items, windowStart: recA.windowStart, windowEnd: recA.windowEnd, note: recA.note || '' }
+                     : { items: [], windowStart, windowEnd, note: dayNote };
+  const dataB = recB ? { items: recB.items, windowStart: recB.windowStart, windowEnd: recB.windowEnd, note: recB.note || '' }
+                     : { items: [], windowStart: '6:00', windowEnd: '14:00', note: '' };
   const setDay = (iso, data, existing) => {
-    if (existing) { existing.items = data.items; existing.windowStart = data.windowStart; existing.windowEnd = data.windowEnd; existing.mt = now; }
-    else if (data.items.length) weekDays.push({ id: now + Math.random(), date: iso, items: data.items, windowStart: data.windowStart, windowEnd: data.windowEnd, mt: now });
+    if (existing) { existing.items = data.items; existing.windowStart = data.windowStart; existing.windowEnd = data.windowEnd; existing.note = data.note; existing.mt = now; }
+    else if (data.items.length || data.note.trim()) weekDays.push({ id: now + Math.random(), date: iso, items: data.items, windowStart: data.windowStart, windowEnd: data.windowEnd, note: data.note, mt: now });
   };
   setDay(a, dataB, recA);   // active day gets B's content
   setDay(b, dataA, recB);   // target day gets A's content
@@ -6826,7 +6854,7 @@ function swapDayWith(targetIso) {
   // reload the (still active) day from its swapped-in content into the live buffer
   const newActive = weekDays.find(d => d.date === a);
   if (newActive) applySessionData(newActive);
-  else { items = []; windowStart = dataB.windowStart; windowEnd = dataB.windowEnd;
+  else { items = []; windowStart = dataB.windowStart; windowEnd = dataB.windowEnd; dayNote = dataB.note; syncDayNoteUi();
     if (el('winStart')) el('winStart').value = windowStart; if (el('winEnd')) el('winEnd').value = windowEnd; }
   activeLibId = null; savedSnapshot = null;
   closeModal('daySwapModal');
@@ -7022,6 +7050,7 @@ function switchNotesTab(name) {
     renderLater();
   }
   renderTimeline();  // central panel follows the tab: Later → day-overview calendar, otherwise the hour timeline
+  syncDayNoteUi();   // the field was hidden until now → autoGrow measured 0, re-grow it
   updateAbbrevHint();
   updatePlanAheadNote();
   updateUndoBtn();   // ↩/↪ reflects the active card stack (Later has its own)
@@ -7071,6 +7100,13 @@ function groupPlansByWeek() {
   return [...map.entries()].sort(([a],[b]) => a.localeCompare(b));
 }
 
+// marker on a Done row whose day carries a note (its first line is the tooltip)
+function noteFlag(rec) {
+  const t = (rec && rec.note || '').trim();
+  if (!t) return '';
+  return `<span class="day-note-flag" title="${esc(t.split('\n')[0].slice(0, 120))}">✎</span>`;
+}
+
 function renderPlanRow(p) {
   const blockCount = p.items.filter(i => !i.isSubtask).length || p.items.length;
   const totalDur = p.items.filter(i => !i.isSubtask).reduce((s, i) => s + (i.duration || 0), 0);
@@ -7078,6 +7114,7 @@ function renderPlanRow(p) {
   return `<div class="week-row-wrap" id="wrap-weekPlan-${p.id}">
     <div class="plan-day-row">
       <span class="week-day-date">${formatDateCz(p.date)}</span>
+      ${noteFlag(p)}
       <span class="week-day-meta">${blockCount}p${totalDur ? ' · ' + formatDur(totalDur) : ''}</span>
       <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="toggleInlinePreview('weekPlan',${p.id})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
       <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekPlanDay(${p.id})" title="delete">✕</button>
@@ -7092,6 +7129,7 @@ function renderDayRow(d) {
   return `<div class="week-row-wrap" id="wrap-weekDay-${d.id}">
     <div class="week-day-row" style="cursor:default">
       <span class="week-day-date">${formatDateCz(d.date)}${hol ? ` <span class="holiday-name">· ${esc(hol)}</span>` : ''}</span>
+      ${noteFlag(d)}
       <span class="week-day-meta">${done ? formatDur(done) : '0'} / ${formatDur(total)}</span>
       <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="toggleInlinePreview('weekDay',${d.id})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
       <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${d.id})" title="delete from Reality">✕</button>
@@ -7195,6 +7233,26 @@ function refreshInlineWrap(type, id) {
   if (!wrap || !rec) return;
   wrap.outerHTML = type === 'weekDay' ? renderDayRow(rec) : renderPlanRow(rec);
   initInlinePreviewDnd(type, id);
+  autoGrowTextarea(el('inlNote-' + type + '-' + id));   // rebuilt markup → size the note to its text again
+}
+
+// Day note edited inside the Done preview: model first, persist (+sync) debounced — no re-render,
+// so the caret stays put. If the record IS the active day, the live buffer must follow, otherwise
+// the next autoSavePlanDay() flush would write the stale note back over it.
+let _inlNoteTimer = null;
+function inlineNoteInput(type, id, ta) {
+  const rec = getInlinePreviewRecord(type, id); if (!rec) return;
+  autoGrowTextarea(ta);
+  if ((rec.note || '') === ta.value) return;
+  rec.note = ta.value;
+  rec.mt = Date.now();
+  if (type === 'weekDay' && rec.date === activePlanDate) { dayNote = ta.value; syncDayNoteUi(); }
+  clearTimeout(_inlNoteTimer);
+  _inlNoteTimer = setTimeout(() => {
+    if (type !== 'weekDay') { saveWeekPlans(); return; }   // both save functions are sync-wrapped
+    saveWeek();
+    if (rec.date === activePlanDate) saveSession();        // active day → keep the session copy in step
+  }, 500);
 }
 
 function initInlinePreviewDnd(type, id) {
@@ -7268,6 +7326,8 @@ function renderInlinePreviewBody(type, id) {
       <span>–</span>
       <input type="text" value="${esc(rec.windowEnd || '')}" placeholder="14:00" onchange="inlineSetWindow('${type}',${id},'windowEnd',this.value)">
     </div>${tl}<div class="preview-item-list" id="inlItems-${type}-${id}" style="display:flex;flex-direction:column;gap:.1rem">${itemsHtml}</div>
+    <textarea id="inlNote-${type}-${id}" class="week-note day-note" placeholder="note for this day…"
+      oninput="inlineNoteInput('${type}',${id},this)" onfocus="autoGrowTextarea(this)">${esc(rec.note || '')}</textarea>
     <div class="notes-add" style="margin-top:.4rem">
       <textarea id="inlAddText" placeholder="${esc(quickAddPlaceholder())}" rows="2"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inlineAddQuick();}"></textarea>
@@ -7391,7 +7451,7 @@ async function weekGroupToTemplate(key) {
   rg.days.forEach(d => {
     if (!d.items.length) return;
     const dayKey = PLAN_DAY_SHORT[new Date(d.date + 'T12:00:00').getDay()];
-    weekData[dayKey] = { items: stripDone(d.items), windowStart: d.windowStart, windowEnd: d.windowEnd };
+    weekData[dayKey] = { items: stripDone(d.items), windowStart: d.windowStart, windowEnd: d.windowEnd, note: d.note || '' };
   });
   if (!Object.keys(weekData).length) { customAlert('No days with items.'); return; }
   const entry = { id: Date.now(), name, type: 'week', weekData };
@@ -7549,8 +7609,15 @@ function _itemLines(items) {
   return out;
 }
 
+// day note → "[note]" block (same shape as the week note in doExportWeekText)
+function _noteLines(rec) {
+  const t = (rec && rec.note || '').trim();
+  return t ? ['[note]', ...t.split('\n')] : [];
+}
+
 function buildDayText(reality, plan) {
   const lines = ['--- ' + formatDateCz(reality.date) + ' | ' + reality.windowStart + '–' + reality.windowEnd + ' ---'];
+  lines.push(..._noteLines(reality));
   if (plan) {
     const planMin = dayTotalMinutes(plan.items);
     lines.push('[plan · ' + formatDur(planMin) + ' · ' + plan.items.length + 'p]');
@@ -7899,7 +7966,8 @@ function init() {
     } else {
       weekDays.push({ id: Date.now(), date, items: rawSession.items,
         windowStart: rawSession.windowStart || '6:00',
-        windowEnd:   rawSession.windowEnd   || '14:00', mt: Date.now() });
+        windowEnd:   rawSession.windowEnd   || '14:00',
+        note: rawSession.note || '', mt: Date.now() });
     }
     saveWeek();
     staleArchived = date;
@@ -7913,7 +7981,8 @@ function init() {
     // This heals sessions left stale by older builds; without it the active day kept showing the old
     // version and the next edit clobbered the cloud (the reported "week tasks deleted" bug).
     const todayEntry = weekDays.find(d => d.date === today);
-    if (todayEntry && JSON.stringify(todayEntry.items) !== JSON.stringify(rawSession.items || [])) {
+    if (todayEntry && (JSON.stringify(todayEntry.items) !== JSON.stringify(rawSession.items || [])
+                       || (todayEntry.note || '') !== (rawSession.note || ''))) {
       applySessionData(todayEntry);
       activeLibId = null;
       saveSession();
