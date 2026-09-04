@@ -3587,6 +3587,56 @@ function renderBlockTypeList() {
 let _editingBlockKey = null;
 let _blockEditIsEvent = false;
 
+// "+ custom task" / "+ custom event" in the + Task ▾ / + Event ▾ menus: a small dialog (text · time · note) instead of
+// silently adding whatever the add field holds (usually nothing). The text goes through the same parser as the field
+// (-d, 45m, garden: …) and the item lands where a typed line would (task: under the last block; event: top level); the
+// note is attached afterwards. A single-line field content is offered as the prefilled text and consumed on add.
+let _newItemCtx = null, _newItemKind = 'task', _newItemFromField = false;
+function openNewItem(kind) {
+  const ctx = menuCtx();                                   // before closeBlockMenu() clears the menu context
+  closeBlockMenu();
+  _newItemCtx = ctx; _newItemKind = kind;
+  const ta = el(ctx.input), fieldText = ta ? ta.value.trim() : '';
+  _newItemFromField = !!fieldText && !fieldText.includes('\n');
+  el('niTitle').textContent = kind === 'event' ? 'New event' : 'New task';
+  el('niText').value = _newItemFromField ? fieldText : '';
+  el('niText').placeholder = kind === 'event' ? 'e.g. standup  ·  -d text = under block d' : 'e.g. write spec 45m  ·  -d text = under block d';
+  el('niTimes').style.display = kind === 'event' ? '' : 'none';
+  el('niFrom').value = ''; el('niTo').value = '';
+  el('niNote').value = '';
+  el('newItemModal').classList.add('open');
+  autoGrowTextarea(el('niNote'));
+  setTimeout(() => { const t = el('niText'); t.focus(); t.select(); }, 0);
+}
+async function submitNewItem() {
+  const ctx = _newItemCtx; if (!ctx) return;
+  const text = el('niText').value.trim();
+  if (!text) { await customAlert('Enter the text.'); return; }
+  let line = text;
+  if (_newItemKind === 'event') {
+    const from = el('niFrom').value.trim(), to = el('niTo').value.trim(), okT = v => /^\d{1,2}:\d{2}$/.test(v);
+    if ((from && !okT(from)) || (to && !okT(to))) { await customAlert('Time must look like 9:30.'); return; }
+    if (from) {                                             // the range defines the length → a typed "20m" leaves the text
+      const dur = parseItemText(text).duration || 30;
+      line = text.replace(/\s*\b\d+\s*(?:h|m(?:in)?)\b/i, '').trim() + ' ' + from + '-' + (to || minToTime(timeToMin(from) + dur));
+    }
+    // no time given → the event starts at the day window (forceType EVENT in op_addQuickItems)
+  }
+  const note = el('niNote').value.trim();
+  const ta = el(ctx.input); if (!ta) return;
+  const keep = _newItemFromField ? '' : ta.value;             // the prefilled text is consumed; anything else stays in the field
+  const before = new Set(ctx.list.map(x => String(x.id)));
+  ta.value = line;
+  op_addQuickItems(ctx, _newItemKind === 'event' ? 'EVENT' : 'TASK');
+  const refused = ta.value.trim();                            // an unknown -abbr leaves the line in the field (+ status message)
+  ta.value = keep;
+  if (refused) return;                                        // dialog stays open for the correction
+  if (note) {
+    const added = ctx.list.filter(x => !before.has(String(x.id)));
+    if (added.length) { added[added.length - 1].note = note; ctx.save(); ctx.render(); }
+  }
+  closeModal('newItemModal');
+}
 // "+ new block type…" in the + Block menu: the type editor opens and, once saved, the block is inserted on the card the
 // menu was opened for (regular card or Done preview) — one step instead of "save the type, then pick it from the menu".
 let _blockEditInsertCtx = null;
@@ -4374,7 +4424,7 @@ function toggleEventMenu(e) {
     `<button class="block-menu-item" onclick="addBlockItem('${k}')">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</button>`
   ).join('');
   if (eventTypes.length) html += '<div class="new-menu-sep"></div>';
-  html += `<button class="block-menu-item" onclick="addQuickItems('EVENT');closeBlockMenu()">+ custom event</button>`;
+  html += `<button class="block-menu-item" onclick="openNewItem('event')">+ custom event</button>`;
   menu._src = 'event';
   _openMenu(menu, html, e.currentTarget);
 }
@@ -4405,7 +4455,7 @@ function toggleTaskMenu(e) {
   const customBtn = document.createElement('button');
   customBtn.className = 'block-menu-item';
   customBtn.textContent = '+ custom task';
-  customBtn.addEventListener('click', () => { addQuickItems('TASK'); closeBlockMenu(); });
+  customBtn.addEventListener('click', () => openNewItem('task'));
   menu.appendChild(customBtn);
   menu._src = 'task';
   _openMenu(menu, null, e.currentTarget);
@@ -8828,6 +8878,37 @@ window.addEventListener('resize', updateAppGrid);
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="addRecur()">+ add rule</button>
       <button class="modal-btn" onclick="closeModal('recurModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- New task / event — "+ custom task" / "+ custom event" in the + Task ▾ / + Event ▾ menus -->
+<div class="modal-bg" id="newItemModal">
+  <div class="modal" style="max-width:420px;gap:.6rem">
+    <h2 id="niTitle">New task</h2>
+    <div class="field">
+      <label>Text</label>
+      <input type="text" id="niText" placeholder="e.g. write spec 45m  ·  -d text = under block d" onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewItem();}">
+    </div>
+    <div id="niTimes" style="display:none">
+      <div class="setup-grid">
+        <div class="field">
+          <label>Time from</label>
+          <input type="text" id="niFrom" placeholder="9:00" onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewItem();}">
+        </div>
+        <div class="field">
+          <label>Time to</label>
+          <input type="text" id="niTo" placeholder="10:00 · empty = from + length" onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewItem();}">
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <textarea id="niNote" rows="2" placeholder="description — opens under the item" oninput="autoGrowTextarea(this)"></textarea>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="submitNewItem()">add</button>
+      <button class="modal-btn" onclick="closeModal('newItemModal')">cancel</button>
     </div>
   </div>
 </div>
