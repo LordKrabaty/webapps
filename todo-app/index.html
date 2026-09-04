@@ -144,6 +144,17 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .recur-legend table{border-collapse:collapse;margin-top:.4rem;width:100%}
 .recur-legend td{padding:.12rem .3rem .12rem 0;vertical-align:top}
 .recur-legend code{font-family:'DM Mono',monospace;color:var(--black);white-space:nowrap}
+/* shortcuts legend (? modal) — same look as the recurrence legend, with section headings */
+.sc-legend{font-size:.76rem;color:var(--muted);line-height:1.55}
+.sc-legend h3{font-family:'DM Sans',sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--black);margin:calc(.8rem / var(--pzc,1)) 0 calc(.15rem / var(--pzc,1))}
+.sc-legend h3:first-child{margin-top:0}
+.sc-legend table{border-collapse:collapse;width:100%}
+.sc-legend td{padding:calc(.16rem / var(--pzc,1)) calc(.4rem / var(--pzc,1)) calc(.16rem / var(--pzc,1)) 0;vertical-align:top;border-top:var(--b)}
+.sc-legend tr:first-child td{border-top:0}
+.sc-legend td:first-child{width:1%}
+.sc-legend code{font-family:'DM Mono',monospace;color:var(--black);white-space:nowrap}
+.sc-legend b{color:var(--black);font-weight:600}
+.sc-legend p{margin:calc(.3rem / var(--pzc,1)) 0 0;font-size:inherit}
 html{-webkit-text-size-adjust:100%;overflow-x:clip}
 body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
 .app{padding:calc(1.25rem/var(--pzc,1)) calc(1.25rem/var(--pzc,1)) calc(1.5rem/var(--pzc,1));display:grid;grid-template-columns:210px minmax(0,1fr) 440px;gap:calc(1.25rem/var(--pzc,1));overflow-x:clip;max-width:1480px;margin:0 auto}
@@ -412,6 +423,7 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.btn-add:hover{background:var(--light)}}
 .btn-add.planned{background:var(--black);color:var(--w);border-color:var(--black)}
 @media(hover:hover){.btn-add.planned:hover{background:var(--black)}}
+.btn-help{margin-left:auto;font-family:'DM Mono',monospace;padding:.3rem .6rem}   /* "?" → shortcuts legend, right end of the row */
 
 /* ── STATS ── */
 .stats-row{display:grid;grid-template-columns:auto 1fr;gap:.15rem .5rem;font-size:.78rem;margin-top:.4rem}
@@ -702,12 +714,13 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <!-- shared add field — same for Week / Next / Inbox / Later (target by active card) -->
     <div id="notes-add" class="notes-add">
-      <textarea id="quickInput" placeholder="task 20m  ·  9:30-10:00 standup  ·  -D text (under block)  ·  text -d" rows="2"></textarea>
-      <div id="abbrevHint" class="abbrev-hint" title="type -ABBR at the start (or -abbr at the end) → the task is inserted under that block"></div>
+      <textarea id="quickInput" placeholder="task 20m  ·  9:30-10:00 standup  ·  -d text / text -d (under block)" rows="2"></textarea>
+      <div id="abbrevHint" class="abbrev-hint" title="blocks on this card — click one to insert the typed text under it, or type -abbr as the first / last word (any case) · ? = all shortcuts"></div>
       <div class="input-btns" id="inputBtns">
         <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Task ▾</button>
         <button class="btn-add" id="btnBlock" onclick="toggleBlockMenu(event)">+ Block ▾</button>
         <button class="btn-add" id="btnEvent" onclick="toggleEventMenu(event)">+ Event ▾</button>
+        <button class="btn-add btn-help" onclick="openShortcutsHelp()" title="shortcuts — everything you can type into the field">?</button>
       </div>
       <div id="planAheadNote" class="plan-ahead-note" style="display:none"></div>
     </div>
@@ -1169,22 +1182,50 @@ function _abbrevStr(label, len) {
   while (i < label.length && r.length < len) { if (label[i] !== ' ') r += label[i]; i++; }
   return r;
 }
-function getBlockAbbrevMap() {
-  const keys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
-  const norms = keys.map(k => (BLOCK_TYPES[k].label || '').replace(/\s+/g, '').toUpperCase());
-  const abbrevs = {};
-  for (let i = 0; i < keys.length; i++) {
+// normalized form for prefix comparison: no spaces, upper case (diacritics kept — "Úklid" → "Ú")
+function _abbrevNorm(name) { return String(name || '').replace(/\s+/g, '').toUpperCase(); }
+// letters only = every character has a case (covers diacritics; digits, punctuation and emoji do not)
+function _isLetterToken(tok) { return !!tok && Array.from(tok).every(c => c.toLowerCase() !== c.toUpperCase()); }
+// shortest unique prefix of every name among the given names; 3 chars when no prefix is unique (identical names)
+function _uniqueAbbrevs(names) {
+  const norms = names.map(_abbrevNorm);
+  return names.map((name, i) => {
     const norm = norms[i];
     for (let len = 1; len <= norm.length; len++) {
-      if (norms.every((n, j) => j === i || !n.startsWith(norm.slice(0, len)))) {
-        abbrevs[keys[i]] = _abbrevStr(BLOCK_TYPES[keys[i]].label || '', len); break;
-      }
+      if (norms.every((n, j) => j === i || !n.startsWith(norm.slice(0, len)))) return _abbrevStr(name, len);
     }
-    if (!abbrevs[keys[i]]) abbrevs[keys[i]] = _abbrevStr(BLOCK_TYPES[keys[i]].label || '', 3);
-  }
-  const map = {};
-  for (const [k, a] of Object.entries(abbrevs)) map[a.toLowerCase()] = k;
-  return { abbrevs, map };
+    return _abbrevStr(name, 3);
+  });
+}
+// Resolver for a typed "-x" token over entries [{ name, abbr, key }] — case-insensitive: the exact abbreviation
+// wins, otherwise a token that is a prefix of exactly ONE block name (-d, -de, -deep all hit "Deep work" while it
+// is the only block starting with d; the abbreviation shown in the hint is just the shortest such prefix).
+function _abbrevResolver(entries) {
+  return tok => {
+    const t = _abbrevNorm(tok);
+    if (!t) return null;
+    const exact = entries.find(e => _abbrevNorm(e.abbr) === t);
+    if (exact) return exact.key;
+    const pref = entries.filter(e => _abbrevNorm(e.name).startsWith(t));
+    return pref.length === 1 ? pref[0].key : null;
+  };
+}
+// "-x text" / "text -x" → { key, rest } | null. x = any non-space token resolved by `resolve` (see above);
+// -, – and — are all accepted as the dash. Shared by the blocks present on a card and by the block types.
+function splitBlockAbbrev(text, resolve) {
+  let m, key;
+  if ((m = text.match(/^[-–—](\S+)\s+(.+)$/)) && (key = resolve(m[1])) != null) return { key, rest: m[2].trim() };
+  if ((m = text.match(/^(.+?)\s+[-–—](\S+)$/)) && (key = resolve(m[2])) != null) return { key, rest: m[1].trim() };
+  return null;
+}
+// Abbreviations of block TYPES (by label). Returns: abbrevs {key→abbr}, resolve (typed -x → type key).
+function getBlockAbbrevMap() {
+  const keys = Object.keys(BLOCK_TYPES).filter(k => k !== 'TASK');
+  const abbrs = _uniqueAbbrevs(keys.map(k => BLOCK_TYPES[k].label || ''));
+  const abbrevs = {};
+  keys.forEach((k, i) => { abbrevs[k] = abbrs[i]; });
+  const resolve = _abbrevResolver(keys.map((k, i) => ({ name: BLOCK_TYPES[k].label || '', abbr: abbrs[i], key: k })));
+  return { abbrevs, resolve };
 }
 // Underlines the part of the block name that forms its abbreviation (abbr passed from outside — per-instance).
 function hlBlockText(rawText, btInfo, abbr) {
@@ -1196,25 +1237,32 @@ function hlBlockText(rawText, btInfo, abbr) {
 }
 
 // ── PARSE TEXT ────────────────────────────────────────────────────────────────
-function parseItemText(raw) {
+// resolvePresent (optional) = resolver over the blocks PRESENT on the target card (presentBlockAbbrevs().resolve):
+// a "-x" token is tried against those first (→ targetBlockId, that block instance), then against block TYPES
+// (→ targetBlockKey — the block gets created on the card when missing).
+function parseItemText(raw, resolvePresent) {
   let text = raw.trim();
   let duration = null, isEvent = false, eventStart = null, eventEnd = null;
   let blockType = 'TASK', isSubtask = false, done = false, urgent = false;
+  let targetBlockKey = null, targetBlockId = null, typeResolve = null;
+
+  // "-x text" / "text -x" → task under block x (abbreviation or a unique prefix of the block name, any case).
+  // Runs twice: before the markers ("-d x done") and again once durations/times are stripped ("draft -d 30m") —
+  // the abbreviation only has to be the first or the last WORD, not the first or last token of any kind.
+  const takeBlockAbbrev = () => {
+    if (targetBlockKey != null || targetBlockId != null) return;
+    let hit = resolvePresent ? splitBlockAbbrev(text, resolvePresent) : null;
+    if (hit) targetBlockId = hit.key;
+    else if ((hit = splitBlockAbbrev(text, typeResolve || (typeResolve = getBlockAbbrevMap().resolve)))) targetBlockKey = hit.key;
+    if (hit) { text = hit.rest; isSubtask = true; }
+  };
+  takeBlockAbbrev();
+  const viaSendMarker = text.charCodeAt(0) === 0x2712;   // "✒ …" = a task moved here with → — never refused (see unknownAbbrev)
 
   if (text.startsWith('✒')) { isSubtask = true; text = text.replace(/^(?:✒️?\s*)+/, ''); }
   else if (/^[xX] /.test(text)) { isSubtask = true; done = true; text = text.replace(/^[xX] /i, ''); }
 
   if (text.endsWith(' !')) { urgent = true; text = text.slice(0, -2); }
-
-  let targetBlockKey = null;
-  { const { map } = getBlockAbbrevMap();
-    const pm = text.match(/^-([a-zA-Z]+)\s+(.+)$/);
-    if (pm && map[pm[1].toLowerCase()]) { targetBlockKey = map[pm[1].toLowerCase()]; text = pm[2].trim(); isSubtask = true; }
-    if (!targetBlockKey) {
-      const sm = text.match(/^(.+?)\s+-([a-zA-Z]+)$/);
-      if (sm && map[sm[2].toLowerCase()]) { targetBlockKey = map[sm[2].toLowerCase()]; text = sm[1].trim(); isSubtask = true; }
-    }
-  }
 
   let m;
   // Duration at start: "120min" "2h"
@@ -1235,6 +1283,17 @@ function parseItemText(raw) {
     else if ((m = text.match(/(\d+)\s*m(?:in)?\b/i))) { duration = parseInt(m[1]); text = text.replace(m[0], '').trim(); }
   }
 
+  takeBlockAbbrev();
+
+  // "-word" as the first / last word that matched NO block (present or type) — most likely a typo in the abbreviation.
+  // Reported to the caller (the quick-add field refuses the line and names it) instead of silently adding "word text".
+  // Only all-letter tokens count: "-5", "->" stay ordinary text; lines moved with → ("✒ …") are never refused.
+  let unknownAbbrev = null;
+  if (targetBlockKey == null && targetBlockId == null && !viaSendMarker) {
+    const um = text.match(/^[-–—](\S+)\s+\S/) || text.match(/\S\s+[-–—](\S+)$/);
+    if (um && _isLetterToken(um[1])) unknownAbbrev = um[1];
+  }
+
   // Detect a block type ONLY by the type name (e.g. "DEEP WORK"). An emoji no longer creates a block nor is it
   // stripped — blocks are added from the menu/presets, so an emoji in a task stays intact.
   for (const [key, bt] of Object.entries(BLOCK_TYPES)) {
@@ -1250,7 +1309,7 @@ function parseItemText(raw) {
   if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 30;
   if (targetBlockKey) { blockType = targetBlockKey; if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 30; }
 
-  return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent, targetBlockKey };
+  return { text: text.trim() || raw.trim(), duration, blockType, isEvent, eventStart, eventEnd, isSubtask, done, urgent, targetBlockKey, targetBlockId, unknownAbbrev };
 }
 
 // ── EMOJI / DATE helpers for quick add ────────────────────────────────
@@ -2090,6 +2149,7 @@ function op_addQuickItems(ctx, forceType) {
   const w = ctx.winStart();
   let addedHere = false, routedLater = false, lastYm = null, addedRecur = 0;
   const routedYms = new Set();   // target months of routed rows — for stamping mt
+  const rejected = [], unknownAbbrevs = [];   // lines refused because of an unknown block abbreviation (stay in the field)
 
   lines.forEach(rawLine => {
     let line = rawLine;
@@ -2122,15 +2182,14 @@ function op_addQuickItems(ctx, forceType) {
     let icon = null;
     if (onDay) { const ie = extractLeadingIcon(line); if (ie) { icon = ie.icon; line = ie.rest; } }
 
-    // -X (abbreviation of a specific block in the target list) at the start / end (Day only)
-    let targetBlockId = null, body = line, mm;
-    if (onDay) {
-      const { map: blockMap } = presentBlockAbbrevs(targetList);
-      if ((mm = body.match(/^-([a-zA-Z]+)\s+(.+)$/)) && blockMap[mm[1].toLowerCase()] != null) { targetBlockId = blockMap[mm[1].toLowerCase()]; body = mm[2].trim(); }
-      else if ((mm = body.match(/^(.+?)\s+-([a-zA-Z]+)$/)) && blockMap[mm[2].toLowerCase()] != null) { targetBlockId = blockMap[mm[2].toLowerCase()]; body = mm[1].trim(); }
-    }
-
-    const parsed = parseItemText(body);
+    // -x (block abbreviation) as the first / last word — Day only: a block PRESENT on the card wins (→ targetBlockId,
+    // that instance), otherwise a block TYPE (→ parsed.targetBlockKey, creates the block when missing); see parseItemText
+    const parsed = parseItemText(line, onDay ? presentBlockAbbrevs(targetList).resolve : null);
+    const targetBlockId = parsed.targetBlockId, unknownAbbrev = parsed.unknownAbbrev;
+    delete parsed.targetBlockId; delete parsed.unknownAbbrev;                    // routing hints only — never stored on the item
+    // Day: "-word" that is neither a block on this card nor a block type = a typo in the abbreviation → the line is
+    // NOT added, stays in the field and the status message names it (a plain "-bullet" needs a space: "- task")
+    if (onDay && unknownAbbrev) { rejected.push(rawLine); unknownAbbrevs.push(unknownAbbrev); return; }
     if (parsed.text && _sendNotes[parsed.text]) parsed.note = _sendNotes[parsed.text];   // note carried over via → (move)
 
     // (2) Day: a plain task and a "-task" both go under a block as a subtask → blocks are created only from presets (no pseudo-blocks)
@@ -2177,8 +2236,8 @@ function op_addQuickItems(ctx, forceType) {
     if (toLater) { routedLater = true; lastYm = route.ym; routedYms.add(route.ym); } else { addedHere = true; }
   });
 
-  ta.value = '';
-  _sendNotes = {};                       // carried-over notes consumed by this add
+  ta.value = rejected.join('\n') + (rejected.length && wantDelSrc ? '\n.del' : '');   // refused lines stay in the field for correction (with the pending ".del")
+  if (!rejected.length) _sendNotes = {}; // carried-over notes consumed by this add (kept while a refused line waits for its retry)
   if (addedRecur) {                      // rule → ghosts in Later; switch there and show
     saveRecur();
     if (typeof renderLater === 'function') renderLater();
@@ -2203,8 +2262,15 @@ function op_addQuickItems(ctx, forceType) {
     renderLater();
     showStatusMsg('→ added to Later · ' + monthLabel(lastYm), 2600);
   }
-  // move (→ + ".del"): after adding to the target card delete the source; otherwise (copy done) drop tracking
-  if (wantDelSrc) { const removed = deleteSentSources(); if (removed) showStatusMsg('→ moved — source deleted', 2400); }
+  // move (→ + ".del"): after adding to the target card delete the source; otherwise (copy done) drop tracking.
+  // With a refused line nothing is deleted yet — the sources stay tracked for the corrected retry.
+  if (rejected.length) {                 // last, so this is the message that stays visible
+    const names = [...new Set(unknownAbbrevs)].slice(0, 3).map(a => '"' + a + '"').join(', ');
+    const here = presentBlockAbbrevs(ctx.list).blocks.map(b => b.abbr).join(', ') || '—';
+    const types = Object.values(getBlockAbbrevMap().abbrevs).join(', ') || '—';
+    showStatusMsg('no block ' + names + ' — line kept in the field · blocks here: ' + here + ' · types: ' + types + ' · plain task = "- text"', 6000);
+  }
+  else if (wantDelSrc) { const removed = deleteSentSources(); if (removed) showStatusMsg('→ moved — source deleted', 2400); }
   else _sendSources = [];
 }
 
@@ -2287,7 +2353,7 @@ function op_addUnderBlock(ctx, blockId) {
     const parsed = parseItemText(line);
     parsed.id = Date.now() + Math.random();
     parsed.blockType = blockType;
-    parsed.targetBlockKey = null;
+    parsed.targetBlockKey = null; delete parsed.targetBlockId; delete parsed.unknownAbbrev;
     parsed.isSubtask = true;
     list.splice(ins, 0, parsed);
     ins++;
@@ -3418,19 +3484,24 @@ function saveBlockTypes() {
   updateQuickInputPlaceholder();
 }
 
+// placeholder of the add fields (quick-add + Done inline preview) — the example abbreviation is the first block type,
+// shown in lower case in both positions: the case never matters (-d = -D)
+function quickAddPlaceholder() {
+  const { abbrevs } = getBlockAbbrevMap();
+  let ex = 'd', exLabel = 'block';
+  const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1].toLowerCase(); exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; }
+  return `task 20m  ·  9:30-10:00 standup  ·  -${ex} text / text -${ex} (under ${exLabel})`;
+}
 function updateQuickInputPlaceholder() {
   const ta = el('quickInput');
   if (!ta) return;
-  const { abbrevs } = getBlockAbbrevMap();
-  let ex = 'D', exLabel = 'blok';
-  const f = Object.entries(abbrevs)[0]; if (f) { ex = f[1]; exLabel = BLOCK_TYPES[f[0]]?.label || f[0]; }
-  ta.placeholder = `task 20m  ·  9:30-10:00 standup  ·  -${ex} text (under ${exLabel})  ·  text -${ex.toLowerCase()}`;
+  ta.placeholder = quickAddPlaceholder();
   updateAbbrevHint();
 }
 
 // Abbreviations of blocks PRESENT on the active card — derived from their DISPLAYED names (per block instance),
 // same rule as for types: shortest unique prefix. After renaming a block the abbreviation is recomputed.
-// Returns: blocks [{id,name,abbr,emoji}], map (abbr→id for typed -X), byId (id→abbr for underlining in the name).
+// Returns: blocks [{id,name,abbr,emoji}], resolve (typed -x → block id, see _abbrevResolver), byId (id→abbr for underlining in the name).
 function presentBlockAbbrevs(list) {
   const blocks = [];
   (list || []).forEach(it => {
@@ -3439,18 +3510,11 @@ function presentBlockAbbrevs(list) {
     const name = (stripBlockEmoji(it.text || '', bt).trim()) || (bt.label || '');
     blocks.push({ id: it.id, name, emoji: itemIcon(it) });
   });
-  const norms = blocks.map(b => b.name.replace(/\s+/g, '').toUpperCase());
-  blocks.forEach((b, i) => {
-    const norm = norms[i];
-    let abbr = '';
-    for (let len = 1; len <= norm.length; len++) {
-      if (norms.every((n, j) => j === i || !n.startsWith(norm.slice(0, len)))) { abbr = _abbrevStr(b.name, len); break; }
-    }
-    b.abbr = abbr || _abbrevStr(b.name, 3) || ('B' + (i + 1));
-  });
-  const map = {}, byId = {};
-  blocks.forEach(b => { const k = b.abbr.toLowerCase(); if (map[k] == null) map[k] = b.id; byId[b.id] = b.abbr; });
-  return { blocks, map, byId };
+  const abbrs = _uniqueAbbrevs(blocks.map(b => b.name));
+  const byId = {};
+  blocks.forEach((b, i) => { b.abbr = abbrs[i] || ('B' + (i + 1)); byId[b.id] = b.abbr; });
+  const resolve = _abbrevResolver(blocks.map(b => ({ name: b.name, abbr: b.abbr, key: b.id })));
+  return { blocks, resolve, byId };
 }
 
 // hint under the field: clickable abbreviations ONLY for blocks present on the active card (per block instance).
@@ -3462,7 +3526,7 @@ function updateAbbrevHint() {
   const list = addCtx.list || [];
   const { blocks } = presentBlockAbbrevs(list);
   hint.innerHTML = blocks.map(b =>
-    `<span class="ab" role="button" onclick="addUnderBlock('${b.id}')" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)}"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
+    `<span class="ab" role="button" onclick="addUnderBlock('${b.id}')" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)} (any case)"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
   ).join('');
 }
 
@@ -5695,6 +5759,13 @@ function recurHaystack(rec) {
   return [rec.payload?.text || '', rec.payload?.note || '', recurTokens(rec), describeRecur(rec)].join(' ').toLowerCase();
 }
 function openRecurManage() { renderRecurList(); el('recurModal').classList.add('open'); }
+// "?" under the add field — legend of everything that can be typed. The recurrence table is copied from the ↻ legend
+// on first open, so the r-token documentation has a single source.
+function openShortcutsHelp() {
+  const src = document.querySelector('#recurModal .recur-legend table'), dst = el('scRecurTable');
+  if (src && dst && !dst.firstChild) dst.innerHTML = src.outerHTML;
+  el('shortcutsModal').classList.add('open');
+}
 function renderRecurList() {
   const c = el('recurList'); if (!c) return;
   if (!recurrences.length) {
@@ -7069,7 +7140,7 @@ function renderInlinePreviewBody(type, id) {
     : '<div style="color:var(--muted);font-size:.8rem;font-style:italic;padding:.3rem 0">No items.</div>';
   // clickable block-abbreviation chips under the field — same as #abbrevHint on the day cards
   const abbrevChips = presentBlockAbbrevs(arr).blocks.map(b =>
-    `<span class="ab" role="button" onclick="dnAddUnderBlock('${type}',${id},'${b.id}')" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)}"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
+    `<span class="ab" role="button" onclick="dnAddUnderBlock('${type}',${id},'${b.id}')" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)} (any case)"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
   ).join('');
   return `<div class="preview-win" style="margin-bottom:.35rem">
       <span>window</span>
@@ -7078,7 +7149,7 @@ function renderInlinePreviewBody(type, id) {
       <input type="text" value="${esc(rec.windowEnd || '')}" placeholder="14:00" onchange="inlineSetWindow('${type}',${id},'windowEnd',this.value)">
     </div>${tl}<div class="preview-item-list" id="inlItems-${type}-${id}" style="display:flex;flex-direction:column;gap:.1rem">${itemsHtml}</div>
     <div class="notes-add" style="margin-top:.4rem">
-      <textarea id="inlAddText" placeholder="task 20m  ·  9:30-10:00 standup  ·  -D text (under block)  ·  text -d" rows="2"
+      <textarea id="inlAddText" placeholder="${esc(quickAddPlaceholder())}" rows="2"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inlineAddQuick();}"></textarea>
       ${abbrevChips ? `<div class="abbrev-hint">${abbrevChips}</div>` : ''}
       <div class="input-btns">
@@ -7086,6 +7157,7 @@ function renderInlinePreviewBody(type, id) {
         <button class="btn-add" onclick="inlineOpenMenu(event,'block')">+ Block ▾</button>
         <button class="btn-add" onclick="inlineOpenMenu(event,'event')">+ Event ▾</button>
         <button class="btn-add" onclick="inlineSaveAsTemplate('${type}',${id})" title="save these items as a reusable template">+ template</button>
+        <button class="btn-add btn-help" onclick="openShortcutsHelp()" title="shortcuts — everything you can type into the field">?</button>
       </div>
     </div>`;
 }
@@ -8611,6 +8683,52 @@ window.addEventListener('resize', updateAppGrid);
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shortcuts legend — the "?" button under the add field (the recurrence table is copied in from the ↻ legend below) -->
+<div class="modal-bg" id="shortcutsModal">
+  <div class="modal" style="max-width:580px;gap:.6rem">
+    <h2>Shortcuts</h2>
+    <p>One line of the field = one item (Shift+Enter starts a new line). Nothing here is case-sensitive.</p>
+    <div class="sc-legend">
+      <h3>Blocks (Day cards)</h3>
+      <table>
+        <tr><td><code>-d text</code> · <code>text -d</code></td><td>task under block <b>d</b>. The abbreviation of every block on the card is shown in the chips under the field (clicking a chip does the same). Any prefix of the block name that fits only one block works: <code>-d</code>, <code>-de</code>, <code>-deep</code>; <code>-D</code> = <code>-d</code>. A block type that is not on the card yet is created.</td></tr>
+        <tr><td><code>-q text</code></td><td>no block starts with <b>q</b> → the line is <b>not added</b>: it stays in the field and the status message names the unknown abbreviation.</td></tr>
+        <tr><td><code>- text</code></td><td>dash + space = plain task (pasted bullet lists), no block lookup.</td></tr>
+        <tr><td><code>text</code></td><td>plain task → under the last block on the card. In Inbox and Later: a flat item.</td></tr>
+        <tr><td><code>Deep work</code></td><td>the name of a block type anywhere in the line creates that block (with its default length).</td></tr>
+      </table>
+      <h3>Markers</h3>
+      <table>
+        <tr><td><code>text !</code></td><td>urgent (space before the <code>!</code>)</td></tr>
+        <tr><td><code>x text</code></td><td>done task</td></tr>
+        <tr><td><code>✒ text</code></td><td>task marker — the <code>→</code> (send) button adds it when moving items between cards</td></tr>
+        <tr><td><code>20m</code> · <code>2h</code> · <code>45 min</code></td><td>length, anywhere in the line</td></tr>
+        <tr><td><code>9:30-10:00</code> · <code>9:30 to 10:00</code></td><td>event with a time range</td></tr>
+        <tr><td><code>🧠 text</code></td><td>a leading emoji becomes the icon of the row (Day cards; block emojis do not count)</td></tr>
+        <tr><td><code>.del</code></td><td>at the very end of the field: after adding, delete the items that were sent here with <code>→</code> (move instead of copy)</td></tr>
+      </table>
+      <h3>Dates — the line goes to Later</h3>
+      <table>
+        <tr><td><code>15.3. text</code> · <code>text 15.3.</code></td><td>a date at the start or the end → that day in Later (also <code>15.3</code>, <code>15.3.2026</code>)</td></tr>
+        <tr><td><code>15.-18.7. text</code></td><td>multi-day range</td></tr>
+        <tr><td><code>5. text</code> · <code>march text</code></td><td>whole month (a bare month number only at the start)</td></tr>
+      </table>
+      <h3>Recurrence — r-tokens anywhere in the line, combinable</h3>
+      <div id="scRecurTable"></div>
+      <p>The month of entry is the anchor. Rules are managed with the <b>↻</b> button in Later.</p>
+      <h3>Badges on an item (click to edit)</h3>
+      <table>
+        <tr><td>time / length</td><td><code>45m</code> <code>2h</code> <code>1h30m</code> = length · <code>9:00-10:00</code> = event · <code>0</code> = block · <code>-</code> or <code>✒</code> = task · <code>d</code> = duplicate</td></tr>
+        <tr><td>icon of a block / event</td><td>another emoji = icon of this row only · <code>-</code>, <code>0</code>, <code>✒</code> = turn into a task</td></tr>
+        <tr><td>date in Later</td><td><code>15.7.</code> <code>15</code> <code>15.-18.7.</code> = day / range (moves to another month when needed) · <code>r…</code> = turn into a recurrence · <code>d</code> = duplicate</td></tr>
+      </table>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('shortcutsModal')">close</button>
     </div>
   </div>
 </div>
