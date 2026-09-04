@@ -2611,7 +2611,9 @@ function openItemEdit(ctx, idx) {
   el('itemEditName').value = item.text || '';
   el('itemEditNote').value = item.note || '';
   el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
-  el('itemEditBlockRow').style.display = item.isSubtask ? 'none' : '';           // a whole block (header + its tasks) can become a block type
+  // a whole block (header + its tasks) can become a block type — only on cards that HAVE blocks
+  // (day, Done record, template preview); Inbox and Later are flat single-line lists
+  el('itemEditBlockRow').style.display = (!item.isSubtask && isBlockCard(ctx)) ? '' : 'none';
   el('itemEditModal').classList.add('open');
   const nameEl = el('itemEditName');
   autoGrowTextarea(nameEl);                  // name first — the note's cap is measured against it
@@ -2623,9 +2625,10 @@ function openItemEdit(ctx, idx) {
 // descriptions, its icon, event times and description — and opens the Blocks editor prefilled with it.
 // A block that came from a type opens on that type, so "save" updates it and "save as new" branches off;
 // a plain line (TASK) opens as a new type. Unsaved edits in this modal count — they are read from the fields.
+function isBlockCard(ctx) { return !!ctx && (ctx.kind === 'day' || ctx.kind === 'done' || ctx.kind === 'preview'); }
 function saveDayBlockAsType() {
   const ctx = _itemEditCtx, item = _itemEditItem;
-  if (!ctx || !item || item.isSubtask) return;
+  if (!ctx || !item || item.isSubtask || !isBlockCard(ctx)) return;
   const list = ctx.list;
   const idx = list.indexOf(item);
   if (idx < 0) return;
