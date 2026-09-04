@@ -561,11 +561,18 @@ textarea::placeholder{color:var(--mid)}
 /* ── DRAG AND DROP ── */
 /* draggable rows: on touch, long-press must not trigger text selection / iOS callout */
 [draggable="true"]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-[draggable="true"] input,[draggable="true"] [contenteditable="true"]{-webkit-user-select:text;user-select:text}
+[draggable="true"] input,[draggable="true"] textarea,[draggable="true"] [contenteditable="true"]{-webkit-user-select:text;user-select:text}
 .item-row[draggable]{cursor:grab}
 .item-row.dragging{opacity:.3}
 .item-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
 .item-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+/* preset tasks in the block editor — rows are full of inputs, so they drag by a grip only */
+.bet-row.dragging{opacity:.3}
+.bet-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.bet-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+.bet-grip{cursor:grab;touch-action:none;flex-shrink:0;color:var(--mid);font-size:.8rem;line-height:1;padding:.2rem .1rem;user-select:none}
+.bet-move{flex-shrink:0;width:20px;height:22px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.75rem;display:flex;align-items:center;justify-content:center;border-radius:3px}
+.bet-move:disabled{opacity:.25;cursor:default}
 .preview-item[draggable]{cursor:grab}
 .preview-item.dragging{opacity:.3}
 .preview-item.drag-over-top{box-shadow:0 -2px 0 var(--black)}
@@ -1091,6 +1098,7 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" id="blockEditResetBtn" onclick="resetBlockType()">restore default</button>
       <button class="modal-btn" onclick="closeModal('blockEditModal')">cancel</button>
+      <button class="modal-btn" id="blockEditSaveNewBtn" style="display:none" onclick="saveBlockType(true)" title="keep this block type as it is and store the current content as another one">save as new</button>
       <button class="modal-btn primary" onclick="saveBlockType()">save</button>
     </div>
   </div>
@@ -1133,6 +1141,9 @@ textarea::placeholder{color:var(--mid)}
       <div class="modal-row" id="itemEditRecurRow" style="display:none;justify-content:flex-start;gap:.4rem">
         <button class="btn-io" onclick="editGhostRule()" title="edit the recurrence rule this occurrence belongs to">↻ edit rule</button>
         <button class="btn-io" onclick="revertItemToGhost()" title="discard this occurrence and turn it back into a recurrence ghost">↺ back to ghost</button>
+      </div>
+      <div class="modal-row" id="itemEditBlockRow" style="display:none;justify-content:flex-start;gap:.4rem">
+        <button class="btn-io" onclick="saveDayBlockAsType()" title="take this block as it stands here — its tasks, times and descriptions — into Blocks: update the type it came from, or save it as a new one">⇪ save as block type</button>
       </div>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
@@ -2600,6 +2611,7 @@ function openItemEdit(ctx, idx) {
   el('itemEditName').value = item.text || '';
   el('itemEditNote').value = item.note || '';
   el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
+  el('itemEditBlockRow').style.display = item.isSubtask ? 'none' : '';           // a whole block (header + its tasks) can become a block type
   el('itemEditModal').classList.add('open');
   const nameEl = el('itemEditName');
   autoGrowTextarea(nameEl);                  // name first — the note's cap is measured against it
@@ -2607,6 +2619,45 @@ function openItemEdit(ctx, idx) {
   switchItemEditTab(noteHasChkItems() ? 'list' : 'text');
   nameEl.focus(); nameEl.select();
 }
+// "⇪ save as block type": takes the block as it stands on the day — its subtasks with their lengths and
+// descriptions, its icon, event times and description — and opens the Blocks editor prefilled with it.
+// A block that came from a type opens on that type, so "save" updates it and "save as new" branches off;
+// a plain line (TASK) opens as a new type. Unsaved edits in this modal count — they are read from the fields.
+function saveDayBlockAsType() {
+  const ctx = _itemEditCtx, item = _itemEditItem;
+  if (!ctx || !item || item.isSubtask) return;
+  const list = ctx.list;
+  const idx = list.indexOf(item);
+  if (idx < 0) return;
+  const btInfo = BLOCK_TYPES[item.blockType] || BLOCK_TYPES.TASK;
+  const text = (el('itemEditName').value.trim() || item.text || '');
+  const label = stripBlockEmoji(text, btInfo).trim() || text;
+  const defaultTasks = [];
+  for (let i = idx + 1; i < list.length && list[i].isSubtask; i++) {
+    const s = list[i];
+    if (!(s.text || '').trim()) continue;
+    const t = { text: s.text, duration: s.duration || 30 };
+    if (s.note) t.note = s.note;
+    defaultTasks.push(t);
+  }
+  const preset = {
+    emoji: itemIcon(item) || '',
+    label,
+    defaultDuration: item.duration || btInfo.defaultDuration || 30,
+    isEvent: !!item.isEvent,
+    eventStart: item.isEvent ? (item.eventStart || null) : null,
+    eventEnd:   item.isEvent ? (item.eventEnd   || null) : null,
+    defaultTasks,
+    note: el('itemEditNote').value.trim() ? el('itemEditNote').value : '',
+  };
+  const key = (item.blockType && item.blockType !== 'TASK' && BLOCK_TYPES[item.blockType]) ? item.blockType : null;
+  closeModal('itemEditModal');
+  openBlockTypeEdit(key, preset);
+  showStatusMsg(key
+    ? 'filled from the day — "save" updates the block type "' + (btInfo.label || key) + '", "save as new" keeps it and creates another'
+    : 'new block type filled from the day — check the name and save', 4500);
+}
+
 // The textarea grows with content (rows attribute = minimum), capped so it stays inside the screen.
 // In a modal with a pinned action row (.modal-scroll) the cap is the space actually left over next to
 // the title, the other fields and the buttons — the field scrolls internally instead of pushing the
@@ -3712,12 +3763,16 @@ function newBlockTypeFromMenu() {
   openBlockTypeEdit(null);
   _blockEditInsertCtx = ctx;       // after openBlockTypeEdit(), which resets it
 }
-function openBlockTypeEdit(key) {
+// preset = values to open the editor with instead of the stored ones (used by "save as block type"
+// on a day block — the type is filled from what the day actually looks like right now)
+function openBlockTypeEdit(key, preset) {
   _blockEditInsertCtx = null;      // opened from the Blocks list → save only, no auto-insert
   _editingBlockKey = key;
   const isNew = !key;
-  const bt = key ? (BLOCK_TYPES[key] || {}) : { emoji: '', label: '', defaultDuration: 30, isEvent: false, defaultTasks: [] };
+  let bt = key ? (BLOCK_TYPES[key] || {}) : { emoji: '', label: '', defaultDuration: 30, isEvent: false, defaultTasks: [] };
+  if (preset) bt = { ...bt, ...preset };
   el('blockEditTitle').textContent = isNew ? 'New block type' : 'Edit block';
+  el('blockEditSaveNewBtn').style.display = isNew ? 'none' : '';   // update this type, or branch off a new one
   el('blockEditEmoji').value = bt.emoji || '';
   el('blockEditLabel').value = bt.label || '';
   el('blockEditDuration').value = bt.defaultDuration || 30;
@@ -3750,16 +3805,57 @@ function toggleBlockEditEvent() {
 function addBlockEditTask(text, duration, note) {
   const row = document.createElement('div');
   row.className = 'bet-row';
+  row.setAttribute('draggable', 'true');
   row.style.cssText = 'display:flex;flex-direction:column;gap:.25rem;border:var(--b);border-radius:var(--r);padding:.35rem .4rem;background:var(--off)';
   row.innerHTML = `
     <div style="display:flex;gap:.3rem;align-items:center">
-      <input type="text" class="bet-text" placeholder="Task name" value="${esc(text||'')}" style="flex:1;font-family:'DM Sans',sans-serif;font-size:.85rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none">
+      <span class="bet-grip" title="drag to reorder">⠿</span>
+      <input type="text" class="bet-text" placeholder="Task name" value="${esc(text||'')}" style="flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.85rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none">
       <input type="number" class="bet-dur" placeholder="min" value="${duration||''}" min="1" max="480" style="width:58px;font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.3rem .4rem;background:var(--w);color:var(--black);outline:none;text-align:right">
-      <button onclick="this.closest('.bet-row').remove()" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.85rem;display:flex;align-items:center;justify-content:center;border-radius:3px" title="delete">✕</button>
+      <button class="bet-move" onclick="moveBetRow(this,-1)" title="up">↑</button>
+      <button class="bet-move" onclick="moveBetRow(this,1)" title="down">↓</button>
+      <button onclick="deleteBetRow(this)" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.85rem;display:flex;align-items:center;justify-content:center;border-radius:3px" title="delete">✕</button>
     </div>
     <textarea class="bet-note" placeholder="Preset description for this task (optional)" rows="1" oninput="autoGrowTextarea(this)" style="font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;resize:vertical;overflow-y:auto">${esc(note||'')}</textarea>`;
   el('blockEditTasks').appendChild(row);
   autoGrowTextarea(row.querySelector('.bet-note'));
+  renumberBetRows();
+}
+
+// The preset-task rows live only in the DOM (the array is read back in saveBlockType), so reordering
+// moves the nodes. data-idx must be renumbered after every add / delete / move — initDnd reads it.
+function renumberBetRows() {
+  const rows = [...el('blockEditTasks').children];
+  rows.forEach((r, i) => {
+    r.dataset.idx = i;
+    const up = r.querySelector('.bet-move[title="up"]'), dn = r.querySelector('.bet-move[title="down"]');
+    if (up) up.disabled = i === 0;
+    if (dn) dn.disabled = i === rows.length - 1;
+  });
+}
+function deleteBetRow(btn) { btn.closest('.bet-row')?.remove(); renumberBetRows(); }
+function moveBetRow(btn, dir) {
+  const row = btn.closest('.bet-row'); if (!row) return;
+  const c = row.parentNode;
+  if (dir < 0 && row.previousElementSibling) c.insertBefore(row, row.previousElementSibling);
+  else if (dir > 0 && row.nextElementSibling) c.insertBefore(row.nextElementSibling, row);
+  else return;
+  renumberBetRows();
+}
+// drop from initDnd: raw = insertion index in the original order → the node to insert before
+function moveBetRowTo(srcIdx, rawIdx) {
+  const c = el('blockEditTasks'), rows = [...c.children];
+  const src = rows[srcIdx]; if (!src) return;
+  const ref = rows[rawIdx] || null;
+  if (ref === src) return;
+  c.insertBefore(src, ref);
+  renumberBetRows();
+}
+function initBlockEditTaskDnd() {
+  const c = el('blockEditTasks');
+  if (!c || c._dndInit) return;
+  c._dndInit = true;
+  initDnd(c, (s, f, raw) => moveBetRowTo(s, raw), { grip: '.bet-grip' });
 }
 
 // Quick block type from the add field ("Name: …" with a name that is no type yet — see op_addQuickItems): 30 min, no
@@ -3773,7 +3869,8 @@ function createBlockTypeQuick(label, emoji) {
   renderBlockTypeList();
   return key;
 }
-function saveBlockType() {
+// asNew = store under a fresh key even while editing an existing type (the "save as new" button)
+function saveBlockType(asNew) {
   const emoji = el('blockEditEmoji').value.trim();
   const label = el('blockEditLabel').value.trim();
   const duration = parseInt(el('blockEditDuration').value) || 30;
@@ -3792,7 +3889,7 @@ function saveBlockType() {
   let eventEnd   = isEvent ? el('blockEditEventEnd').value.trim()   || null : null;
   const note = el('blockEditNote').value.trim() ? el('blockEditNote').value : '';
 
-  let key = _editingBlockKey;
+  let key = asNew ? null : _editingBlockKey;
   if (!key) {
     key = normalizeBlockKey(label);
     if (BLOCK_TYPES[key]) key = key + '_' + Date.now();
@@ -7907,7 +8004,11 @@ function _dndClearIndicators(container) {
     r.classList.remove('drag-over-top', 'drag-over-bottom'));
 }
 
-function initDnd(container, onDrop) {
+// opts.grip = selector of a dedicated drag handle. Without it the whole row is draggable (a tap on a
+// control never starts a drag) and touch needs a long-press; with a grip the drag can only start there,
+// so on touch it begins immediately — the row itself stays scrollable and its fields stay editable.
+function initDnd(container, onDrop, opts = {}) {
+  const gripSel = opts.grip || null;
   container.addEventListener('dragstart', e => e.preventDefault());   // suppress native drag
 
   let srcRow = null, srcIdx = null, pointerId = null, dragging = false;
@@ -7979,16 +8080,22 @@ function initDnd(container, onDrop) {
 
   container.addEventListener('pointerdown', e => {
     if (e.button > 0) return;                          // primary button / touch only
-    const row = e.target.closest('[draggable="true"]');
+    let row;
+    if (gripSel) {
+      const grip = e.target.closest(gripSel);
+      row = grip && grip.closest('[draggable="true"]');
+    } else {
+      row = e.target.closest('[draggable="true"]');
+      // a tap on a control must not start a drag (buttons, checkbox, selects, editing…)
+      if (row && e.target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return;
+    }
     if (!row || !container.contains(row)) return;
-    // a tap on a control must not start a drag (buttons, checkbox, selects, editing…)
-    if (e.target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return;
     srcRow = row; srcIdx = parseInt(row.dataset.idx);
     startX = e.clientX; startY = e.clientY; pointerId = e.pointerId; dragging = false;
     document.addEventListener('pointermove', onMove, true);
     document.addEventListener('pointerup', onUp, true);
     document.addEventListener('pointercancel', onUp, true);
-    if (e.pointerType !== 'mouse') holdTimer = setTimeout(beginDrag, TOUCH_HOLD);
+    if (e.pointerType !== 'mouse') { if (gripSel) beginDrag(); else holdTimer = setTimeout(beginDrag, TOUCH_HOLD); }
   });
 }
 
@@ -8291,7 +8398,7 @@ function init() {
   populateLaterAddMonth(); renderLater();
   if (activeLibId) markSaved();
   updateUndoBtn();
-  initItemDnd(); initLibDnd(); initBlockTypeDnd(); initInboxDnd(); initPreviewDnd(); initEvalDnd();
+  initItemDnd(); initLibDnd(); initBlockTypeDnd(); initInboxDnd(); initPreviewDnd(); initEvalDnd(); initBlockEditTaskDnd();
   if (staleArchived) showSave('↓ archived: ' + formatDateCz(staleArchived));
   else if (rawSession) showSave('↓ restored');
   setInterval(() => renderTimeline(), 60000);
