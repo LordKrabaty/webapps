@@ -1310,7 +1310,11 @@ function parseItemText(raw, resolvePresent) {
       if (rest && !/^\s*:/.test(rest)) continue;                           // only the bare name or "name: …" — "Deep work session" stays a task
       if (!best || lab.length > best.lab.length) best = { key, bt, lab };
     }
-    if (best) { blockType = best.key; if (!duration && !isEvent) duration = best.bt.defaultDuration; }
+    if (best) {
+      blockType = best.key; if (!duration && !isEvent) duration = best.bt.defaultDuration;
+      // just the name, with or without the colon → the block takes the type's stored name ("deep work:" → "Deep work")
+      if (/^\s*:?\s*$/.test(plainUpper.slice(best.lab.length))) text = best.bt.label;
+    }
   }
 
   if (!duration) duration = (BLOCK_TYPES[blockType]?.defaultDuration) || 30;
@@ -2156,7 +2160,7 @@ function op_addQuickItems(ctx, forceType) {
   const w = ctx.winStart();
   let addedHere = false, routedLater = false, lastYm = null, addedRecur = 0;
   const routedYms = new Set();   // target months of routed rows — for stamping mt
-  const rejected = [], unknownAbbrevs = [];   // lines refused because of an unknown block abbreviation (stay in the field)
+  const rejected = [], unknownAbbrevs = [], newTypes = [];   // refused lines (unknown block abbreviation — stay in the field) · block types created from "Name: …"
 
   lines.forEach(rawLine => {
     let line = rawLine;
@@ -2205,6 +2209,21 @@ function op_addQuickItems(ctx, forceType) {
       parsed.text = stripBlockEmoji(parsed.text, BLOCK_TYPES[bm.blockType]);   // the type emoji rode along in the line — the row renders it anyway
     }
 
+    // (1b) Day: "Name: …" whose name is no block type yet → the type is created on the spot (30 min; a leading emoji
+    // becomes its emoji) and the line becomes that block — the colon is the block marker (see parseItemText). The colon
+    // must be followed by a space or end the line, so times ("call at 10:00") never qualify.
+    if (onDay && !parsed.isSubtask && !parsed.isEvent && parsed.blockType === 'TASK' && targetBlockId == null && !parsed.targetBlockKey) {
+      const plain = stripLeadingEmoji(parsed.text);
+      const cm = plain.match(/^([^:\d\s][^:]*?)\s*:(?:\s|$)/);
+      if (cm) {
+        const label = cm[1].trim(), rest = plain.slice(cm[0].length).trim();
+        const typeEmoji = icon || parsed.text.slice(0, parsed.text.length - plain.length).trim();   // stripped earlier (custom emoji) or still in the text (a block emoji)
+        parsed.blockType = createBlockTypeQuick(label, typeEmoji);
+        parsed.text = rest ? plain : label;   // "garden:" alone → a block named just "garden"; "garden: water" → the whole line
+        icon = null;
+        newTypes.push(label);
+      }
+    }
     // (2) Day: a plain task and a "-task" both go under a block as a subtask → blocks are created only from presets (no pseudo-blocks)
     let toLastBlock = false;
     if (onDay && targetBlockId == null && !parsed.targetBlockKey && forceType !== 'EVENT') {
@@ -2277,6 +2296,7 @@ function op_addQuickItems(ctx, forceType) {
   }
   // move (→ + ".del"): after adding to the target card delete the source; otherwise (copy done) drop tracking.
   // With a refused line nothing is deleted yet — the sources stay tracked for the corrected retry.
+  if (newTypes.length) showStatusMsg('new block type ' + newTypes.map(n => '"' + n + '"').join(', ') + ' — edit or delete it in Blocks (left panel)', 4000);
   if (rejected.length) {                 // last, so this is the message that stays visible
     const names = [...new Set(unknownAbbrevs)].slice(0, 3).map(a => '"' + a + '"').join(', ');
     const here = presentBlockAbbrevs(ctx.list).blocks.map(b => b.abbr).join(', ') || '—';
@@ -3567,7 +3587,17 @@ function renderBlockTypeList() {
 let _editingBlockKey = null;
 let _blockEditIsEvent = false;
 
+// "+ new block type…" in the + Block menu: the type editor opens and, once saved, the block is inserted on the card the
+// menu was opened for (regular card or Done preview) — one step instead of "save the type, then pick it from the menu".
+let _blockEditInsertCtx = null;
+function newBlockTypeFromMenu() {
+  const ctx = menuCtx();           // read before closeBlockMenu() clears the menu context
+  closeBlockMenu();
+  openBlockTypeEdit(null);
+  _blockEditInsertCtx = ctx;       // after openBlockTypeEdit(), which resets it
+}
 function openBlockTypeEdit(key) {
+  _blockEditInsertCtx = null;      // opened from the Blocks list → save only, no auto-insert
   _editingBlockKey = key;
   const isNew = !key;
   const bt = key ? (BLOCK_TYPES[key] || {}) : { emoji: '', label: '', defaultDuration: 30, isEvent: false, defaultTasks: [] };
@@ -3616,6 +3646,17 @@ function addBlockEditTask(text, duration, note) {
   autoGrowTextarea(row.querySelector('.bet-note'));
 }
 
+// Quick block type from the add field ("Name: …" with a name that is no type yet — see op_addQuickItems): 30 min, no
+// presets, optional emoji. Returns the key. Same persistence as the editor (saveBlockTypes → sync + placeholder/hint).
+function createBlockTypeQuick(label, emoji) {
+  let key = normalizeBlockKey(label);
+  if (BLOCK_TYPES[key]) key = key + '_' + Date.now();
+  BLOCK_TYPES[key] = { emoji: emoji || '', label, defaultDuration: 30, isEvent: false, eventStart: null, eventEnd: null, defaultTasks: [], note: '', mt: Date.now() };
+  if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key);
+  saveBlockTypes();
+  renderBlockTypeList();
+  return key;
+}
 function saveBlockType() {
   const emoji = el('blockEditEmoji').value.trim();
   const label = el('blockEditLabel').value.trim();
@@ -3646,6 +3687,7 @@ function saveBlockType() {
   renderBlockTypeList();
   updateQuickInputPlaceholder();   // recompute type abbreviations + refresh the hint/placeholder
   closeModal('blockEditModal');
+  if (_blockEditInsertCtx) { const c = _blockEditInsertCtx; _blockEditInsertCtx = null; op_addBlockItem(c, key); }   // opened from + Block ▾ → insert now
   showSave('✓ block saved');
 }
 
@@ -4312,12 +4354,14 @@ function toggleBlockMenu(e) {
   const menu = el('blockMenu');
   menu._ctx = _previewMenuCtx; _previewMenuCtx = null;   // null = regular card (addCtx), otherwise preview
   if (menu._src === 'block' && menu.style.display === 'flex') { closeBlockMenu(); return; }
-  const html = Object.entries(BLOCK_TYPES)
+  let html = Object.entries(BLOCK_TYPES)
     .filter(([k, bt]) => k !== 'TASK' && !bt.isEvent)
     .map(([k, bt]) => `<button class="block-menu-item" onclick="addBlockItem('${k}')">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</button>`)
     .join('');
+  // a new type straight from here — saved AND inserted on this card in one go (see newBlockTypeFromMenu)
+  html += (html ? '<div class="new-menu-sep"></div>' : '') + `<button class="block-menu-item" onclick="newBlockTypeFromMenu()">+ new block type…</button>`;
   menu._src = 'block';
-  _openMenu(menu, html || '<div class="block-menu-item" style="color:var(--muted);cursor:default">No blocks</div>', e.currentTarget);
+  _openMenu(menu, html, e.currentTarget);
 }
 
 function toggleEventMenu(e) {
@@ -8725,7 +8769,8 @@ window.addEventListener('resize', updateAppGrid);
         <tr><td><code>-q text</code></td><td>no block starts with <b>q</b> → the line is <b>not added</b>: it stays in the field and the status message names the unknown abbreviation.</td></tr>
         <tr><td><code>- text</code></td><td>dash + space = plain task (pasted bullet lists), no block lookup.</td></tr>
         <tr><td><code>text</code></td><td>plain task → under the last block on the card. In Inbox and Later: a flat item.</td></tr>
-        <tr><td><code>Deep work</code> · <code>Deep work: API</code></td><td>the bare name of a block type, or the name followed by a <b>colon</b>, creates that block (with its default length; the whole line becomes its name). Anything else is a task — <code>Deep work session</code>, <code>call admin</code>.</td></tr>
+        <tr><td><code>Deep work</code> · <code>deep work:</code> · <code>Deep work: API</code></td><td>the bare name of a block type (a trailing colon is fine) creates that block with the type's stored name; <code>name: text</code> makes the whole line the block's name (default length of the type). Anything else is a task — <code>Deep work session</code>, <code>call admin</code>.</td></tr>
+        <tr><td><code>garden:</code> · <code>garden: water</code></td><td>a name that is <b>no block type yet</b>, followed by a colon, creates the type on the spot (30 min; a leading emoji becomes its emoji) and adds the block — <code>garden:</code> alone gives a block named just "garden". Edit or delete the type later in Blocks (left panel). The same from the menu: <code>+ Block ▾</code> → <code>+ new block type…</code>.</td></tr>
       </table>
       <h3>Markers</h3>
       <table>
