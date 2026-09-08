@@ -3535,6 +3535,10 @@ function renderWindowTabs() {
 // loads the target window into the global variables and re-renders (WITHOUT saving the outgoing one)
 function activateWindow(id) {
   activeWin = id;
+  // adopt the incoming window's sync state FIRST — everything below can persist (the evals migration,
+  // the restored tab flushing the day) and a save must never reconcile against the outgoing window's
+  // tombstones/baseline; reloadWindowSync() at the end is then only the cloud check
+  if (typeof window.adoptWindowSyncState === 'function') { try { window.adoptWindowSyncState(); } catch(e) {} }
   try { localStorage.setItem(ACTIVE_WIN_KEY, id); } catch(e) {}
   activeLibId = null; savedSnapshot = null;
   undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
@@ -5772,13 +5776,19 @@ function findEval(id) { return evals.find(e => String(e.id) === String(id)); }
 function migrateWeekNotesToEvals() {
   let raw = null; try { raw = localStorage.getItem(WK(EVALS_KEY)); } catch(e) {}
   if (raw != null) return;                    // already migrated in this window
+  let migrated = 0;
   weekNotes.forEach(n => {
     if (!n || !n.key || !n.text) return;
     const mon = mondayOfWeekKey(n.key); if (!mon) return;
     const sun = isoAddDays(mon, 6);
     evals.push({ id: 'wn-' + n.key, day: sun, from: mon, to: sun, text: n.text, custom: false, mt: +n.mt || 0 });
+    migrated++;
   });
-  saveEvals();                                // write even when empty → the migration never runs twice
+  // write even when empty → the migration never runs twice. With nothing migrated the content did not
+  // change, so write the marker DIRECTLY: the wrapped saveEvals() would fire the sync hook (reconcile +
+  // push) just for switching into a window for the first time.
+  if (migrated) saveEvals();
+  else try { localStorage.setItem(WK(EVALS_KEY), '[]'); } catch(e) {}
 }
 
 // ── RECURRENCE: rule collection (per-window like weekDays). F3: only the management modal is missing ──
@@ -8770,10 +8780,19 @@ window.addEventListener('resize', updateAppGrid);
   const TOMB_TTL  = 90 * 864e5;              // drop tombstones older than 90 days
   let tombstones = {};
   let knownIds = null;                        // null = not tracked yet
-  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(WK(TOMB_KEY)) || '{}') || {}; } catch(e) { tombstones = {}; } }
+  let syncStateWin = null;                    // which day window the loaded tombstones/knownIds belong to
+  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(WK(TOMB_KEY)) || '{}') || {}; } catch(e) { tombstones = {}; } syncStateWin = activeWin; }
   function saveTombstones() { try { localStorage.setItem(WK(TOMB_KEY), JSON.stringify(tombstones)); } catch(e) {} }
-  function loadKnownIds()   { try { const s = localStorage.getItem(WK(KNOWN_KEY)); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
+  function loadKnownIds()   { try { const s = localStorage.getItem(WK(KNOWN_KEY)); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } syncStateWin = activeWin; }
   function saveKnownIds()   { try { localStorage.setItem(WK(KNOWN_KEY), JSON.stringify([...(knownIds || [])])); } catch(e) {} }
+  // The tombstone map and the knownIds baseline are PER WINDOW (WK-namespaced). Switching a day window
+  // reloads them, but anything that persists BEFORE that reload (a migration, the tab restored by
+  // activateWindow) would reconcile the incoming window's data against the OUTGOING window's baseline
+  // and then write the outgoing window's whole tombstone map into the incoming window's slot. Those
+  // foreign "deleted" markers hit date-keyed namespaces (wd:/wp:/lat:/bt: collide across windows),
+  // get pushed to the gist and silently wipe days on every device. Never touch a state that belongs
+  // to another window — reload it first.
+  function ensureSyncState() { if (syncStateWin !== activeWin) { loadTombstones(); loadKnownIds(); } }
   function isTombstoned(key) { return !!tombstones[key]; }
   // set of "<ns>:<id>" of all currently existing items
   function currentKeySet() {
@@ -8796,6 +8815,7 @@ window.addEventListener('resize', updateAppGrid);
   }
   // diff the current state against the last known → deletions are recorded as tombstones
   function reconcileTombstones() {
+    ensureSyncState();          // never diff this window's data against another window's baseline
     const cur = currentKeySet(), now = Date.now();
     if (knownIds) knownIds.forEach(k => { if (!cur.has(k)) tombstones[k] = now; });
     cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // exists ⇒ alive
@@ -8873,6 +8893,7 @@ window.addEventListener('resize', updateAppGrid);
 
   // payload like doCloudUpload with "select all": full library + archive + weekDays + weekPlans + inbox + settings
   function buildAutoPayload() {
+    ensureSyncState();          // the payload carries `tombstones` — it must be this window's map
     const payload = { v:2, items: library, archive: archive, weekDays: weekDays, weekPlans: weekPlans, settings: buildSettingsExport(), tombstones: tombstones };
     payload.inbox = inbox; payload.inboxMt = inboxMt;   // the whole list + mt (even empty, so deletion propagates)
     payload.recurrences = recurrences;                  // recurrence rules (always, even empty — deletion propagation)
@@ -9032,6 +9053,7 @@ window.addEventListener('resize', updateAppGrid);
   //  1) unify tombstones  2) LWW for templates/days/plans/inbox/blocks (incl. deletions and edits)  3) add archive
   function autoImportSilent(record) {
     if (!record || typeof record !== 'object') return;
+    ensureSyncState();          // merge against THIS window's tombstones, never a leftover foreign map
     applyingRemote = true;
     try {
     mergeCloudTombstones(record.tombstones);
@@ -9337,6 +9359,8 @@ window.addEventListener('resize', updateAppGrid);
   window.autoSyncOnSave       = autoSyncOnSave;     // hook called from schedSave()
   window.pushWindowRegistry   = pushWindowRegistry; // window registry → main bin (hybrid)
   // ── DAY WINDOWS: switching a window reloads the sync state (tombstones/known) + cloud check ──
+  // called at the TOP of activateWindow, before anything in it can persist
+  window.adoptWindowSyncState = ensureSyncState;
   window.reloadWindowSync = function() {
     loadTombstones(); loadKnownIds();
     lastPushTs = 0;
