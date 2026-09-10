@@ -1158,7 +1158,7 @@ textarea::placeholder{color:var(--mid)}
             onblur="endNoteEdit()"></textarea>
           <div class="ie-bar">
             <span class="ie-tools" id="ieEditTools">
-              <button class="btn-io" onmousedown="event.preventDefault()" onclick="toggleChkOnSelection()" title="turn the current line (or the selected lines) into a checklist item — and back">☑ checklist line</button>
+              <button class="btn-io" onmousedown="event.preventDefault()" onclick="toggleChkOnSelection()" title="turn the current line (or the selected lines) into a checklist item — and back (Ctrl+L)">☑ checklist line</button>
               <button class="btn-io" onmousedown="event.preventDefault()" onclick="mdWrapSelection(el('itemEditNote'),'**')" title="bold — **text** (Ctrl+B)"><strong>B</strong></button>
               <button class="btn-io" onmousedown="event.preventDefault()" onclick="mdWrapSelection(el('itemEditNote'),'_')" title="italic — _text_ (Ctrl+I)"><em>I</em></button>
             </span>
@@ -3120,10 +3120,13 @@ function mdWrapSelection(ta, mark) {
 
 // Text tab: Enter on an item line continues the list (an empty item ends it)
 function noteKeydown(e, ta) {
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'b' || e.key === 'i' || e.key === 'B' || e.key === 'I')) {
-    e.preventDefault();
-    mdWrapSelection(ta, e.key.toLowerCase() === 'b' ? '**' : '_');
-    return;
+  // Shift is excluded on purpose: Ctrl+Shift+B / +I belong to the browser (bookmarks bar,
+  // dev tools) and must not format the text on their way out.
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.length === 1) {
+    const k = e.key.toLowerCase();
+    // Ctrl+L = "list": the same toggle as the ☑ button, on the current line or the selected ones
+    if (k === 'b' || k === 'i') { e.preventDefault(); mdWrapSelection(ta, k === 'b' ? '**' : '_'); return; }
+    if (k === 'l')              { e.preventDefault(); toggleChkOnSelection(); return; }
   }
   if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
   const pos = ta.selectionStart;
@@ -9748,7 +9751,7 @@ window.addEventListener('resize', updateAppGrid);
           <tr><td><code># Heading</code></td><td>heading — larger, with a rule under it</td></tr>
           <tr><td><code>## Heading</code></td><td>sub-heading — a small spaced-out uppercase label</td></tr>
           <tr><td><code>- text</code></td><td>bullet</td></tr>
-          <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; the “☑ checklist line” button turns the current line (or the selected ones) into items and back.</td></tr>
+          <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; <b>Ctrl+L</b> — or the “☑ checklist line” button — turns the current line (or the selected ones) into items and back.</td></tr>
           <tr><td><code>- [x] milk</code></td><td>a ticked item. Items are counted in the <code>2/6</code> badge on the row and can be ticked off, reordered and deleted on the <b>Checklist</b> tab.</td></tr>
         </table>
         <h3>Table</h3>
