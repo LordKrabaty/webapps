@@ -115,9 +115,12 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .ie-bar{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
 .ie-bar .btn-io{flex:0 0 auto;padding:.28rem .6rem}
 .ie-bar-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-right:auto}
+.ie-tools{display:flex;gap:.35rem;flex:0 0 auto}
+#ieHelpBtn{margin-left:auto;flex:0 0 auto}
 .ie-hint{font-size:.7rem;color:var(--muted);line-height:1.5}
 .ie-hint code{font-family:'DM Mono',monospace;background:var(--off);border-radius:var(--r);padding:0 .22rem}
 .ie-tab-count{font-family:'DM Mono',monospace;font-size:.7rem;opacity:.7}
+.ie-kind{margin-left:auto;align-self:center;font-size:.66rem;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 .1rem .2rem}
 .chk-list{display:flex;flex-direction:column}
 .chk-row{display:flex;align-items:center;gap:.4rem;padding:.3rem .15rem;border-bottom:1px solid var(--light)}
 .chk-row:last-child{border-bottom:none}
@@ -137,6 +140,34 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .chk-del{width:18px;height:18px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;opacity:.45}
 .chk-del svg{width:8px;height:8px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
 .chk-empty{font-size:.78rem;color:var(--muted);font-style:italic;padding:.35rem 0}
+/* ── SIMPLE MARKDOWN IN A DESCRIPTION ────────────────────────────────────────
+   Same deal as the checklist above: only a rendering of the note text, nothing new
+   is stored. Five marks and no more — **bold**, _italic_, `code`, ~~strike~~ and a
+   "# heading" line ("- text" gets a bullet dot). */
+.md strong{font-weight:600}
+.md em{font-style:italic}
+.md code{font-family:'DM Mono',monospace;font-size:.92em;background:var(--off);border-radius:var(--r);padding:0 .22rem}
+.md s{opacity:.55}
+/* Headings must not read as "just a bold line": "#" is bigger with a rule under it,
+   "##" is the small uppercase label used elsewhere in the app. */
+.md-h1{display:inline-block;font-size:1.16em;font-weight:600;color:var(--black);letter-spacing:.01em;border-bottom:1.5px solid var(--black);padding-bottom:.06em}
+.md-h2{font-size:.82em;font-weight:600;color:var(--black);letter-spacing:.09em;text-transform:uppercase}
+.md-h3{display:inline-block;font-size:1.02em;font-weight:600;color:var(--black);border-bottom:1px dotted var(--mid);padding-bottom:.04em}
+/* Pipe table: its own scroller, so a wide one never pushes the panel sideways. */
+.md-tbl-wrap{display:block;max-width:100%;overflow-x:auto;white-space:normal;margin:.25rem 0}
+.md-tbl{border-collapse:collapse;font-size:.94em}
+.md-tbl td,.md-tbl th{border:1px solid var(--light);padding:.18em .45em;text-align:left;vertical-align:top}
+.md-tbl th{font-weight:600;color:var(--black);background:var(--off);white-space:nowrap}
+/* The description field reads as formatted text and turns into its plain source on a click —
+   same box, same metrics as the textarea below it, so the swap doesn't move anything. */
+/* No inner scroller on purpose: the view grows with the text and only .modal-scroll
+   scrolls, so a long description never puts two scrollbars next to each other. */
+.note-view{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:max(1.4,calc(1.8/var(--pzc,1)));color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:calc(.7rem/var(--pzc,1)) calc(.75rem/var(--pzc,1));white-space:pre-wrap;word-break:break-word;cursor:text;min-height:60px;flex:0 0 auto}
+.note-view-empty{color:var(--mid)}
+.md-help-src{font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.5;color:var(--black);background:var(--off);border:var(--b);border-radius:var(--r);padding:calc(.45rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));margin:.3rem 0;white-space:pre;overflow-x:auto}
+.md-help-demo{display:grid;grid-template-columns:1fr 1fr;gap:calc(.5rem/var(--pzc,1));align-items:start}
+.md-help-demo .md-help-src,.md-help-demo .note-view{margin:0;min-height:0;max-height:none}
+@media(max-width:560px){.md-help-demo{grid-template-columns:1fr}}
 .btn-io.danger{border-color:#c0392b;color:#c0392b}
 @media(hover:hover){.btn-io.danger:hover{background:#c0392b;color:var(--w)}}
 .recur-legend{font-size:.76rem;color:var(--muted);line-height:1.55;border:var(--b);border-radius:var(--r);padding:.5rem .6rem}
@@ -1107,25 +1138,32 @@ textarea::placeholder{color:var(--mid)}
 <!-- Item detail / rename modal -->
 <div class="modal-bg" id="itemEditModal">
   <div class="modal" style="max-width:min(900px,94vw);gap:.6rem;max-height:90vh;overflow:hidden">
-    <h2 id="itemEditTitle">Edit item</h2>
     <div class="modal-scroll">
       <div class="field">
-        <label>Name</label>
         <textarea id="itemEditName" rows="1" placeholder="Item name" oninput="autoGrowTextarea(this)"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();saveItemEdit();}"></textarea>
       </div>
       <div class="field">
-        <label>Description / subtasks</label>
+        <!-- no field labels: the placeholder names the field and the tabs name the pane;
+             the kind of row being edited rides along as a small tag on the tab strip -->
         <div class="notes-tabs">
           <button class="notes-tab active" id="ieTabText" onclick="switchItemEditTab('text')">Text</button>
           <button class="notes-tab" id="ieTabList" onclick="switchItemEditTab('list')">Checklist <span class="ie-tab-count" id="ieTabCount"></span></button>
+          <span class="ie-kind" id="itemEditTitle"></span>
         </div>
         <div class="ie-pane active" id="iePaneText">
-          <textarea id="itemEditNote" rows="7" placeholder="More text — description, notes, subtasks…"
-            oninput="autoGrowTextarea(this);renderChkList()" onkeydown="noteKeydown(event,this)"></textarea>
+          <div id="itemEditNoteView" class="note-view md" onclick="startNoteEdit(event)" title="click to edit the text"></div>
+          <textarea id="itemEditNote" rows="7" data-nocap placeholder="More text — description, notes, subtasks…"
+            oninput="autoGrowTextarea(this);renderChkList()" onkeydown="noteKeydown(event,this)"
+            onblur="endNoteEdit()"></textarea>
           <div class="ie-bar">
-            <button class="btn-io" onclick="toggleChkOnSelection()" title="turn the current line (or the selected lines) into a checklist item — and back">☑ checklist line</button>
-            <span class="ie-hint">or type <code>[] milk</code> · Enter continues the list</span>
+            <span class="ie-tools" id="ieEditTools">
+              <button class="btn-io" onmousedown="event.preventDefault()" onclick="toggleChkOnSelection()" title="turn the current line (or the selected lines) into a checklist item — and back">☑ checklist line</button>
+              <button class="btn-io" onmousedown="event.preventDefault()" onclick="mdWrapSelection(el('itemEditNote'),'**')" title="bold — **text** (Ctrl+B)"><strong>B</strong></button>
+              <button class="btn-io" onmousedown="event.preventDefault()" onclick="mdWrapSelection(el('itemEditNote'),'_')" title="italic — _text_ (Ctrl+I)"><em>I</em></button>
+            </span>
+            <span class="ie-hint" id="ieViewHint">click the text to edit it</span>
+            <button class="btn-io" id="ieHelpBtn" onmousedown="event.preventDefault()" onclick="openMdHelp()" title="how to format a description">? formatting</button>
           </div>
         </div>
         <div class="ie-pane" id="iePaneList">
@@ -2607,7 +2645,7 @@ function openItemEdit(ctx, idx) {
   if (!item) return;
   _itemEditCtx = ctx; _itemEditItem = item;
   const type = item.isSubtask ? 'task' : (item.isEvent ? 'event' : ((item.blockType && item.blockType !== 'TASK') ? 'block' : 'item'));
-  el('itemEditTitle').textContent = 'Edit ' + type;
+  el('itemEditTitle').textContent = type;   // small tag at the end of the tab strip
   el('itemEditName').value = item.text || '';
   el('itemEditNote').value = item.note || '';
   el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
@@ -2617,6 +2655,8 @@ function openItemEdit(ctx, idx) {
   el('itemEditModal').classList.add('open');
   const nameEl = el('itemEditName');
   autoGrowTextarea(nameEl);                  // name first — the note's cap is measured against it
+  // an empty description goes straight to typing; one that has text opens rendered, to be read
+  setNoteMode(!(item.note || '').trim());
   // a note that already holds a checklist opens on the list (that's what you came to tick off)
   switchItemEditTab(noteHasChkItems() ? 'list' : 'text');
   nameEl.focus(); nameEl.select();
@@ -2666,10 +2706,23 @@ function saveDayBlockAsType() {
 // the title, the other fields and the buttons — the field scrolls internally instead of pushing the
 // whole modal past the viewport, so only one scrollbar is ever in play.
 const MODAL_MAX_VH = 0.9;   // mirrors max-height:90vh on .modal
+// data-nocap on the field opts out of the cap: it grows to its full text and .modal-scroll does
+// all the scrolling. Used where the same text is also shown rendered (the item description) —
+// there a capped field would scroll inside a scrolling dialog, i.e. two scrollbars side by side.
 function autoGrowTextarea(ta) {
   if (!ta) return;
   if (!ta.offsetParent) return;             // hidden (closed modal, inactive tab) → measures 0 and would collapse
   ta.style.height = 'auto';                 // collapse first → the modal shrinks back to its content
+  if (ta.dataset.nocap != null) {
+    // scrollHeight is the CONTENT height; with box-sizing:border-box the borders have to be added
+    // back, otherwise the box ends up ~2px short and Chrome puts a scrollbar on it after all.
+    const cs = getComputedStyle(ta);
+    const bw = cs.boxSizing === 'border-box'
+      ? (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0) : 0;
+    ta.style.overflowY = 'hidden';          // it never scrolls on its own — .modal-scroll does that
+    ta.style.height = Math.ceil(ta.scrollHeight + bw) + 'px';
+    return;
+  }
   let cap = Math.round(window.innerHeight * 0.7);
   const modal = ta.closest('.modal-scroll') && ta.closest('.modal');
   if (modal && ta.offsetParent) {           // hidden field measures as 0 — leave the plain cap
@@ -2703,6 +2756,133 @@ function ieSetNoteLines(lines) {
   renderChkList();
 }
 
+// ── DESCRIPTION FIELD: READ ⇄ EDIT ───────────────────────────────────────────
+// The Text tab shows the note rendered — markdown and real checkboxes — and swaps to the
+// raw textarea the moment you click into it, so the field you read is the field you type in.
+// The textarea stays the single source of truth; the view is thrown away and rebuilt from it.
+let _noteEditing = false;
+function renderNoteView() {
+  const view = el('itemEditNoteView'), ta = el('itemEditNote');
+  if (!view || !ta) return;
+  view.innerHTML = ta.value.trim() ? noteDisplay(ta.value)
+    : '<span class="note-view-empty">More text — description, notes, subtasks…</span>';
+}
+function setNoteMode(editing) {
+  const view = el('itemEditNoteView'), ta = el('itemEditNote'), tools = el('ieEditTools'), hint = el('ieViewHint');
+  if (!view || !ta) return;
+  _noteEditing = !!editing;
+  view.style.display = editing ? 'none' : '';
+  ta.style.display   = editing ? '' : 'none';
+  if (tools) tools.style.display = editing ? '' : 'none';   // B / I / checklist only while typing
+  if (hint)  hint.style.display  = editing ? 'none' : '';
+  if (editing) autoGrowTextarea(ta);                      // hidden until now → would measure 0
+  else renderNoteView();
+}
+// "? formatting": the demo is rendered by the same noteDisplay() the field uses,
+// so the help can never drift away from what the app actually does.
+const MD_HELP_DEMO = [
+  '# Project kickoff',
+  'Bring **the printed brief** — the room is _2.14_.',
+  '## Before it starts',
+  '- [x] book the room',
+  '- [ ] send the `agenda.md`',
+  '- ~~order lunch~~',
+  '',
+  '| task      | time |',
+  '|-----------|-----:|',
+  '| deep work | 90m  |',
+  '| mail      | 15m  |',
+].join('\n');
+function openMdHelp() {
+  const src = el('mdHelpSrc'), out = el('mdHelpOut');
+  if (src) src.textContent = MD_HELP_DEMO;
+  if (out) out.innerHTML = noteDisplay(MD_HELP_DEMO);
+  el('mdHelpModal').classList.add('open');
+}
+
+// Click in the rendered view → the same spot in the source text. caretRangeFromPoint lands in
+// the RENDERED text, where the marks are missing, so: data-ln gives the line, and the rendered
+// prefix of that line is then walked character by character forward through the source line —
+// what gets skipped over is exactly the markup ("**", "#", "- [ ]" …).
+function srcPosFromView(e) {
+  const view = el('itemEditNoteView'), ta = el('itemEditNote');
+  if (!view || !ta || !e || e.clientX == null) return null;
+  let node = null, off = 0;
+  if (document.caretRangeFromPoint) {
+    const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+    if (r) { node = r.startContainer; off = r.startOffset; }
+  } else if (document.caretPositionFromPoint) {
+    const p = document.caretPositionFromPoint(e.clientX, e.clientY);
+    if (p) { node = p.offsetNode; off = p.offset; }
+  }
+  const host = node && (node.nodeType === 3 ? node.parentElement : node);
+  const lnEl = host && host.closest && host.closest('[data-ln]');
+  if (!lnEl || !view.contains(lnEl)) return null;                 // padding, or outside → caller decides
+  const lines = ta.value.split('\n'), lineIdx = +lnEl.dataset.ln;
+  if (!(lineIdx >= 0 && lineIdx < lines.length)) return null;
+  let start = 0;
+  for (let i = 0; i < lineIdx; i++) start += lines[i].length + 1;  // +1 for the newline
+  let prefix = '';
+  try {
+    const r = document.createRange();
+    r.selectNodeContents(lnEl);
+    r.setEnd(node, off);
+    prefix = r.toString();
+  } catch (_) { return start; }                                    // click outside the line's own nodes
+  const src = lines[lineIdx];
+  let si = 0;
+  for (const ch of prefix) {
+    const k = src.indexOf(ch, si);
+    if (k >= 0) si = k + ch.length;                                // no counterpart (☐, •) → skip it
+  }
+  return start + si;
+}
+
+// How far down inside the field does a given offset sit? Measured on a throwaway copy of the
+// field — same width, font and padding — with the rest of the text in a marker span.
+function taCaretTop(ta, pos) {
+  const cs = getComputedStyle(ta);
+  const mirror = document.createElement('div');
+  ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing','wordSpacing','lineHeight',
+   'textIndent','textTransform','wordBreak','overflowWrap','boxSizing',
+   'paddingTop','paddingRight','paddingBottom','paddingLeft',
+   'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'
+  ].forEach(p => mirror.style[p] = cs[p]);
+  mirror.style.cssText += ';position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre-wrap;border-style:solid';
+  mirror.style.width = ta.offsetWidth + 'px';
+  mirror.textContent = ta.value.slice(0, pos);
+  const mark = document.createElement('span');
+  mark.textContent = ta.value.slice(pos) || '.';
+  mirror.appendChild(mark);
+  document.body.appendChild(mirror);
+  const top = mark.offsetTop;
+  mirror.remove();
+  return top;
+}
+
+function startNoteEdit(e) {
+  const ta = el('itemEditNote');
+  const pos = srcPosFromView(e);
+  const sc = ta.closest('.modal-scroll'), top = sc ? sc.scrollTop : 0;
+  const clickY = (e && e.clientY != null) ? e.clientY : null;
+  setNoteMode(true);
+  ta.focus();
+  const n = ta.value.length, at = (pos == null) ? n : Math.max(0, Math.min(pos, n));
+  ta.setSelectionRange(at, at);
+  if (!sc) return;
+  sc.scrollTop = top;              // focus() scrolls the dialog around — put it back where it was
+  // The raw text wraps differently from the rendered one (the marks take room), so the same
+  // scroll offset shows a different place. Move the dialog so the character that was clicked
+  // stays under the finger — that is what "it puts me where I clicked" actually means here.
+  if (clickY != null && pos != null) {
+    const caretY = ta.getBoundingClientRect().top + taCaretTop(ta, at);
+    sc.scrollTop += caretY - clickY;
+  }
+}
+// Blur = done reading the keyboard; the bar buttons keep the focus (mousedown is prevented),
+// so this only fires on a click that really leaves the field.
+function endNoteEdit() { if (_noteEditing) setNoteMode(false); }
+
 function switchItemEditTab(which) {
   const isList = which === 'list';
   el('ieTabList').classList.toggle('active', isList);
@@ -2710,7 +2890,8 @@ function switchItemEditTab(which) {
   el('iePaneList').classList.toggle('active', isList);
   el('iePaneText').classList.toggle('active', !isList);
   renderChkList();
-  if (!isList) autoGrowTextarea(el('itemEditNote'));   // the field was hidden → re-grow it now that it shows
+  // the pane was hidden → re-grow the field (or rebuild the view) now that it shows
+  if (!isList) { if (_noteEditing) autoGrowTextarea(el('itemEditNote')); else renderNoteView(); }
 }
 
 function updateChkCounts() {
@@ -2740,13 +2921,13 @@ function buildChkRows(box) {
   }
   box.innerHTML = lines.map((ln, i) => {
     const it = parseChkLine(ln);
-    if (!it) return ln.trim() ? `<div class="chk-plain">${esc(ln.trim())}</div>` : '';   // heading / prose — editable on the Text tab
+    if (!it) return ln.trim() ? `<div class="chk-plain md">${noteDisplay(ln.trim())}</div>` : '';   // heading / prose — editable on the Text tab
     const pos = idxs.indexOf(i);
     return `<div class="chk-row" draggable="true" data-idx="${i}">
       <span class="chk-grip" title="drag to reorder">⠿</span>
       <input type="checkbox" class="chk-box" ${it.done ? 'checked' : ''} onchange="toggleChkItem(${i})">
-      <span class="chk-text${it.done ? ' done' : ''}${it.text.trim() ? '' : ' blank'}" onclick="startChkEdit(${i},this)"
-        title="edit the text">${it.text.trim() ? esc(it.text) : 'empty'}</span>
+      <span class="chk-text md${it.done ? ' done' : ''}${it.text.trim() ? '' : ' blank'}" onclick="startChkEdit(${i},this)"
+        title="edit the text">${it.text.trim() ? mdInline(it.text) : 'empty'}</span>
       <div class="chk-move">
         <button onclick="moveChkItem(${i},-1)" ${pos === 0 ? 'disabled' : ''} title="move up">▲</button>
         <button onclick="moveChkItem(${i},1)" ${pos === idxs.length - 1 ? 'disabled' : ''} title="move down">▼</button>
@@ -2842,9 +3023,9 @@ function startChkEdit(lineIdx, span) {
     ta.value = lines.join('\n');
     autoGrowTextarea(ta);
     const fresh = document.createElement('span');
-    fresh.className = 'chk-text' + (cur.done ? ' done' : '');
+    fresh.className = 'chk-text md' + (cur.done ? ' done' : '');
     fresh.title = 'edit the text';
-    fresh.textContent = v;
+    fresh.innerHTML = mdInline(v);            // same rendering as buildChkRows — v is escaped in there
     fresh.onclick = () => startChkEdit(lineIdx, fresh);
     inp.replaceWith(fresh);
     updateChkCounts();
@@ -2857,16 +3038,93 @@ function startChkEdit(lineIdx, span) {
   });
 }
 
-// read-only rendering of a note: checklist lines get a real box instead of the "- [ ]" markup
+// ── SIMPLE MARKDOWN IN A DESCRIPTION ─────────────────────────────────────────
+// Deliberately five marks and no more: **bold**, *italic* / _italic_, `code`,
+// ~~strike~~ and a "# heading" line (plus "- text" → a bullet dot). Like the checklist
+// above this is only a rendering of the note text — nothing new is stored, so sync,
+// export and older clients keep treating a note as the plain string it has always been.
+const MD_HEAD_RE   = /^(\s*)(#{1,3})\s+(.*)$/;
+const MD_BULLET_RE = /^(\s*)[-*•]\s+(?=\S)(.*)$/;
+// table: a row of "| a | b |" and, right under the first one, a "|---|:--:|" divider
+const MD_ROW_RE    = /^\s*\|(.+)\|\s*$/;
+const MD_DIV_RE    = /^\s*\|(\s*:?-{1,}:?\s*\|)+\s*$/;
+// Every field that shows this HTML carries class="md" (see the CSS block above).
+function mdInline(s) {
+  const code = [];
+  let h = esc(s || '')
+    // code first, parked in placeholders — nothing inside a `…` span is markup any more
+    .replace(/`([^`\n]+)`/g, (_m, c) => { code.push(c); return '\u0000' + (code.length - 1) + '\u0000'; })
+    .replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '<s>$1</s>');
+  // single * / _ only on a word boundary: "* milk" stays a bullet, snake_case stays a name
+  h = h.replace(/(^|[\s([{"'])[*_](?=\S)([^*_\n]*\S)[*_](?=$|[\s.,;:!?)\]}"'])/g, '$1<em>$2</em>');
+  return h.replace(/\u0000(\d+)\u0000/g, (_m, i) => '<code>' + code[i] + '</code>');
+}
+
+// one line: checklist box, heading, bullet — or just inline marks
+function mdLine(ln) {
+  const it = parseChkLine(ln);
+  if (it) return esc(it.indent) + (it.done ? '☑' : '☐') + ' ' + mdInline(it.text);
+  const h = MD_HEAD_RE.exec(ln);
+  if (h) return esc(h[1]) + `<span class="md-h${h[2].length}">` + mdInline(h[3]) + '</span>';
+  const b = MD_BULLET_RE.exec(ln);
+  if (b) return esc(b[1]) + '• ' + mdInline(b[2]);
+  return mdInline(ln);
+}
+// rows[0] = header, rows[1] = the divider (which also carries the column alignment)
+function mdTable(rows, lineIdx) {
+  const cells = r => r.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
+  const al = cells(rows[1]).map(c => /^:-+:$/.test(c) ? ' style="text-align:center"'
+                                   : /-+:$/.test(c)   ? ' style="text-align:right"' : '');
+  const cell = (tag, list) => list.map((c, i) => `<${tag}${al[i] || ''}>${mdInline(c)}</${tag}>`).join('');
+  const body = rows.slice(2).map(r => `<tr>${cell('td', cells(r))}</tr>`).join('');
+  return `<div class="md-tbl-wrap" data-ln="${lineIdx}"><table class="md-tbl"><tr>${cell('th', cells(rows[0]))}</tr>${body}</table></div>`;
+}
+// read-only rendering of a note: checklist lines get a real box instead of the "- [ ]" markup,
+// a "| a | b |" run with a "|---|---|" divider under its first row becomes a real table.
+// A table is a block: it swallows the newlines around it, so no empty line appears next to it.
+// Every piece carries data-ln = the line it came from, which is how a click in the rendered
+// view finds its place in the source (see srcPosFromView).
 function noteDisplay(s) {
-  return esc(s || '').split('\n').map(ln => {
-    const it = parseChkLine(ln);
-    return it ? it.indent + (it.done ? '☑' : '☐') + ' ' + it.text : ln;
-  }).join('\n');
+  const lines = (s || '').split('\n'), parts = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (MD_ROW_RE.test(lines[i]) && MD_DIV_RE.test(lines[i + 1] || '')) {
+      const rows = [lines[i], lines[i + 1]];
+      let j = i + 2;
+      while (j < lines.length && MD_ROW_RE.test(lines[j])) rows.push(lines[j++]);
+      parts.push({ block: true, html: mdTable(rows, i) });
+      i = j - 1;
+    } else parts.push({ block: false, html: `<span class="md-ln" data-ln="${i}">${mdLine(lines[i])}</span>` });
+  }
+  return parts.map((p, i) => (i && !p.block && !parts[i - 1].block ? '\n' : '') + p.html).join('');
+}
+
+// Text tab: Ctrl/⌘+B and Ctrl/⌘+I wrap the selection in the mark — pressing the same
+// keys on an already wrapped selection takes it back off. Without a selection the marks
+// go in and the caret lands between them.
+function mdWrapSelection(ta, mark) {
+  const val = ta.value, a = ta.selectionStart, b = ta.selectionEnd, n = mark.length;
+  const inside = val.slice(a, b);
+  if (inside.length > 2 * n && inside.startsWith(mark) && inside.endsWith(mark)) {
+    ta.setRangeText(inside.slice(n, -n), a, b, 'select');       // marks sit inside the selection
+  } else if (val.slice(a - n, a) === mark && val.slice(b, b + n) === mark) {
+    ta.setRangeText(inside, a - n, b + n, 'select');            // …or just outside it
+  } else {
+    ta.setRangeText(mark + inside + mark, a, b, 'select');
+    if (!inside) ta.selectionStart = ta.selectionEnd = a + n;   // empty → type between the marks
+  }
+  autoGrowTextarea(ta);
+  renderChkList();
+  ta.focus();                                                  // clicking the B / I button blurred it
 }
 
 // Text tab: Enter on an item line continues the list (an empty item ends it)
 function noteKeydown(e, ta) {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'b' || e.key === 'i' || e.key === 'B' || e.key === 'I')) {
+    e.preventDefault();
+    mdWrapSelection(ta, e.key.toLowerCase() === 'b' ? '**' : '_');
+    return;
+  }
   if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
   const pos = ta.selectionStart;
   if (pos !== ta.selectionEnd) return;                       // a selection → plain Enter
@@ -4327,7 +4585,7 @@ function renderPreviewList() {
       <button class="preview-item-del" onclick="deletePreviewItem(${i})" title="delete">
         <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
       </button>
-    </div>` + (item.note ? `<div class="preview-item-note" onclick="startPreviewNoteEdit(${i},this)" title="edit description / note">${noteDisplay(item.note)}</div>` : '');
+    </div>` + (item.note ? `<div class="preview-item-note md" onclick="startPreviewNoteEdit(${i},this)" title="edit description / note">${noteDisplay(item.note)}</div>` : '');
   }).join('') : '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">No items.</div>';
   // visual mini timeline — same strip as the Done inline preview (re-rendered on every change)
   const tl = renderInlineTlStrip(arr, times, _previewSource.windowStart, _previewSource.windowEnd);
@@ -6132,7 +6390,7 @@ function renderRecurList() {
         : '—';
       const note = rec.payload?.note || '';
       const noteHtml = note
-        ? `<div class="recur-rule-desc" title="${esc(note)}">📝 ${esc(note.length > 90 ? note.slice(0, 90) + '…' : note)}</div>`
+        ? `<div class="recur-rule-desc md" title="${esc(note)}">📝 ${mdInline(note.length > 90 ? note.slice(0, 90) + '…' : note)}</div>`
         : '';
       return `<div class="recur-rule">
         <div class="recur-rule-head">
@@ -9467,6 +9725,48 @@ window.addEventListener('resize', updateAppGrid);
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn" onclick="closeModal('shortcutsModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Formatting a description (? button on the item's Text tab) -->
+<div class="modal-bg" id="mdHelpModal">
+  <div class="modal" style="max-width:620px;gap:.6rem;max-height:90vh;overflow:hidden">
+    <h2>Formatting a description</h2>
+    <p>The description stays plain text — the marks below only change how it is <b>shown</b>. Nothing extra is stored, so sync, export and an older version of the app see the same note as always. The field shows the text formatted and turns back into the raw marks when you click into it.</p>
+    <div class="modal-scroll">
+      <div class="sc-legend">
+        <h3>Inside a line</h3>
+        <table>
+          <tr><td><code>**text**</code></td><td><b>bold</b> — Ctrl+B, or the <b>B</b> button</td></tr>
+          <tr><td><code>_text_</code> · <code>*text*</code></td><td><i>italic</i> — Ctrl+I, or the <i>I</i> button. A mark has to sit at a word boundary, so <code>snake_case_name</code> and <code>2 * 3</code> stay as they are.</td></tr>
+          <tr><td><code>`text`</code></td><td>code / verbatim — marks inside it are no longer read as marks</td></tr>
+          <tr><td><code>~~text~~</code></td><td>struck through</td></tr>
+        </table>
+        <h3>Whole lines</h3>
+        <table>
+          <tr><td><code># Heading</code></td><td>heading — larger, with a rule under it</td></tr>
+          <tr><td><code>## Heading</code></td><td>sub-heading — a small spaced-out uppercase label</td></tr>
+          <tr><td><code>- text</code></td><td>bullet</td></tr>
+          <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; the “☑ checklist line” button turns the current line (or the selected ones) into items and back.</td></tr>
+          <tr><td><code>- [x] milk</code></td><td>a ticked item. Items are counted in the <code>2/6</code> badge on the row and can be ticked off, reordered and deleted on the <b>Checklist</b> tab.</td></tr>
+        </table>
+        <h3>Table</h3>
+        <p>Cells between <code>|</code>, and directly under the first row a divider — that is what makes it a table. The dashes in the divider set the alignment of the column: <code>---</code> left, <code>:-:</code> centre, <code>--:</code> right. The columns do not have to line up in the text, only the number of <code>|</code> matters.</p>
+        <pre class="md-help-src">| task      | time |
+|-----------|-----:|
+| deep work | 90m  |
+| mail      | 15m  |</pre>
+        <h3>All of it together</h3>
+        <p>The source on the left is what you type, on the right is what the field shows:</p>
+        <div class="md-help-demo">
+          <pre class="md-help-src" id="mdHelpSrc"></pre>
+          <div id="mdHelpOut" class="note-view md"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('mdHelpModal')">close</button>
     </div>
   </div>
 </div>
