@@ -3796,6 +3796,10 @@ function renderWindowTabs() {
 // loads the target window into the global variables and re-renders (WITHOUT saving the outgoing one)
 function activateWindow(id) {
   activeWin = id;
+  // The collections below are swapped one by one, so until the last load() the globals are a MIX of both
+  // windows. Freeze the sync hook for that stretch — a reconcile against a half-swapped state tombstones
+  // whatever the other window happens not to have (days, plans, evaluations) and the push deletes it everywhere.
+  if (typeof window.setWindowLoading === 'function') { try { window.setWindowLoading(true); } catch(e) {} }
   // adopt the incoming window's sync state FIRST — everything below can persist (the evals migration,
   // the restored tab flushing the day) and a save must never reconcile against the outgoing window's
   // tombstones/baseline; reloadWindowSync() at the end is then only the cloud check
@@ -3805,7 +3809,9 @@ function activateWindow(id) {
   undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
   laterCollapsed = null; laterYearCollapsed = null;   // reload month/year collapse state under WK() of the new window
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes(); loadEvals(); migrateWeekNotesToEvals();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes(); loadEvals();
+  if (typeof window.setWindowLoading === 'function') { try { window.setWindowLoading(false); } catch(e) {} }   // all collections belong to `id` from here on
+  migrateWeekNotesToEvals();
   activePlanDate = todayIso();
   const todayEntry = weekDays.find(d => d.date === activePlanDate);
   if (todayEntry) applySessionData(todayEntry);
@@ -3820,6 +3826,9 @@ function activateWindow(id) {
   // keep the currently open card when switching windows (e.g. stay on "Later", do not jump back to "Week")
   const keepTab = ['tyden','pristi','pozdeji','inbox','hotovo'].find(n => el('tab-' + n)?.classList.contains('active')) || 'tyden';
   switchNotesTab(keepTab);
+  // one reconcile now that everything belongs to this window (the saves during the load were frozen);
+  // any push it schedules waits for the cloud check below (pull-before-push gate)
+  if (typeof window.autoSyncOnSave === 'function') { try { window.autoSyncOnSave(); } catch(e) {} }
   if (typeof window.reloadWindowSync === 'function') { try { window.reloadWindowSync(); } catch(e) {} }
 }
 
@@ -8856,6 +8865,8 @@ window.addEventListener('resize', updateAppGrid);
     try { pushWindowRegistry(); } catch(e) {}   // propagate a new/changed Gist ID into the registry
     if (idChanged) {   // newly entered ID → download the cloud right away (otherwise only after reload)
       try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
+      initialPullDone.delete(activeWin);   // a different gist = unseen data → pull → merge → only then push
+      lastPullOkTs.delete(activeWin);
       try { checkCloudOnStartup(); } catch(e) {}
     }
     closeModal('jsonbinModal');
@@ -8954,29 +8965,59 @@ window.addEventListener('resize', updateAppGrid);
     } catch(e) { showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55)); }
     finally { btn.disabled = false; }
   }
+  // The window registry (which day window lives in which gist) travels ONLY in the MAIN gist. A device
+  // that opens straight into a secondary window therefore never sees it — and if that window's gist id
+  // is missing locally, checkCloudOnStartup would take the "no gist" branch, POST a BRAND NEW gist from
+  // the stale local data and then stamp a fresher binIdMt into the registry. Every other device follows
+  // that id and the window's real gist (with the other device's days/evaluations) is orphaned = "the data
+  // disappeared". So: read the registry from the main gist before concluding a window has no gist.
+  async function ensureRegistryFresh(winAtStart) {
+    if (winAtStart === 'main') return;          // the main gist carries the registry — its own pull merges it
+    if (registryPulled.has(winAtStart)) return;
+    const token = localStorage.getItem(GHTOKEN), mainGist = localStorage.getItem('todo-app-gist-id');
+    if (!token || !mainGist) return;
+    try {
+      const res = await gistGet(mainGist, token); if (!res.ok) return;
+      const rec = await gistRecord(res);
+      if (!rec || typeof rec !== 'object') return;
+      // the registry is global (not per-window) → safe to merge even if the user switched windows meanwhile
+      if (rec.windows || rec.winTomb) { try { mergeWindowRegistry(rec.windows, rec.winTomb); } catch(e) {} }
+      registryPulled.add(winAtStart);
+    } catch(e) {}
+  }
   async function checkCloudOnStartup() {
-    const gistId = localStorage.getItem(WK(GISTID));
+    const winAtStart = activeWin;              // the window we are checking the cloud for (activeWin may switch during fetch)
+    const checkedKey = 'todo-app-cloud-checked::' + winAtStart;
+    if (sessionStorage.getItem(checkedKey)) { initialPullDone.add(winAtStart); return; }   // already pulled this session
+    let gistId = localStorage.getItem(WK(GISTID));
+    if (!gistId && winAtStart !== 'main') {    // maybe we just never learned this window's gist id — ask the registry first
+      await ensureRegistryFresh(winAtStart);
+      if (activeWin !== winAtStart) return;
+      gistId = localStorage.getItem(WK(GISTID));
+    }
     if (!gistId) {
-      // the window has no own gist → nothing to pull → allow pushes (the first one creates the gist)
-      initialPullDone.add(activeWin);
+      // the window really has no gist → nothing to pull → allow pushes (the first one creates it)
+      initialPullDone.add(winAtStart);
       if (autosyncEnabled() && hasApiKey() && typeof windowHasData === 'function' && windowHasData()) scheduleAutoPush();
       return;
     }
-    const checkedKey = 'todo-app-cloud-checked::' + activeWin;
-    if (sessionStorage.getItem(checkedKey)) { initialPullDone.add(activeWin); return; }   // already pulled this session
     sessionStorage.setItem(checkedKey, '1');
-    const winAtStart = activeWin;              // the window we are checking the cloud for (activeWin may switch during fetch)
+    let pullOk = false;                        // the gate opens ONLY on a cloud read we could actually apply
     const btn = el('syncDownBtn'); const origTitle = btn.title;
     btn.disabled = true; btn.title = 'kontroluji cloud…';
     try {
       const token = localStorage.getItem(GHTOKEN);
-      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const res = await gistGet(gistId, token);
+      // 404 = the gist was deleted/migrated → there is nothing to protect, doAutoPush re-creates it.
+      // Anything else (403 rate limit, 5xx, auth) = we are blind → keep the gate shut, never overwrite.
+      if (!res.ok) { if (res.status === 404) pullOk = true; return; }
       const record = await gistRecord(res);
-      if (typeof record !== 'object' || record === null) return;
+      if (typeof record !== 'object' || record === null) return;   // unreadable/truncated → do NOT allow an overwrite
       // HYBRID: the window registry (carried only by the main gist) is always merged — global (not per-window), safe even after a window switch
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       // CRITICAL: the window may have switched meanwhile → this gist data belongs to ANOTHER window, do not apply it to the current one
-      if (activeWin !== winAtStart) return;
+      if (activeWin !== winAtStart) return;    // pullOk stays false → the gate is re-armed for this window
+      pullOk = true;
       checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       // AUTOSYNC: silent two-way merge (incl. deletions) — full state comparison
       if (autosyncEnabled()) {
@@ -8997,8 +9038,17 @@ window.addEventListener('resize', updateAppGrid);
       showSyncTooltip('☁ cloud has different data — check the selection');
     } catch(e) {} finally {
       btn.disabled = false; btn.title = origTitle;
-      initialPullDone.add(winAtStart);   // pull is done (merged or not) → uploads for this window are safe now
-      if (pushDeferred && autosyncEnabled() && hasApiKey()) { pushDeferred = false; scheduleAutoPush(); }   // flush a push held back by the gate
+      if (pullOk) {
+        lastPullOkTs.set(winAtStart, Date.now());
+        initialPullDone.add(winAtStart);   // the cloud was read → uploads for this window are safe now
+        if (pushDeferred && autosyncEnabled() && hasApiKey()) { pushDeferred = false; scheduleAutoPush(); }   // flush a push held back by the gate
+      } else {
+        // The cloud stayed unread (offline, rate limit, switched window). Keep the gate SHUT — a push now
+        // would PATCH the gist with a snapshot that never saw the other devices' edits. Clear the
+        // session marker so the next focus/interval pull retries instead of skipping the startup check.
+        try { sessionStorage.removeItem(checkedKey); } catch(e) {}
+        if (autosyncEnabled() && hasApiKey()) showStatusMsg('⚠ sync: cloud unavailable — changes stay local until it downloads', 4500);
+      }
     }
   }
 
@@ -9013,6 +9063,13 @@ window.addEventListener('resize', updateAppGrid);
   // window switch / autosync-enable so each fresh cloud check pulls before any upload.
   const initialPullDone = new Set();
   let pushDeferred = false;     // a push was held back by the gate → flush it once the pull completes
+  // Timestamp of the last SUCCESSFUL cloud read per window. A PATCH overwrites the whole gist file
+  // (GitHub has no server-side merge), so pushing on top of a stale read silently drops everything the
+  // other devices wrote since. Anything older than PUSH_PULL_MAX_AGE gets re-pulled + merged first.
+  const lastPullOkTs = new Map();
+  const PUSH_PULL_MAX_AGE = 120000;   // 2 min — a tab left open all day must not push a morning-old snapshot
+  const registryPulled = new Set();   // windows whose gist id was verified against the main gist registry this session
+  let windowLoading = false;    // true while activateWindow() swaps collections → no reconcile against half-loaded data
   let applyingRemote = false;   // true during a silent merge → suppresses the save-hook (no recursion)
   let cloudSchemaAhead = false; // cloud written by a newer app version → pause our push so we can't overwrite it
   let schemaWarnShown = false;  // the blocking warning is shown at most once per session
@@ -9148,6 +9205,7 @@ window.addEventListener('resize', updateAppGrid);
       // overwrite the gist with an empty local state before the cloud data is downloaded
       try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
       initialPullDone.delete(activeWin);   // force a fresh pull before any upload
+      lastPullOkTs.delete(activeWin); registryPulled.delete(activeWin);
       checkCloudOnStartup();
     }
   }
@@ -9191,6 +9249,15 @@ window.addEventListener('resize', updateAppGrid);
     let creating = !gistId;        // the window has no gist yet → autosync creates it (POST)
     pushing = true; setSyncState('syncing');
     try {
+      // READ BEFORE OVERWRITE: a PATCH replaces the whole gist file, so a snapshot built on an old read
+      // wipes everything the other devices wrote since (a tab left open in the background is the classic
+      // case — nothing pulls while it is hidden). Refresh + merge first whenever our read is stale.
+      if (gistId && Date.now() - (lastPullOkTs.get(winAtStart) || 0) > PUSH_PULL_MAX_AGE) {
+        const ok = await silentPull(true);      // (the finally below clears `pushing`)
+        if (!ok) { pushDeferred = true; setSyncState('err');   // blind → defer rather than clobber
+          showStatusMsg('⚠ sync: cloud unreachable — upload postponed (your changes are saved locally)', 4000); return; }
+        if (activeWin !== winAtStart) { setSyncState(); return; }   // switched window → its own push takes over
+      }
       const payload = buildAutoPayload();
       let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload, winAtStart));
       if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
@@ -9416,6 +9483,12 @@ window.addEventListener('resize', updateAppGrid);
   // hook after each persistence: record deletions (tombstones) and schedule a push
   function autoSyncOnSave() {
     if (applyingRemote) return;      // changes from the merge must not trigger reconcile/push
+    // activateWindow() adopts the incoming window's tombstone baseline BEFORE it loads that window's
+    // collections, so for a few statements the globals still hold the OUTGOING window's data. A reconcile
+    // in that gap (e.g. the legacy week-template migration saving the library) would diff the new window's
+    // baseline against the old window's days/evaluations and tombstone every key that "vanished" — and
+    // wd:/wp:/ev: keys are shared shapes, so the push then deletes those records on every device.
+    if (windowLoading) return;
     if (!hasApiKey()) return;        // without a token there is nothing to track (autosync creates the gist itself)
     reconcileTombstones();
     if (autosyncEnabled()) scheduleAutoPush();
@@ -9424,37 +9497,47 @@ window.addEventListener('resize', updateAppGrid);
   // silent PULL (focus / visibilitychange / interval): download the cloud and merge if it differs — no spinner
   let lastPullTs = 0;
   const PULL_MIN_INTERVAL = 30000;            // max 1 pull / 30 s (focus + visibility fire together)
-  async function silentPull() {
-    if (Date.now() - lastPullTs < PULL_MIN_INTERVAL) return;
-    lastPullTs = Date.now();
-    if (!hasKeys()) return;                    // without a token and Gist ID there is nowhere to download from
-    if (pushing) return;                       // a push is in progress → let it finish
-    if (pulling) return;                       // a pull is already running → do not start a second
+  // force = called from doAutoPush to refresh a stale read before overwriting the gist (skips the throttle
+  // and the "a push is running" guard, and does not schedule another push). Returns true when the cloud was read.
+  async function silentPull(force) {
+    if (!force && Date.now() - lastPullTs < PULL_MIN_INTERVAL) return false;
+    if (!hasKeys()) return false;              // without a token and Gist ID there is nowhere to download from
+    if (!force && pushing) return false;       // a push is in progress → let it finish
+    if (pulling) return false;                 // a pull is already running → do not start a second
+    lastPullTs = Date.now();                   // only once we really go online (a skipped attempt must not burn the window)
     pulling = true;
     const sBtn = el('syncDownBtn');
     if (sBtn) { sBtn.disabled = true; sBtn.classList.add('syncing'); }
-    let changed = false;
+    let changed = false, pullOk = false;
     const winAtStart = activeWin;              // the window we are downloading for (activeWin may switch during fetch)
     try {
       const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(WK(GISTID));
-      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const res = await gistGet(gistId, token);
+      if (!res.ok) { if (res.status === 404) pullOk = true; return pullOk; }   // 404 = gist gone → the push may re-create it
       const record = await gistRecord(res);
-      if (typeof record !== 'object' || record === null) return;
+      if (typeof record !== 'object' || record === null) return false;
       // the window registry (carried only by the main gist) is merged even without data changes → new windows from other devices appear immediately.
       // The registry is global (not per-window) → safe to merge even after a window switch.
       if (record.windows || record.winTomb) { try { mergeWindowRegistry(record.windows, record.winTomb); } catch(e) {} }
       // CRITICAL: the window may have switched meanwhile → this per-window data belongs to ANOTHER window, must not overwrite the current one
-      if (activeWin !== winAtStart) return;
+      if (activeWin !== winAtStart) return false;
+      pullOk = true;
       checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       if (localSig() !== cloudSig(record)) {
         const before = localSig();
         autoImportSilent(record);
         changed = localSig() !== before;
       }
-      if (autosyncEnabled()) scheduleAutoPush();
-    } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); }
+      if (autosyncEnabled() && !force) scheduleAutoPush();
+      return true;
+    } catch(e) { console.warn('[silentPull] selhal:', (e && e.message) ? e.message : e); return false; }
     finally {
       pulling = false;
+      if (pullOk) {   // a successful read also satisfies the pull-before-push gate (e.g. a startup pull that failed)
+        lastPullOkTs.set(winAtStart, Date.now());
+        initialPullDone.add(winAtStart);
+        if (pushDeferred && autosyncEnabled() && hasApiKey()) { pushDeferred = false; scheduleAutoPush(); }
+      }
       if (sBtn) {
         sBtn.disabled = false;
         sBtn.classList.remove('syncing');
@@ -9622,12 +9705,16 @@ window.addEventListener('resize', updateAppGrid);
   // ── DAY WINDOWS: switching a window reloads the sync state (tombstones/known) + cloud check ──
   // called at the TOP of activateWindow, before anything in it can persist
   window.adoptWindowSyncState = ensureSyncState;
+  // guard around the collection swap in activateWindow (see autoSyncOnSave)
+  window.setWindowLoading = function(on) { windowLoading = !!on; };
   window.reloadWindowSync = function() {
     loadTombstones(); loadKnownIds();
     lastPushTs = 0;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     try { sessionStorage.removeItem('todo-app-cloud-checked::' + activeWin); } catch(e) {}
     initialPullDone.delete(activeWin);   // switched into this window → pull its cloud before allowing uploads
+    lastPullOkTs.delete(activeWin);      // and never count another window's read as this one's freshness
+    registryPulled.delete(activeWin);    // re-verify this window's gist id against the registry
     checkCloudOnStartup();
   };
   // best-effort push of the outgoing window to ITS gist (called BEFORE switching activeWin —
