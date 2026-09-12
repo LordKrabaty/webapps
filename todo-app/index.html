@@ -9674,8 +9674,15 @@ window.addEventListener('resize', updateAppGrid);
         + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
         + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">restore</button></div></div>';
     }).join('');
-    el('gistHistoryList').innerHTML = rows || '<p style="color:var(--muted);font-size:.82rem">Nothing matches this filter</p>';
+    // GitHub paused our detail requests → say so instead of leaving the rows at "…" forever.
+    // Times, preview and restore keep working — only the device/summary line is missing.
+    const note = historyRateLimited
+      ? '<p style="color:var(--muted);font-size:.78rem;line-height:1.5">⚠ GitHub is throttling extra requests — device and content summary stay blank for now. '
+        + 'Times, preview and restore work as usual. <button class="btn-io" onclick="ghRetryMeta()">retry details</button></p>'
+      : '';
+    el('gistHistoryList').innerHTML = (rows || '<p style="color:var(--muted);font-size:.82rem">Nothing matches this filter</p>') + note;
   }
+  function ghRetryMeta() { historyRateLimited = false; refreshHistory(); }
   // fetch device name + content summary for the given rows (throttled, cached) and update them live
   async function loadHistoryMeta(idxs) {
     const run = ++metaRunId;                    // a newer filter view supersedes this pass
@@ -9768,6 +9775,7 @@ window.addEventListener('resize', updateAppGrid);
   window.gistHistoryRestore   = gistHistoryRestore;
   window.onGhDevFilter        = onGhDevFilter;
   window.onGhDaySel           = onGhDaySel;
+  window.ghRetryMeta          = ghRetryMeta;
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
   window.copySyncLink         = copySyncLink;
