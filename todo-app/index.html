@@ -67,6 +67,10 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .gh-rev-sum{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);word-break:break-word}
 .gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
 .gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
+.gh-day{font-family:'DM Sans',sans-serif;font-size:.7rem;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:.4rem .1rem .05rem}
+.gh-day:first-child{padding-top:0}
+.gh-filters{display:flex;gap:.4rem;flex-wrap:wrap}
+.gh-filters select{flex:1 1 45%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.3rem .4rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none}
 .modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
 @media(hover:hover){.modal-item:hover{background:var(--off)}}
 .modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
@@ -9550,33 +9554,93 @@ window.addEventListener('resize', updateAppGrid);
   /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
      Loads the history[] of the active window gist (WK), allows preview (via the import
      modal) and restore (via the standard LWW merge autoImportSilent + push). */
-  const HISTORY_MAX = 40;     // how many revisions to list + fetch metadata for
+  // Autosync writes a revision every few seconds of editing, so a day of work is dozens of them —
+  // listing only the newest 40 did not even reach back to the morning. List a lot, but fetch the
+  // per-revision metadata (device + content summary = one request each) ONLY for the rows on screen.
+  const HISTORY_MAX = 300;        // revisions taken from the gist history
+  const HISTORY_META_MAX = 40;    // details fetched per filter view (GitHub secondary rate limit)
   let gistRevs = [];          // revisions from openGistHistory (index = order in the list)
   const gistRevCache = {};    // version → parsed record (avoids refetching on filter/re-render)
   const gistRevMeta = {};     // version → { device, summary, loaded } shown in the row
   let ghDevFilter = '';       // active device filter ('' = all devices)
+  let ghDay = '';             // active day filter 'YYYY-MM-DD' ('' = all days)
+  let metaRunId = 0;          // changing the filter cancels the metadata pass still in flight
   let historyRateLimited = false;   // a 403/429 during history fetches → stop firing more
   function historyGistId() { try { return localStorage.getItem(WK(GISTID)); } catch(e) { return null; } }
   async function openGistHistory() {
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
     closeModal('jsonbinModal');
-    gistRevs = []; ghDevFilter = ''; historyRateLimited = false;
+    gistRevs = []; ghDevFilter = ''; ghDay = ''; historyRateLimited = false; metaRunId++;
     Object.keys(gistRevMeta).forEach(k => delete gistRevMeta[k]);
     const fsel = el('ghDevFilter'); if (fsel) { fsel.style.display = 'none'; fsel.value = ''; }
+    const dsel = el('ghDaySel'); if (dsel) { dsel.style.display = 'none'; dsel.value = ''; }
     el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
     el('gistHistoryModal').classList.add('open');
     try {
-      const res = await gistGet(gistId, token);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      gistRevs = ((json && json.history) || []).slice(0, HISTORY_MAX);
-      renderGistHistory();
-      loadHistoryMeta();      // async — fills device names + content summary per revision
+      gistRevs = await fetchGistCommits(gistId, token);
+      ghDay = gistRevs.length ? revDayIso(gistRevs[0]) : '';   // start on the newest day — one dropdown click reaches the others
+      updateDaySel();
+      refreshHistory();
     } catch(e) {
       el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
+  // Revision list. The gist GET carries only a truncated `history`, so page the dedicated commits
+  // endpoint instead (100 per page) — with autosync writing a revision per editing burst, reaching back
+  // to "yesterday afternoon" needs hundreds. Falls back to the embedded history if the endpoint fails.
+  async function fetchGistCommits(gistId, token) {
+    const out = [];
+    for (let page = 1; out.length < HISTORY_MAX; page++) {
+      const res = await fetch(gistUrl(gistId) + '/commits?per_page=100&page=' + page,
+                              { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+      if (!res.ok) {
+        if (out.length) break;                       // keep what we already have
+        const r2 = await gistGet(gistId, token);     // fallback: the history embedded in the gist itself
+        if (!r2.ok) throw new Error('HTTP ' + res.status);
+        const json = await r2.json();
+        return ((json && json.history) || []).slice(0, HISTORY_MAX);
+      }
+      const batch = await res.json();
+      if (!Array.isArray(batch) || !batch.length) break;
+      out.push(...batch);
+      if (batch.length < 100) break;                 // last page
+    }
+    return out.slice(0, HISTORY_MAX);
+  }
+  function revDate(rev) { const t = (rev && rev.committed_at) ? new Date(rev.committed_at) : null; return (t && !isNaN(t)) ? t : null; }
+  function revDayIso(rev) { const t = revDate(rev); return t ? isoOfDate(t) : ''; }
+  function revTimeLabel(rev) {
+    const t = revDate(rev); if (!t) return '??:??';
+    const p = n => String(n).padStart(2, '0');
+    return p(t.getHours()) + ':' + p(t.getMinutes()) + ':' + p(t.getSeconds());
+  }
+  // day dropdown — the first thing to narrow by ("what did I push at work around 13:30")
+  function updateDaySel() {
+    const sel = el('ghDaySel'); if (!sel) return;
+    const counts = new Map();
+    gistRevs.forEach(r => { const d = revDayIso(r); if (d) counts.set(d, (counts.get(d) || 0) + 1); });
+    const days = [...counts.keys()].sort().reverse();
+    if (!days.length) { sel.style.display = 'none'; return; }
+    sel.innerHTML = '<option value="">all days · ' + gistRevs.length + '</option>'
+      + days.map(d => '<option value="' + d + '">' + esc(formatDateCz(d)) + ' · ' + counts.get(d) + '</option>').join('');
+    sel.value = ghDay;
+    sel.style.display = '';
+  }
+  function onGhDaySel() { ghDay = (el('ghDaySel').value) || ''; refreshHistory(); }
+  // indices of the revisions the current filters let through (indices stay valid — gistRevs is never re-ordered)
+  function visibleRevIdxs() {
+    const out = [];
+    gistRevs.forEach((rev, i) => {
+      if (ghDay && revDayIso(rev) !== ghDay) return;
+      if (ghDevFilter && (gistRevMeta[rev.version] || {}).device !== ghDevFilter) return;
+      out.push(i);
+    });
+    return out;
+  }
+  // render + start fetching details for what is on screen (the render itself must stay free of that,
+  // otherwise the per-row refresh inside the metadata pass would restart it forever)
+  function refreshHistory() { renderGistHistory(); loadHistoryMeta(visibleRevIdxs()); }
   // compact content summary of a revision (so you can tell versions apart without opening the preview)
   function revSummary(rec) {
     if (!rec || typeof rec !== 'object') return '';
@@ -9595,45 +9659,55 @@ window.addEventListener('resize', updateAppGrid);
   }
   function renderGistHistory() {
     if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">No history available</p>'; return; }
-    const rows = gistRevs.map((rev, i) => {
-      const meta = gistRevMeta[rev.version] || {};
-      if (ghDevFilter && meta.device !== ghDevFilter) return '';   // filtered out by device
-      const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('en-GB') : '?';
+    let lastDay = null;
+    const rows = visibleRevIdxs().map(i => {
+      const rev = gistRevs[i], meta = gistRevMeta[rev.version] || {};
+      const day = revDayIso(rev);
+      let head = '';
+      if (day !== lastDay) { lastDay = day; head = '<div class="gh-day">' + esc(day ? formatDateCz(day) : 'unknown date') + '</div>'; }
       const tag = i === 0 ? '<span class="gh-rev-chg">newest</span>' : '';
       const dev = meta.device ? '· ' + esc(meta.device) + ' ' : '';
       const sum = meta.loaded ? esc(meta.summary || 'empty') : '…';
-      return '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
+      return head + '<div class="gh-rev"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(revTimeLabel(rev)) + '</span>'
         + '<span class="gh-rev-dev">' + dev + tag + '</span>'
         + '<span class="gh-rev-sum">' + sum + '</span></div>'
         + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
         + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">restore</button></div></div>';
     }).join('');
-    el('gistHistoryList').innerHTML = rows || '<p style="color:var(--muted);font-size:.82rem">No versions from this device</p>';
+    el('gistHistoryList').innerHTML = rows || '<p style="color:var(--muted);font-size:.82rem">Nothing matches this filter</p>';
   }
-  // fetch device name + content summary for every listed revision (throttled, cached) and update the rows live
-  async function loadHistoryMeta() {
-    const devices = new Set();
-    let idx = 0;
+  // fetch device name + content summary for the given rows (throttled, cached) and update them live
+  async function loadHistoryMeta(idxs) {
+    const run = ++metaRunId;                    // a newer filter view supersedes this pass
+    const todo = (idxs || []).filter(i => gistRevs[i] && gistRevs[i].version && !gistRevMeta[gistRevs[i].version]).slice(0, HISTORY_META_MAX);
+    updateDevFilter();
+    if (!todo.length) return;
+    let k = 0;
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const next = async () => {
-      while (idx < gistRevs.length && !historyRateLimited) {
-        const i = idx++; const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+      while (k < todo.length && !historyRateLimited && run === metaRunId) {
+        const rev = gistRevs[todo[k++]];
         const cached = !!gistRevCache[rev.version];
         try {
           const rec = await fetchGistRevision(rev.version);
           gistRevMeta[rev.version] = { device: (rec && rec.device) || '', summary: revSummary(rec), loaded: true };
-          if (rec && rec.device) devices.add(rec.device);
         } catch(e) { gistRevMeta[rev.version] = { device: '', summary: '', loaded: true }; }
-        updateDevFilter(devices);
+        if (run !== metaRunId) return;          // filter changed mid-flight → let the newer pass render
+        updateDevFilter();
         renderGistHistory();
         if (!cached) await sleep(150);   // space requests so we don't trip GitHub's secondary rate limit
       }
     };
     await Promise.all([next(), next()]);   // 2 gentle workers (was 5 — bursts can trip the secondary rate limit)
   }
-  // (re)build the device filter dropdown — only shown once ≥2 distinct devices are known
-  function updateDevFilter(devices) {
+  // (re)build the device filter dropdown from what is known about the listed day — only shown once ≥2 devices
+  function updateDevFilter() {
     const sel = el('ghDevFilter'); if (!sel) return;
+    const devices = new Set();
+    gistRevs.forEach(r => {
+      if (ghDay && revDayIso(r) !== ghDay) return;
+      const m = gistRevMeta[r.version]; if (m && m.device) devices.add(m.device);
+    });
     const list = [...devices].sort();
     if (list.length < 2) { sel.style.display = 'none'; return; }
     const cur = sel.value;
@@ -9641,7 +9715,7 @@ window.addEventListener('resize', updateAppGrid);
     if (cur && list.includes(cur)) sel.value = cur;
     sel.style.display = '';
   }
-  function onGhDevFilter() { ghDevFilter = (el('ghDevFilter').value) || ''; renderGistHistory(); }
+  function onGhDevFilter() { ghDevFilter = (el('ghDevFilter').value) || ''; refreshHistory(); }
   // downloads the content of a specific revision → record (object) or null (cached per version)
   async function fetchGistRevision(version) {
     if (gistRevCache[version]) return gistRevCache[version];
@@ -9693,6 +9767,7 @@ window.addEventListener('resize', updateAppGrid);
   window.gistHistoryPreview   = gistHistoryPreview;
   window.gistHistoryRestore   = gistHistoryRestore;
   window.onGhDevFilter        = onGhDevFilter;
+  window.onGhDaySel           = onGhDaySel;
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
   window.copySyncLink         = copySyncLink;
@@ -9764,7 +9839,10 @@ window.addEventListener('resize', updateAppGrid);
 <div class="modal-bg" id="gistHistoryModal">
   <div class="modal" style="max-width:460px;gap:.65rem">
     <h2>Version history</h2>
-    <select id="ghDevFilter" onchange="onGhDevFilter()" style="display:none;font-family:'DM Sans';font-size:.8rem;padding:.3rem .4rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none"></select>
+    <div class="gh-filters">
+      <select id="ghDaySel" onchange="onGhDaySel()" style="display:none" title="day to list revisions from"></select>
+      <select id="ghDevFilter" onchange="onGhDevFilter()" style="display:none" title="device that pushed the revision"></select>
+    </div>
     <div class="modal-list" id="gistHistoryList"></div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
