@@ -791,7 +791,9 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <!-- shared add field — same for Week / Next / Inbox / Later (target by active card) -->
     <div id="notes-add" class="notes-add">
-      <textarea id="quickInput" placeholder="task 20m  ·  9:30-10:00 standup  ·  -d text / text -d (under block)" rows="2"></textarea>
+      <!-- autocapitalize=none: a recurrence shortcut is recognized lowercase-only here (see parseRecurToken),
+           and a phone keyboard would otherwise capitalize the first word of the line ("r1m" → "R1m") -->
+      <textarea id="quickInput" autocapitalize="none" placeholder="task 20m  ·  9:30-10:00 standup  ·  -d text / text -d (under block)" rows="2"></textarea>
       <div id="abbrevHint" class="abbrev-hint" title="blocks on this card — click one to insert the typed text under it, or type -abbr as the first / last word (any case) · ? = all shortcuts"></div>
       <div class="input-btns" id="inputBtns">
         <button class="btn-add" id="btnTask" onclick="toggleTaskMenu(event)">+ Task ▾</button>
@@ -1535,8 +1537,13 @@ function extractMonthRoute(text) {
 //   r24.7.       → every year on 24.7.
 //   rmo rwe      → every Monday and Wednesday
 //   r3sa rlsu    → the 3rd Saturday / the last Sunday of every month (ordinal weekday)
-function parseRecurToken(tok) {
+// strict = the token came from a free-text field (quick-add), where a shortcut is only recognized
+// written all in lowercase — work codes are written in caps ("R08 solution", "RTU calibration") and
+// would otherwise silently turn into a rule (R08 = "every August"). Explicit rule fields (the ↻ modal,
+// "edit rule", the day badge) stay case-insensitive: whatever is typed there is meant as a rule.
+function parseRecurToken(tok, strict) {
   if (!tok) return null;
+  if (strict && tok !== tok.toLowerCase()) return null;
   const t = tok.toLowerCase().replace(/[,;]+$/, '');
   if (t[0] !== 'r' || t.length < 2) return null;
   const b = t.slice(1);
@@ -1560,12 +1567,13 @@ function nthWeekdayOfMonth(Y, M, wd, nth) {
   return nth === 'last' ? days[days.length - 1] : (days[nth - 1] || null);
 }
 // parse all r-tokens from the line (anywhere), return { rules, rest } | null
-function extractRecurRoute(text) {
+// strict → lowercase-only tokens (free text; see parseRecurToken)
+function extractRecurRoute(text, strict) {
   text = (text || '').trim();
   if (!text) return null;
   const rules = [], rest = [], seen = new Set();
   text.split(/\s+/).forEach(tok => {
-    const p = parseRecurToken(tok);
+    const p = parseRecurToken(tok, strict);
     if (!p) { rest.push(tok); return; }
     const k = JSON.stringify(p);
     if (!seen.has(k)) { seen.add(k); rules.push(p); }   // dedup identical rules
@@ -2259,7 +2267,7 @@ function highlightItem(id) {
 }
 
 // ── ADD ITEMS ─────────────────────────────────────────────────────────────────
-function op_addQuickItems(ctx, forceType) {
+async function op_addQuickItems(ctx, forceType) {
   const ta = el(ctx.input);
   if (!ta) return;
   // ".del" at the end of the field = move: after adding, delete the source(s) sent via → (tracked in _sendSources)
@@ -2271,17 +2279,35 @@ function op_addQuickItems(ctx, forceType) {
     if (wantDelSrc) { const removed = deleteSentSources(); ta.value = ''; if (removed) showStatusMsg('→ source deleted (move)', 2200); }
     return;
   }
+  // (0) RECURRENCE pre-pass — BEFORE ctx.undo(), because the confirmation is async.
+  // A rule is never created silently from free text: the dialog names the rule as it was understood,
+  // so a line that only looks like a shortcut ("r08 solution") can be kept as a plain task. Tokens are
+  // recognized lowercase-only here (parseRecurToken strict), so "R08" never even gets this far.
+  const recurPlan = new Map();                            // line index → confirmed recurrence route
+  for (let i = 0; i < lines.length; i++) {
+    const rr = extractRecurRoute(lines[i], true);
+    if (!rr) continue;
+    const pr = parseItemText(rr.rest);
+    if (!pr.text) continue;                               // no payload (just "r4w") → no rule to create, so the line
+                                                          // stays a plain task instead of being silently swallowed
+    const ok = await customConfirm('"' + pr.text + '" — read as a recurrence rule: ' + describeRecur({ rules: rr.rules })
+      + '. Create the rule, or keep the line as a plain task?', 'create recurrence', 'plain task');
+    if (ok) recurPlan.set(i, rr);
+  }
+
   ctx.undo();
   const w = ctx.winStart();
   let addedHere = false, routedLater = false, lastYm = null, addedRecur = 0;
   const routedYms = new Set();   // target months of routed rows — for stamping mt
   const rejected = [], unknownAbbrevs = [], newTypes = [];   // refused lines (unknown block abbreviation — stay in the field) · block types created from "Name: …"
 
-  lines.forEach(rawLine => {
+  lines.forEach((rawLine, lineIdx) => {
     let line = rawLine;
     // (0) RECURRENCE: r-tokens anywhere on the line → create a rule, do NOT add as an item.
     // They appear as ghosts in the monthly buckets of the Later card (day cards "later").
-    const recur = extractRecurRoute(line);
+    // Only lines the user confirmed in the pre-pass above; a declined line continues as a plain task
+    // with the r-token left in its text.
+    const recur = recurPlan.get(lineIdx);
     if (recur) {
       const pItem = parseItemText(recur.rest);
       if (pItem.text) {                                     // without payload (just "r4w") skip
@@ -2475,7 +2501,7 @@ function op_addBlockItem(ctx, blockType) {
 // When the menu has no context (regular cards, Enter in quickInput), it falls back to addCtx.
 let _previewMenuCtx = null;                       // one-time context for the NEXT menu opening
 function menuCtx() { const m = el('blockMenu'); return (m && m._ctx) || addCtx; }
-function addQuickItems(forceType) { op_addQuickItems(menuCtx(), forceType); }
+function addQuickItems(forceType) { return op_addQuickItems(menuCtx(), forceType); }
 function addBlockItem(blockType) { op_addBlockItem(menuCtx(), blockType); }
 
 // clicking a block abbreviation under the field → inserts the typed text as subtask(s) under a SPECIFIC block (by id)
@@ -4330,7 +4356,7 @@ async function submitNewItem() {
   const keep = _newItemFromField ? '' : ta.value;             // the prefilled text is consumed; anything else stays in the field
   const before = new Set(ctx.list.map(x => String(x.id)));
   ta.value = line;
-  op_addQuickItems(ctx, _newItemKind === 'event' ? 'EVENT' : 'TASK');
+  await op_addQuickItems(ctx, _newItemKind === 'event' ? 'EVENT' : 'TASK');
   const refused = ta.value.trim();                            // an unknown -abbr leaves the line in the field (+ status message)
   ta.value = keep;
   if (refused) return;                                        // dialog stays open for the correction
@@ -4911,7 +4937,7 @@ function renderPreviewList() {
   // visual mini timeline — same strip as the Done inline preview (re-rendered on every change)
   const tl = renderInlineTlStrip(arr, times, _previewSource.windowStart, _previewSource.windowEnd);
   container.innerHTML = tl + itemsHtml + `<div class="preview-add-row">
-    <input id="previewAddText" class="preview-add-text" placeholder="new item… (e.g. task 20m)"
+    <input id="previewAddText" class="preview-add-text" autocapitalize="none" placeholder="new item… (e.g. task 20m)"
       onkeydown="if(event.key==='Enter')addPreviewItem(false)">
     <input id="previewAddDur" class="preview-add-dur" type="number" min="1" max="720"
       placeholder="min" title="length in minutes" onkeydown="if(event.key==='Enter')addPreviewItem(false)">
@@ -5243,6 +5269,7 @@ function customPrompt(msg, defaultVal) {
     el('confirmMsg').textContent = msg;
     el('confirmMsg').after(input);
     el('confirmOkBtn').textContent = 'OK';
+    el('confirmCancelBtn').textContent = 'cancel';   // a previous customConfirm may have renamed it
     el('confirmCancelBtn').style.display = '';
     el('confirmModal').classList.add('open');
     input.focus(); input.select();
@@ -5276,6 +5303,7 @@ function customPromptArea(msg, defaultVal) {
     el('confirmMsg').textContent = msg;
     el('confirmMsg').after(input);
     el('confirmOkBtn').textContent = 'OK';
+    el('confirmCancelBtn').textContent = 'cancel';   // a previous customConfirm may have renamed it
     el('confirmCancelBtn').style.display = '';
     el('confirmModal').classList.add('open');
     input.focus();
@@ -5520,12 +5548,15 @@ function onExpandEsc(e) { if (e.key === 'Escape' && expandedPanel) collapsePanel
 
 // ── CUSTOM CONFIRM / ALERT ────────────────────────────────────────────────────
 let _confirmResolve = null;
-function customConfirm(msg, okLabel='confirm') {
+// cancelLabel names the other choice where "cancel" would be wrong (a fork, not an abort — e.g.
+// "create recurrence" / "plain task"); always written, so it never leaks into the next dialog
+function customConfirm(msg, okLabel='confirm', cancelLabel='cancel') {
   return new Promise(resolve => {
     if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
     el('confirmMsg').textContent = msg;
     el('confirmOkBtn').textContent = okLabel;
     el('confirmOkBtn').onclick = () => _confirmResolve && _confirmResolve(true);
+    el('confirmCancelBtn').textContent = cancelLabel;
     el('confirmCancelBtn').style.display = '';
     el('confirmCancelBtn').onclick = () => _confirmResolve && _confirmResolve(false);
     el('confirmModal').classList.add('open');
@@ -8255,7 +8286,7 @@ function renderInlinePreviewBody(type, id) {
     <textarea id="inlNote-${type}-${id}" class="week-note day-note" placeholder="note for this day…"
       oninput="inlineNoteInput('${type}',${id},this)" onfocus="autoGrowTextarea(this)">${esc(rec.note || '')}</textarea>
     <div class="notes-add" style="margin-top:.4rem">
-      <textarea id="inlAddText" placeholder="${esc(quickAddPlaceholder())}" rows="2"
+      <textarea id="inlAddText" autocapitalize="none" placeholder="${esc(quickAddPlaceholder())}" rows="2"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inlineAddQuick();}"></textarea>
       ${abbrevChips ? `<div class="abbrev-hint">${abbrevChips}</div>` : ''}
       <div class="input-btns">
@@ -8304,10 +8335,10 @@ function inlineCtx() {
   return DNCTX(inlinePreviewKey.slice(0, sep), Number(inlinePreviewKey.slice(sep + 1)));
 }
 
-function inlineAddQuick() {
+async function inlineAddQuick() {
   const ctx = inlineCtx();
   if (!ctx) return;
-  op_addQuickItems(ctx, 'TASK');
+  await op_addQuickItems(ctx, 'TASK');
   el('inlAddText')?.focus();   // op_addQuickItems' render() rebuilt the row → refocus the fresh textarea
 }
 
@@ -10260,6 +10291,7 @@ window.addEventListener('resize', updateAppGrid);
         <tr><td><code>rmo</code> <code>rwe</code> <code>rtu</code></td><td>day of the week — the ghost lists the occurrence days in the month</td></tr>
         <tr><td><code>r3sa</code> <code>rlsu</code></td><td>the 3rd Saturday · the last Sunday of every month (1–5 or l = last)</td></tr>
       </table>
+      <p style="margin:.4rem 0 0"><b>Lowercase only, and it always asks first.</b> In the task field a shortcut counts only written in lowercase, so a code in capitals (<code>R08</code>, <code>RTU</code>) stays an ordinary task. Before a rule is created the app shows how it read the line — pick <i>plain task</i> to keep it as text. The date field of an existing item and the rule fields here take any case.</p>
       <p style="margin:.4rem 0 0"><b>The month of entry = anchor.</b> The rule shows in that month and onward per the rule as a dashed "ghost" (🔃). Click 🔃 = confirm into the month, ✕ = skip that month.</p>
     </details>
     <input id="recurSearch" type="text" placeholder="search rules — text, note, rule…" oninput="setRecurSearch(this.value)" style="width:100%;box-sizing:border-box;font-size:.82rem;padding:.35rem .55rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none">
@@ -10277,7 +10309,7 @@ window.addEventListener('resize', updateAppGrid);
     <h2 id="niTitle">New task</h2>
     <div class="field">
       <label>Text</label>
-      <input type="text" id="niText" placeholder="e.g. write spec 45m  ·  -d text = under block d" onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewItem();}">
+      <input type="text" id="niText" autocapitalize="none" placeholder="e.g. write spec 45m  ·  -d text = under block d" onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewItem();}">
     </div>
     <div id="niTimes" style="display:none">
       <div class="setup-grid">
@@ -10312,7 +10344,7 @@ window.addEventListener('resize', updateAppGrid);
     </div>
     <div class="field">
       <label>Rule</label>
-      <input type="text" id="raRule" placeholder="e.g. r1m · r12.m r24.m · r06 · rmo · r3sa" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddRecur();}">
+      <input type="text" id="raRule" autocapitalize="none" placeholder="e.g. r1m · r12.m r24.m · r06 · rmo · r3sa" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddRecur();}">
     </div>
     <div class="field">
       <label>Valid from</label>
