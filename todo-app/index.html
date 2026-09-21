@@ -2897,7 +2897,12 @@ function startLineEdit(lineIdx, col) {
   box.rows = 1;
   const partLines = lines.slice(part.start, part.end + 1);
   box.value = partLines.join('\n');
+  // The span being replaced carries the line break that ends it (see noteDisplay). Taking it out
+  // with the span would swallow the row after it — an empty line behind the tapped one collapsed
+  // for as long as it was open — so the break is put back as a text node after the field.
+  const keepBreak = !part.block && /\n$/.test(part.el.textContent || '');
   part.el.replaceWith(box);
+  if (keepBreak) box.insertAdjacentText('afterend', '\n');
   _lineEdit = { start: part.start, end: part.end, span0: part.end - part.start + 1, box };
   box.addEventListener('input', () => { syncLineEdit(); growLineEdit(); });
   box.addEventListener('keydown', lineEditKeydown);
