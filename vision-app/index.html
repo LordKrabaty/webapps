@@ -84,6 +84,14 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 @media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
 .modal-btn.danger{border-color:#c0392b;color:#c0392b}
 @media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
+/* format switch (text / JSON) in the single-item export modal */
+.fmt-row{display:flex;gap:calc(.35rem/var(--pzc,1));align-items:center;flex-wrap:wrap;margin:calc(.1rem/var(--pzc,1)) 0 calc(.35rem/var(--pzc,1))}
+.fmt-lbl{font-size:.7rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.fmt-btn{font-family:'DM Sans',sans-serif;font-size:.76rem;padding:.25rem .65rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
+.fmt-btn.on{background:var(--black);color:var(--w)}
+@media(hover:hover){.fmt-btn:hover{background:var(--light)}.fmt-btn.on:hover{background:var(--dark)}}
+.vis-text-ta{font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.65;min-height:240px;background:var(--off);border:var(--b);resize:vertical}
+.vis-text-ta.json{font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.5}
 html{-webkit-text-size-adjust:100%;overflow-x:clip}
 body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
 
@@ -701,11 +709,16 @@ textarea::placeholder{color:var(--mid)}
 <div class="modal-bg" id="visTextModal">
   <div class="modal" style="max-width:520px">
     <h2 id="visTextTitle">Vision</h2>
-    <p style="font-size:.78rem;color:var(--muted)">Copy or download this vision as plain text.</p>
-    <textarea id="visTextArea" readonly style="font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.65;min-height:240px;background:var(--off);border:var(--b);resize:vertical"></textarea>
+    <p id="visTextHint" style="font-size:.78rem;color:var(--muted)">Copy or download this vision as plain text.</p>
+    <div class="fmt-row">
+      <span class="fmt-lbl">Format</span>
+      <button class="fmt-btn on" id="visFmtText" onclick="setVisTextFmt('text')">text</button>
+      <button class="fmt-btn" id="visFmtJson" onclick="setVisTextFmt('json')">JSON</button>
+    </div>
+    <textarea id="visTextArea" class="vis-text-ta" readonly></textarea>
     <div class="modal-row">
       <button class="modal-btn primary" onclick="copyVisionText()">📋 copy</button>
-      <button class="modal-btn" onclick="downloadVisionText()">↓ download .txt</button>
+      <button class="modal-btn" id="visTextDlBtn" onclick="downloadVisionText()">↓ download .txt</button>
       <button class="modal-btn" onclick="closeModal('visTextModal')">close</button>
     </div>
   </div>
@@ -1936,7 +1949,7 @@ function renderVisions() {
         ${note ? `<span class="lib-item-note">${esc(note)}</span>` : ''}
       </div>
       <button class="lib-item-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('vision','${e.id}')">✎</button>
-      <button class="lib-item-exp" title="export as text" onclick="event.stopPropagation();exportVisionText('${e.id}')">↑</button>
+      <button class="lib-item-exp" title="export as text or JSON" onclick="event.stopPropagation();exportVisionText('${e.id}')">↑</button>
       <button class="lib-item-del" title="delete vision" onclick="event.stopPropagation();deleteVision('${e.id}')"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8"/></svg></button>
     </div>`;
   }).join('');
@@ -1996,16 +2009,36 @@ function visionToText(d, name, note) {
   }
   return lines.join('\n');
 }
+// ── single-item export modal (plain text / JSON) ──
+let visTextFmt = 'text', visTextPayload = { text:'', json:'' };
+function openVisTextModal(title, fname, text, jsonObj) {
+  visTextPayload = { text, json: JSON.stringify(jsonObj, null, 2) };
+  el('visTextTitle').textContent = title;
+  el('visTextArea').dataset.fname = fname;
+  setVisTextFmt('text');
+  el('visTextModal').classList.add('open');
+}
+function setVisTextFmt(fmt) {
+  visTextFmt = fmt === 'json' ? 'json' : 'text';
+  const json = visTextFmt === 'json';
+  const ta = el('visTextArea');
+  ta.value = json ? visTextPayload.json : visTextPayload.text;
+  ta.classList.toggle('json', json);
+  el('visFmtText').classList.toggle('on', !json);
+  el('visFmtJson').classList.toggle('on', json);
+  el('visTextDlBtn').textContent = json ? '↓ download .json' : '↓ download .txt';
+  el('visTextHint').textContent = json
+    ? 'Copy or download as JSON — this file can be loaded back through Import.'
+    : 'Copy or download this vision as plain text.';
+}
 function exportVisionText(id) {
   const entry = library.find(e => String(e.id) === String(id));
   if (!entry) return;
   // for the active vision, prefer the live (unsaved) form data
   const data = String(id) === String(activeLibId) ? getSessionData() : entry.data;
   const name = entry.name || (data && data.title) || 'Vision';
-  el('visTextTitle').textContent = name;
-  el('visTextArea').value = visionToText(data, entry.name, entry.note);
-  el('visTextArea').dataset.fname = name;
-  el('visTextModal').classList.add('open');
+  openVisTextModal(name, name, visionToText(data, entry.name, entry.note),
+    { v:1, schema: APP_SCHEMA, items: [{ ...entry, data }], archive: [] });
 }
 // ── rename / note a vision or a version ──
 let itemEditTarget = null;   // { kind:'vision'|'version', id }
@@ -2051,10 +2084,9 @@ function exportVersionText(id) {
   if (!s) return;
   const src = library.find(e => String(e.id) === String(s.srcId));
   const visName = (src && src.name) || (s.data && s.data.title) || 'Vision';
-  el('visTextTitle').textContent = visName + ' — ' + (s.name || '');
-  el('visTextArea').value = visionToText(s.data, src && src.name, s.note);
-  el('visTextArea').dataset.fname = visName + ' ' + (s.name || '');
-  el('visTextModal').classList.add('open');
+  openVisTextModal(visName + ' — ' + (s.name || ''), visName + ' ' + (s.name || ''),
+    visionToText(s.data, src && src.name, s.note),
+    { v:1, schema: APP_SCHEMA, items: [], archive: [s] });
 }
 function copyVisionText() {
   const ta = el('visTextArea');
@@ -2066,10 +2098,11 @@ function copyVisionText() {
 }
 function downloadVisionText() {
   const ta = el('visTextArea');
+  const json = visTextFmt === 'json';
   const base = (ta.dataset.fname || 'vision').replace(/[^a-z0-9\s._-]/gi,'_').slice(0,50).trim() || 'vision';
-  const fname = base + '-' + new Date().toISOString().slice(0,10) + '.txt';
+  const fname = base + '-' + new Date().toISOString().slice(0,10) + (json ? '.json' : '.txt');
   try {
-    const uri = 'data:text/plain;charset=utf-8,' + encodeURIComponent(ta.value);
+    const uri = 'data:' + (json ? 'application/json' : 'text/plain') + ';charset=utf-8,' + encodeURIComponent(ta.value);
     const a = document.createElement('a'); a.href = uri; a.download = fname;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     showSave('↑ downloaded');
@@ -2164,7 +2197,7 @@ function renderVersions() {
     return `<div class="ver-item${active?' active':''}" onclick="viewSnapshot('${s.id}')">
       <div class="ver-meta"><span class="ver-date">${esc(s.name||'')}</span><span class="ver-sum">${esc(verSummary(s))}</span>${(s.note||'').trim() ? `<span class="ver-note">${esc((s.note||'').trim())}</span>` : ''}</div>
       <button class="ver-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('version','${s.id}')">✎</button>
-      <button class="ver-exp" title="export as text" onclick="event.stopPropagation();exportVersionText('${s.id}')">↑</button>
+      <button class="ver-exp" title="export as text or JSON" onclick="event.stopPropagation();exportVersionText('${s.id}')">↑</button>
       <button class="ver-del" title="delete version" onclick="event.stopPropagation();deleteVersion('${s.id}')">✕</button>
     </div>`;
   }).join('');
