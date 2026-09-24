@@ -126,6 +126,11 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
    fits one line on a phone; what each one does is in its tooltip and in "? formatting". */
 #iePaneText .ie-bar{position:sticky;bottom:0;z-index:2;background:var(--w);border-top:1px solid var(--light);padding-top:calc(.35rem/var(--pzc,1));margin-top:calc(.1rem/var(--pzc,1))}
 #iePaneText .ie-bar .btn-io{min-width:1.9rem;padding:.28rem .42rem}
+/* Checklist tab: the same tight row — four short buttons that still fit one line on a phone;
+   the count gives up its space first (it is the one thing that may be cut) */
+#iePaneList .ie-bar{gap:.25rem}
+#iePaneList .ie-bar .btn-io{padding:.26rem .45rem}
+#iePaneList .ie-bar-count{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn-io.on{background:var(--black);color:var(--w);border-color:var(--black)}   /* source mode is on */
 .ie-bar-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-right:auto}
 .ie-tools{display:flex;gap:.35rem;flex:0 0 auto}
@@ -134,7 +139,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .ie-tab-count{font-family:'DM Mono',monospace;font-size:.7rem;opacity:.7}
 .ie-kind{margin-left:auto;align-self:center;font-size:.66rem;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 .1rem .2rem}
 .chk-list{display:flex;flex-direction:column}
-.chk-row{display:flex;align-items:center;gap:.4rem;padding:.3rem .15rem;border-bottom:1px solid var(--light)}
+.chk-row{display:flex;align-items:center;gap:.35rem;padding:.24rem .1rem;border-bottom:1px solid var(--light)}
 .chk-row:last-child{border-bottom:none}
 .chk-row.dragging{opacity:.3}
 .chk-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
@@ -145,7 +150,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .chk-text.done{text-decoration:line-through;color:var(--muted)}
 .chk-text.blank{color:var(--mid);font-style:italic}
 .chk-edit{flex:1;font-family:'DM Sans',sans-serif;font-size:.86rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;padding:.05rem 0;min-width:0}
-.chk-plain{font-size:.8rem;color:var(--muted);line-height:1.45;padding:.32rem .15rem .16rem 2.2rem;word-break:break-word;white-space:pre-wrap}
+.chk-plain{font-size:.8rem;color:var(--muted);line-height:1.45;padding:.28rem .1rem .12rem 1.9rem;word-break:break-word;white-space:pre-wrap}
 .chk-move{display:flex;flex-direction:column;flex-shrink:0;opacity:.5}
 .chk-move button{border:none;background:none;cursor:pointer;padding:0;font-size:.6rem;line-height:1;color:var(--black);width:17px;height:14px;display:flex;align-items:center;justify-content:center}
 .chk-move button:disabled{opacity:.2;cursor:default}
@@ -1191,9 +1196,10 @@ textarea::placeholder{color:var(--mid)}
         <div class="ie-pane" id="iePaneList">
           <div class="ie-bar">
             <span class="ie-bar-count" id="ieChkCount"></span>
-            <button class="btn-io" onclick="setAllChkItems(true)" title="check every item">☑ all</button>
-            <button class="btn-io" onclick="setAllChkItems(false)" title="uncheck every item">☐ none</button>
-            <button class="btn-io" onclick="addChkItem()" title="add a checklist item">+ item</button>
+            <button class="btn-io" onclick="setAllChkItems(true)" title="tick off every item">☑ all</button>
+            <button class="btn-io" onclick="setAllChkItems(false)" title="untick every item">☐ none</button>
+            <button class="btn-io" id="ieChkHideBtn" onclick="toggleChkHideDone()" title="hide the items that are already ticked off">hide</button>
+            <button class="btn-io" onclick="addChkItem()" title="add a checklist item">+</button>
           </div>
           <div class="chk-list" id="ieChkList"></div>
         </div>
@@ -2815,6 +2821,21 @@ function parseChkLine(line) {
 function chkLine(indent, done, text) { return indent + '- [' + (done ? 'x' : ' ') + '] ' + text; }
 function ieNoteLines() { return (el('itemEditNote')?.value || '').split('\n'); }
 function ieChkIdxs(lines) { return lines.map((ln, i) => parseChkLine(ln) ? i : -1).filter(i => i >= 0); }
+// "hide done" is a view preference, not content — nothing is written to the note, so a long list
+// can be read as "what is left" without touching the text (and the choice sticks between items).
+const CHK_HIDE_KEY = 'todo-app-chk-hidedone';
+let chkHideDone = (() => { try { return localStorage.getItem(CHK_HIDE_KEY) === '1'; } catch (e) { return false; } })();
+function toggleChkHideDone() {
+  chkHideDone = !chkHideDone;
+  try { localStorage.setItem(CHK_HIDE_KEY, chkHideDone ? '1' : '0'); } catch (e) {}
+  renderChkList();
+}
+// the items the list actually shows — with "hide done" on, only the ones still open.
+// ▲▼ step between THESE, so a move is always a visible one (the ticked lines in between stay put)
+function chkVisibleIdxs(lines) {
+  const idxs = ieChkIdxs(lines);
+  return chkHideDone ? idxs.filter(i => !parseChkLine(lines[i]).done) : idxs;
+}
 function noteHasChkItems() { return ieNoteLines().some(ln => parseChkLine(ln)); }
 // every change goes through here: the textarea stays the single source of truth
 function ieSetNoteLines(lines) {
@@ -3187,7 +3208,14 @@ function updateChkCounts() {
   const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
   const done = idxs.filter(i => parseChkLine(lines[i]).done).length;
   const badge = el('ieTabCount'); if (badge) badge.textContent = idxs.length ? done + '/' + idxs.length : '';
-  const cnt = el('ieChkCount');   if (cnt)   cnt.textContent   = idxs.length ? done + ' / ' + idxs.length + ' done' : '';
+  const cnt = el('ieChkCount');   if (cnt)   cnt.textContent   = idxs.length ? done + '/' + idxs.length + ' done' : '';
+  const hide = el('ieChkHideBtn');
+  if (hide) {
+    hide.classList.toggle('on', chkHideDone);
+    hide.textContent = chkHideDone ? 'show' : 'hide';   // how many are hidden is right next to it, in the count
+    hide.disabled = !done && !chkHideDone;             // nothing ticked off → nothing to hide
+    hide.title = chkHideDone ? 'show the ' + done + ' ticked-off item(s) again' : 'hide the items that are already ticked off';
+  }
 }
 // Rebuilding the rows removes whatever is focused inside them, and that fires blur → an open
 // inline edit would re-enter this function in the middle of the innerHTML write (DOM exception,
@@ -3205,13 +3233,15 @@ function renderChkList() {
 function buildChkRows(box) {
   const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
   if (!idxs.length) {
-    box.innerHTML = '<div class="chk-empty">No checklist items yet — use “+ item”, or write “[] milk” on the Text tab.</div>';
+    box.innerHTML = '<div class="chk-empty">No checklist items yet — use “+”, or write “[] milk” on the Text tab.</div>';
     return;
   }
+  const vis = chkVisibleIdxs(lines);
   box.innerHTML = lines.map((ln, i) => {
     const it = parseChkLine(ln);
     if (!it) return ln.trim() ? `<div class="chk-plain md">${noteDisplay(ln.trim())}</div>` : '';   // heading / prose — editable on the Text tab
-    const pos = idxs.indexOf(i);
+    if (chkHideDone && it.done) return '';
+    const pos = vis.indexOf(i);
     return `<div class="chk-row" draggable="true" data-idx="${i}">
       <span class="chk-grip" title="drag to reorder">⠿</span>
       <input type="checkbox" class="chk-box" ${it.done ? 'checked' : ''} onchange="toggleChkItem(${i})">
@@ -3219,13 +3249,13 @@ function buildChkRows(box) {
         title="edit the text">${it.text.trim() ? mdInline(it.text) : 'empty'}</span>
       <div class="chk-move">
         <button onclick="moveChkItem(${i},-1)" ${pos === 0 ? 'disabled' : ''} title="move up">▲</button>
-        <button onclick="moveChkItem(${i},1)" ${pos === idxs.length - 1 ? 'disabled' : ''} title="move down">▼</button>
+        <button onclick="moveChkItem(${i},1)" ${pos === vis.length - 1 ? 'disabled' : ''} title="move down">▼</button>
       </div>
       <button class="chk-del" onclick="deleteChkItem(${i})" title="delete the item">
         <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
       </button>
     </div>`;
-  }).join('');
+  }).join('') + (vis.length ? '' : '<div class="chk-empty">Every item is ticked off — “show” brings them back.</div>');
   initChkDnd();
 }
 
@@ -3246,7 +3276,7 @@ function setAllChkItems(done) {
 }
 // ↑/↓ swaps with the neighbouring ITEM — headings and prose between them stay where they are
 function moveChkItem(lineIdx, dir) {
-  const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
+  const lines = ieNoteLines(), idxs = chkVisibleIdxs(lines);
   const pos = idxs.indexOf(lineIdx);
   if (pos < 0) return;
   const other = idxs[pos + dir];
