@@ -336,7 +336,7 @@ Nikdy horizontální scroll. Tlačítko ☰ skryje `library-panel`.
 - Windows 11 PC (práce + domov)
 - Redmi Note 15 5G (Android 14)
 - Onyx Boox Note Air2 Plus (e-ink, pomalý refresh)
-- Rotoped BH i.Spada 2 Racing **H9356I** (bez FTMS) — konzole iConcept = **Bluetooth Classic SPP**, ne BLE → v `workout-app` přes **Web Serial** (ne Web Bluetooth); protokol podle QZ `iconceptbike.cpp`
+- Rotoped BH i.Spada 2 Racing **H9356I** (bez FTMS) — konzole od Pafers, hlásí se jako `PAFERS_1B02B2`, **BLE s vlastní službou** `72d70001-…` (ne FTMS, ne sériový SPP — Web Serial ho nenajde) → v `workout-app` přes **Web Bluetooth**; protokol podle QZ `src/devices/pafersbike`
 
 Vše musí být použitelné na všech třech bez nutnosti zoomu nebo horizontálního scrollu.
 
