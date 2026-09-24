@@ -361,6 +361,30 @@ Při otevírání URL, spouštění preview nebo jakémkoliv příkazu vyžaduj�
 - Smoke testy přes headless Chrome jsou volitelné — spusť je pouze pokud o to výslovně požádám
 - PowerShell je dostupný, ale preferuj přímé souborové operace kde to jde
 
+### Víceřádkové zprávy commitu — syntaxe podle shellu, ve kterém příkaz běží
+
+Jsou k dispozici **dva různé shelly** a každý má jinou syntaxi pro víceřádkový text:
+
+| Shell | Víceřádková zpráva |
+|---|---|
+| **Bash tool** (Git Bash, POSIX sh) | heredoc do souboru + `git commit -F soubor` (viz níže) |
+| **PowerShell tool** | here-string `git commit -m @'` … `'@` (zavírací `'@` musí být na sloupci 0) |
+
+❌ **Nikdy nemíchej** — PowerShell here-string `@'…'@` poslaný do Bash toolu se **nevyhodnotí jako syntaxe**: sh vezme `@` jako obyčejný znak a `'…'` jako běžný uvozovkový řetězec, takže do zprávy propadne `@` jako **první řádek (subject)** a druhé `@` na konci. Commit projde bez chyby — všimneš si toho až v `git log --oneline`, kde je subject `@`. (Stalo se 2026-09-24, oprava vyžadovala `--amend` + force push.)
+
+**Bezpečný postup v Bash toolu:**
+```sh
+cat > "$TEMP/cmsg.txt" <<'MSG'
+feat(app): subject
+
+Tělo zprávy.
+
+Co-Authored-By: …
+MSG
+git commit -F "$TEMP/cmsg.txt"
+```
+Po každém commitu zkontroluj `git log --oneline -1` — subject musí začínat typem změny (`feat`/`fix`/…), ne interpunkcí.
+
 
 ---
 
