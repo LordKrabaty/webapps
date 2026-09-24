@@ -124,6 +124,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 .hr-stats{font-size:.78rem;color:var(--muted)}
 @media(max-width:820px){.hr-bar{padding:calc(.5rem/var(--pzc,1)) calc(.85rem/var(--pzc,1))}}
 @media(max-width:400px){.hr-bar{padding:calc(.5rem/var(--pzc,1)) calc(.65rem/var(--pzc,1));gap:calc(.6rem/var(--pzc,1))}.hr-value{font-size:1.5rem}}
+/* EXERCISE BIKE (Web Serial) bar — reuses the .hr-bar look, sits right under it */
+.bike-unit{font-size:.8rem;font-weight:500;margin-left:.15rem}
+.bike-lvl{display:flex;align-items:center;gap:.35rem}
+.bike-lvl .btn-sm{min-width:2.4em;padding:.3rem .55rem}
+.bike-err{font-size:.72rem;color:var(--muted);overflow-wrap:anywhere}
+.bike-dec{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--black);overflow-wrap:anywhere}
+.bike-log{font-family:'DM Mono',monospace;font-size:.68rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow-y:auto;border:var(--b);border-radius:var(--r);padding:.4rem .5rem;background:var(--off);color:var(--dark);margin:0}
+.now-bike-row{padding:0 .9rem;margin-bottom:.35rem;font-family:'DM Mono',monospace;font-size:.95rem;color:var(--dark)}
+.now-bike-row b{color:var(--black);font-size:1.15rem}
 
 /* HEADER */
 header{
@@ -588,6 +597,7 @@ textarea::placeholder{color:var(--mid)}
 </header>
 
 <div id="hrBar"></div>
+<div id="bikeBar" style="display:none"></div>
 
 <div class="app">
 
@@ -787,6 +797,29 @@ textarea::placeholder{color:var(--mid)}
       <div class="jb-field" style="flex:1;min-width:4.5em"><label>Z5 ≥</label><input type="number" inputmode="numeric" min="0" id="hrz5" onchange="setHrZone(4,this.value)"></div>
     </div>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('hrZonesModal')">close</button></div>
+  </div>
+</div>
+
+<!-- Exercise bike modal (BH iConcept console over Bluetooth serial) — options + raw data for calibration -->
+<div class="modal-bg" id="bikeModal">
+  <div class="modal" style="max-width:460px;gap:.6rem">
+    <h2>Exercise bike</h2>
+    <p style="font-size:.78rem;color:var(--muted);line-height:1.5;margin:0">For BH iConcept consoles (i.Spada 2 Racing H9356I …), which use classic Bluetooth, not BLE. Pair the bike in the phone's / PC's Bluetooth settings first (PIN usually 0000 or 1234), then tap “Connect bike” and pick it in Chrome's list. Start-up takes ~8 s.</p>
+    <div class="modal-row" style="flex-wrap:wrap">
+      <div class="jb-field" style="flex:1;min-width:10em"><label>start-up sequence</label>
+        <select id="bikeInitSel" onchange="setBikeOpt('init',this.value)"><option value="std">standard (i.Spada …)</option><option value="bh">BH-… consoles (i.Nexor …)</option></select>
+        <div class="jb-sub">applies on the next connect</div></div>
+      <div class="jb-field" style="flex:1;min-width:10em"><label>level scale</label>
+        <select id="bikeLvlSel" onchange="setBikeOpt('lvl',this.value)"><option value="12">1–12 (QZ table)</option><option value="24">1–24 (raw byte)</option></select>
+        <div class="jb-sub">whichever matches the console display</div></div>
+    </div>
+    <div class="jb-field"><label>last decoded frame</label><div class="bike-dec" id="bikeDec">–</div></div>
+    <div class="jb-field"><label>raw data (&lt; from bike · &gt; sent, polls hidden)</label><pre class="bike-log" id="bikeLog"></pre></div>
+    <div class="modal-row" style="flex-wrap:wrap">
+      <button class="modal-btn" onclick="copyBikeLog()" title="copy the raw data to send for calibration">⧉ copy data</button>
+      <button class="modal-btn" onclick="forgetBike()" title="drop the remembered bike — the next connect shows Chrome's list again">forget bike</button>
+      <button class="modal-btn primary" onclick="closeModal('bikeModal')">close</button>
+    </div>
   </div>
 </div>
 
@@ -1335,7 +1368,7 @@ function customAlert(msg, okLabel='ok') {
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
   closeNewMenu();
-  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal','wkHistModal','musicModal','logPickModal','hrZonesModal'].forEach(id => {
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','logEditModal','tplNameModal','actModal','finishModal','exSetModal','exScoreModal','wkHistModal','musicModal','logPickModal','hrZonesModal','bikeModal'].forEach(id => {
     const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
   });
   // a track preview must not outlive the ♪… modal (covers close button + backdrop click)
@@ -1590,6 +1623,7 @@ function init() {
   if (restored) showSave('↓ restored');
   initWkDnd();
   initHrPanel();
+  initBikePanel();
   setInterval(tick, 500);
   // web fonts change line metrics → re-grow the note fields once fonts are ready
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => document.querySelectorAll('.ex-note-in,.ex-snote-in,.log-note-in').forEach(autoResizeTA));
@@ -1746,6 +1780,7 @@ function renderMain() {
   </div>
   ${pendingStripHtml()}
   <div class="now-hr-row" id="nowHrRow" style="display:none"></div>
+  <div class="now-bike-row" id="nowBikeRow" style="display:none"></div>
   <div class="rest-bar" id="nowBar" style="display:none">
     <span class="rest-label" id="nowLabel">ready</span>
     <div class="now-prog" id="nowProg">
@@ -1791,6 +1826,7 @@ function renderMain() {
   c.innerHTML = html;
   c.querySelectorAll('.ex-note-in,.ex-snote-in').forEach(autoResizeTA);
   updateHeaderName();
+  renderBikeBar();   // shown for cardio only — follows a type switch / workout load
   updateRunUi();
 }
 // active workout name mirrored into the toolbar brand (headerSub is prepared in the template)
@@ -2792,7 +2828,7 @@ function releaseWakeLock() {
   if (wl) { try { wl.release(); } catch (e) {} }
 }
 function syncWakeLock() {
-  _wakeWant = !!(wk.run && wk.run.startedAt) || hrState === 'connected';
+  _wakeWant = !!(wk.run && wk.run.startedAt) || hrState === 'connected' || bikeState === 'connected';
   if (_wakeWant && document.visibilityState === 'visible') acquireWakeLock();
   else releaseWakeLock();
 }
@@ -3020,6 +3056,337 @@ function hrRetryAttempt() {
     catch (e) { hrRetryAttempt(); }
   }, 2000);
 }
+
+// ── EXERCISE BIKE (BH iConcept console over Web Serial → Bluetooth Classic SPP) ──
+// The BH i.Spada 2 Racing (H9356I) and other iConcept consoles talk a serial protocol over
+// classic Bluetooth (SPP / RFCOMM), not BLE — Web Bluetooth can't see them, Web Serial can
+// (Chrome desktop 117+, Chrome Android 137+; the bike has to be paired in the OS first).
+// Protocol facts come from the open-source QZ app (cagnulein/qdomyos-zwift, iconceptbike.cpp):
+// frames are 0x55, cmd, len, payload[len]; the console answers a 1 s poll (55 17 01 01) with
+// 16-byte metric frames; resistance is set with 55 11 01 <byte>, sent in place of a poll.
+// Same shape as the HR module above: feature-detected once (initBikePanel), and nothing
+// below talks to navigator.serial until the user taps "Connect bike".
+const BIKE_SPP = '00001101-0000-1000-8000-00805f9b34fb';   // Serial Port Profile
+const BIKE_OPTS_KEY = 'workout-bike-opts';                  // device-local, not synced
+const BIKE_POLL = [0x55, 0x17, 0x01, 0x01];
+// resistance byte per level: QZ's table for levels 1–12 ('12'), or byte = level ('24') —
+// which one the H9356I console follows is still to be confirmed on the bike (⚙ → level scale)
+const BIKE_LVL12 = [0x08, 0x0a, 0x0b, 0x0d, 0x0e, 0x10, 0x11, 0x13, 0x14, 0x16, 0x17, 0x18];
+// start-up: wake-up bursts shared by both variants, then [bytes, pause ms after] steps (QZ's order & delays)
+const BIKE_WAKE = [
+  [[0x55,0x0c,0x01,0xff, 0x55,0xbb,0x01,0xff, 0x55,0x24,0x01,0xff, 0x55,0x25,0x01,0xff, 0x55,0x26,0x01,0xff, 0x55,0x27,0x01,0xff,
+    0x55,0x02,0x01,0xff, 0x55,0x03,0x01,0xff, 0x55,0x04,0x01,0xff, 0x55,0x06,0x01,0xff, 0x55,0x1f,0x01,0xff, 0x55,0xa0,0x01,0xff,
+    0x55,0xb0,0x01,0xff, 0x55,0xb2,0x01,0xff, 0x55,0xb3,0x01,0xff, 0x55,0xb4,0x01,0xff, 0x55,0xb5,0x01,0xff, 0x55,0xb6,0x01,0xff,
+    0x55,0xb7,0x01,0xff, 0x55,0xb8,0x01,0xff, 0x55,0xb9,0x01,0xff, 0x55,0xba,0x01,0xff], 0],
+  [[0x55,0x0b,0x01,0xff, 0x55,0x18,0x01,0xff, 0x55,0x19,0x01,0xff, 0x55,0x1a,0x01,0xff, 0x55,0x1b,0x01,0xff], 2000]];
+const BIKE_INIT = {
+  std: [   // i.Spada & most iConcept consoles
+    [[0x55,0x17,0x01,0x01, 0x55,0xb5,0x01,0xff], 2000],
+    [[0x55,0x17,0x01,0x01, 0x55,0xb5,0x01,0xff], 500],
+    [[0x55,0x01,0x06,0x1e,0x00,0x3c,0x00,0xaa,0x00], 600],
+    [[0x55,0x15,0x01,0x00], 600],
+    [[0x55,0x11,0x01,0x01], 600],
+    [[0x55,0x0a,0x01,0x01], 600],
+    [[0x55,0x07,0x01,0xff], 600],
+    [[0x55,0x11,0x01,0x08], 0]],   // leaves the resistance at byte 0x08 (= level 1 of the QZ table)
+  bh: [    // consoles advertising as "BH-…" (i.Nexor)
+    [[0x55,0x0a,0x01,0x02,0x53], 0],
+    [[0x55,0x17,0x01,0x01,0x4f], 600],
+    [[0x55,0x01,0x06,0x21,0x01,0x50,0x00,0xb4,0x00], 400],
+    [BIKE_POLL, 200],
+    [[0x55,0x15,0x01,0x00], 600],
+    [[0x55,0x11,0x01,0x01], 200],
+    [BIKE_POLL, 400],
+    [[0x55,0x0a,0x01,0x01], 600],
+    [[0x55,0x07,0x01,0xff], 600]]
+};
+let bikeOpts = { init: 'std', lvl: '12' };
+let bikePort = null, bikeReader = null, bikeWriter = null, bikeReadDone = null, bikeClosing = null;
+let bikeState = 'disconnected';   // 'disconnected' | 'connecting' | 'starting' | 'connected' | 'error'
+let bikeErr = '', bikeGen = 0, bikeAttempts = 0, bikeRetryTimer = null, bikeManualStop = false;
+let bikePollTimer = null, bikeWriteChain = Promise.resolve();
+let bikeLive = null;      // last metric frame {w, rpm, kmh, kcal, sec, dist, t}
+let bikeLvl = null;       // level last SENT — the console never reports its resistance back
+let bikeWantRaw = null;   // pending resistance byte, goes out instead of the next poll (like QZ)
+const bikeFreshStats = () => ({ sumW: 0, count: 0, maxW: 0, sumRpm: 0, nRpm: 0, distKm: 0, kcal: 0 });
+let bikeStats = bikeFreshStats(), bikeStatsFor = null;   // scoped to the CURRENT run, like hrStats
+let bikeHistory = [];     // {t, w, rpm} — the whole active run, idle-capped like hrHistory
+let bikeLog = [];         // last raw frames as hex — the ⚙ modal shows them for calibration
+const BIKE_LOG_MAX = 60;
+
+function loadBikeOpts() { try { Object.assign(bikeOpts, JSON.parse(localStorage.getItem(BIKE_OPTS_KEY) || '{}')); } catch(e) {} }
+function saveBikeOpts() { try { localStorage.setItem(BIKE_OPTS_KEY, JSON.stringify(bikeOpts)); } catch(e) {} }
+function bikeMaxLvl() { return bikeOpts.lvl === '24' ? 24 : 12; }
+function bikeLvlToRaw(l) { return bikeOpts.lvl === '24' ? l : BIKE_LVL12[l - 1]; }
+function bikeRawToLvl(raw) {
+  if (bikeOpts.lvl === '24') return raw >= 1 && raw <= 24 ? raw : null;
+  const i = BIKE_LVL12.indexOf(raw); return i < 0 ? null : i + 1;
+}
+const bikeSleep = ms => new Promise(r => setTimeout(r, ms));
+const bikeHex = a => Array.from(a, b => b.toString(16).padStart(2, '0')).join(' ');
+function bikeLogLine(dir, bytes) {
+  bikeLog.push(new Date().toTimeString().slice(0, 8) + ' ' + dir + ' ' + bikeHex(bytes));
+  if (bikeLog.length > BIKE_LOG_MAX) bikeLog.shift();
+  if (el('bikeModal').classList.contains('open')) renderBikeLog();
+}
+
+function initBikePanel() { loadBikeOpts(); renderBikeBar(); }
+function bikeStatusWord() {
+  return { disconnected: 'bike disconnected', connecting: 'connecting…', starting: 'waking the console…', connected: 'bike connected', error: 'bike error' }[bikeState] || bikeState;
+}
+// the bar is rebuilt only when its shape changes (state / retry count / visibility) — the live
+// numbers go into fixed spans (updateBikeLive), so a − / + tap is never lost to a mid-tap re-render
+let bikeBarKey = '';
+function renderBikeBar() {
+  const bar = el('bikeBar'); if (!bar) return;
+  const busy = bikeState === 'connecting' || bikeState === 'starting' || bikeState === 'connected';
+  const show = busy || wk.type === 'cardio';   // only where it's useful: a cardio workout, or a bike already on the line
+  const key = [show, bikeState, bikeAttempts, bikeErr, 'serial' in navigator].join('|');
+  if (key === bikeBarKey) { updateBikeLive(); return; }
+  bikeBarKey = key;
+  bar.style.display = show ? 'flex' : 'none';
+  if (!show) return;
+  if (!('serial' in navigator)) {
+    bar.className = 'hr-bar unsupported';
+    bar.textContent = 'Exercise bike requires Chrome (desktop 117+ / Android 137+) — the bike talks over Bluetooth serial.';
+    return;
+  }
+  bar.className = 'hr-bar';
+  const st = `<b>${bikeStatusWord()}</b>` + (bikeAttempts > 0 && bikeState === 'connecting' ? ` (${bikeAttempts}/5)` : '');
+  bar.innerHTML = `
+    <button class="btn-io" style="flex:0 0 auto" onclick="toggleBike()">${busy ? 'Disconnect bike' : 'Connect bike'}</button>
+    <button class="btn-sm" style="flex:0 0 auto" onclick="openBikeModal()" title="bike options &amp; raw data">⚙</button>
+    <span class="hr-status">${st}</span>
+    ${bikeState === 'error' && bikeErr ? `<span class="bike-err">${esc(bikeErr)}</span>` : ''}
+    ${bikeState === 'connected' ? `<span class="hr-value"><span id="bikeW">–</span><span class="bike-unit">W</span></span>
+      <span class="hr-stats" id="bikeRpm"></span>
+      <span class="bike-lvl"><button class="btn-sm" onclick="bikeStepLvl(-1)" title="resistance one level down">−</button><span class="hr-zone" id="bikeLvlTxt" title="resistance level last sent to the bike">L–</span><button class="btn-sm" onclick="bikeStepLvl(1)" title="resistance one level up">+</button></span>
+      <span class="hr-stats" id="bikeAvg"></span>` : ''}`;
+  updateBikeLive();
+}
+function updateBikeLive() {
+  const w = el('bikeW'); if (!w) return;
+  const L = bikeLive;
+  w.textContent = L ? L.w : '–';
+  el('bikeRpm').textContent = L ? L.rpm + ' rpm · ' + L.kmh.toFixed(1) + ' km/h' : 'waiting for data…';
+  el('bikeLvlTxt').textContent = 'L' + (bikeLvl ?? '–');
+  el('bikeAvg').textContent = bikeStats.count ? 'avg ' + Math.round(bikeStats.sumW / bikeStats.count) + ' W · ' + bikeStats.distKm.toFixed(2) + ' km' : '';
+}
+// run strip: one compact line right above it — watts lead, like the pulse leads the digit
+function updateNowBike() {
+  const row = el('nowBikeRow'); if (!row) return;
+  const show = bikeState === 'connected' && bikeLive != null && (wk.exercises || []).some(ex => (ex.sets || []).length);   // hidden with the strip itself
+  row.style.display = show ? 'block' : 'none';
+  if (show) row.innerHTML = `⚡ <b>${bikeLive.w} W</b> · ${bikeLive.rpm} rpm · ${bikeLive.kmh.toFixed(1)} km/h` + (bikeLvl != null ? ' · L' + bikeLvl : '');
+}
+
+function toggleBike() {
+  if (bikeState === 'connecting' || bikeState === 'starting' || bikeState === 'connected') {
+    bikeManualStop = true; stopBikeRetry();
+    bikeClosing = bikeClose();   // a quick re-connect waits for this (the port can't reopen while still closing)
+    bikeState = 'disconnected'; bikeLive = null; bikeHistory = [];   // a deliberate disconnect starts the next trace clean
+    renderBikeBar(); updateNowBike(); syncWakeLock();
+    return;
+  }
+  connectBike();
+}
+function stopBikeRetry() { if (bikeRetryTimer) { clearTimeout(bikeRetryTimer); bikeRetryTimer = null; } bikeAttempts = 0; }
+async function connectBike() {
+  bikeManualStop = false; bikeErr = '';
+  bikeState = 'connecting'; renderBikeBar();
+  try {
+    if (bikeClosing) { await bikeClosing; bikeClosing = null; }
+    // a bike granted before is reused without Chrome's list (one tap on the next ride);
+    // ⚙ → "forget bike" drops it so the list comes back
+    const granted = await navigator.serial.getPorts();
+    const bt = granted.filter(p => p.getInfo().bluetoothServiceClassId != null);
+    bikePort = bt.length === 1 ? bt[0] : granted.length === 1 ? granted[0] : null;
+    if (!bikePort) bikePort = await navigator.serial.requestPort({ allowedBluetoothServiceClassIds: [BIKE_SPP] });
+    if (bikeManualStop) return;
+    await bikeOpen();
+  } catch (e) {
+    if (bikeManualStop) return;
+    // closing Chrome's list without a pick is not an error — just back to "connect"
+    if (e && e.name === 'NotFoundError') { bikeState = 'disconnected'; bikeErr = ''; }
+    else { bikeState = 'error'; bikeErr = (e && e.message) || String(e); }
+    renderBikeBar(); syncWakeLock();
+  }
+}
+// open the port, start reading, run the console start-up, then poll every second.
+// Throws only when the port can't be opened (bike off / out of range) — a drop after
+// that is noticed by the read loop, which is the single place that triggers a retry.
+async function bikeOpen() {
+  const gen = ++bikeGen;
+  await bikePort.open({ baudRate: 9600 });   // RFCOMM ignores the rate, the API still wants one
+  if (gen !== bikeGen || bikeManualStop) { try { await bikePort.close(); } catch (e) {} return; }   // "disconnect" hit while it was opening
+  bikeWriter = bikePort.writable.getWriter();
+  bikeWriteChain = Promise.resolve();
+  bikeReadDone = bikeReadLoop(bikePort, gen);
+  bikeState = 'starting'; renderBikeBar();
+  for (const [bytes, ms] of BIKE_WAKE.concat(BIKE_INIT[bikeOpts.init] || BIKE_INIT.std)) {
+    if (gen !== bikeGen || bikeManualStop) return;   // disconnected / dropped mid start-up
+    await bikeWrite(bytes);
+    if (bytes[1] === 0x11) bikeLvl = bikeRawToLvl(bytes[3]);   // start-up sets a resistance too
+    if (ms) await bikeSleep(ms);
+  }
+  if (gen !== bikeGen || bikeManualStop) return;
+  bikeState = 'connected'; bikeAttempts = 0;
+  bikePollTimer = setInterval(bikePoll, 1000);
+  renderBikeBar(); syncWakeLock();
+  showStatusMsg('⚡ bike connected');
+}
+// all writes go through one chain, so the start-up, polls and resistance never interleave
+function bikeWrite(bytes) {
+  const buf = Uint8Array.from(bytes);
+  if (bytes !== BIKE_POLL) bikeLogLine('>', buf);   // polls every second would drown the log
+  bikeWriteChain = bikeWriteChain.then(() => bikeWriter && bikeWriter.write(buf)).catch(() => {});   // a failed write = a dropped link → the read loop handles it
+  return bikeWriteChain;
+}
+function bikePoll() {
+  if (!bikeWriter) return;
+  if (bikeWantRaw != null) { const raw = bikeWantRaw; bikeWantRaw = null; bikeWrite([0x55, 0x11, 0x01, raw]); return; }
+  bikeWrite(BIKE_POLL);
+}
+async function bikeReadLoop(port, gen) {
+  let buf = [];
+  let stopped = false;
+  while (port.readable && !stopped) {
+    const reader = port.readable.getReader();
+    bikeReader = reader;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) { stopped = true; break; }   // reader.cancel() from bikeClose
+        for (const b of value) buf.push(b);
+        buf = bikeParse(buf);
+      }
+    } catch (e) {   // a non-fatal error leaves port.readable set → the loop takes a fresh reader
+    } finally {
+      try { reader.releaseLock(); } catch (e) {}
+      if (bikeReader === reader) bikeReader = null;
+    }
+  }
+  if (!stopped && gen === bikeGen) onBikeDropped();   // the link died under us (not a deliberate close)
+}
+// split the byte stream into frames: sync on 0x55, length = 3 + byte[2] (QZ's readSocket)
+function bikeParse(buf) {
+  for (;;) {
+    const i = buf.indexOf(0x55);
+    if (i < 0) return [];
+    if (i > 0) buf = buf.slice(i);
+    if (buf.length < 3) return buf;
+    const n = 3 + buf[2];
+    if (buf.length < n) return buf;
+    onBikeFrame(buf.slice(0, n));
+    buf = buf.slice(n);
+  }
+}
+function onBikeFrame(f) {
+  bikeLogLine('<', f);
+  if (f.length !== 16) return;   // only the 16-byte frames carry live metrics
+  const u16 = i => f[i] * 256 + f[i + 1];   // big-endian, bytes read unsigned
+  const now = Date.now();
+  const prev = bikeLive;
+  bikeLive = {
+    w: u16(14), rpm: f[13],
+    kmh: u16(9) / 200,   // the Spada 2 reports double speed — QZ's "BH Spada 2" mode halves it
+    kcal: u16(7), sec: u16(3), dist: u16(5), t: now
+  };
+  const runStart = wk.run && wk.run.startedAt;
+  if (runStart && bikeStatsFor !== runStart) { bikeStats = bikeFreshStats(); bikeHistory = []; bikeStatsFor = runStart; }   // new workout → fresh stats + trace
+  if (runStart) {
+    const s = bikeStats, L = bikeLive;
+    s.sumW += L.w; s.count++; if (L.w > s.maxW) s.maxW = L.w;
+    if (L.rpm > 0) { s.sumRpm += L.rpm; s.nRpm++; }   // cadence average skips the coasting samples
+    if (prev) {
+      s.distKm += L.kmh * Math.min(5000, now - prev.t) / 3600000;   // capped, so a reconnect gap isn't counted as riding
+      if (L.kcal > prev.kcal) s.kcal += L.kcal - prev.kcal;          // console counter — only its growth, survives a console reset
+    }
+  }
+  bikeHistory.push({ t: now, w: bikeLive.w, rpm: bikeLive.rpm });
+  if (!runStart) {   // an active run keeps its full trace — only idle riding gets pruned
+    const cutoff = now - HR_HIST_MAX_MS;
+    while (bikeHistory.length && bikeHistory[0].t < cutoff) bikeHistory.shift();
+  }
+  updateBikeLive(); updateNowBike();
+}
+async function onBikeDropped() {
+  bikeGen++;   // a start-up still in flight must stop instead of declaring the dead link "connected"
+  if (bikePollTimer) { clearInterval(bikePollTimer); bikePollTimer = null; }
+  try { if (bikeWriter) bikeWriter.releaseLock(); } catch (e) {}
+  bikeWriter = null;
+  try { await bikePort.close(); } catch (e) {}
+  if (bikeManualStop) { bikeState = 'disconnected'; renderBikeBar(); syncWakeLock(); return; }
+  bikeAttempts = 0;
+  bikeRetryAttempt();
+}
+function bikeRetryAttempt() {
+  if (bikeManualStop) return;
+  bikeAttempts++;
+  bikeState = 'connecting'; renderBikeBar();
+  if (bikeAttempts > 5) { bikeState = 'disconnected'; bikeAttempts = 0; bikeLive = null; renderBikeBar(); updateNowBike(); syncWakeLock(); return; }
+  bikeRetryTimer = setTimeout(async () => {
+    try { await bikeOpen(); }
+    catch (e) { bikeRetryAttempt(); }   // port didn't open (bike off / out of range) → next attempt
+  }, 2000);
+}
+// deliberate close: stop polling, cancel the reader and wait for the loop to let go, then close
+async function bikeClose() {
+  bikeGen++;   // invalidates a start-up still in flight and tells the read loop this is no drop
+  if (bikePollTimer) { clearInterval(bikePollTimer); bikePollTimer = null; }
+  bikeWantRaw = null;
+  const port = bikePort;
+  try { if (bikeReader) await bikeReader.cancel(); } catch (e) {}
+  try { if (bikeReadDone) await bikeReadDone; } catch (e) {}
+  try { if (bikeWriter) bikeWriter.releaseLock(); } catch (e) {}
+  bikeWriter = null;
+  try { if (port) await port.close(); } catch (e) {}
+}
+
+function bikeStepLvl(d) {
+  const cur = bikeLvl ?? (d > 0 ? 0 : 2);   // unknown level → + goes to 1, − stays at 1
+  bikeSetLvl(Math.max(1, Math.min(bikeMaxLvl(), cur + d)));
+}
+function bikeSetLvl(l) {
+  if (bikeState !== 'connected') return;
+  bikeLvl = l; bikeWantRaw = bikeLvlToRaw(l);
+  updateBikeLive(); updateNowBike();
+}
+
+function openBikeModal() {
+  el('bikeInitSel').value = bikeOpts.init;
+  el('bikeLvlSel').value = bikeOpts.lvl;
+  renderBikeLog();
+  el('bikeModal').classList.add('open');
+}
+function renderBikeLog() {
+  const L = bikeLive;
+  el('bikeDec').textContent = L
+    ? `${L.w} W · ${L.rpm} rpm · ${L.kmh.toFixed(1)} km/h (raw ${(L.kmh * 2).toFixed(2)}) · kcal ${L.kcal} · time ${mmss(L.sec)} · dist raw ${L.dist}`
+    : '–';
+  const log = el('bikeLog');
+  log.textContent = bikeLog.length ? bikeLog.join('\n') : '(nothing yet — connect the bike)';
+  log.scrollTop = log.scrollHeight;
+}
+function copyBikeLog() {
+  const L = bikeLive;
+  const head = `bike: init ${bikeOpts.init} · scale ${bikeOpts.lvl} · level L${bikeLvl ?? '–'} · state ${bikeState}${bikeErr ? ' (' + bikeErr + ')' : ''}`
+    + (L ? `\nlast: ${L.w} W · ${L.rpm} rpm · ${L.kmh.toFixed(1)} km/h · kcal ${L.kcal} · time ${L.sec} s · dist raw ${L.dist}` : '');
+  copyText(head + '\n' + bikeLog.join('\n'), '✓ bike data copied');
+}
+function setBikeOpt(k, v) {
+  bikeOpts[k] = v; saveBikeOpts();
+  if (k === 'lvl') { bikeLvl = null; updateBikeLive(); updateNowBike(); }   // the old number means something else on the new scale
+  showStatusMsg(k === 'init' ? '⚡ start-up sequence: applies on the next connect' : '⚡ level scale ' + (v === '24' ? '1–24' : '1–12'));
+}
+async function forgetBike() {
+  if (bikeState !== 'disconnected' && bikeState !== 'error') toggleBike();
+  if (bikeClosing) { await bikeClosing; bikeClosing = null; }
+  const ports = await navigator.serial.getPorts().catch(() => []);
+  for (const p of ports) { try { if (p.forget) await p.forget(); } catch (e) {} }
+  bikePort = null;
+  showStatusMsg('⚡ bike forgotten — the next connect shows Chrome\'s list');
+}
 function tick() {
   const r = wk.run;
   if (!r || !r.startedAt) { updateNowBar(); updateMusic(); return; }   // pre-start: the strip shows ▶ start (or hides if no exercises)
@@ -3087,13 +3454,14 @@ function updateNowBar() {
   const prog = el('nowProg');
   const hasEx = (wk.exercises || []).some(ex => (ex.sets || []).length);
   const started = !!(r && r.startedAt && r.phase);
-  if (!hasEx) { bar.style.display = 'none'; const hs = el('nowHrRow'); if (hs) hs.style.display = 'none'; return; }
+  if (!hasEx) { bar.style.display = 'none'; ['nowHrRow','nowBikeRow'].forEach(id => { const e = el(id); if (e) e.style.display = 'none'; }); return; }
   bar.style.display = 'flex';
   const lbl = el('nowLabel'), exl = el('nowEx'), t = el('nowTime');
   if (prog) prog.classList.toggle('pre', !started);   // hide the corner controls before start
   updateOverallBar(started);
   const hrShown = updateNowHr();
   updateNowHrStrip();
+  updateNowBike();
   if (!started) {   // ready to start — the whole strip starts, corners hidden
     bar.classList.remove('over');
     if (prog) prog.classList.remove('paused');
