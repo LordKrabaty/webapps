@@ -431,6 +431,7 @@ textarea::placeholder{color:var(--mid)}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-unit{color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace;flex-shrink:0;margin-left:-.05rem}
 .set-t{width:4.5em;min-width:3.2em}
+.set-lvl{width:2.6em;min-width:2.2em}   /* exercise-bike resistance of a cardio interval */
 .set-dur{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);flex:1 0 auto;white-space:nowrap}
 /* rounds view (strength: one round = each exercise once) */
 .round-head{display:flex;align-items:center;gap:.4rem;border-bottom:1px solid var(--light);padding-bottom:.25rem;margin-bottom:.15rem}
@@ -846,6 +847,10 @@ textarea::placeholder{color:var(--mid)}
       <label>time in zones</label>
       <div class="jb-readout" id="finZoneTime" title="computed from the sensor trace — not editable"></div>
     </div>
+    <div class="jb-field" id="finBikeWrap" style="display:none">
+      <label>exercise bike</label>
+      <div class="jb-readout" id="finBike" title="measured by the bike — saved with the log entry, not editable"></div>
+    </div>
     <div class="jb-field" style="margin-top:.2rem"><label>session note</label>
       <textarea id="finNote" rows="2" placeholder="how it went — HR, feel, adjustments… (saved with the logged workout, editable afterwards)" oninput="autoResizeTA(this)"></textarea></div>
     <div style="display:flex;flex-direction:column;gap:.5rem">
@@ -1015,7 +1020,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 10;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise
+const APP_SCHEMA = 11;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise · 11: exercise-bike resistance per interval (lvl) + during rests (restLvl) — older builds whitelist-copy both away (tplFromWk) on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1668,10 +1673,10 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
+    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, restLvl: w.restLvl ?? null, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
     exercises: (w.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))}, ex))
+      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s))}, ex))
   };
 }
 // a not-yet-trained reps/weight/time edit rides along with the template (and so with the sync);
@@ -1692,10 +1697,10 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
+  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, restLvl: d.restLvl ?? null, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
     exercises: (d.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null}, s))}, ex)),
+      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s))}, ex)),
     run: null};
   migrateWkAudio();
   prefillFromLast(id);
@@ -1757,6 +1762,8 @@ function renderMain() {
       <input type="number" value="${wk.setPauseSec != null ? esc(wk.setPauseSec) : ''}" min="0" placeholder="${esc(wk.pauseSec)}" title="rest between ${wk.type === 'cardio' ? 'intervals INSIDE a segment' : 'sets of the SAME exercise'} — empty = same as between ${wk.type === 'cardio' ? 'segments' : 'exercises'}; ⚙ and the ↳ gaps override it" oninput="wk.setPauseSec=this.value===''?null:(parseInt(this.value)||0);schedSave()" onchange="renderMain()"></div>
     <div class="field" style="width:5.5em"><label>prep (s)</label>
       <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()" onchange="renderMain()"></div>
+    ${wk.type === 'cardio' ? `<div class="field" style="width:5.5em"><label>rest L</label>
+      <input type="text" inputmode="numeric" value="${wk.restLvl != null ? esc(wk.restLvl) : ''}" placeholder="–" title="exercise-bike resistance during rests, the L↔R switch and prep (1–${BIKE_MAX_LVL}) — empty = leave it as is" onchange="setRestLvl(this.value)"></div>` : ''}
     ${(wk.exercises || []).some(ex => ex.side) ? `<div class="field" style="width:5.5em"><label>L↔R (s)</label>
       <input type="number" value="${esc(wk.sidePauseSec ?? 0)}" min="0" title="pause between the left and right side of L/R exercises (0 = switch immediately)" oninput="wk.sidePauseSec=parseInt(this.value)||0;schedSave()" onchange="renderMain()"></div>` : ''}
     <div class="field" style="width:5.5em"><label>±step (s)</label>
@@ -2012,6 +2019,7 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   // cardio is time-based: instead of reps × weight one wide interval-name field (work / rest / all-in)
   const mid = cardio
     ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">
+    <input class="set-in set-lvl" type="text" inputmode="numeric" value="${s.lvl != null ? s.lvl : ''}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">
     <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
     : `<input class="set-in${s.pr != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
@@ -2532,7 +2540,7 @@ function addExercise() {
   // strength: a new exercise joins every existing round; cardio: starts with one interval
   const n = (wk.type !== 'cardio' && wk.exercises.length)
     ? Math.max(1, ...wk.exercises.map(ex => (ex.sets || []).length)) : 1;
-  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, repeat: 1, pauseSec: null, innerPauseSec: null, sidePauseSec: null, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:'', iname:'', cue:'', restSec:null}))});
+  wk.exercises.push({code:'', name:'', note:'', snote:'', linked: true, side: false, repeat: 1, pauseSec: null, innerPauseSec: null, sidePauseSec: null, sets: Array.from({length: n}, () => ({reps:'', weight:'', durSec:null, done:false, snote:'', iname:'', cue:'', restSec:null, lvl:null}))});
   schedSave(); renderMain();
 }
 function addRound() {
@@ -2540,7 +2548,7 @@ function addRound() {
   pushUndo();
   wk.exercises.forEach(ex => {
     const p = ex.sets[ex.sets.length - 1], n = ex.sets.length;
-    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: '', iname: p ? (p.iname ?? '') : '', cue: '', restSec: p ? (p.restSec ?? null) : null});
+    ex.sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, done: false, snote: '', iname: p ? (p.iname ?? '') : '', cue: '', restSec: p ? (p.restSec ?? null) : null, lvl: p ? (p.lvl ?? null) : null});
     stampExStructure(ex, n);
   });
   schedSave(); renderMain();
@@ -2563,7 +2571,7 @@ function addSet(ei) {
   const ex = wk.exercises[ei]; if (!ex) return;
   pushUndo();
   const prev = ex.sets[ex.sets.length - 1], n = ex.sets.length;
-  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: '', iname: '', cue: '', restSec: prev ? (prev.restSec ?? null) : null});
+  ex.sets.push({reps: prev ? prev.reps : '', weight: prev ? prev.weight : '', durSec: prev ? (prev.durSec ?? null) : null, done: false, snote: '', iname: '', cue: '', restSec: prev ? (prev.restSec ?? null) : null, lvl: prev ? (prev.lvl ?? null) : null});
   stampExStructure(ex, n);
   schedSave(); renderMain();
 }
@@ -2868,13 +2876,14 @@ function setHrZone(i, v) {
 // positioned by actual time, not by sample index, so a reconnect gap draws as a gap rather than
 // a misleading straight jump between the two sides. The <svg> stretches to fill its row (see
 // .hr-spark CSS) — the viewBox is just an internal coordinate space.
-function traceSvg(pts_raw, h, tagCurrentZone) {
+function traceSvg(pts_raw, h, tagCurrentZone, noZones) {
   const w = 600; h = h || 34; const pad = 2;
+  const zoned = !noZones && hrZonesSet();   // the bike power trace reuses this without the HR zone scale
   if (pts_raw.length < 2) return '';
   const t0 = pts_raw[0].t, tSpan = Math.max(1, pts_raw[pts_raw.length - 1].t - t0);
   const vals = pts_raw.map(p => p.v);
   let lo = Math.min(...vals), hi = Math.max(...vals);
-  if (hrZonesSet()) {
+  if (zoned) {
     const set = hrZones.zones.filter(z => z != null);
     lo = Math.min(lo, ...set);
     hi = Math.max(hi, ...set, set[set.length - 1] + 15);   // headroom above the top configured zone
@@ -2887,7 +2896,7 @@ function traceSvg(pts_raw, h, tagCurrentZone) {
   // above the actual trace (headroom, see hi above) can end up crowded into a few pixels —
   // skip a label that would collide with the last one drawn rather than stack illegibly.
   let guides = '';
-  if (hrZonesSet()) {
+  if (zoned) {
     const fs = Math.max(8, Math.round(h * 0.32));
     let lastLabelY = Infinity;
     hrZones.zones.forEach((z, i) => {
@@ -2905,7 +2914,7 @@ function traceSvg(pts_raw, h, tagCurrentZone) {
   // labels above can thin themselves out when zones are crowded, but "what zone am I in RIGHT
   // NOW" always needs an answer, so it gets its own dedicated, always-shown marker
   let curTag = '';
-  if (tagCurrentZone && hrZonesSet()) {
+  if (tagCurrentZone && zoned) {
     const last = pts_raw[pts_raw.length - 1];
     const z = hrZoneOf(last.v);
     if (z) {
@@ -3183,6 +3192,7 @@ async function bikeConnectGatt() {
     if (gen !== bikeGen || bikeManualStop) return;
   }
   bikeState = 'connected'; bikeAttempts = 0;
+  bikePlanKey = null;   // (re)connected mid-workout → the current phase's planned level goes out now
   bikePoll();
   bikePollTimer = setInterval(bikePoll, 2000);
   renderBikeBar(); syncWakeLock();
@@ -3257,6 +3267,65 @@ function bikeSetLvl(l) {
   bikeLvl = l;   // shown right away — the next frame confirms (or corrects) it
   bikeWrite([0x55, 0x11, 0x01, l]);
   updateBikeLive(); updateNowBike();
+}
+
+// planned resistance: each cardio interval may carry its own level (set.lvl), rests / the L↔R
+// switch / prep share the workout's restLvl; empty = leave the bike as it is
+const bikeParseLvl = v => { const n = parseInt(v, 10); return isNaN(n) ? null : Math.max(1, Math.min(BIKE_MAX_LVL, n)); };
+function setSetLvl(ei, si, v) {
+  const s = ((wk.exercises[ei] || {}).sets || [])[si]; if (!s) return;
+  const n = bikeParseLvl(v);
+  if ((s.lvl ?? null) === n) { renderMain(); return; }   // no real change (just re-normalize the field)
+  pushUndo(); s.lvl = n; schedSave(); renderMain();
+}
+function setRestLvl(v) {
+  const n = bikeParseLvl(v);
+  if ((wk.restLvl ?? null) === n) { renderMain(); return; }
+  pushUndo(); wk.restLvl = n; schedSave(); renderMain();
+}
+function bikeWantLvl() {
+  const r = wk.run;
+  if (!r || !r.startedAt) return null;
+  if (r.phase === 'work' || r.phase === 'manual') { const s = ((wk.exercises[r.ei] || {}).sets || [])[r.si]; return s ? (s.lvl ?? null) : null; }
+  if (r.phase === 'rest' || r.phase === 'srest' || r.phase === 'prep') return wk.restLvl ?? null;
+  return null;
+}
+// applied ONCE per phase (and again if its planned level is edited meanwhile) — a manual − / +
+// in the bar holds until the next phase instead of being snapped back every tick
+let bikePlanKey = null;
+function bikeSyncLevel() {
+  if (bikeState !== 'connected') return;
+  const r = wk.run;
+  const want = bikeWantLvl();
+  const key = r && r.startedAt ? [r.startedAt, r.phase, r.ei, r.si, r.rep, r.half, want].join('|') : null;
+  if (key === bikePlanKey) return;
+  bikePlanKey = key;
+  if (want != null && want !== bikeLvl) bikeSetLvl(want);
+}
+
+// what "finish & log" keeps: the session summary + a power trace averaged into 5 s buckets
+function bikeSummary() {
+  const s = bikeStats;
+  return { avgW: Math.round(s.sumW / s.count), maxW: s.maxW, avgRpm: s.nRpm ? Math.round(s.sumRpm / s.nRpm) : 0,
+    distKm: Math.round(s.distKm * 100) / 100, kj: Math.round(s.kj) };
+}
+function bikeSummaryText(b) {
+  return b ? `${b.avgW} W avg · max ${b.maxW} W · ${b.avgRpm} rpm · ${b.distKm.toFixed(1)} km · ${b.kj} kJ` : '';
+}
+function bikeTraceOf(start) {   // [[elapsedSec, W, rpm], …] — compact, like hrTrace
+  const out = []; let b = null;
+  const flush = () => { if (b) out.push([b.sec, Math.round(b.w / b.n), Math.round(b.rpm / b.n)]); };
+  bikeHistory.forEach(p => {
+    const sec = Math.floor((p.t - start) / 5000) * 5;
+    if (!b || b.sec !== sec) { flush(); b = { sec, w: 0, rpm: 0, n: 0 }; }
+    b.w += p.w; b.rpm += p.rpm; b.n++;
+  });
+  flush();
+  return out;
+}
+function logBikeTraceSvg(a) {
+  if (!a.bikeTrace || a.bikeTrace.length < 2) return '';
+  return traceSvg(a.bikeTrace.map(p => ({ t: p[0], v: p[1] })), 40, false, true);
 }
 
 function openBikeModal() { renderBikeLog(); el('bikeModal').classList.add('open'); }
@@ -3348,6 +3417,7 @@ function updateNowBar() {
   const hrShown = updateNowHr();
   updateNowHrStrip();
   updateNowBike();
+  bikeSyncLevel();   // phase changed (timer, skip, ▶ jump) → the bike follows the planned resistance
   if (!started) {   // ready to start — the whole strip starts, corners hidden
     bar.classList.remove('over');
     if (prog) prog.classList.remove('paused');
@@ -3770,6 +3840,8 @@ function finishWorkout() {
     const zt = zoneTimeText(hrZoneTimeSec(hrHistory));   // computed, not editable — it's derived straight from the trace
     if (zt) { el('finZoneTime').textContent = zt; wrap.style.display = 'flex'; }
   }
+  const bw = el('finBikeWrap'); bw.style.display = 'none';
+  if (bikeStatsFor === r.startedAt && bikeStats.count) { el('finBike').textContent = bikeSummaryText(bikeSummary()); bw.style.display = 'flex'; }
   el('finNote').value = wk.note || '';   // carry over anything typed in the notes tab; keep editing here
   el('finishModal').classList.add('open');
   requestAnimationFrame(() => autoResizeTA(el('finNote')));   // grow once the modal (and the field) is visible
@@ -3808,12 +3880,13 @@ function confirmFinish() {
     restAfter[ei][si] = plannedRestSec(wk.exercises[ei], wk.exercises[ei].sets[si], order[k + 1][0] === ei) || undefined;
   });
   const hrThisRun = hrStatsFor === r.startedAt && hrHistory.length >= 2;   // the sensor actually tracked THIS run
+  const bikeThisRun = bikeStatsFor === r.startedAt && bikeStats.count >= 2;   // same for the exercise bike
   const entry = {
     id: Date.now(), date: Date.now(), tplId: activeLibId,
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
     entries: wk.exercises.map((ex, ei) => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
       tech: ex.tech ?? undefined, rir: ex.rir ?? undefined,
-      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, eq: s.eq || undefined, durSec: s.durSec, iname: s.iname || undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
+      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, eq: s.eq || undefined, durSec: s.durSec, iname: s.iname || undefined, lvl: s.lvl ?? undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
     note: (el('finNote').value || '').trim(),   // session note — typed/edited right in the finish dialog
@@ -3823,6 +3896,8 @@ function confirmFinish() {
     // independent of wall-clock date; only when the sensor actually tracked THIS run
     hrTrace: hrThisRun ? hrHistory.map(p => [Math.round((p.t - r.startedAt) / 1000), p.v]) : undefined,
     hrZoneSec: hrThisRun ? hrZoneTimeSec(hrHistory) : undefined,   // [Z1..Z5] seconds — same "finish & log" auto-fill as HR avg/max, see finishWorkout()
+    bike: bikeThisRun ? bikeSummary() : undefined,                  // {avgW, maxW, avgRpm, distKm, kj}
+    bikeTrace: bikeThisRun ? bikeTraceOf(r.startedAt) : undefined,  // [elapsedSec, W, rpm] per 5 s
     mt: Date.now()   // log entries sync via LWW — notes stay editable afterwards
   };
   archive.push(entry); saveArchive();
@@ -3872,8 +3947,8 @@ function exStatText(e) {
   const rests = [...new Set(sets.map(s => s.restSec).filter(v => v != null))];
   const restStr = rests.length ? ' · rest ' + rests.map(mmss).join('/') : '';
   // cardio segments log as named timed intervals: "×4 work 3:00 / rest 3:00"
-  if (sets.some(s => s.iname)) {
-    const body = sets.map(s => [s.iname, s.durSec != null ? mmss(s.durSec) : null].filter(Boolean).join(' ') || '–').join(' / ');
+  if (sets.some(s => s.iname || s.lvl != null)) {
+    const body = sets.map(s => [s.iname, s.lvl != null ? 'L' + s.lvl : null, s.durSec != null ? mmss(s.durSec) : null].filter(Boolean).join(' ') || '–').join(' / ');
     return (e.rep > 1 ? '×' + e.rep + ' ' : '') + body + restStr;
   }
   const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
@@ -3895,6 +3970,7 @@ function sessScoreText(a) {
   if (a.focus) p.push('focus ' + a.focus);
   if (a.rpe) p.push('RPE ' + a.rpe);
   if (a.hrAvg || a.hrMax) p.push('HR ' + (a.hrAvg || '–') + '/' + (a.hrMax || '–'));
+  if (a.bike) p.push('⚡ ' + a.bike.avgW + ' W');
   return p.join(' · ');
 }
 function logDateStr(a, longYear) {
@@ -4206,8 +4282,11 @@ function renderLog() {
       }).join('');
       const trace = logHrTraceSvg(a);
       const zoneTxt = zoneTimeText(a.hrZoneSec);
+      const bTrace = logBikeTraceSvg(a);
       body = `${trace ? `<div class="log-hr-trace" title="heart rate over the whole session">${trace}</div>` : ''}
-        ${zoneTxt ? `<div class="log-zone-time" title="time spent in each zone, computed from the sensor trace">${esc(zoneTxt)}</div>` : ''}${lines}
+        ${zoneTxt ? `<div class="log-zone-time" title="time spent in each zone, computed from the sensor trace">${esc(zoneTxt)}</div>` : ''}
+        ${bTrace ? `<div class="log-hr-trace" title="exercise-bike power (W) over the whole session">${bTrace}</div>` : ''}
+        ${a.bike ? `<div class="log-zone-time" title="measured by the exercise bike">⚡ ${esc(bikeSummaryText(a.bike))}</div>` : ''}${lines}
         <textarea class="log-note-in log-note-wk" rows="1" placeholder="${isAct ? '· description' : '· workout note'}" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note || '')}</textarea>`;
     } else if (a.note) {
       body = `<textarea class="log-note-in log-note-wk" rows="1" title="editable note" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},null,this.value)">${esc(a.note)}</textarea>`;
@@ -4493,7 +4572,7 @@ function leRest(ei, si, inp) {
 function leAddSet(ei) {
   const sets = logEditDraft.entries[ei].sets;
   const p = sets[sets.length - 1];
-  sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, restSec: p ? (p.restSec ?? null) : null, done: true, rd: p ? (+p.rd || sets.length) + 1 : 1, note: ''});
+  sets.push({reps: p ? p.reps : '', weight: p ? p.weight : '', durSec: p ? (p.durSec ?? null) : null, restSec: p ? (p.restSec ?? null) : null, lvl: p ? (p.lvl ?? undefined) : undefined, done: true, rd: p ? (+p.rd || sets.length) + 1 : 1, note: ''});
   renderLogEdit();
 }
 function leDelSet(ei, si) {
@@ -4530,6 +4609,7 @@ function logEntryToWk(a) {
     pauseSec: (d && d.pauseSec != null) ? +d.pauseSec : 105,
     prepSec: (d && d.prepSec != null) ? +d.prepSec : 120,
     sidePauseSec: d ? (+d.sidePauseSec || 0) : 0,
+    restLvl: d ? (d.restLvl ?? null) : null,
     note: '', run: null,
     exercises: (a.entries || []).map(e => {
       const te = tplEx(e.code);
@@ -4542,7 +4622,7 @@ function logEntryToWk(a) {
         pauseSec: te ? (te.pauseSec ?? null) : null, innerPauseSec: te ? (te.innerPauseSec ?? null) : null, sidePauseSec: te ? (te.sidePauseSec ?? null) : null,
         sets: (e.sets || []).map((s, i) => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '',
           iname: s.iname ?? (ts(i) ? (ts(i).iname ?? '') : ''), cue: ts(i) ? (ts(i).cue ?? '') : '', mus: ts(i) ? (ts(i).mus ?? null) : null,
-          restSec: s.restSec ?? null, eq: s.eq ?? null}))};
+          restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? (ts(i) ? (ts(i).lvl ?? null) : null)}))};
     })
   };
 }
@@ -4583,6 +4663,7 @@ function logEntryText(a) {
     + (a.type === 'activity' && actSubName(a) ? ' · as ' + actSubName(a) : '')
     + (a.intensity ? ' · intensity ' + a.intensity + '/5' : '')
     + (sessScoreText(a) ? ' · ' + sessScoreText(a) : '')];
+  if (a.bike) lines.push('  bike: ' + bikeSummaryText(a.bike));
   (a.entries || []).forEach(e => {
     if (!(e.sets || []).length) return;
     lines.push('  ' + (e.code || e.name) + ' ' + exStatText(e) + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
