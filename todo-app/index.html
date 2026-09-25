@@ -1161,7 +1161,20 @@ textarea::placeholder{color:var(--mid)}
       <button class="modal-btn danger" id="blockEditResetBtn" onclick="resetBlockType()">restore default</button>
       <button class="modal-btn" onclick="closeModal('blockEditModal')">cancel</button>
       <button class="modal-btn" id="blockEditSaveNewBtn" style="display:none" onclick="saveBlockType(true)" title="keep this block type as it is and store the current content as another one">save as new</button>
+      <button class="modal-btn" id="blockEditSyncBtn" style="display:none" onclick="saveBlockType(false,true)" title="save, then choose templates whose copy of this block should be updated to it">save + templates…</button>
       <button class="modal-btn primary" onclick="saveBlockType()">save</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="tplSyncModal">
+  <div class="modal" style="max-width:min(520px,94vw);max-height:90vh;overflow-y:auto">
+    <h2 id="tplSyncTitle">Update block in templates?</h2>
+    <p id="tplSyncIntro" style="font-size:.8rem;color:var(--muted);line-height:1.5"></p>
+    <div style="display:flex;gap:.4rem"><button class="btn-io" onclick="tplSyncAll(true)">all</button><button class="btn-io" onclick="tplSyncAll(false)">none</button></div>
+    <div id="tplSyncList" style="display:flex;flex-direction:column;gap:.3rem"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('tplSyncModal')">keep templates</button>
+      <button class="modal-btn primary" onclick="applyBlockTplSync()">update selected</button>
     </div>
   </div>
 </div>
@@ -2461,8 +2474,7 @@ async function op_addQuickItems(ctx, forceType) {
 }
 
 // creates a block header (block row without subtasks)
-function makeBlockHeader(blockType) {
-  const bt = BLOCK_TYPES[blockType] || BLOCK_TYPES.TASK;
+function makeBlockHeader(blockType, bt = BLOCK_TYPES[blockType] || BLOCK_TYPES.TASK) {
   return {
     id: Date.now() + Math.random(),
     text: bt.label,
@@ -2488,13 +2500,13 @@ function insertSubtaskUnderBlock(list, blockType, item) {
   list.splice(ins, 0, item);
 }
 
-function op_addBlockItem(ctx, blockType) {
-  const bt = BLOCK_TYPES[blockType] || BLOCK_TYPES.TASK;
-  ctx.undo();
-  ctx.list.push(makeBlockHeader(blockType));
+// a freshly inserted block = header + its preset tasks (bt defaults to the stored type; passing the previous
+// definition lets the template sync tell an untouched block from one edited in the template)
+function presetBlockItems(blockType, bt = BLOCK_TYPES[blockType] || BLOCK_TYPES.TASK) {
+  const out = [makeBlockHeader(blockType, bt)];
   const tasks = bt.defaultTasks && bt.defaultTasks.length ? bt.defaultTasks : [{ text: '✒ task', duration: bt.defaultDuration || 30 }];
   tasks.forEach((task, i) => {
-    ctx.list.push({
+    out.push({
       id: Date.now() + Math.random() + (i + 1) * 0.001,
       text: task.text || '✒ task',
       blockType, duration: task.duration || 30,
@@ -2503,6 +2515,12 @@ function op_addBlockItem(ctx, blockType) {
       note: task.note || '',                 // preset description of the task
     });
   });
+  return out;
+}
+
+function op_addBlockItem(ctx, blockType) {
+  ctx.undo();
+  ctx.list.push(...presetBlockItems(blockType));
   ctx.save(); ctx.render();
   closeBlockMenu();
 }
@@ -4457,6 +4475,8 @@ function openBlockTypeEdit(key, preset) {
   if (preset) bt = { ...bt, ...preset };
   el('blockEditTitle').textContent = isNew ? 'New block type' : 'Edit block';
   el('blockEditSaveNewBtn').style.display = isNew ? 'none' : '';   // update this type, or branch off a new one
+  // "save + templates…" only for a type some template actually uses
+  el('blockEditSyncBtn').style.display = !isNew && templateDayLists().some(d => d.list.some(it => !it.isSubtask && it.blockType === key)) ? '' : 'none';
   el('blockEditEmoji').value = bt.emoji || '';
   el('blockEditLabel').value = bt.label || '';
   el('blockEditDuration').value = bt.defaultDuration || 30;
@@ -4555,7 +4575,8 @@ function createBlockTypeQuick(label, emoji) {
   return key;
 }
 // asNew = store under a fresh key even while editing an existing type (the "save as new" button)
-function saveBlockType(asNew) {
+// syncAll = "save + templates…": offer the template update even when the type itself did not change
+function saveBlockType(asNew, syncAll) {
   const emoji = el('blockEditEmoji').value.trim();
   const label = el('blockEditLabel').value.trim();
   const duration = parseInt(el('blockEditDuration').value) || 30;
@@ -4579,7 +4600,11 @@ function saveBlockType(asNew) {
     key = normalizeBlockKey(label);
     if (BLOCK_TYPES[key]) key = key + '_' + Date.now();
   }
-  BLOCK_TYPES[key] = { emoji, label, defaultDuration: duration, isEvent, eventStart, eventEnd, defaultTasks, note, mt: Date.now() };
+  const prev = BLOCK_TYPES[key];
+  const next = { emoji, label, defaultDuration: duration, isEvent, eventStart, eventEnd, defaultTasks, note };
+  // stamp mt only on a real change — a blind re-save would beat a newer version from another device
+  const changed = !prev || JSON.stringify(blockTypeContent(prev)) !== JSON.stringify(blockTypeContent(next));
+  BLOCK_TYPES[key] = { ...prev, ...next, mt: changed ? Date.now() : (+prev.mt || 0) };
   if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key);
   saveBlockTypes();
   renderBlockTypeList();
@@ -4587,6 +4612,11 @@ function saveBlockType(asNew) {
   closeModal('blockEditModal');
   if (_blockEditInsertCtx) { const c = _blockEditInsertCtx; _blockEditInsertCtx = null; op_addBlockItem(c, key); }   // opened from + Block ▾ → insert now
   showSave('✓ block saved');
+  if (prev && (changed || syncAll)) openBlockTplSync(key, changed ? prev : null, !!syncAll);
+}
+function blockTypeContent(bt) {
+  return [bt.emoji || '', bt.label || '', bt.defaultDuration || 0, !!bt.isEvent, bt.eventStart || null, bt.eventEnd || null,
+    (bt.defaultTasks || []).map(t => [t.text || '', t.duration || 0, t.note || '']), bt.note || ''];
 }
 
 function resetBlockType() {
@@ -4608,6 +4638,115 @@ async function deleteBlockType(key) {
   renderBlockTypeList();
   updateQuickInputPlaceholder();
   showSave('block deleted');
+}
+
+// ── BLOCK TYPE → TEMPLATES ──────────────────────────────────────────────────
+// A template stores its blocks as plain items (header + subtasks), so editing a block type does not touch
+// the templates. After saving a type, a dialog lists the templates whose block of that type differs from
+// the new definition; the checked ones get it replaced by a fresh copy of the preset (like removing it and
+// inserting it again from + Block), the unchecked ones stay as they are. When the previous definition is
+// known, blocks that still matched it are pre-checked and blocks edited inside the template are not.
+const _blkFields = it => [it.text || '', it.duration || 0, !!it.isEvent, it.eventStart || null, it.eventEnd || null, it.note || '', it.icon || ''];
+function blockSpanEnd(list, i) { let j = i + 1; while (j < list.length && list[j].isSubtask) j++; return j; }
+function blockSpanSig(span) { return JSON.stringify(span.map(_blkFields)); }
+// what differs between a block in a template and the preset — short words for the dialog
+function blockSpanDiff(span, fresh) {
+  const a = _blkFields(span[0]), b = _blkFields(fresh[0]), out = [];
+  if (a[0] !== b[0]) out.push('name');
+  if (a[1] !== b[1] || a[2] !== b[2] || a[3] !== b[3] || a[4] !== b[4]) out.push('time');
+  if (a[5] !== b[5]) out.push('note');
+  if (a[6]) out.push('icon');
+  const ta = span.slice(1), tb = fresh.slice(1);
+  if (ta.length !== tb.length) out.push('tasks ' + ta.length + '→' + tb.length);
+  else if (blockSpanSig(ta) !== blockSpanSig(tb)) out.push('tasks');
+  return out;
+}
+// every day list of the templates: [{ entry, dayKey|null, list }]
+function templateDayLists() {
+  const out = [];
+  library.forEach(entry => {
+    if (entry.type === 'week') Object.keys(entry.weekData || {}).forEach(dk => { const d = entry.weekData[dk]; if (d && Array.isArray(d.items)) out.push({ entry, dayKey: dk, list: d.items }); });
+    else if (entry.data && Array.isArray(entry.data.items)) out.push({ entry, dayKey: null, list: entry.data.items });
+  });
+  return out;
+}
+// replaces the outdated blocks of the type in a list (in place); keeps the header's id/urgent and unknown fields
+function refreshBlockSpans(list, key) {
+  const want = blockSpanSig(presetBlockItems(key));
+  let n = 0;
+  for (let i = 0; i < list.length; i++) {
+    const h = list[i];
+    if (h.isSubtask || h.blockType !== key) continue;
+    const j = blockSpanEnd(list, i);
+    if (blockSpanSig(list.slice(i, j)) === want) { i = j - 1; continue; }
+    const fresh = presetBlockItems(key);
+    const head = { ...h, ...fresh[0], id: h.id, urgent: !!h.urgent };
+    delete head.icon;                      // the type's emoji applies again
+    fresh[0] = head;
+    list.splice(i, j - i, ...fresh);
+    i += fresh.length - 1; n++;
+  }
+  return n;
+}
+
+let _tplSync = null;
+function openBlockTplSync(key, prevBt, manual) {
+  const bt = BLOCK_TYPES[key]; if (!bt) return;
+  const want = presetBlockItems(key), wantSig = blockSpanSig(want);
+  const oldSig = prevBt ? blockSpanSig(presetBlockItems(key, prevBt)) : null;
+  const rows = new Map();                  // entry.id → { entry, days:Set, blocks, edited, diff:Set }
+  templateDayLists().forEach(({ entry, dayKey, list }) => {
+    for (let i = 0; i < list.length; i++) {
+      const h = list[i];
+      if (h.isSubtask || h.blockType !== key) continue;
+      const j = blockSpanEnd(list, i), span = list.slice(i, j), sig = blockSpanSig(span);
+      i = j - 1;
+      if (sig === wantSig) continue;
+      let r = rows.get(entry.id);
+      if (!r) rows.set(entry.id, r = { entry, days: new Set(), blocks: 0, edited: false, diff: new Set() });
+      if (dayKey) r.days.add(dayKey);
+      r.blocks++;
+      if (oldSig && sig !== oldSig) r.edited = true;
+      blockSpanDiff(span, want).forEach(d => r.diff.add(d));
+    }
+  });
+  if (!rows.size) { if (manual) showStatusMsg('templates already match "' + bt.label + '"', 2400); return; }
+  _tplSync = { key, rows: [...rows.values()] };
+  el('tplSyncTitle').textContent = 'Update "' + bt.label + '" in templates?';
+  el('tplSyncIntro').textContent = prevBt
+    ? 'These templates contain the block in a different form. Checked ones get the new version; unchecked ones stay as they are. Blocks you edited inside a template are unchecked.'
+    : 'These templates contain the block in a different form. Checked ones get the current version; unchecked ones stay as they are.';
+  el('tplSyncList').innerHTML = _tplSync.rows.map((r, i) => {
+    const where = r.days.size ? DAY_ORDER.filter(d => r.days.has(d)).concat([...r.days].filter(d => !DAY_ORDER.includes(d))).join(', ') + ' · ' : '';
+    const meta = where + (r.blocks > 1 ? r.blocks + '× · ' : '') + [...r.diff].join(', ') + (r.edited ? ' · edited in template' : '');
+    const on = !prevBt || !r.edited;
+    return `<label class="modal-item${on ? ' sel' : ''}"><input type="checkbox" data-i="${i}"${on ? ' checked' : ''} onchange="this.parentNode.classList.toggle('sel',this.checked)">
+      <span style="flex:1;min-width:0"><span style="display:block">${esc(r.entry.name || String(r.entry.id))}</span><span style="display:block;font-size:.72rem;opacity:.75">${esc(meta)}</span></span></label>`;
+  }).join('');
+  el('tplSyncModal').classList.add('open');
+}
+function tplSyncAll(on) {
+  el('tplSyncList').querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = on; cb.parentNode.classList.toggle('sel', on); });
+}
+function applyBlockTplSync() {
+  const s = _tplSync; if (!s) return;
+  const pick = new Set();
+  el('tplSyncList').querySelectorAll('input[type=checkbox]:checked').forEach(cb => { const r = s.rows[+cb.dataset.i]; if (r) pick.add(r.entry.id); });
+  closeModal('tplSyncModal'); _tplSync = null;
+  if (!pick.size) { showStatusMsg('templates left unchanged', 2000); return; }
+  let blocks = 0, tpls = 0;
+  const now = Date.now();
+  library.forEach(entry => {
+    if (!pick.has(entry.id)) return;
+    const before = JSON.stringify(entry);
+    templateDayLists().filter(d => d.entry === entry).forEach(d => { blocks += refreshBlockSpans(d.list, s.key); });
+    if (JSON.stringify(entry) !== before) { entry.mt = now; tpls++; }   // mt only on a real change
+  });
+  // an open template preview holds its own copy (unsaved edits) → give it the new block too
+  const ps = _previewSource;
+  if (ps && pick.has(ps.id) && el('previewModal').classList.contains('open') && refreshBlockSpans(ps.items, s.key)) renderPreviewList();
+  if (tpls) { saveLibrary(); renderLibrary(); }
+  showSave('✓ updated ' + blocks + ' block' + (blocks === 1 ? '' : 's') + ' in ' + tpls + ' template' + (tpls === 1 ? '' : 's'));
 }
 
 // Templates never contain checked-off items → reset done to not-completed
