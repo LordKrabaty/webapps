@@ -1151,8 +1151,11 @@ textarea::placeholder{color:var(--mid)}
       <button class="btn-add" onclick="addBlockEditTask()" style="margin-top:.3rem;width:100%;text-align:center">+ add task</button>
     </div>
     <div class="field">
-      <label>Preset description / note</label>
-      <textarea id="blockEditNote" rows="3" placeholder="Free text — pre-fills the block description on insert" oninput="autoGrowTextarea(this)"></textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem">
+        <label>Preset description / note</label>
+        <button class="btn-io" onmousedown="event.preventDefault()" onclick="presetNoteChk(el('blockEditNote'))" title="checklist item — the current line, or a new one at the end (Ctrl+L; Enter continues the list)">☑ list item</button>
+      </div>
+      <textarea id="blockEditNote" rows="3" data-nocap placeholder="Free text — pre-fills the block description on insert" oninput="autoGrowTextarea(this)" onkeydown="noteKeydown(event,this)"></textarea>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn danger" id="blockEditResetBtn" onclick="resetBlockType()">restore default</button>
@@ -3507,7 +3510,7 @@ function mdShortcut(e, f) {
   if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.length !== 1) return false;
   const k = e.key.toLowerCase();
   if (k === 'b' || k === 'i') { e.preventDefault(); mdWrapSelection(f, k === 'b' ? '**' : '_'); return true; }
-  if (k === 'l')              { e.preventDefault(); toggleChkOnSelection(); return true; }
+  if (k === 'l')              { e.preventDefault(); toggleChkOnSelection(f); return true; }
   if (k === 'h')              { e.preventDefault(); mdCycleHeading(f); return true; }
   return false;
 }
@@ -3531,13 +3534,18 @@ function noteKeydown(e, ta) {
 }
 // Text tab button: current line (or every selected line) plain text ⇄ checklist item.
 // In live mode that field is the one open line, in source mode the whole note.
-function toggleChkOnSelection() {
-  const ta = noteField(); if (!ta) return;
+// Also serves the plain preset-note fields of the block editor (ta passed in).
+function toggleChkOnSelection(ta = noteField()) {
+  if (!ta) return;
   const val = ta.value;
   const from = val.lastIndexOf('\n', ta.selectionStart - 1) + 1;
   let to = val.indexOf('\n', Math.max(ta.selectionStart, ta.selectionEnd));
   if (to < 0) to = val.length;
   const seg = val.slice(from, to).split('\n');
+  if (seg.length === 1 && !seg[0].trim()) {                         // empty line → start an item right there
+    ta.setRangeText(chkLine(seg[0], false, ''), from, to, 'end');
+    noteFieldChanged(ta); ta.focus(); return;
+  }
   const toItems = seg.some(ln => ln.trim() && !parseChkLine(ln));   // any plain line → make items, else strip
   ta.setRangeText(seg.map(ln => {
     const it = parseChkLine(ln);
@@ -3550,6 +3558,19 @@ function toggleChkOnSelection() {
   }).join('\n'), from, to, 'end');
   noteFieldChanged(ta);
   ta.focus();
+}
+
+// ☑ next to a preset-note field of the block editor. Typing in it → the current line flips like
+// Ctrl+L; not in it (a tap on a phone) → a new empty item at the end, cursor ready inside.
+function presetNoteChk(ta) {
+  if (!ta) return;
+  if (document.activeElement !== ta) {
+    const v = ta.value.replace(/\s+$/, '');
+    ta.value = v ? v + '\n' : '';
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+  toggleChkOnSelection(ta);
 }
 
 function saveItemEdit() {
@@ -4477,9 +4498,10 @@ function addBlockEditTask(text, duration, note) {
       <input type="number" class="bet-dur" placeholder="min" value="${duration||''}" min="1" max="480" style="width:58px;font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.3rem .4rem;background:var(--w);color:var(--black);outline:none;text-align:right">
       <button class="bet-move" onclick="moveBetRow(this,-1)" title="up">↑</button>
       <button class="bet-move" onclick="moveBetRow(this,1)" title="down">↓</button>
+      <button class="bet-move" onmousedown="event.preventDefault()" onclick="presetNoteChk(this.closest('.bet-row').querySelector('.bet-note'))" title="checklist item in the description (Ctrl+L)">☑</button>
       <button onclick="deleteBetRow(this)" style="flex-shrink:0;width:22px;height:22px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:.85rem;display:flex;align-items:center;justify-content:center;border-radius:3px" title="delete">✕</button>
     </div>
-    <textarea class="bet-note" placeholder="Preset description for this task (optional)" rows="1" oninput="autoGrowTextarea(this)" style="font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;resize:vertical;overflow-y:auto">${esc(note||'')}</textarea>`;
+    <textarea class="bet-note" placeholder="Preset description for this task (optional)" rows="1" data-nocap oninput="autoGrowTextarea(this)" onkeydown="noteKeydown(event,this)" style="flex:0 0 auto;font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;resize:none;overflow:hidden">${esc(note||'')}</textarea>`;
   el('blockEditTasks').appendChild(row);
   autoGrowTextarea(row.querySelector('.bet-note'));
   renumberBetRows();
