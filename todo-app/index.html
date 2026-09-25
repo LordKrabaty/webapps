@@ -157,6 +157,9 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .chk-del{width:18px;height:18px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;opacity:.45}
 .chk-del svg{width:8px;height:8px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
 .chk-empty{font-size:.78rem;color:var(--muted);font-style:italic;padding:.35rem 0}
+.chk-add{display:flex;align-items:center;gap:.4rem;width:100%;margin-top:calc(.3rem / var(--pzc, 1));padding:.45rem .5rem;border:1px dashed var(--mid);background:none;color:var(--muted);font:inherit;font-size:.82rem;text-align:left;cursor:pointer}
+.chk-add:hover{color:var(--black);border-color:var(--dark)}
+.chk-add-kbd{margin-left:auto;font-family:'DM Mono',monospace;font-size:.68rem;opacity:.7}
 /* ── SIMPLE MARKDOWN IN A DESCRIPTION ────────────────────────────────────────
    Same deal as the checklist above: only a rendering of the note text, nothing new
    is stored. Five marks and no more — **bold**, _italic_, `code`, ~~strike~~ and a
@@ -1199,7 +1202,7 @@ textarea::placeholder{color:var(--mid)}
             <button class="btn-io" onclick="setAllChkItems(true)" title="tick off every item">☑ all</button>
             <button class="btn-io" onclick="setAllChkItems(false)" title="untick every item">☐ none</button>
             <button class="btn-io" id="ieChkHideBtn" onclick="toggleChkHideDone()" title="hide the items that are already ticked off">hide</button>
-            <button class="btn-io" onclick="addChkItem()" title="add a checklist item">+</button>
+            <button class="btn-io" onclick="addChkItem()" title="add a checklist item (Ctrl+L)">+</button>
           </div>
           <div class="chk-list" id="ieChkList"></div>
         </div>
@@ -3230,10 +3233,12 @@ function renderChkList() {
   try { do { _chkDirty = false; buildChkRows(box); } while (_chkDirty); }
   finally { _chkRendering = false; }
 }
+// the "+" in the bar is easy to miss → a second, big one closes the list (the bar one stays for long lists)
+const CHK_ADD_ROW = '<button class="chk-add" onclick="addChkItem()" title="add a checklist item (Ctrl+L)">+ add item<span class="chk-add-kbd">Ctrl+L</span></button>';
 function buildChkRows(box) {
   const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
   if (!idxs.length) {
-    box.innerHTML = '<div class="chk-empty">No checklist items yet — use “+”, or write “[] milk” on the Text tab.</div>';
+    box.innerHTML = '<div class="chk-empty">No checklist items yet — add one here, or write “[] milk” on the Text tab.</div>' + CHK_ADD_ROW;
     return;
   }
   const vis = chkVisibleIdxs(lines);
@@ -3255,7 +3260,8 @@ function buildChkRows(box) {
         <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
       </button>
     </div>`;
-  }).join('') + (vis.length ? '' : '<div class="chk-empty">Every item is ticked off — “show” brings them back.</div>');
+  }).join('') + (vis.length ? '' : '<div class="chk-empty">Every item is ticked off — “show” brings them back.</div>')
+    + CHK_ADD_ROW;
   initChkDnd();
 }
 
@@ -3305,6 +3311,21 @@ function deleteChkItem(lineIdx) {
   lines.splice(lineIdx, 1);
   ieSetNoteLines(lines);
 }
+// Ctrl+L on the Checklist tab = new item (on the Text tab the same key turns a line into an item)
+function isChkAddKey(e) {
+  return (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'l';
+}
+function chkAddShortcut(e) {
+  if (!isChkAddKey(e) || !el('iePaneList')?.classList.contains('active')) return false;
+  const open = document.querySelectorAll('.modal-bg.open');
+  if (!open.length || open[open.length - 1].id !== 'itemEditModal') return false;   // a dialog on top has the keys
+  const a = document.activeElement;
+  if (a && a.classList.contains('chk-edit')) return false;       // the inline edit handles it itself
+  e.preventDefault();
+  const row = a && a.closest && a.closest('#ieChkList .chk-row');  // focus on a row's checkbox → add right under it
+  addChkItem(row ? +row.dataset.idx : undefined);
+  return true;
+}
 // new item under `afterLine` (default: under the last item, or at the end of the text)
 function addChkItem(afterLine) {
   const lines = ieNoteLines();
@@ -3352,7 +3373,7 @@ function startChkEdit(lineIdx, span) {
   };
   inp.addEventListener('blur', () => finish(true));
   inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter')       { e.preventDefault(); addNext = true; finish(true); }
+    if (e.key === 'Enter' || isChkAddKey(e)) { e.preventDefault(); addNext = true; finish(true); }
     else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }   // don't let the modal close
   });
 }
@@ -6274,6 +6295,7 @@ document.addEventListener('keydown', e => {
       e.preventDefault(); e.stopImmediatePropagation(); return;
     }
   }
+  if (chkAddShortcut(e)) return;
   if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
     const a = document.activeElement;
     if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
@@ -10281,7 +10303,7 @@ window.addEventListener('resize', updateAppGrid);
           <tr><td><code># Heading</code></td><td>heading — larger, with a rule under it (the <b>H1</b> button, or <b>Ctrl+H</b>)</td></tr>
           <tr><td><code>## Heading</code></td><td>sub-heading — a small spaced-out uppercase label (the <b>H2</b> button; <b>Ctrl+H</b> steps the line <code>#</code> → <code>##</code> → off)</td></tr>
           <tr><td><code>- text</code></td><td>bullet</td></tr>
-          <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; <b>Ctrl+L</b> — or the “☑ checklist line” button — turns the current line (or the selected ones) into items and back.</td></tr>
+          <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; <b>Ctrl+L</b> — or the “☑ checklist line” button — turns the current line (or the selected ones) into items and back. On the Checklist tab <b>Ctrl+L</b> adds a new item.</td></tr>
           <tr><td><code>- [x] milk</code></td><td>a ticked item. Items are counted in the <code>2/6</code> badge on the row and can be ticked off, reordered and deleted on the <b>Checklist</b> tab.</td></tr>
         </table>
         <h3>Table</h3>
