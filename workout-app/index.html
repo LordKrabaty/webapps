@@ -128,6 +128,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 .bike-unit{font-size:.8rem;font-weight:500;margin-left:.15rem}
 .bike-lvl{display:flex;align-items:center;gap:.35rem}
 .bike-lvl .btn-sm{min-width:2.4em;padding:.3rem .55rem}
+.bike-lvl .btn-sm:disabled{color:var(--light);border-color:var(--light);cursor:default}   /* end of the 1–24 range */
 .bike-err{font-size:.72rem;color:var(--muted);overflow-wrap:anywhere}
 .bike-dec{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--black);overflow-wrap:anywhere}
 .bike-log{font-family:'DM Mono',monospace;font-size:.68rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow-y:auto;border:var(--b);border-radius:var(--r);padding:.4rem .5rem;background:var(--off);color:var(--dark);margin:0}
@@ -323,6 +324,8 @@ textarea::placeholder{color:var(--mid)}
 /* WORKOUT — setup + run bar */
 .wk-setup{display:flex;gap:calc(.6rem/var(--pzc,1)) calc(.9rem/var(--pzc,1));flex-wrap:wrap;margin-bottom:calc(.75rem/var(--pzc,1))}
 .wk-setup .field>label{flex:1}   /* multi-line labels wrap upward — inputs stay bottom-aligned across the row */
+.wk-hint{flex-basis:100%;font-size:.72rem;line-height:1.45;color:var(--muted)}
+.wk-hint b{color:var(--dark);font-weight:600}
 .wk-runbar{display:flex;align-items:center;gap:calc(.7rem/var(--pzc,1));margin-bottom:calc(.75rem/var(--pzc,1));flex-wrap:wrap}
 /* reps/weight changed but not trained yet — the strip above the workout + the row marker */
 .wk-chg{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;border:var(--bh);border-radius:var(--r);padding:.3rem .45rem;margin-bottom:.7rem;min-width:0}
@@ -1020,7 +1023,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 11;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise · 11: exercise-bike resistance per interval (lvl) + during rests (restLvl) — older builds whitelist-copy both away (tplFromWk) on push
+const APP_SCHEMA = 12;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise · 11: exercise-bike resistance per interval (lvl) + during rests (restLvl) — older builds whitelist-copy both away (tplFromWk) on push · 12: the indoor-bike flag on a cardio workout (bike) — same whitelist problem
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1132,7 +1135,7 @@ function renderLibrary() {
   const list = el('libList'); if (!list) return;
   if (!library.length) { list.innerHTML = '<p class="lib-empty">No workouts yet.</p>'; }
   else {
-    const typeOf = e => ((e.data && e.data.type) === 'cardio') ? 'cardio' : 'strength';
+    const typeOf = e => ((e.data && e.data.type) === 'cardio') ? (e.data.bike ? 'bike' : 'cardio') : 'strength';
     // Monday 00:00 of the current week — the done/target badge counts this week's logged sessions.
     // setDate (local days), not a ms subtraction — that lands on 01:00/23:00 across a DST switch.
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7);
@@ -1154,7 +1157,7 @@ function renderLibrary() {
       <button class="lib-item-del" onclick="event.stopPropagation();deleteLibraryEntry(${jsArg(e.id)})" title="delete"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
     </div>`;
     let html = '';
-    [['strength','strength'],['cardio','cardio']].forEach(([t, label]) => {
+    [['strength','strength'],['cardio','cardio'],['bike','indoor bike']].forEach(([t, label]) => {
       const items = library.filter(e => typeOf(e) === t).sort((a,b) => String(a.name).localeCompare(String(b.name)));
       if (items.length) html += `<div class="lib-cat-header">${label}</div>` + items.map(row).join('');
     });
@@ -1638,7 +1641,7 @@ document.addEventListener('keydown', e => {
 });
 
 // ── WORKOUT DATA MODEL ──────────────────────────────────────────────────────
-// wk (live workout) = {name, type:'strength'|'cardio', pauseSec, prepSec, note,
+// wk (live workout) = {name, type:'strength'|'cardio', bike (cardio on the exercise bike = "indoor bike"), restLvl, pauseSec, prepSec, note,
 //   exercises:[{code, name, note (technique cues, template), snote (segment note, cardio → log),
 //     tech (technique 1–5 in 0.5 steps), rir (reps in reserve on the LAST set, 0–4) — strength ratings, session-scoped like snote → log, numbers for trends,
 //     linked (default true: reps/weight/time edits mirror into every round; ≠ = independent),
@@ -1673,7 +1676,7 @@ function autoResizeTA(ta) { if (!ta || ta.offsetParent === null) return; ta.styl
 function tplFromWk(w) {
   w = w || wk;
   return {
-    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, restLvl: w.restLvl ?? null, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
+    type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, restLvl: w.restLvl ?? null, bike: w.bike ? true : undefined, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
     exercises: (w.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
       sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s))}, ex))
@@ -1697,7 +1700,7 @@ function loadFromLibrary(id) {
   if (wk.run && wk.run.startedAt) { customAlert('A workout is running — finish it (■) or start a new one (+ new) first.'); return; }
   pushUndo();
   const d = JSON.parse(JSON.stringify(e.data || {}));
-  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, restLvl: d.restLvl ?? null, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
+  wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, restLvl: d.restLvl ?? null, bike: !!d.bike, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
     exercises: (d.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
       sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s))}, ex)),
@@ -1747,9 +1750,10 @@ function renderMain() {
     <div class="field" style="flex:1;min-width:150px"><label>workout name</label>
       <input type="text" value="${esc(wk.name)}" oninput="wk.name=this.value;schedSave();updateHeaderName()" placeholder="e.g. Strength A"></div>
     <div class="field"><label>type</label>
-      <select onchange="wk.type=this.value;schedSave();renderMain();renderLibrary()">
+      <select onchange="setWkType(this.value)">
         <option value="strength"${wk.type !== 'cardio' ? ' selected' : ''}>strength</option>
-        <option value="cardio"${wk.type === 'cardio' ? ' selected' : ''}>cardio</option>
+        <option value="cardio"${wk.type === 'cardio' && !wk.bike ? ' selected' : ''}>cardio</option>
+        <option value="bike"${isBikeWk() ? ' selected' : ''} title="cardio on the exercise bike — adds the bike connection and a resistance level per interval">indoor bike</option>
       </select></div>
     ${wk.type !== 'cardio' ? `<div class="field"><label>order</label>
       <select onchange="wk.order=this.value;schedSave();renderMain()" title="how the sequence walks the sets">
@@ -1762,7 +1766,7 @@ function renderMain() {
       <input type="number" value="${wk.setPauseSec != null ? esc(wk.setPauseSec) : ''}" min="0" placeholder="${esc(wk.pauseSec)}" title="rest between ${wk.type === 'cardio' ? 'intervals INSIDE a segment' : 'sets of the SAME exercise'} — empty = same as between ${wk.type === 'cardio' ? 'segments' : 'exercises'}; ⚙ and the ↳ gaps override it" oninput="wk.setPauseSec=this.value===''?null:(parseInt(this.value)||0);schedSave()" onchange="renderMain()"></div>
     <div class="field" style="width:5.5em"><label>prep (s)</label>
       <input type="number" value="${esc(wk.prepSec ?? 120)}" min="0" title="mental preparation before the first exercise" oninput="wk.prepSec=parseInt(this.value)||0;schedSave()" onchange="renderMain()"></div>
-    ${wk.type === 'cardio' ? `<div class="field" style="width:5.5em"><label>rest L</label>
+    ${isBikeWk() ? `<div class="field" style="width:5.5em"><label>rest L (1–${BIKE_MAX_LVL})</label>
       <input type="text" inputmode="numeric" value="${wk.restLvl != null ? esc(wk.restLvl) : ''}" placeholder="–" title="exercise-bike resistance during rests, the L↔R switch and prep (1–${BIKE_MAX_LVL}) — empty = leave it as is" onchange="setRestLvl(this.value)"></div>` : ''}
     ${(wk.exercises || []).some(ex => ex.side) ? `<div class="field" style="width:5.5em"><label>L↔R (s)</label>
       <input type="number" value="${esc(wk.sidePauseSec ?? 0)}" min="0" title="pause between the left and right side of L/R exercises (0 = switch immediately)" oninput="wk.sidePauseSec=parseInt(this.value)||0;schedSave()" onchange="renderMain()"></div>` : ''}
@@ -1770,6 +1774,7 @@ function renderMain() {
       <input type="number" value="${esc(wk.adjSec ?? 30)}" min="5" title="how much the −/+ buttons adjust the running countdown" onchange="wk.adjSec=parseInt(this.value)||30;schedSave();renderMain()"></div>
     <div class="field" style="width:5.5em"><label>×/week</label>
       <input type="number" value="${wk.weekTarget != null ? esc(wk.weekTarget) : ''}" min="0" placeholder="–" title="optional weekly goal — the library shows done/target for the current week (Mon–Sun)" oninput="wk.weekTarget=this.value===''?null:(parseInt(this.value)||0);schedSave();renderLibrary()"></div>
+    ${isBikeWk() ? `<div class="wk-hint"><b>L</b> next to each interval = bike resistance <b>1–${BIKE_MAX_LVL}</b> (1 lightest), set automatically when the interval starts · empty = leave the bike as it is · <b>rest L</b> = during rests &amp; prep · − / + in the bike bar overrides until the next phase</div>` : ''}
   </div>
   <div class="wk-runbar">
     <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="sound &amp; music — music on/off, track selection, end countdown, halfway alert, rep pacer">${musicOn ? '♪' : '♪ off'}</button>
@@ -2019,7 +2024,7 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   // cardio is time-based: instead of reps × weight one wide interval-name field (work / rest / all-in)
   const mid = cardio
     ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">
-    <input class="set-in set-lvl" type="text" inputmode="numeric" value="${s.lvl != null ? s.lvl : ''}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">
+    ${isBikeWk() ? `<input class="set-in set-lvl" type="text" inputmode="numeric" value="${s.lvl != null ? s.lvl : ''}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">` : ''}
     <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
     : `<input class="set-in${s.pr != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
@@ -3101,7 +3106,7 @@ let bikeBarKey = '';
 function renderBikeBar() {
   const bar = el('bikeBar'); if (!bar) return;
   const busy = bikeState === 'connecting' || bikeState === 'connected';
-  const show = busy || wk.type === 'cardio';   // only where it's useful: a cardio workout, or a bike already on the line
+  const show = busy || isBikeWk();   // only where it's useful: an indoor-bike workout, or a bike already on the line
   const key = [show, bikeState, bikeAttempts, bikeErr, 'bluetooth' in navigator].join('|');
   if (key === bikeBarKey) { updateBikeLive(); return; }
   bikeBarKey = key;
@@ -3121,7 +3126,7 @@ function renderBikeBar() {
     ${bikeState === 'error' && bikeErr ? `<span class="bike-err">${esc(bikeErr)}</span>` : ''}
     ${bikeState === 'connected' ? `<span class="hr-value"><span id="bikeW">–</span><span class="bike-unit">W</span></span>
       <span class="hr-stats" id="bikeRpm"></span>
-      <span class="bike-lvl"><button class="btn-sm" onclick="bikeStepLvl(-1)" title="resistance one level down">−</button><span class="hr-zone" id="bikeLvlTxt" title="resistance level (1–${BIKE_MAX_LVL})">L–</span><button class="btn-sm" onclick="bikeStepLvl(1)" title="resistance one level up">+</button></span>
+      <span class="bike-lvl"><button class="btn-sm" id="bikeLvlDn" onclick="bikeStepLvl(-1)" title="resistance one level down">−</button><span class="hr-zone" id="bikeLvlTxt" title="resistance level (1–${BIKE_MAX_LVL}, 1 lightest)">L–</span><button class="btn-sm" id="bikeLvlUp" onclick="bikeStepLvl(1)" title="resistance one level up">+</button></span>
       <span class="hr-stats" id="bikeAvg"></span>` : ''}`;
   updateBikeLive();
 }
@@ -3130,7 +3135,9 @@ function updateBikeLive() {
   const L = bikeLive;
   w.textContent = L ? L.w : '–';
   el('bikeRpm').textContent = L ? L.rpm + ' rpm · ' + L.kmh + ' km/h' : 'waiting for data…';
-  el('bikeLvlTxt').textContent = 'L' + (bikeLvl ?? '–');
+  el('bikeLvlTxt').textContent = 'L' + (bikeLvl ?? '–') + '/' + BIKE_MAX_LVL;   // the range, spelled out where it's adjusted
+  el('bikeLvlDn').disabled = bikeLvl != null && bikeLvl <= 1;
+  el('bikeLvlUp').disabled = bikeLvl != null && bikeLvl >= BIKE_MAX_LVL;
   el('bikeAvg').textContent = bikeStats.count ? 'avg ' + Math.round(bikeStats.sumW / bikeStats.count) + ' W · ' + bikeStats.distKm.toFixed(2) + ' km' : '';
 }
 // run strip: one compact line right above it — watts lead, like the pulse leads the digit
@@ -3269,9 +3276,23 @@ function bikeSetLvl(l) {
   updateBikeLive(); updateNowBike();
 }
 
-// planned resistance: each cardio interval may carry its own level (set.lvl), rests / the L↔R
+// "indoor bike" = a cardio workout with the bike flag — all the cardio logic stays as it is,
+// only the bike bar, the per-interval L and the rest L come on (the type <select> shows it as a third type)
+function isBikeWk() { return wk.type === 'cardio' && !!wk.bike; }
+function setWkType(v) {
+  pushUndo();
+  wk.type = v === 'strength' ? 'strength' : 'cardio';
+  wk.bike = v === 'bike';   // levels typed in before stay in the sets, just hidden in plain cardio
+  schedSave(); renderMain(); renderLibrary();
+}
+// planned resistance: each interval may carry its own level (set.lvl), rests / the L↔R
 // switch / prep share the workout's restLvl; empty = leave the bike as it is
-const bikeParseLvl = v => { const n = parseInt(v, 10); return isNaN(n) ? null : Math.max(1, Math.min(BIKE_MAX_LVL, n)); };
+const bikeParseLvl = v => {
+  const n = parseInt(v, 10); if (isNaN(n)) return null;
+  const c = Math.max(1, Math.min(BIKE_MAX_LVL, n));
+  if (c !== n) showStatusMsg('⚠ bike resistance is 1–' + BIKE_MAX_LVL + ' — set to ' + c);
+  return c;
+};
 function setSetLvl(ei, si, v) {
   const s = ((wk.exercises[ei] || {}).sets || [])[si]; if (!s) return;
   const n = bikeParseLvl(v);
@@ -3285,7 +3306,7 @@ function setRestLvl(v) {
 }
 function bikeWantLvl() {
   const r = wk.run;
-  if (!r || !r.startedAt) return null;
+  if (!r || !r.startedAt || !isBikeWk()) return null;   // plain cardio never drives the bike
   if (r.phase === 'work' || r.phase === 'manual') { const s = ((wk.exercises[r.ei] || {}).sets || [])[r.si]; return s ? (s.lvl ?? null) : null; }
   if (r.phase === 'rest' || r.phase === 'srest' || r.phase === 'prep') return wk.restLvl ?? null;
   return null;
@@ -3886,7 +3907,7 @@ function confirmFinish() {
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
     entries: wk.exercises.map((ex, ei) => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
       tech: ex.tech ?? undefined, rir: ex.rir ?? undefined,
-      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, eq: s.eq || undefined, durSec: s.durSec, iname: s.iname || undefined, lvl: s.lvl ?? undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
+      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, eq: s.eq || undefined, durSec: s.durSec, iname: s.iname || undefined, lvl: isBikeWk() ? (s.lvl ?? undefined) : undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
     note: (el('finNote').value || '').trim(),   // session note — typed/edited right in the finish dialog
@@ -4610,6 +4631,7 @@ function logEntryToWk(a) {
     prepSec: (d && d.prepSec != null) ? +d.prepSec : 120,
     sidePauseSec: d ? (+d.sidePauseSec || 0) : 0,
     restLvl: d ? (d.restLvl ?? null) : null,
+    bike: !!((d && d.bike) || a.bike),   // an indoor-bike template, or a logged ride (a.bike = its summary)
     note: '', run: null,
     exercises: (a.entries || []).map(e => {
       const te = tplEx(e.code);
