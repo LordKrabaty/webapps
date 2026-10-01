@@ -1413,6 +1413,7 @@ function doImport() {
   let arcAdded = 0;
   (importArchiveData || []).forEach(a => {
     if (!a || a.id == null) return;
+    delete a.srcMt;                                 // export-only metadata, not part of the stored version
     a.mt = Date.now();
     const i = archive.findIndex(x => String(x.id) === String(a.id));
     if (i >= 0) { archive[i] = a; } else { archive.push(a); arcAdded++; }
@@ -2082,11 +2083,16 @@ function saveItemEdit() {
 function exportVersionText(id) {
   const s = archive.find(x => String(x.id) === String(id));
   if (!s) return;
+  if (String(s.srcId) === String(activeLibId)) saveSession();   // flush live edits so the vision's mt is current
   const src = library.find(e => String(e.id) === String(s.srcId));
   const visName = (src && src.name) || (s.data && s.data.title) || 'Vision';
+  // srcMt = the vision's last save; newer than the version's ts → the vision changed after this version.
+  // Export-only metadata next to srcId — never put the vision into items (an import would overwrite it).
+  const out = {};
+  Object.keys(s).forEach(k => { out[k] = s[k]; if (k === 'srcId' && src && src.mt) out.srcMt = src.mt; });
   openVisTextModal(visName + ' — ' + (s.name || ''), visName + ' ' + (s.name || ''),
     visionToText(s.data, src && src.name, s.note),
-    { v:1, schema: APP_SCHEMA, items: [], archive: [s] });
+    { v:1, schema: APP_SCHEMA, items: [], archive: [out] });
 }
 function copyVisionText() {
   const ta = el('visTextArea');
