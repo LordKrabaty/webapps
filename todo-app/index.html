@@ -2726,7 +2726,8 @@ function openItemEdit(ctx, idx) {
   const type = item.isSubtask ? 'task' : (item.isEvent ? 'event' : ((item.blockType && item.blockType !== 'TASK') ? 'block' : 'item'));
   el('itemEditTitle').textContent = type;   // small tag at the end of the tab strip
   el('itemEditName').value = item.text || '';
-  el('itemEditNote').value = item.note || '';
+  _ieLink = linksTasks(ctx, item) ? openBlockLink(ctx, item) : null;   // a block lists its tasks in the note
+  el('itemEditNote').value = _ieLink ? _ieLink.base : (item.note || '');
   el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
   // a whole block (header + its tasks) can become a block type — only on cards that HAVE blocks
   // (day, Done record, template preview); Inbox and Later are flat single-line lists
@@ -2752,6 +2753,174 @@ function ieNextTab(which) { _ieNextTab = which; }
 // A block that came from a type opens on that type, so "save" updates it and "save as new" branches off;
 // a plain line (TASK) opens as a new type. Unsaved edits in this modal count — they are read from the fields.
 function isBlockCard(ctx) { return !!ctx && (ctx.kind === 'day' || ctx.kind === 'done' || ctx.kind === 'preview'); }
+
+// ── BLOCK ⇄ ITS TASKS ────────────────────────────────────────────────────────
+// A block's list and the tasks under it are one and the same: the dialog of a block shows every task
+// under it as a checklist line ("- [ ] Lunch"), so its Checklist tab IS what sits under the block on
+// the card — ticking, renaming, adding, deleting and reordering there change those rows on save. The
+// other way round, a bullet or checklist line written into a block's description becomes a task under
+// it. Only the rest of the text is stored as the description; the tasks stay ordinary rows, so nothing
+// new is stored and sync, export and older clients see the same data as before.
+// Blocks only — a real block (a type or an event) or a line that already has tasks under it. A plain
+// task keeps its checklist as a checklist (a shopping list must not turn into 30-minute tasks).
+let _ieLink = null;   // { ctx, block, base, pending, durs } while the dialog shows a block — base = the text it opened
+                      // with, durs = lengths picked in the dialog (task → min; a new line by its text, '+' + text)
+function linksTasks(ctx, item) {
+  if (!isBlockCard(ctx) || !item || item.isSubtask) return false;
+  if ((item.blockType && item.blockType !== 'TASK') || item.isEvent) return true;
+  const list = ctx.list, idx = list.indexOf(item);
+  return idx >= 0 && !!list[idx + 1] && !!list[idx + 1].isSubtask;
+}
+function blockSubs(list, idx) { return idx < 0 ? [] : list.slice(idx + 1, blockSpanEnd(list, idx)); }
+// a task as one checklist line — a name never spans lines
+function taskText(s) { return String((s && s.text) || '').replace(/\s*\n\s*/g, ' ').trim(); }
+// a description line that stands for a task: a checklist item or a bullet, at any depth (the tasks are flat)
+function taskLineOf(ln) {
+  const c = parseChkLine(ln);
+  if (c) return { done: c.done, text: c.text.trim() };
+  const b = MD_BULLET_RE.exec(ln);
+  return b ? { done: false, text: b[2].trim() } : null;
+}
+// "Nap 20m" → 20 min + "Nap" — the same length marks the quick-add field understands ("(5 min)" stays text)
+const TASK_DUR_RE = /(^|\s)(\d+\s*h(?:\s*\d+\s*m(?:in)?)?|\d+\s*m(?:in)?)(?=\s|$)/i;
+function splitTaskDur(text) {
+  const m = TASK_DUR_RE.exec(text);
+  const dur = m ? parseDuration(m[2].replace(/\s+/g, '')) : null;
+  if (!dur) return { text, dur: null };
+  const rest = (text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim();
+  return rest ? { text: rest, dur } : { text, dur: null };
+}
+// The text the dialog opens with: the description with the tasks as checklist lines — where the
+// description already has a list, otherwise under its text. List lines of the description itself show
+// as items too (save turns them into tasks); one that names a task already there is that task, shown once.
+function openBlockLink(ctx, block) {
+  const list = ctx.list, subs = blockSubs(list, list.indexOf(block));
+  const free = subs.map(taskText), out = [];
+  let at = -1, pending = false;
+  (block.note ? block.note.split('\n') : []).forEach(ln => {
+    const t = taskLineOf(ln);
+    if (!t) { out.push(ln); return; }
+    pending = true;                                    // the description still holds a list → save moves it out
+    if (at < 0) at = out.length;
+    const k = free.indexOf(t.text);
+    if (k >= 0) { free[k] = null; return; }
+    out.push(chkLine('', t.done, t.text));
+  });
+  const tasks = subs.map(s => chkLine('', !!s.done, taskText(s)));
+  if (at >= 0) out.splice(at, 0, ...tasks);
+  else if (tasks.length) {
+    while (out.length && !out[out.length - 1].trim()) out.pop();
+    if (out.length) out.push('');
+    out.push(...tasks);
+  }
+  return { ctx, block, base: out.join('\n'), pending, durs: new Map() };
+}
+// The dialog's text read back as the block's tasks: rows [{ line, done, text, sub, same, setDur, tok }] in
+// list order — sub = the task the line stands for (null = a new one), same = its text is unchanged,
+// setDur = a new length (typed into a changed line → tok, else picked in the dialog → durs) — and the
+// description that is left without the list. An unchanged line keeps its task; the changed ones take
+// the tasks left over, in order, so a rename keeps the task's id, length and description. An emptied
+// line drops its task.
+function readBlockTasks(text, subs, durs) {
+  const rows = [], rest = [];
+  let cut = false;
+  text.split('\n').forEach((ln, i) => {
+    const t = taskLineOf(ln);
+    if (t) { rows.push({ line: i, done: t.done, text: t.text, sub: null, same: false, setDur: null, tok: false }); cut = true; return; }
+    if (cut && !ln.trim() && rest.length && !rest[rest.length - 1].trim()) return;   // where the list was: one blank line, not two
+    if (ln.trim()) cut = false;
+    rest.push(ln);
+  });
+  while (rest.length && !rest[0].trim()) rest.shift();
+  while (rest.length && !rest[rest.length - 1].trim()) rest.pop();
+  const free = subs.slice();
+  rows.forEach(r => {
+    const k = free.findIndex(s => taskText(s) === r.text);
+    if (k >= 0) { r.sub = free.splice(k, 1)[0]; r.same = true; }
+  });
+  rows.forEach(r => {
+    if (!r.sub && r.text && free.length) r.sub = free.shift();
+    if (!r.same) { const d = splitTaskDur(r.text); r.text = d.text; r.setDur = d.dur; r.tok = d.dur != null; }
+    if (r.setDur == null && durs) { const v = durs.get(r.sub || '+' + r.text); if (v != null) r.setDur = v; }
+  });
+  return { rows: rows.filter(r => r.sub || r.text), note: rest.join('\n') };
+}
+// line → the task it stands for (Checklist tab, to show and change its length) — none under an event,
+// its time is fixed
+function ieTaskRows(lines) {
+  const L = _ieLink, out = {};
+  if (!L || L.block.isEvent) return out;
+  const list = L.ctx.list;
+  readBlockTasks(lines.join('\n'), blockSubs(list, list.indexOf(L.block)), L.durs).rows.forEach(r => { out[r.line] = r; });
+  return out;
+}
+// the length the task has / will get on save
+function ieRowDur(r) { return r.setDur != null ? r.setDur : (r.sub ? r.sub.duration : 30); }
+const CHK_DUR_TITLE = 'length of the task under the block — click to change it (or type e.g. “20m” into the item)';
+function chkDurHtml(i, r) {
+  return `<span class="chk-dur dur-badge editable" onclick="startChkDurEdit(${i},this)" title="${CHK_DUR_TITLE}">${formatDur(ieRowDur(r))}</span>`;
+}
+// the same lengths refreshed in place — an inline rename swaps only the text, it does not rebuild the rows
+function refreshChkDurs() {
+  if (!_ieLink) return;
+  const rows = ieTaskRows(ieNoteLines());
+  el('ieChkList')?.querySelectorAll('.chk-row').forEach(row => {
+    const i = +row.dataset.idx, r = rows[i];
+    const s = row.querySelector('.chk-dur');
+    if (!r) { if (s) s.remove(); return; }
+    if (s) s.textContent = formatDur(ieRowDur(r));
+    else row.querySelector('.chk-move')?.insertAdjacentHTML('beforebegin', chkDurHtml(i, r));
+  });
+}
+// a tap on a task's length → the same picker as on the day rows. The picked length stays with the dialog
+// like everything else in it and reaches the task on save (cancel drops it). A length typed into the
+// line itself gives way — the picked one is the only one left, so the two can never disagree.
+function startChkDurEdit(lineIdx, anchor) {
+  const L = _ieLink, r = ieTaskRows(ieNoteLines())[lineIdx];
+  if (!L || !r) return;
+  durPickerPop(anchor, ieRowDur(r), 'manually: 45m / 2h / 1h30m', t => {
+    const min = parseDuration(t);
+    if (!(min > 0)) return;
+    const lines = ieNoteLines(), it = parseChkLine(lines[lineIdx]);
+    if (r.tok && it) lines[lineIdx] = chkLine(it.indent, it.done, r.text);
+    L.durs.set(r.sub || '+' + r.text, min);
+    ieSetNoteLines(lines);                     // rebuilds the rows → the new length shows
+  });
+}
+// save: the list becomes the rows under the block, the rest its description. Runs also when only the
+// name changed, or nothing did but the description still held a list (what the dialog showed is kept).
+function saveBlockLink(ctx, block, link, text, newName) {
+  const list = ctx.list;
+  let idx = list.indexOf(block);
+  if (idx < 0) {                                       // the card was reloaded meanwhile (sync) → the same block by id
+    idx = list.findIndex(it => it && !it.isSubtask && it.id === block.id);
+    if (idx >= 0) block = list[idx];
+  }
+  const subs = blockSubs(list, idx);
+  const plan = (idx >= 0 && (text !== link.base || link.pending || link.durs.size)) ? readBlockTasks(text, subs, link.durs) : null;
+  const subsChanged = !!plan && (plan.rows.length !== subs.length
+    || plan.rows.some((r, i) => r.sub !== subs[i] || !r.same || r.done !== !!r.sub.done
+                                || (r.setDur != null && r.setDur !== r.sub.duration)));
+  const noteChanged = !!plan && plan.note !== (block.note || '');
+  if (!newName && !subsChanged && !noteChanged) return;
+  ctx.undo();
+  if (newName) block.text = newName;
+  if (noteChanged) block.note = plan.note;
+  if (subsChanged) {
+    const next = plan.rows.map(r => {
+      const s = r.sub || { id: Date.now() + Math.random(), text: '', blockType: block.blockType || 'TASK', duration: 30,
+        isEvent: false, eventStart: null, eventEnd: null, isSubtask: true, done: false, urgent: false, note: '' };
+      if (!r.same) s.text = r.text;
+      if (r.setDur != null) s.duration = r.setDur;
+      s.done = r.done;
+      return s;
+    });
+    list.splice(idx + 1, subs.length, ...next);
+    if (next.length) block.done = next.every(s => s.done);   // same rule as ticking a task on the row
+  }
+  ctx.save(); ctx.render();
+}
+
 function saveDayBlockAsType() {
   const ctx = _itemEditCtx, item = _itemEditItem;
   if (!ctx || !item || item.isSubtask || !isBlockCard(ctx)) return;
@@ -2762,13 +2931,17 @@ function saveDayBlockAsType() {
   const text = (el('itemEditName').value.trim() || item.text || '');
   const label = stripBlockEmoji(text, btInfo).trim() || text;
   const defaultTasks = [];
-  for (let i = idx + 1; i < list.length && list[i].isSubtask; i++) {
-    const s = list[i];
-    if (!(s.text || '').trim()) continue;
+  // a block's list in the dialog IS its tasks (BLOCK ⇄ ITS TASKS) → taken from there, the rest is the note
+  const plan = _ieLink ? readBlockTasks(el('itemEditNote').value, blockSubs(list, idx), _ieLink.durs) : null;
+  const tasks = plan ? plan.rows.map(r => ({ text: r.text, duration: ieRowDur(r), note: r.sub && r.sub.note }))
+                     : blockSubs(list, idx);
+  tasks.forEach(s => {
+    if (!(s.text || '').trim()) return;
     const t = { text: s.text, duration: s.duration || 30 };
     if (s.note) t.note = s.note;
     defaultTasks.push(t);
-  }
+  });
+  const noteText = plan ? plan.note : el('itemEditNote').value;
   const preset = {
     emoji: itemIcon(item) || '',
     label,
@@ -2777,7 +2950,7 @@ function saveDayBlockAsType() {
     eventStart: item.isEvent ? (item.eventStart || null) : null,
     eventEnd:   item.isEvent ? (item.eventEnd   || null) : null,
     defaultTasks,
-    note: el('itemEditNote').value.trim() ? el('itemEditNote').value : '',
+    note: noteText.trim() ? noteText : '',
   };
   const key = (item.blockType && item.blockType !== 'TASK' && BLOCK_TYPES[item.blockType]) ? item.blockType : null;
   closeModal('itemEditModal');
@@ -3285,7 +3458,7 @@ function updateChkCounts() {
   const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
   const done = idxs.filter(i => parseChkLine(lines[i]).done).length;
   const badge = el('ieTabCount'); if (badge) badge.textContent = idxs.length ? done + '/' + idxs.length : '';
-  const cnt = el('ieChkCount');   if (cnt)   cnt.textContent   = idxs.length ? done + '/' + idxs.length + ' done' : '';
+  const cnt = el('ieChkCount');   if (cnt)   cnt.textContent   = idxs.length ? done + '/' + idxs.length + ' done' + (_ieLink ? ' · under the block' : '') : '';
   const hide = el('ieChkHideBtn');
   if (hide) {
     hide.classList.toggle('on', chkHideDone);
@@ -3312,10 +3485,13 @@ const CHK_ADD_ROW = '<button class="chk-add" onclick="addChkItem()" title="add a
 function buildChkRows(box) {
   const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
   if (!idxs.length) {
-    box.innerHTML = '<div class="chk-empty">No checklist items yet — add one here, or write “[] milk” on the Text tab.</div>' + CHK_ADD_ROW;
+    box.innerHTML = (_ieLink
+      ? '<div class="chk-empty">Nothing under this block yet — an item added here becomes a task under it (“nap 20m” sets its length).</div>'
+      : '<div class="chk-empty">No checklist items yet — add one here, or write “[] milk” on the Text tab.</div>') + CHK_ADD_ROW;
     return;
   }
   const vis = chkVisibleIdxs(lines);
+  const trows = ieTaskRows(lines);             // a block's list = its tasks → each shows the length it has / will get
   box.innerHTML = lines.map((ln, i) => {
     const it = parseChkLine(ln);
     if (!it) return ln.trim() ? `<div class="chk-plain md">${noteDisplay(ln.trim())}</div>` : '';   // heading / prose — editable on the Text tab
@@ -3326,6 +3502,7 @@ function buildChkRows(box) {
       <input type="checkbox" class="chk-box" ${it.done ? 'checked' : ''} onchange="toggleChkItem(${i})">
       <span class="chk-text md${it.done ? ' done' : ''}${it.text.trim() ? '' : ' blank'}" onclick="startChkEdit(${i},this)"
         title="edit the text">${it.text.trim() ? mdInline(it.text) : 'empty'}</span>
+      ${trows[i] ? chkDurHtml(i, trows[i]) : ''}
       <div class="chk-move">
         <button onclick="moveChkItem(${i},-1)" ${pos === 0 ? 'disabled' : ''} title="move up">▲</button>
         <button onclick="moveChkItem(${i},1)" ${pos === vis.length - 1 ? 'disabled' : ''} title="move down">▼</button>
@@ -3443,6 +3620,7 @@ function startChkEdit(lineIdx, span) {
     fresh.onclick = () => startChkEdit(lineIdx, fresh);
     inp.replaceWith(fresh);
     updateChkCounts();
+    refreshChkDurs();
     if (addNext) addChkItem(lineIdx);
   };
   inp.addEventListener('blur', () => finish(true));
@@ -3652,8 +3830,10 @@ function saveItemEdit() {
   const note = noteRaw.trim() ? noteRaw : '';
   const nameChanged = name && name !== item.text;
   const noteChanged = (item.note || '') !== note;
-  _itemEditCtx = null; _itemEditItem = null;
+  const link = _ieLink;
+  _itemEditCtx = null; _itemEditItem = null; _ieLink = null;
   closeModal('itemEditModal');
+  if (link) { saveBlockLink(ctx, item, link, noteRaw, nameChanged ? name : null); return; }   // a block: its list → its tasks
   if (nameChanged || noteChanged) {
     ctx.undo();
     if (nameChanged) item.text = name;
@@ -3950,12 +4130,23 @@ function openRangePicker(ctx, idx, anchor, start, end) {
 
 // task length (minutes) — steppers + presets; the field also handles conversions (range/0/-)
 function openDurPicker(ctx, idx, anchor) {
+  durPickerPop(anchor, ctx.list[idx] && ctx.list[idx].duration,
+    'manually: 45m / 2h · 9:00-10:00 → event · 0 → block · - → task · d → duplicate', t => {
+      if (applyTimeConversion(ctx, idx, t)) { ctx.render(); return; }   // range → event · 0 → block · -/✒ → task
+      const parsed = parseDuration(t);
+      const item = ctx.list[idx];
+      if (item && parsed && parsed > 0 && parsed !== item.duration) { ctx.undo(); item.duration = parsed; ctx.save(); }
+      ctx.render();
+    });
+}
+// the length picker itself — steppers, presets and a field; onOk gets the field's text ("45m", or whatever was typed)
+function durPickerPop(anchor, start, title, onOk) {
   const pop = _openTimePop(anchor);
-  let d = +(ctx.list[idx] && ctx.list[idx].duration) || 30;
+  let d = +start || 30;
 
   const input = document.createElement('input');
   input.className = 'time-pop-input';
-  input.title = 'manually: 45m / 2h · 9:00-10:00 → event · 0 → block · - → task · d → duplicate';
+  input.title = title;
   const val = document.createElement('span'); val.className = 'time-pop-val';
   const sync = () => { val.textContent = formatDur(d); input.value = d + 'm'; };
   const readInput = () => { const p = parseDuration(input.value); if (p && p > 0) d = p; };
@@ -3972,14 +4163,7 @@ function openDurPicker(ctx, idx, anchor) {
 
   const foot = document.createElement('div'); foot.className = 'time-pop-foot';
   foot.appendChild(_tpBtn('cancel', '', () => closeTimePop()));
-  const ok = () => {
-    const t = input.value.trim(); closeTimePop();
-    if (applyTimeConversion(ctx, idx, t)) { ctx.render(); return; }   // range → event · 0 → block · -/✒ → task
-    const parsed = parseDuration(t);
-    const item = ctx.list[idx];
-    if (item && parsed && parsed > 0 && parsed !== item.duration) { ctx.undo(); item.duration = parsed; ctx.save(); }
-    ctx.render();
-  };
+  const ok = () => { const t = input.value.trim(); closeTimePop(); onOk(t); };
   foot.appendChild(_tpBtn('OK', '', ok, 'primary'));
   input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
 
@@ -10523,6 +10707,8 @@ window.addEventListener('resize', updateAppGrid);
           <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; <b>Ctrl+L</b> — or the “☑ checklist line” button — turns the current line (or the selected ones) into items and back. On the Checklist tab <b>Ctrl+L</b> adds a new item.</td></tr>
           <tr><td><code>- [x] milk</code></td><td>a ticked item. Items are counted in the <code>2/6</code> badge on the row and can be ticked off, reordered and deleted on the <b>Checklist</b> tab.</td></tr>
         </table>
+        <h3>In a block</h3>
+        <p>In a block (or any line with tasks under it) the list <b>is</b> the tasks under it: they show up as its checklist, and on save every list line — checklist item or bullet — becomes a task under the block, while ticking, renaming, deleting and reordering change the rows below it. Each task shows its length on the Checklist tab — click it to change it, just like on the row; a new task gets 30 min, and <code>nap 20m</code> typed into the item sets it too. A plain task keeps its checklist as a checklist.</p>
         <h3>Table</h3>
         <p>Cells between <code>|</code>, and directly under the first row a divider — that is what makes it a table. The dashes in the divider set the alignment of the column: <code>---</code> left, <code>:-:</code> centre, <code>--:</code> right. The columns do not have to line up in the text, only the number of <code>|</code> matters.</p>
         <pre class="md-help-src">| task      | time |
