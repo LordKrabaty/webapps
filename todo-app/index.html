@@ -1191,8 +1191,8 @@ textarea::placeholder{color:var(--mid)}
         <!-- no field labels: the placeholder names the field and the tabs name the pane;
              the kind of row being edited rides along as a small tag on the tab strip -->
         <div class="notes-tabs">
-          <button class="notes-tab active" id="ieTabText" onclick="switchItemEditTab('text')">Text</button>
-          <button class="notes-tab" id="ieTabList" onclick="switchItemEditTab('list')">Checklist <span class="ie-tab-count" id="ieTabCount"></span></button>
+          <button class="notes-tab active" id="ieTabText" onclick="switchItemEditTab('text', true)">Text</button>
+          <button class="notes-tab" id="ieTabList" onclick="switchItemEditTab('list', true)">Checklist <span class="ie-tab-count" id="ieTabCount"></span></button>
           <span class="ie-kind" id="itemEditTitle"></span>
         </div>
         <div class="ie-pane active" id="iePaneText">
@@ -1970,7 +1970,7 @@ function rowsHtml(ctx, insertBefore = {}) {
         <span class="item-main">
           <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
           <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
-          ${chkBadge(item, `onclick="${ctx.call(ctx.h.edit, idx)}"`)}
+          ${chkBadge(item, `onclick="ieNextTab('list');${ctx.call(ctx.h.edit, idx)}"`)}
         </span>
         <span class="item-ctrls">
           <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -1998,7 +1998,7 @@ function rowsHtml(ctx, insertBefore = {}) {
           ${dayBadge}${timeBadge}${gBadge}
           <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
           <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
-          ${chkBadge(item, `onclick="${ctx.call(ctx.h.edit, idx)}"`)}
+          ${chkBadge(item, `onclick="ieNextTab('list');${ctx.call(ctx.h.edit, idx)}"`)}
         </span>
         <span class="item-ctrls">
           <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -2059,7 +2059,7 @@ function rowsHtml(ctx, insertBefore = {}) {
         <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${toggle}</span>
         ${ghostBadge}${emoji}
         <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${isBlock ? hlBlockText(item.text, btInfo, blockAbbrById[item.id]) : esc(item.text)}</span>
-        ${chkBadge(item, `onclick="${ctx.call(ctx.h.edit, idx)}"`)}
+        ${chkBadge(item, `onclick="ieNextTab('list');${ctx.call(ctx.h.edit, idx)}"`)}
       </span>
       <span class="item-ctrls">
         ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
@@ -2370,6 +2370,7 @@ async function op_addQuickItems(ctx, forceType) {
     // carried over via → (the buffer is text-only): the note, and for a block header its type + length — keyed by plain text
     const sk = stripLeadingEmoji(parsed.text);
     if (sk && _sendNotes[sk]) parsed.note = _sendNotes[sk];
+    const viewFrom = sk ? _sendViews[sk] : null;   // the source item's id → its view memory goes along
     if (sk && _sendBlocks[sk] && !parsed.isSubtask && !parsed.isEvent) {   // a renamed block (no type name in its text) stays a block
       const bm = _sendBlocks[sk]; parsed.blockType = bm.blockType; if (bm.duration) parsed.duration = bm.duration;
       parsed.text = stripBlockEmoji(parsed.text, BLOCK_TYPES[bm.blockType]);   // the type emoji rode along in the line — the row renders it anyway
@@ -2404,6 +2405,7 @@ async function op_addQuickItems(ctx, forceType) {
       parsed.eventEnd = minToTime(timeToMin(w) + parsed.duration);
     }
     parsed.id = Date.now() + Math.random();
+    if (viewFrom != null) itemViewCopy(viewFrom, parsed);
     if (toLater && route.dayLabel) parsed.dayLabel = route.dayLabel;
     if (toLater && route.dayEnd) parsed.dayEnd = route.dayEnd;   // multi-day range from the quick-add field
 
@@ -2435,7 +2437,7 @@ async function op_addQuickItems(ctx, forceType) {
   });
 
   ta.value = rejected.join('\n') + (rejected.length && wantDelSrc ? '\n.del' : '');   // refused lines stay in the field for correction (with the pending ".del")
-  if (!rejected.length) { _sendNotes = {}; _sendBlocks = {}; }   // carried-over notes / block meta consumed by this add (kept while a refused line waits for its retry)
+  if (!rejected.length) { _sendNotes = {}; _sendBlocks = {}; _sendViews = {}; }   // carried-over notes / block meta / view memory consumed by this add (kept while a refused line waits for its retry)
   if (addedRecur) {                      // rule → ghosts in Later; switch there and show
     saveRecur();
     if (typeof renderLater === 'function') renderLater();
@@ -2717,7 +2719,8 @@ function iStartEdit(idx) { openItemEdit(INBOXCTX, idx); }
 // Clicking an item name (block / event / task) opens a dialog instead of inline rename.
 let _itemEditCtx = null, _itemEditItem = null;
 function openItemEdit(ctx, idx) {
-  const item = ctx.list[idx];
+  const item = ctx.list[idx], tab = _ieNextTab;
+  _ieNextTab = null;                         // one-shot, also when there is nothing to open
   if (!item) return;
   _itemEditCtx = ctx; _itemEditItem = item;
   const type = item.isSubtask ? 'task' : (item.isEvent ? 'event' : ((item.blockType && item.blockType !== 'TASK') ? 'block' : 'item'));
@@ -2731,14 +2734,19 @@ function openItemEdit(ctx, idx) {
   el('itemEditModal').classList.add('open');
   const nameEl = el('itemEditName');
   autoGrowTextarea(nameEl);                  // name first — the note's cap is measured against it
-  // formatted by default (the line you tap becomes its markdown); source mode if that was chosen
-  let srcPref = false;
-  try { srcPref = localStorage.getItem(NOTE_SRC_KEY) === '1'; } catch (_) {}
-  setNoteMode(srcPref);
-  // a note that already holds a checklist opens on the list (that's what you came to tick off)
-  switchItemEditTab(noteHasChkItems() ? 'list' : 'text');
+  // the item opens the way it was left (itemViewGet): formatted or source, done items hidden or not,
+  // Text or Checklist tab. Untouched: formatted (the line you tap becomes its markdown), and a note that
+  // already holds a checklist opens on the list (that's what you came to tick off).
+  const view = itemViewGet(item);
+  chkHideDone = !!view.hide;
+  setNoteMode(!!view.src);
+  if (tab) switchItemEditTab(tab, true);     // the "2/6" badge asks for the checklist
+  else switchItemEditTab(view.tab === 'list' || view.tab === 'text' ? view.tab : (noteHasChkItems() ? 'list' : 'text'));
   nameEl.focus(); nameEl.select();
 }
+// the next openItemEdit goes to this tab — for row elements that mean a particular one (the "2/6" badge)
+let _ieNextTab = null;
+function ieNextTab(which) { _ieNextTab = which; }
 // "⇪ save as block type": takes the block as it stands on the day — its subtasks with their lengths and
 // descriptions, its icon, event times and description — and opens the Blocks editor prefilled with it.
 // A block that came from a type opens on that type, so "save" updates it and "save as new" branches off;
@@ -2846,13 +2854,57 @@ function chkLine(indent, done, text) { return indent + '- [' + (done ? 'x' : ' '
 function ieNoteLines() { return (el('itemEditNote')?.value || '').split('\n'); }
 function ieChkIdxs(lines) { return lines.map((ln, i) => parseChkLine(ln) ? i : -1).filter(i => i >= 0); }
 // "hide done" is a view preference, not content — nothing is written to the note, so a long list
-// can be read as "what is left" without touching the text (and the choice sticks between items).
-const CHK_HIDE_KEY = 'todo-app-chk-hidedone';
-let chkHideDone = (() => { try { return localStorage.getItem(CHK_HIDE_KEY) === '1'; } catch (e) { return false; } })();
+// can be read as "what is left" without touching the text (remembered per item, see itemViewGet).
+let chkHideDone = false;
 function toggleChkHideDone() {
   chkHideDone = !chkHideDone;
-  try { localStorage.setItem(CHK_HIDE_KEY, chkHideDone ? '1' : '0'); } catch (e) {}
+  itemViewSet({ hide: chkHideDone });
   renderChkList();
+}
+
+// ── PER-ITEM VIEW MEMORY ─────────────────────────────────────────────────────
+// How an item's description is looked at — formatted or ⟨⟩ source, ticked-off items hidden or not,
+// Text or Checklist tab — is remembered for every item on its own, so changing it on one note never
+// changes how another one opens. An item nobody has touched opens formatted, showing everything, on
+// the Checklist tab when its note holds a checklist (otherwise Text).
+// Kept on this device only, keyed by item id — never on the item itself: that would make a mere tab
+// switch an edit of the whole day (new `mt`), and LWW could then let it win over a real change made
+// on another device. A recurring item also remembers under its rule, so next week's occurrence (a new
+// id) opens the way the last one was left.
+const ITEM_VIEW_KEY = 'todo-app-v1-item-view';
+const ITEM_VIEW_MAX = 600;            // deleted items leave their entry behind → the oldest ones go beyond this
+// the old app-wide switches, replaced by the per-item memory
+try { localStorage.removeItem('todo-app-v1-note-src'); localStorage.removeItem('todo-app-chk-hidedone'); } catch (_) {}
+function itemViewAll() {
+  try { const o = JSON.parse(localStorage.getItem(ITEM_VIEW_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; }
+  catch (_) { return {}; }
+}
+function itemViewKeys(item) {
+  if (!item || item.id == null) return [];
+  return item.recurId != null ? ['i:' + item.id, 'r:' + item.recurId] : ['i:' + item.id];
+}
+// { src?, hide?, tab? } — empty when the item was never switched
+function itemViewGet(item) {
+  const all = itemViewAll();
+  for (const k of itemViewKeys(item)) if (all[k] && typeof all[k] === 'object') return all[k];
+  return {};
+}
+// merges a change into the memory of the item open in the dialog
+function itemViewSet(patch, item = _itemEditItem) {
+  const keys = itemViewKeys(item);
+  if (!keys.length) return;
+  const all = itemViewAll(), at = Date.now();
+  const merged = { ...itemViewGet(item), ...patch, at };
+  keys.forEach(k => { all[k] = merged; });
+  const ks = Object.keys(all);
+  if (ks.length > ITEM_VIEW_MAX)
+    ks.sort((a, b) => (all[a].at || 0) - (all[b].at || 0)).slice(0, ks.length - ITEM_VIEW_MAX).forEach(k => delete all[k]);
+  try { localStorage.setItem(ITEM_VIEW_KEY, JSON.stringify(all)); } catch (_) {}
+}
+// an item re-created from text (→ move) takes over the memory of the one it came from
+function itemViewCopy(fromId, toItem) {
+  const v = itemViewAll()['i:' + fromId];
+  if (v) { const { at, ...rest } = v; itemViewSet(rest, toItem); }
 }
 // the items the list actually shows — with "hide done" on, only the ones still open.
 // ▲▼ step between THESE, so a move is always a visible one (the ticked lines in between stay put)
@@ -2884,7 +2936,6 @@ let _noteEditing = false;    // source mode
 let _lineEdit = null;        // live mode: { start, end, span0, box } — the part opened as source
 let _lineClosing = false;    // guard: removing the focused box must not re-enter through blur
 let _noteTapLoc = null;      // target recorded on pointerdown, used by the click that follows
-const NOTE_SRC_KEY = 'todo-app-v1-note-src';
 
 // the field the toolbar and the shortcuts act on: the open line, else the whole-text field
 function noteField() { return _lineEdit ? _lineEdit.box : (_noteEditing ? el('itemEditNote') : null); }
@@ -2932,7 +2983,7 @@ function toggleNoteSrcMode() {
     const lines = ta.value.split('\n');
     at = noteLineStart(lines, _lineEdit.start) + _lineEdit.box.selectionStart;
   }
-  try { localStorage.setItem(NOTE_SRC_KEY, to ? '1' : '0'); } catch (_) {}
+  itemViewSet({ src: to });
   setNoteMode(to);
   if (to && at != null) {
     ta.focus();
@@ -3216,8 +3267,10 @@ function taCaretTop(ta, pos) {
 }
 
 
-function switchItemEditTab(which) {
+// remember = a choice made by the user (tab click, the row badge) → the item opens there next time
+function switchItemEditTab(which, remember) {
   const isList = which === 'list';
+  if (remember) itemViewSet({ tab: isList ? 'list' : 'text' });
   if (isList) closeLineEdit(false);          // an open line must not linger in a hidden pane
   el('ieTabList').classList.toggle('active', isList);
   el('ieTabText').classList.toggle('active', !isList);
@@ -7274,6 +7327,8 @@ let _sendNotes = {};
 // block headers carried over via → : { <plain text>: { blockType, duration } } — the line itself only says "🧠 Focus",
 // so a renamed block would otherwise come back as a task (the type is normally recognised from the type name in the text)
 let _sendBlocks = {};
+// source item ids carried over via → : { <plain text>: id } — the re-created item takes over its view memory (itemViewCopy)
+let _sendViews = {};
 // text without any leading emoji / spaces — key of the two maps above (the line carries the block emoji, the item text
 // may not) and the form parseItemText matches block-type names against ("🧠 Deep work" → "Deep work")
 function stripLeadingEmoji(text) {
@@ -7302,6 +7357,7 @@ function sendItemToField(ctx, idx) {
     // carry the task length only from a day (incl. an archived one in Done) — Later/Inbox do not carry times
     else if ((ctx.kind === 'day' || ctx.kind === 'done') && x.duration && !(!x.isSubtask && hasSubs)) suffix = ' ' + x.duration + 'm';   // for a block, the length is carried by the subtask
     if (x.note) _sendNotes[stripLeadingEmoji(x.text)] = x.note;                                         // carry the note keyed by the plain text
+    if (x.id != null) _sendViews[stripLeadingEmoji(x.text)] = x.id;                                     // …and how it was viewed
     if (x.urgent) suffix += ' !';                                                            // urgent survives the round trip (" !" marker)
     if (!x.isSubtask && !x.isEvent && x.blockType && x.blockType !== 'TASK') _sendBlocks[stripLeadingEmoji(x.text)] = { blockType: x.blockType, duration: x.duration || null };
     lines.push(prefix + emoji + (x.text || '') + suffix);
@@ -10449,7 +10505,7 @@ window.addEventListener('resize', updateAppGrid);
   <div class="modal" style="max-width:620px;gap:.6rem;max-height:90vh;overflow:hidden">
     <h2>Formatting a description</h2>
     <p>The description stays plain text — the marks below only change how it is <b>shown</b>. Nothing extra is stored, so sync, export and an older version of the app see the same note as always.</p>
-    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. The <b>⟨⟩ source</b> button puts the whole description into one raw field and remembers that choice.</p>
+    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. The <b>⟨⟩ source</b> button puts the whole description into one raw field. Every item remembers on its own how it was left — formatted or source, ticked-off items hidden or shown, Text or Checklist tab (on this device).</p>
     <div class="modal-scroll">
       <div class="sc-legend">
         <h3>Inside a line</h3>

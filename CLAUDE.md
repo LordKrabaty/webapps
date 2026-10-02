@@ -247,6 +247,7 @@ API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH 
 | archiv | `id` | union (jen doplnit chybějící) — **výjimka `tea-app`: LWW**, archivovaný čaj tam jde dál editovat (favourite, poznámky, název, datum), takže se edit musí přenést; union by tiše nechal starou kopii a zapsal ji zpátky |
 | pracovní dny | week key | union (zatím) |
 | pořadí typů bloků (`blockTypeOrder`) | — | **nesynchronizuje se** (kosmetické) |
+| zobrazení popisu položky v `todo-app` (⟨⟩ zdroj, skrýt hotové, záložka Text/Checklist) | `i:<id>` / `r:<recurId>` | **nesynchronizuje se** (kosmetické, jen `todo-app-v1-item-view` v localStorage) — na položce by přepnutí záložky razítkovalo `mt` celého dne a LWW by mohlo přebít skutečnou editaci z jiného zařízení |
 
 Mazání = **tombstones** `{ "<ns>:<id>": deletedAtTs }`. Konflikt edit-vs-delete řeší čas: pozdější akce vyhrává (editace po smazání = vzkříšení).
 
