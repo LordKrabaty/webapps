@@ -308,9 +308,11 @@ textarea::placeholder{color:var(--mid)}
 .tl-container{display:flex;flex-direction:column;width:100%;border:1.5px solid var(--dark);border-radius:var(--r);overflow:hidden}
 /* Later overview: month mini-calendars marking days that have tasks (no times) */
 .tl-container.later-mode{border:none;gap:.45rem;overflow:visible}
-.tl-cal-toolbar{display:flex;justify-content:flex-end}
+.tl-cal-toolbar{display:flex;justify-content:flex-end;gap:calc(.35rem / var(--pzc, 1))}
 .tl-cal-allbtn{font-family:'DM Sans',sans-serif;font-size:.66rem;color:var(--muted);background:none;border:1px solid var(--light);border-radius:var(--r);padding:.15rem .45rem;cursor:pointer;user-select:none}
 @media(hover:hover){.tl-cal-allbtn:hover{color:var(--black);border-color:var(--mid)}}
+.tl-cal-allbtn.on{color:var(--w);background:var(--black);border-color:var(--black)}   /* "◦ other windows" switched on */
+@media(hover:hover){.tl-cal-allbtn.on:hover{color:var(--w);border-color:var(--black)}}
 .tl-cal-yr-hdr{display:flex;align-items:center;gap:.35rem;font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:600;color:var(--black);cursor:pointer;padding:.3rem .1rem .1rem;border-top:1.5px solid var(--light);margin-top:.3rem;user-select:none}
 .tl-cal-yr-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
 .tl-cal-yr-hdr.overdue{color:var(--muted)}
@@ -335,6 +337,13 @@ textarea::placeholder{color:var(--mid)}
 .tl-cal-band.s{border-top-left-radius:3px;border-bottom-left-radius:3px}
 .tl-cal-band.e{border-top-right-radius:3px;border-bottom-right-radius:3px}
 .tl-cal-dot{position:absolute;top:2px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--black);z-index:1}
+/* other day windows (calendar toggle): hollow counterparts of the own marks — dashed cell, ring, outlined bar */
+.tl-cal-day.oth{border-style:dashed;border-color:var(--mid);color:var(--dark)}
+.tl-cal-oth{position:absolute;top:2px;left:3px;width:6px;height:6px;border-radius:50%;border:1.5px solid var(--black);z-index:1}
+.tl-cal-day.has .tl-cal-oth{border-color:var(--w)}
+.tl-cal-band.oth{background:var(--w);border:1px solid var(--black)}
+.tl-cal-band.oth:not(.s){border-left:none}
+.tl-cal-band.oth:not(.e){border-right:none}
 .tl-cal-num{position:relative;z-index:2}
 .tl-cal-cnt{position:absolute;top:0;right:2px;font-size:.5rem;line-height:1;opacity:.85}
 .tl-later-undated{font-size:.6rem;color:var(--muted);font-family:'DM Mono',monospace;border:1px dashed var(--mid);border-radius:var(--r);padding:0 .3rem;cursor:pointer}
@@ -2126,6 +2135,56 @@ function toggleAllLaterCal() {
   years.forEach(y => { laterCalYearCollapse[y] = anyExpanded; });
   renderLaterTimeline();
 }
+// Other day windows in the overview calendar — opt-in toggle (per device, not synced; cosmetic).
+// Only the calendar shows them, never the Later list. The globals hold just the active window, so this
+// peeks read-only into the other windows' localStorage namespaces — i.e. what this device last loaded for
+// them (a window syncs only while it is open). Nothing here is ever saved.
+const CAL_OTHERWINS_KEY = 'todo-app-cal-otherwins';
+function calOtherWinsOn() { try { return localStorage.getItem(CAL_OTHERWINS_KEY) === '1'; } catch(e) { return false; } }
+function toggleCalOtherWins() { try { localStorage.setItem(CAL_OTHERWINS_KEY, calOtherWinsOn() ? '0' : '1'); } catch(e) {} renderLaterTimeline(); }
+// "9:00–10:00 " prefix of an event (empty for a plain task) — lets the tooltip tell whether two items really clash
+function calEvTime(it) { return (it && it.isEvent && it.eventStart) ? it.eventStart + (it.eventEnd ? '–' + it.eventEnd : '') + ' ' : ''; }
+// dated spans of the other windows' Later (incl. recurrence occurrences, generated like syncLaterGhosts)
+// that end on/after fromT → [{ s, e, nm, label, win }]
+function otherWindowSpans(fromT) {
+  const out = [];
+  const wk = (base, id) => id === 'main' ? base : base + '::' + id;
+  dayWindows.forEach(w => {
+    if (!w || w.id === activeWin) return;
+    let raw = [], recs = [], H = 12;
+    try { raw = JSON.parse(localStorage.getItem(wk(LATER_KEY, w.id)) || '[]') || []; } catch(e) {}
+    try { recs = JSON.parse(localStorage.getItem(wk(RECUR_KEY, w.id)) || '[]') || []; } catch(e) {}
+    try { const v = parseInt(localStorage.getItem(wk(LATER_HORIZON_KEY, w.id)), 10); if (v >= 1 && v <= 60) H = v; } catch(e) {}
+    if (!Array.isArray(raw)) raw = [];
+    if (!Array.isArray(recs)) recs = [];
+    const buckets = (raw.length && raw[0] && raw[0].ym && !Array.isArray(raw[0].items))
+      ? migrateFlatLater(raw) : raw.filter(b => b && b.ym && Array.isArray(b.items));
+    const add = (it, ym) => {
+      if (!it || it.isSubtask) return;
+      const s = it.dayLabel ? parseDayLabel(it.dayLabel, ym) : null; if (!s) return;   // undated → cannot clash with a day
+      const e = it.dayEnd ? laterEndDate(s, it.dayEnd) : s;
+      if (e.getTime() < fromT) return;
+      out.push({ s, e, nm: calEvTime(it) + ((it.text || '').trim() || '(untitled)'), label: laterDayDisplay(it), win: w.name || w.id });
+    };
+    buckets.forEach(b => b.items.forEach(it => add(it, b.ym)));
+    const now = new Date();
+    for (let i = 0; i <= H; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const b = buckets.find(x => x.ym === ym);
+      recs.forEach(rec => {
+        if (!rec || !Array.isArray(rec.rules)) return;
+        recurMonthOccurrences(rec, ym).forEach(occ => {
+          if (rec.exceptions && (rec.exceptions[occ.skipKey] || rec.exceptions[ym])) return;   // skipped day / month
+          if (b && b.items.some(it => it && it.recurId === rec.id && (it.dayLabel || null) === (occ.dayLabel || null))) return;   // already confirmed into the month
+          const p = rec.payload || {};
+          add({ text: p.text || '(recurrence)', dayLabel: occ.dayLabel, isEvent: !!p.isEvent, eventStart: p.eventStart, eventEnd: p.eventEnd }, ym);
+        });
+      });
+    }
+  });
+  return out;
+}
 function renderLaterTimeline(container) {
   container = container || el('tl-container'); if (!container) return;
   const ymKey = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
@@ -2140,15 +2199,26 @@ function renderLaterTimeline(container) {
     monthSet.add(b.ym); itemCountByYm[b.ym] = b.items.length; itemsByYm[b.ym] = b.items;
     b.items.forEach(it => {
       const s = it.dayLabel ? parseDayLabel(it.dayLabel, b.ym) : null;
-      const nm = (it.text || '').trim() || '(untitled)';
+      const nm = calEvTime(it) + ((it.text || '').trim() || '(untitled)');
       if (s) spans.push({ s, e: it.dayEnd ? laterEndDate(s, it.dayEnd) : s, nm, label: laterDayDisplay(it) });
       else (undatedByYm[b.ym] = undatedByYm[b.ym] || []).push(nm);
     });
   });
-  // every month a span touches must be shown (a multi-day range can spill into a month with no bucket)
-  spans.forEach(sp => { const c = new Date(sp.s.getFullYear(), sp.s.getMonth(), 1), end = new Date(sp.e.getFullYear(), sp.e.getMonth(), 1); while (c <= end) { monthSet.add(ymKey(c)); c.setMonth(c.getMonth() + 1); } });
-  if (!monthSet.size) { _laterCalMonths = []; container.innerHTML = '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
   const now = new Date();
+  // other day windows (toggle) — only from the current month on: they are there to spot clashes, not to review the past
+  const multiWin = dayWindows.length > 1, othOn = multiWin && calOtherWinsOn();
+  const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const othSpans = othOn ? otherWindowSpans(curMonthStart.getTime()) : [];
+  // every month a span touches must be shown (a multi-day range can spill into a month with no bucket);
+  // the other windows' ranges add months only from the current one on (a range started last month adds no past month)
+  const addMonths = (sp, from) => { const c = new Date(sp.s.getFullYear(), sp.s.getMonth(), 1), end = new Date(sp.e.getFullYear(), sp.e.getMonth(), 1); if (from && c < from) c.setTime(from.getTime()); while (c <= end) { monthSet.add(ymKey(c)); c.setMonth(c.getMonth() + 1); } };
+  spans.forEach(sp => addMonths(sp, null));
+  othSpans.forEach(sp => addMonths(sp, curMonthStart));
+  const othNames = [...new Set(dayWindows.filter(w => w.id !== activeWin).map(w => w.name || w.id))].join(', ');
+  const othBtn = multiWin
+    ? `<button class="tl-cal-allbtn${othOn ? ' on' : ''}" onclick="toggleCalOtherWins()" title="${esc('show the dated Later items of the other windows (' + othNames + ') to spot clashes: ◦ ring = a day, hollow bar = a range. Data as last loaded on this device.')}">◦ other windows</button>`
+    : '';
+  if (!monthSet.size) { _laterCalMonths = []; container.innerHTML = (othBtn ? `<div class="tl-cal-toolbar">${othBtn}</div>` : '') + '<div class="tl-later-empty">No items in Later yet.</div>'; return; }
   const todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
   const curYm = curMonthYm(), nextYm = nextMonthYm(), curY = curYm.slice(0, 4);
   const tip = names => esc(names.map(x => '• ' + x).join('\n'));   // newline-separated → multiline native tooltip
@@ -2160,9 +2230,14 @@ function renderLaterTimeline(container) {
   const singleSpans = spans.filter(sp => sp.e.getTime() === sp.s.getTime());
   const laneEnd = [];   // laneEnd[lane] = end time of the last range placed on that lane
   rangeSpans.forEach(sp => { let lane = 0; while (lane < laneEnd.length && laneEnd[lane] >= sp.s.getTime()) lane++; sp.lane = lane; laneEnd[lane] = sp.e.getTime(); });
-  // toolbar: expand / collapse all (mirrors the Later list's ⊟)
+  // other windows' ranges go into the first lane free of ANY overlapping range → the own bars keep their lanes
+  const othRangeSpans = othSpans.filter(sp => sp.e.getTime() !== sp.s.getTime()).sort((a, b) => a.s - b.s || a.e - b.e);
+  const othSingleSpans = othSpans.filter(sp => sp.e.getTime() === sp.s.getTime());
+  const placed = rangeSpans.slice();
+  othRangeSpans.forEach(sp => { let lane = 0; while (placed.some(o => o.lane === lane && o.s.getTime() <= sp.e.getTime() && sp.s.getTime() <= o.e.getTime())) lane++; sp.lane = lane; placed.push(sp); });
+  // toolbar: other windows toggle + expand / collapse all (mirrors the Later list's ⊟)
   const anyOpen = months.some(ym => !isLaterCalMonthCollapsed(ym, curYm, nextYm)) || [...new Set(months.map(m => m.slice(0, 4)))].some(y => !isLaterCalYearCollapsed(y, curYm, nextYm));
-  let html0 = `<div class="tl-cal-toolbar"><button class="tl-cal-allbtn" onclick="toggleAllLaterCal()" title="${anyOpen ? 'collapse all' : 'expand all'}">${anyOpen ? '⊟ collapse all' : '⊞ expand all'}</button></div>`;
+  let html0 = `<div class="tl-cal-toolbar">${othBtn}<button class="tl-cal-allbtn" onclick="toggleAllLaterCal()" title="${anyOpen ? 'collapse all' : 'expand all'}">${anyOpen ? '⊟ collapse all' : '⊞ expand all'}</button></div>`;
   const yearItems = {};   // total bucket items per year (year-header summary)
   Object.keys(itemCountByYm).forEach(ym => { const y = ym.slice(0, 4); yearItems[y] = (yearItems[y] || 0) + itemCountByYm[ym]; });
   let html = html0, lastYear = null, firstYear = true;
@@ -2171,7 +2246,7 @@ function renderLaterTimeline(container) {
     if (year !== lastYear) {   // collapsible year header (groups its months)
       const yColl = isLaterCalYearCollapsed(year, curYm, nextYm);
       const yt = yearItems[year] || 0;
-      html += `<div class="tl-cal-yr-hdr${firstYear ? ' first' : ''}${year < curY ? ' overdue' : ''}" onclick="toggleLaterCalYear('${year}')"><span class="tl-cal-caret">${yColl ? '▸' : '▾'}</span>${year}<span class="tl-cal-yr-sum">${yt} ${yt === 1 ? 'item' : 'items'}</span></div>`;
+      html += `<div class="tl-cal-yr-hdr${firstYear ? ' first' : ''}${year < curY ? ' overdue' : ''}" onclick="toggleLaterCalYear('${year}')"><span class="tl-cal-caret">${yColl ? '▸' : '▾'}</span>${year}${yt ? `<span class="tl-cal-yr-sum">${yt} ${yt === 1 ? 'item' : 'items'}</span>` : ''}</div>`;   // a year with only other windows' items → no "0 items"
       lastYear = year; firstYear = false;
     }
     if (isLaterCalYearCollapsed(year, curYm, nextYm)) return;   // collapsed year hides its months
@@ -2189,10 +2264,15 @@ function renderLaterTimeline(container) {
     html += `<div class="tl-later-month">
       <div class="tl-later-mlabel${od ? ' overdue' : ''}" onclick="toggleLaterCalMonth('${ym}')"><span class="tl-cal-caret">${mColl ? '▸' : '▾'}</span>${monthLabel(ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}${sum}</div>`;
     if (!mColl) {   // expanded → the day grid
-      const dayNames = {};
+      const dayNames = {}, othDayNames = {};
       spans.forEach(sp => {
         for (const c = new Date(sp.s); c <= sp.e; c.setDate(c.getDate() + 1)) {
           if (c.getFullYear() === yy && c.getMonth() === mm - 1) (dayNames[c.getDate()] = dayNames[c.getDate()] || []).push((sp.label ? sp.label + ' · ' : '') + sp.nm);
+        }
+      });
+      othSpans.forEach(sp => {
+        for (const c = new Date(sp.s); c <= sp.e; c.setDate(c.getDate() + 1)) {
+          if (c.getFullYear() === yy && c.getMonth() === mm - 1) (othDayNames[c.getDate()] = othDayNames[c.getDate()] || []).push(sp.win + ' · ' + (sp.label ? sp.label + ' · ' : '') + sp.nm);
         }
       });
       const daysInMonth = new Date(yy, mm, 0).getDate();
@@ -2212,15 +2292,24 @@ function renderLaterTimeline(container) {
           const left = isS ? 2 : -3, right = isE ? 2 : -3, bottom = sp.lane * 5 + 2;   // bridge the 3px gap on connecting sides
           bands += `<span class="tl-cal-band${isS ? ' s' : ''}${isE ? ' e' : ''}" style="left:${left}px;right:${right}px;bottom:${bottom}px"></span>`;
         });
+        // other windows: hollow bars (ranges) + a hollow ring (single days) — never the own solid fill
+        othRangeSpans.filter(sp => sp.s.getTime() <= cellT && cellT <= sp.e.getTime()).forEach(sp => {
+          const isS = sp.s.getTime() === cellT, isE = sp.e.getTime() === cellT;
+          const left = isS ? 2 : -3, right = isE ? 2 : -3, bottom = sp.lane * 5 + 2;
+          bands += `<span class="tl-cal-band oth${isS ? ' s' : ''}${isE ? ' e' : ''}" style="left:${left}px;right:${right}px;bottom:${bottom}px"></span>`;
+        });
+        const othNamesD = othDayNames[d] || [];
+        const othSingle = othSingleSpans.some(sp => sp.s.getTime() === cellT);
         const singleCount = singleSpans.filter(sp => sp.s.getTime() === cellT).length;
         const hasRange = covering.length > 0, hasSingle = singleCount > 0;
         const hol = getHoliday(ym + '-' + String(d).padStart(2, '0'));
-        const cls = ['tl-cal-day', hasRange ? 'has-range' : (hasSingle ? 'has' : ''), isToday ? 'today' : '', hol ? 'hol' : ''].filter(Boolean).join(' ');
-        const tipTxt = (hol ? esc(hol) + (n ? '\n' : '') : '') + (n ? tip(names) : '');
-        const click = n ? ` onclick="laterCalJump('${ym}')" title="${tipTxt}"` : (hol ? ` title="${esc(hol)}"` : '');
+        const cls = ['tl-cal-day', hasRange ? 'has-range' : (hasSingle ? 'has' : (othNamesD.length ? 'oth' : '')), isToday ? 'today' : '', hol ? 'hol' : ''].filter(Boolean).join(' ');
+        const tipTxt = [hol ? esc(hol) : '', n ? tip(names) : '', othNamesD.length ? esc(othNamesD.map(x => '◦ ' + x).join('\n')) : ''].filter(Boolean).join('\n');
+        const click = (n ? ` onclick="laterCalJump('${ym}')"` : '') + (tipTxt ? ` title="${tipTxt}"` : '');
         const dot = (hasRange && hasSingle) ? '<span class="tl-cal-dot"></span>' : '';   // a point task that day, on top of a range
+        const ring = othSingle ? '<span class="tl-cal-oth"></span>' : '';               // another window has a task that day
         const cnt = (!hasRange && singleCount > 1) ? `<span class="tl-cal-cnt">${singleCount}</span>` : '';
-        cells += `<div class="${cls}"${click}>${bands}${dot}<span class="tl-cal-num">${d}</span>${cnt}</div>`;
+        cells += `<div class="${cls}"${click}>${bands}${dot}${ring}<span class="tl-cal-num">${d}</span>${cnt}</div>`;
       }
       html += `<div class="tl-cal-grid">${CAL_WD.map(w => `<div class="tl-cal-wd">${w}</div>`).join('')}${cells}</div>`;
     }
