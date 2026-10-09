@@ -2814,7 +2814,7 @@ function openItemEdit(ctx, idx) {
   _itemEditCtx = ctx; _itemEditItem = item;
   const type = item.isSubtask ? 'task' : (item.isEvent ? 'event' : ((item.blockType && item.blockType !== 'TASK') ? 'block' : 'item'));
   el('itemEditTitle').textContent = type;   // small tag at the end of the tab strip
-  el('itemEditName').value = item.text || '';
+  el('itemEditName').value = ieNameValue(item);
   _ieLink = linksTasks(ctx, item) ? openBlockLink(ctx, item) : null;   // a block lists its tasks in the note
   el('itemEditNote').value = _ieLink ? _ieLink.base : (item.note || '');
   el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
@@ -2978,7 +2978,8 @@ function startChkDurEdit(lineIdx, anchor) {
 }
 // save: the list becomes the rows under the block, the rest its description. Runs also when only the
 // name changed, or nothing did but the description still held a list (what the dialog showed is kept).
-function saveBlockLink(ctx, block, link, text, newName) {
+// newUrgent: null = unchanged, else the urgent mark read off the name field (ieReadName)
+function saveBlockLink(ctx, block, link, text, newName, newUrgent = null) {
   const list = ctx.list;
   let idx = list.indexOf(block);
   if (idx < 0) {                                       // the card was reloaded meanwhile (sync) → the same block by id
@@ -2991,9 +2992,10 @@ function saveBlockLink(ctx, block, link, text, newName) {
     || plan.rows.some((r, i) => r.sub !== subs[i] || !r.same || r.done !== !!r.sub.done
                                 || (r.setDur != null && r.setDur !== r.sub.duration)));
   const noteChanged = !!plan && plan.note !== (block.note || '');
-  if (!newName && !subsChanged && !noteChanged) return;
+  if (!newName && newUrgent == null && !subsChanged && !noteChanged) return;
   ctx.undo();
   if (newName) block.text = newName;
+  if (newUrgent != null) block.urgent = newUrgent;
   if (noteChanged) block.note = plan.note;
   if (subsChanged) {
     const next = plan.rows.map(r => {
@@ -3017,7 +3019,7 @@ function saveDayBlockAsType() {
   const idx = list.indexOf(item);
   if (idx < 0) return;
   const btInfo = BLOCK_TYPES[item.blockType] || BLOCK_TYPES.TASK;
-  const text = (el('itemEditName').value.trim() || item.text || '');
+  const text = (ieReadName(el('itemEditName').value).name || item.text || '');   // without the " !" urgent marker
   const label = stripBlockEmoji(text, btInfo).trim() || text;
   const defaultTasks = [];
   // a block's list in the dialog IS its tasks (BLOCK ⇄ ITS TASKS) → taken from there, the rest is the note
@@ -3911,21 +3913,33 @@ function presetNoteChk(ta) {
   toggleChkOnSelection(ta);
 }
 
+// The name field carries the urgent marker exactly like the quick-add line and → send do: "text !" = urgent.
+// An urgent item opens with " !" appended, so typing it marks an existing item and deleting it unmarks it
+// (no other place edits urgent). The other markers (length, time, icon, day) have their own badges on the row.
+function ieNameValue(item) { return (item.text || '') + (item.urgent ? ' !' : ''); }
+function ieReadName(raw) {
+  const v = String(raw || '').trim();
+  const urgent = /\s!$/.test(v);                     // space before the "!" — same rule as parseItemText
+  return { name: urgent ? v.replace(/\s+!$/, '').trim() : v, urgent };
+}
 function saveItemEdit() {
   const ctx = _itemEditCtx, item = _itemEditItem;
   if (!ctx || !item) { closeModal('itemEditModal'); return; }
-  const name = el('itemEditName').value.trim();
+  const raw = el('itemEditName').value.trim();
+  const { name, urgent } = ieReadName(raw);
   const noteRaw = el('itemEditNote').value;
   const note = noteRaw.trim() ? noteRaw : '';
   const nameChanged = name && name !== item.text;
+  const urgentChanged = !!raw && urgent !== !!item.urgent;   // an emptied field keeps the item as it was (name and mark)
   const noteChanged = (item.note || '') !== note;
   const link = _ieLink;
   _itemEditCtx = null; _itemEditItem = null; _ieLink = null;
   closeModal('itemEditModal');
-  if (link) { saveBlockLink(ctx, item, link, noteRaw, nameChanged ? name : null); return; }   // a block: its list → its tasks
-  if (nameChanged || noteChanged) {
+  if (link) { saveBlockLink(ctx, item, link, noteRaw, nameChanged ? name : null, urgentChanged ? urgent : null); return; }   // a block: its list → its tasks
+  if (nameChanged || noteChanged || urgentChanged) {
     ctx.undo();
     if (nameChanged) item.text = name;
+    if (urgentChanged) item.urgent = urgent;
     item.note = note;
     ctx.save(); ctx.render();
   }
@@ -10743,7 +10757,7 @@ window.addEventListener('resize', updateAppGrid);
       </table>
       <h3>Markers</h3>
       <table>
-        <tr><td><code>text !</code></td><td>urgent (space before the <code>!</code>)</td></tr>
+        <tr><td><code>text !</code></td><td>urgent (space before the <code>!</code>) — works in the name of an existing item too (click its name); an urgent item shows the <code>!</code> there, delete it to unmark</td></tr>
         <tr><td><code>x text</code></td><td>done task</td></tr>
         <tr><td><code>✒ text</code></td><td>task marker — the <code>→</code> (send) button adds it when moving items between cards</td></tr>
         <tr><td><code>20m</code> · <code>2h</code> · <code>45 min</code></td><td>length, anywhere in the line</td></tr>
