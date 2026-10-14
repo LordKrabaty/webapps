@@ -581,6 +581,8 @@ textarea::placeholder{color:var(--mid)}
 .plan-day-row{display:flex;align-items:center;gap:.35rem;padding:.22rem .45rem;border:1px dashed var(--light);border-radius:var(--r)}
 .week-section-hdr{font-size:.7rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.5rem .1rem .15rem;border-top:1.5px solid var(--light);margin-top:.2rem;display:flex;align-items:center;gap:.5rem}
 .week-section-hdr.first{border-top:none;margin-top:0;padding-top:.1rem}
+/* Done groups weeks under Later's year/month headers — the month gets weight so it reads above the (muted) week headers */
+#week-list .later-month-hdr{color:var(--black);font-weight:600}
 .week-section-sel{font-size:.68rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);cursor:pointer;margin-left:auto}
 .week-note{font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.55;color:var(--black);background:var(--off);border:1px dashed var(--mid);border-radius:var(--r);padding:.4rem .55rem;outline:none;resize:vertical;width:100%;min-height:2rem;margin-top:.1rem}
 .week-note:focus{outline:2px solid var(--black);outline-offset:1px;background:var(--w)}
@@ -837,8 +839,9 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div id="pane-hotovo" class="notes-pane">
       <div id="week-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.25rem"></div>
-      <div style="flex-shrink:0;margin-top:.35rem">
+      <div style="flex-shrink:0;margin-top:.35rem;display:flex;gap:.3rem">
         <button class="btn-add" onclick="exportWeekAsText()">↗ export</button>
+        <button class="btn-add" onclick="toggleAllDone()" title="expand / collapse all years, months and weeks">⊟</button>
       </div>
     </div>
     <div id="pane-inbox" class="notes-pane">
@@ -4573,7 +4576,7 @@ function activateWindow(id) {
   activeLibId = null; savedSnapshot = null;
   undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
-  laterCollapsed = null; laterYearCollapsed = null;   // reload month/year collapse state under WK() of the new window
+  laterCollapsed = null; laterYearCollapsed = null; doneCollapsed = null;   // reload Later / Done collapse state under WK() of the new window
   loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes(); loadEvals();
   if (typeof window.setWindowLoading === 'function') { try { window.setWindowLoading(false); } catch(e) {} }   // all collections belong to `id` from here on
   migrateWeekNotesToEvals();
@@ -8639,7 +8642,39 @@ async function applyEvalRange() {
   saveEvals(); closeModal('evalRangeModal'); renderWeekTab();
 }
 
-let hotovoCollapsed = null;   // Set of collapsed week keys on the Done card; null = not initialized yet
+// ── DONE: year / month / week collapsing (per device and per day window, not synced) ──
+// One map for all three levels, told apart by the key shape: 'YYYY' year · 'YYYY-MM' month · 'YYYY-Wnn' week.
+// A week belongs to the month (and year) of its Thursday — the same rule that gives the ISO week its year,
+// so "Week 1 · 2027" never lands under December 2026. Only deviations from the default are stored.
+const DONE_COLLAPSE_KEY = 'todo-app-done-collapsed';
+let doneCollapsed = null;   // cache; reset to null on window switch (activateWindow) → reload under WK()
+function ensureDoneCollapsed() { if (doneCollapsed) return; try { doneCollapsed = JSON.parse(localStorage.getItem(WK(DONE_COLLAPSE_KEY)) || '{}') || {}; } catch(e) { doneCollapsed = {}; } }
+function saveDoneCollapsed() { try { localStorage.setItem(WK(DONE_COLLAPSE_KEY), JSON.stringify(doneCollapsed || {})); } catch(e) {} }
+function doneWeekThursday(iso) { return isoAddDays(mondayOfIso(iso), 3); }
+// expanded by default: the previous / current / next week, the months and years holding them, and the current year
+function doneDefaultOpen() {
+  const s = new Set([String(getISOWeekYear(todayIso()))]);
+  [-1, 0, 1].forEach(off => {
+    const mon = getMondayIso(off), thu = isoAddDays(mon, 3);
+    s.add(doneWeekKey(mon)); s.add(thu.slice(0, 7)); s.add(thu.slice(0, 4));
+  });
+  return s;
+}
+function isDoneCollapsed(key, open = doneDefaultOpen()) { ensureDoneCollapsed(); return (key in doneCollapsed) ? !!doneCollapsed[key] : !open.has(key); }
+function setDoneCollapsed(key, v, open = doneDefaultOpen()) { ensureDoneCollapsed(); if (v === !open.has(key)) delete doneCollapsed[key]; else doneCollapsed[key] = v; }
+function toggleDoneGroup(key) { setDoneCollapsed(key, !isDoneCollapsed(key)); saveDoneCollapsed(); renderWeekTab(); }
+// expand/collapse every year, month and week at once — anything expanded → collapse all; otherwise expand all
+function toggleAllDone() {
+  const open = doneDefaultOpen();
+  const dates = [...weekDays.map(d => d.date), ...weekPlans.map(p => p.date), ...evals.map(ev => ev && ev.day)].filter(Boolean);
+  if (!dates.length) return;
+  const keys = new Set(), years = new Set();
+  dates.forEach(iso => { const thu = doneWeekThursday(iso); keys.add(doneWeekKey(iso)); keys.add(thu.slice(0, 7)); years.add(thu.slice(0, 4)); });
+  const collapse = [...years].some(y => !isDoneCollapsed(y, open));
+  [...keys, ...years].forEach(k => setDoneCollapsed(k, collapse, open));
+  saveDoneCollapsed(); renderWeekTab();
+}
+
 function renderWeekTab() {
   const list = el('week-list'); if (!list) return;
   const planMap = new Map(groupPlansByWeek());
@@ -8649,26 +8684,40 @@ function renderWeekTab() {
 
   if (!allKeys.length) {
     list.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.3rem 0">No saved days.</div>';
-    hotovoCollapsed = null;
     return;
   }
 
-  // first render: collapse all weeks outside the primary window (previous+current+next); a user toggle then persists
-  const canonOf = key => key.replace('-W', '-');   // 'YYYY-Wnn' → the canonical key of recentWeekKeySet()
-  if (hotovoCollapsed === null) {
-    const recent = recentWeekKeySet();
-    hotovoCollapsed = new Set();
-    allKeys.forEach(key => { if (!recent.has(canonOf(key))) hotovoCollapsed.add(key); });
-  }
-
-  const prevScroll = list.scrollTop;   // rebuilding innerHTML resets scroll → restore it (an open inline preview may be scrolled deep in the list)
-  list.innerHTML = allKeys.map((key, gi) => {
-    const pg = planMap.get(key);
-    const rg = realMap.get(key);
-    const evs = evalMap.get(key) || [];
+  const open = doneDefaultOpen();
+  // weeks → their month (by Thursday); days per month/year for the header summary
+  const weeks = allKeys.map(key => {
+    const pg = planMap.get(key), rg = realMap.get(key), evs = evalMap.get(key) || [];
     const anyDate = (rg && rg.days[0].date) || (pg && pg.days[0].date) || evs[0].day;
-    const week = getISOWeek(anyDate), year = getISOWeekYear(anyDate);
-    const isColl = hotovoCollapsed.has(key);
+    const ym = doneWeekThursday(anyDate).slice(0, 7);
+    const dates = new Set([...(pg ? pg.days : []), ...(rg ? rg.days : [])].map(d => d.date));
+    return { key, pg, rg, evs, anyDate, ym, year: ym.slice(0, 4), days: dates.size };
+  });
+  const sumDays = {};
+  weeks.forEach(w => { sumDays[w.ym] = (sumDays[w.ym] || 0) + w.days; sumDays[w.year] = (sumDays[w.year] || 0) + w.days; });
+  const daysLbl = n => n + ' ' + (n === 1 ? 'day' : 'days');
+
+  // year and month headers reuse the Later look (.later-year-hdr / .later-month-hdr)
+  let html = '', lastYear = null, lastYm = null, firstYear = true, firstInYear = false, firstInMonth = false;
+  weeks.forEach(w => {
+    if (w.year !== lastYear) {
+      const yc = isDoneCollapsed(w.year, open);
+      html += `<div class="later-year-hdr${firstYear ? ' first' : ''}" onclick="toggleDoneGroup('${w.year}')"><span class="later-month-toggle">${yc ? '▸' : '▾'}</span>${w.year}<span class="later-month-sum">${daysLbl(sumDays[w.year])}</span></div>`;
+      lastYear = w.year; lastYm = null; firstYear = false; firstInYear = true;
+    }
+    if (isDoneCollapsed(w.year, open)) return;   // collapsed year hides all its months
+    if (w.ym !== lastYm) {
+      const mc = isDoneCollapsed(w.ym, open);
+      html += `<div class="later-month-hdr${firstInYear ? ' first' : ''}" onclick="toggleDoneGroup('${w.ym}')"><span class="later-month-toggle">${mc ? '▸' : '▾'}</span>${monthLabel(w.ym)}<span class="later-month-sum">${daysLbl(sumDays[w.ym])}</span></div>`;
+      lastYm = w.ym; firstInYear = false; firstInMonth = true;
+    }
+    if (isDoneCollapsed(w.ym, open)) return;     // collapsed month hides all its weeks
+    const { key, pg, rg, evs, anyDate } = w;
+    const week = getISOWeek(anyDate);   // the year is in the headers above (ISO week year = year of its Thursday)
+    const isColl = isDoneCollapsed(key, open);
     const dayCount = (pg ? pg.days.length : 0) + (rg ? rg.days.length : 0);
     const planSection = pg
       ? `<div class="week-sub-hdr">Plan</div>${pg.days.map(renderPlanRow).join('')}`
@@ -8689,13 +8738,16 @@ function renderWeekTab() {
     const tplBtn = rg
       ? `<button class="week-section-sel" style="background:none;border:none;font-family:inherit" onclick="weekGroupToTemplate('${key}')" title="save the whole week as a template">+ template</button>`
       : '';
-    return `<div class="week-section">
-      <div class="week-section-hdr${gi === 0 ? ' first' : ''}">
-        <span class="week-hdr-toggle" onclick="toggleHotovoWeek('${key}')"><span class="sel-caret">${isColl ? '▸' : '▾'}</span>Week ${week} &middot; ${year}${isColl ? ` <span class="sel-count">${dayCount}×</span>` : ''}</span>${tplBtn}
+    html += `<div class="week-section">
+      <div class="week-section-hdr${firstInMonth ? ' first' : ''}">
+        <span class="week-hdr-toggle" onclick="toggleDoneGroup('${key}')"><span class="sel-caret">${isColl ? '▸' : '▾'}</span>Week ${week}${isColl ? ` <span class="sel-count">${dayCount}×</span>` : ''}</span>${tplBtn}
       </div>
       <div class="week-section-body"${isColl ? ' style="display:none"' : ''}>${planSection}${realSection}</div>
     </div>`;
-  }).join('');
+    firstInMonth = false;
+  });
+  const prevScroll = list.scrollTop;   // rebuilding innerHTML resets scroll → restore it (an open inline preview may be scrolled deep in the list)
+  list.innerHTML = html;
   // size multi-line notes to fit (visible sections only — collapsed ones have no layout height)
   list.querySelectorAll('.week-note').forEach(ta => { if (ta.value && ta.offsetParent) autoGrowTextarea(ta); });
   list.scrollTop = prevScroll;
@@ -8925,12 +8977,6 @@ async function inlineSaveAsTemplate(type, id) {
   library.push(entry);
   saveLibrary(); renderLibrary();
   showSave('✓ saved to templates');
-}
-
-function toggleHotovoWeek(key) {
-  if (!hotovoCollapsed) hotovoCollapsed = new Set();
-  if (hotovoCollapsed.has(key)) hotovoCollapsed.delete(key); else hotovoCollapsed.add(key);
-  renderWeekTab();
 }
 
 // Saves a whole saved week (reality) from Done as a week template — without unchecking.
