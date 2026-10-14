@@ -4541,8 +4541,13 @@ function renderLogEdit() {
         <div class="jb-field" style="flex:1"><label>energy today</label><div class="jb-sub">how you felt during the session</div><select onchange="${leNum('energy')}">${anchorOpts(d.energy, ENERGY_ANCHORS)}</select></div>
         <div class="jb-field" style="flex:1"><label>focus</label><div class="jb-sub">attention on technique</div><select onchange="${leNum('focus')}">${anchorOpts(d.focus, FOCUS_ANCHORS)}</select></div>
       </div>`;
+  const when = new Date(d.date || d.id), p2 = n => String(n).padStart(2, '0');
   el('logEditBody').innerHTML = `
     <div class="jb-field"><label>name</label><input type="text" value="${esc(d.name || '')}" spellcheck="false" oninput="logEditDraft.name=this.value"></div>
+    <div class="modal-row">
+      <div class="jb-field" style="flex:1.4"><label>date</label><input id="leDate" type="date" value="${when.getFullYear()}-${p2(when.getMonth() + 1)}-${p2(when.getDate())}" onchange="leWhen()"></div>
+      <div class="jb-field" style="flex:1"><label>time</label><input id="leTime" type="time" value="${p2(when.getHours())}:${p2(when.getMinutes())}" onchange="leWhen()"></div>
+    </div>
     <div class="jb-field"><label>total time (m:ss)</label><input type="text" value="${mmss(d.totalSec || 0)}" onchange="const v=parseDur(this.value);if(v!=null)logEditDraft.totalSec=v;this.value=mmss(logEditDraft.totalSec||0)"></div>
     ${scoreRow}
     <div class="jb-field"><label>session note</label><textarea class="le-note" rows="2" oninput="autoResizeTA(this);logEditDraft.note=this.value" placeholder="how it went — feel, PBs, aches…">${esc(d.note || '')}</textarea></div>`
@@ -4572,6 +4577,12 @@ function renderLogEdit() {
         <textarea class="le-note le-note-set" rows="1" oninput="autoResizeTA(this);logEditDraft.entries[${ei}].sets[${si}].note=this.value" placeholder="· note (${s.iname != null ? 'interval' : 'round'} ${s.rd || si + 1})">${esc(s.note || '')}</textarea>`).join('')}`).join('')
     + `<button class="btn-io" style="margin-top:.4rem" onclick="leAddEx()">+ add exercise</button>`;
   requestAnimationFrame(() => el('logEditBody') && el('logEditBody').querySelectorAll('.le-note').forEach(autoResizeTA));
+}
+// when the session happened (logged late / clock was off) — date + time inputs → draft.date (ms, local time);
+// an incomplete date is ignored, so the entry keeps its old time until the input holds a valid one
+function leWhen() {
+  const ts = Date.parse((el('leDate').value || '') + 'T' + (el('leTime').value || '12:00'));
+  if (!isNaN(ts)) logEditDraft.date = ts;
 }
 // how many times the whole segment ran — the log keeps one pass + this count
 function leRep(ei, inp) {
@@ -4616,7 +4627,7 @@ function saveLogEdit() {
   logEditDraft.mt = Date.now();   // edited log entry wins LWW → syncs to other devices
   archive[i] = logEditDraft;
   logEditDraft = null;
-  saveArchive(); renderLog();
+  saveArchive(); renderLog(); renderLibrary();   // renderLibrary → a moved date can change this week's done/target badge
   closeModal('logEditModal');
   showSave('✓ log entry updated');
 }
