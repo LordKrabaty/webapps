@@ -197,6 +197,8 @@ header{
 .field{display:flex;flex-direction:column;gap:calc(.3rem/var(--pzc,1))}
 .field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
 .field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none}
+.field input[type="date"],.field input[type="time"]{font-family:'DM Mono',monospace;font-size:.88rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .6rem;outline:none;min-width:0;width:100%}
+html.dark .field input[type="date"],html.dark .field input[type="time"]{color-scheme:dark}
 .field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
 .field select{cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .6rem center;padding-right:1.8rem}
 input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--black);border-radius:1px;outline:none;cursor:pointer;margin:.35rem 0}
@@ -344,7 +346,10 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
 .log-entry{border:var(--b);border-radius:var(--r);overflow:hidden;flex-shrink:0}
 .log-entry-head{padding:.5rem .7rem;background:var(--off);border-bottom:var(--b);display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
 .log-entry-meta{display:flex;flex-direction:column;gap:.18rem;min-width:0}
-.log-entry-date{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.log-entry-date{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);align-self:flex-start}
+/* log entry date — click to change date & time (library log + archive preview) */
+.log-date-edit{cursor:pointer;border-radius:2px;text-decoration:underline dotted var(--mid);text-underline-offset:2px}
+@media(hover:hover){.log-date-edit:hover{background:var(--light);color:var(--dark)}}
 .log-entry-setup{font-size:.78rem;color:var(--dark);line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .log-entry-del{width:22px;height:22px;border:none;background:none;cursor:pointer;flex-shrink:0;opacity:.3;display:flex;align-items:center;justify-content:center;border-radius:3px}
 @media(hover:hover){.log-entry-del:hover{opacity:1;background:var(--light)}}
@@ -901,6 +906,21 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
     <div class="modal-row" style="margin-top:.6rem">
       <button class="modal-btn" onclick="closeModal('logEditModal')">cancel</button>
       <button class="modal-btn primary" onclick="saveCurrentEdit()">save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log entry date modal (opens over the log or the archive preview) -->
+<div class="modal-bg" id="logDateModal">
+  <div class="modal" style="max-width:340px">
+    <h2>Entry date</h2>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap" onkeydown="if(event.key==='Enter'){event.preventDefault();saveLogDate();}">
+      <div class="field" style="flex:1.4;min-width:140px"><label>date</label><input type="date" id="ldDate" /></div>
+      <div class="field" style="flex:1;min-width:100px"><label>time</label><input type="time" id="ldTime" /></div>
+    </div>
+    <div class="modal-row" style="margin-top:.4rem">
+      <button class="modal-btn" onclick="closeModal('logDateModal')">cancel</button>
+      <button class="modal-btn primary" onclick="saveLogDate()">save</button>
     </div>
   </div>
 </div>
@@ -1635,25 +1655,27 @@ function openArchPreview(id){
   // General notes — editable directly in the archive (always shown so notes can be added, not just read)
   const notesTa=el('apm-notes-edit');
   notesTa.value=entry.data?.notes||'';
+  renderArchLogs(entry);
+  el('apm-dup-btn').onclick=()=>dupArchiveToLibrary(id);
+  el('apm-restore-btn').onclick=()=>{closeModal('archPreviewModal');restoreFromArchive(id);};
+  el('apm-asnew-btn').onclick=()=>{closeModal('archPreviewModal');useArchiveAsNew(id);};
+  el('archPreviewModal').classList.add('open');
+  // grow the textareas once the modal is visible (a hidden textarea reports the wrong scrollHeight)
+  requestAnimationFrame(()=>autoResizeTA(el('apm-notes-edit')));
+}
+// the archive preview's log list — also re-rendered on its own after an entry's date changes
+function renderArchLogs(entry){
   const logs=entry.logs||[];
   el('apm-logs-wrap').style.display=logs.length?'':'none';
   el('apm-log-count').textContent=logs.length?'('+logs.length+')':'';
   el('apm-log-list').innerHTML=logs.map(l=>`
     <div style="border:var(--b);border-radius:var(--r);overflow:hidden;flex-shrink:0">
       <div style="padding:.38rem .65rem;background:var(--off);border-bottom:var(--b);display:flex;gap:.55rem;align-items:baseline;flex-wrap:wrap">
-        <span style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0">${esc(l.date||'')}</span>
+        <span class="log-date-edit" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0" onclick="openLogDate('arch',${entry.id},${l.id})" title="change date &amp; time">${esc(l.date||'—')}</span>
         <span style="font-size:.72rem;color:var(--dark);white-space:pre-wrap;word-break:break-word">${esc(l.setup||'')}</span>
       </div>
       <textarea class="arch-log-ta" data-log-id="${l.id}" placeholder="tasting notes for this session…" oninput="updateArchLogText(${l.id},this)">${esc(l.text||'')}</textarea></div>`).join('');
-  el('apm-dup-btn').onclick=()=>dupArchiveToLibrary(id);
-  el('apm-restore-btn').onclick=()=>{closeModal('archPreviewModal');restoreFromArchive(id);};
-  el('apm-asnew-btn').onclick=()=>{closeModal('archPreviewModal');useArchiveAsNew(id);};
-  el('archPreviewModal').classList.add('open');
-  // grow the textareas once the modal is visible (a hidden textarea reports the wrong scrollHeight)
-  requestAnimationFrame(()=>{
-    autoResizeTA(el('apm-notes-edit'));
-    el('apm-log-list').querySelectorAll('.arch-log-ta').forEach(autoResizeTA);
-  });
+  requestAnimationFrame(()=>el('apm-log-list').querySelectorAll('.arch-log-ta').forEach(autoResizeTA));
 }
 function toggleArchPreviewFav(){if(archPreviewId)toggleArchFav(archPreviewId);}
 // the star in the archive preview modal mirrors the one in the list
@@ -3594,6 +3616,40 @@ function updateLogText(id,val){
   if(e){e.text=val;saveLog();}
 }
 
+/* ── LOG ENTRY DATE — change date & time after the fact (session logged later / clock was off) ── */
+// scope 'lib' = a library tea's log · 'arch' = the log in the archive preview. The owner id is kept, not the scope's
+// "current" tea, so the save lands on the record the modal was opened for.
+let logDateCtx=null;
+function logDateOwner(ctx){return(ctx.scope==='arch'?archive:library).find(e=>e.id===ctx.ownerId)||null;}
+function parseLogDate(s){const m=String(s||'').match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/);return m?{d:m[1],t:m[2]||''}:null;}
+// sortable 'YYYY-MM-DD HH:MM'; an unreadable date falls back to the creation time (id = Date.now() at logging)
+function logSortKey(l){const p=parseLogDate(l.date);return p?p.d+' '+(p.t||'00:00'):fmtDate(new Date(l.id));}
+function openLogDate(scope,ownerId,logId){
+  const ctx={scope,ownerId,logId};
+  const owner=logDateOwner(ctx);const l=owner&&(owner.logs||[]).find(x=>x.id===logId);if(!l)return;
+  logDateCtx=ctx;
+  const [d,t]=logSortKey(l).split(' ');
+  el('ldDate').value=d;el('ldTime').value=parseLogDate(l.date)?.t||t;
+  el('logDateModal').classList.add('open');
+}
+function saveLogDate(){
+  const ctx=logDateCtx;const owner=ctx&&logDateOwner(ctx);
+  const l=owner&&(owner.logs||[]).find(x=>x.id===ctx.logId);
+  if(!l){closeModal('logDateModal');return;}
+  const d=el('ldDate').value;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){customAlert('Pick a date.');return;}
+  const t=el('ldTime').value||logSortKey(l).split(' ')[1];   // time cleared → keep the old one
+  closeModal('logDateModal');logDateCtx=null;
+  const v=d+' '+t;
+  if(v===l.date)return;   // nothing changed → no mt stamp (a blind stamp would beat a newer edit from another device)
+  l.date=v;
+  owner.logs.sort((a,b)=>logSortKey(b).localeCompare(logSortKey(a)));   // newest first — a back-dated entry slots in among the others
+  owner.mt=Date.now();
+  if(ctx.scope==='arch'){saveArchive();if(archPreviewId===owner.id)renderArchLogs(owner);}
+  else{saveLibrary();if(activeLibId===owner.id)renderLog();}
+  showSave('✓ entry date changed');
+}
+
 /* ── LOG ENTRY EDIT ── */
 let editingLogId=null;
 let editingTplId=null;
@@ -3870,7 +3926,7 @@ function renderLog(){
     <div class="log-entry" id="log-entry-${e.id}">
       <div class="log-entry-head">
         <div class="log-entry-meta">
-          <span class="log-entry-date">${esc(e.date)}</span>
+          <span class="log-entry-date log-date-edit" onclick="openLogDate('lib',${activeLibId},${e.id})" title="change date &amp; time">${esc(e.date||'—')}</span>
           <span class="log-entry-setup">${buildSetupHtml(e.data,_curData,e.setup,_teaName)}</span>
         </div>
         <button class="log-entry-del" onclick="deleteLogEntry(${e.id})" title="delete entry">
