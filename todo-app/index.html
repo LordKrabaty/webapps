@@ -1924,7 +1924,7 @@ const DAYCTX = {
   input: 'quickInput',
   winStart() { return windowStart; },
   undo() { pushUndo(); },
-  save() { schedSave(); },
+  save() { syncBlockDone(items); schedSave(); },   // sync now — render runs before the debounced flush
   render() { renderAll(); },
   call(name, idx, extra) { return name + '(' + idx + (extra != null ? ',' + extra : '') + ')'; },
 };
@@ -2669,11 +2669,15 @@ function op_toggleDone(ctx, idx) {
   const list = ctx.list;
   if (!list[idx]) return;
   ctx.undo();
-  const newDone = !list[idx].done;
-  list[idx].done = newDone;
+  setItemDone(list, idx, !list[idx].done);
+  ctx.save(); ctx.render();
+}
+// ticking a block ticks all its subtasks; ticking a subtask re-derives its block (see syncBlockDone)
+function setItemDone(list, idx, done) {
+  list[idx].done = done;
   if (!list[idx].isSubtask) {
     // block → cascade to subtasks
-    for (let i = idx + 1; i < list.length && list[i].isSubtask; i++) list[i].done = newDone;
+    for (let i = idx + 1; i < list.length && list[i].isSubtask; i++) list[i].done = done;
   } else {
     // subtask → sync the parent block state
     const parentIdx = findParentBlock(idx, list);
@@ -2685,7 +2689,6 @@ function op_toggleDone(ctx, idx) {
       list[parentIdx].done = allDone;
     }
   }
-  ctx.save(); ctx.render();
 }
 
 function op_deleteItem(ctx, idx) {
@@ -4001,6 +4004,22 @@ function findParentBlock(idx, arr = items) {
   return -1;
 }
 
+// A block with subtasks is done exactly when ALL its subtasks are — its own tick is derived, never
+// independent. Toggling keeps that (setItemDone), but adding/moving/deleting a subtask, a preview edit
+// or an older record would leave "block ticked, tasks open" or the reverse → re-derived on every save
+// and load. A block without subtasks keeps its own tick. Only writes on a real difference, so an
+// already consistent list is left byte-identical (no false change → no mt stamp in autoSavePlanDay).
+function syncBlockDone(list) {
+  if (!Array.isArray(list)) return;
+  for (let b = 0; b < list.length; b++) {
+    const blk = list[b];
+    if (!blk || blk.isSubtask || blk.isGhost) continue;
+    let n = 0, all = true;
+    for (let i = b + 1; i < list.length && list[i] && list[i].isSubtask; i++) { n++; if (!list[i].done) all = false; }
+    if (n && !!blk.done !== all) blk.done = all;
+  }
+}
+
 // Item minutes for totals/scheduling: an event with a from-to time = the time difference (authoritative,
 // even if item.duration is stale — see time editing in the preview), otherwise its own duration.
 function effItemMinutes(item) {
@@ -4388,6 +4407,7 @@ function applySessionData(d) {
   // deep copy — the live buffer must not share a reference with the stored day/template,
   // otherwise editing would mutate the source too and break change detection (mt) in autoSavePlanDay()
   items = d.items ? JSON.parse(JSON.stringify(d.items)) : [];
+  syncBlockDone(items);
   windowStart = d.windowStart || '6:00';
   windowEnd   = d.windowEnd   || '14:00';
   dayNote     = d.note || '';    // always reset — an older record without a note must not inherit the previous day's one
@@ -4451,8 +4471,11 @@ function loadLibrary() { try { library = JSON.parse(localStorage.getItem(WK(LIBR
 function saveLibrary() { try { localStorage.setItem(WK(LIBRARY_KEY), JSON.stringify(library)); } catch(e) {} }
 function loadArchive() { try { archive = JSON.parse(localStorage.getItem(WK(ARCHIVE_KEY)) || '[]'); } catch(e) { archive = []; } }
 function saveArchive() { try { localStorage.setItem(WK(ARCHIVE_KEY), JSON.stringify(archive)); } catch(e) {} }
-function loadWeekPlans() { try { weekPlans = JSON.parse(localStorage.getItem(WK(WEEKPLANS_KEY)) || '[]'); } catch(e) { weekPlans = []; } }
-function saveWeekPlans() { try { localStorage.setItem(WK(WEEKPLANS_KEY), JSON.stringify(weekPlans)); } catch(e) {} }
+function loadWeekPlans() { try { weekPlans = JSON.parse(localStorage.getItem(WK(WEEKPLANS_KEY)) || '[]'); } catch(e) { weekPlans = []; } syncRecordsDone(weekPlans); }
+function saveWeekPlans() { syncRecordsDone(weekPlans); try { localStorage.setItem(WK(WEEKPLANS_KEY), JSON.stringify(weekPlans)); } catch(e) {} }
+// block ticks of stored days/plans re-derived from their subtasks (syncBlockDone) — on load it fixes older
+// records, on save every edit path that skipped it (moves, deletes, Done inline edits, cloud merges)
+function syncRecordsDone(arr) { (Array.isArray(arr) ? arr : []).forEach(r => { if (r) syncBlockDone(r.items); }); }
 function loadWorkingDays() { workingDaysByWeek = {}; try { const s = localStorage.getItem(WK(WORKDAYS_KEY)); if (s) workingDaysByWeek = JSON.parse(s); } catch(e) {} }
 function saveWorkingDays() { try { localStorage.setItem(WK(WORKDAYS_KEY), JSON.stringify(workingDaysByWeek)); } catch(e) {} }
 function getMondayIso(weekOffset = 0) {
@@ -5459,6 +5482,7 @@ function renderPreviewList() {
   const container = el('previewItemList');
   if (!container || !_previewSource) return;
   const arr = _previewSource.items;
+  syncBlockDone(arr);                    // preview ops have no save step (PREVIEWCTX.save is a no-op) → derive here
   const n = arr.length;
   const times = computeScheduleTimes(arr, _previewSource.windowStart);   // when a block lands
   const itemsHtml = n ? arr.map((item, i) => {
@@ -5523,8 +5547,8 @@ function setPreviewWindow() {
 }
 
 function togglePreviewDone(i, checked) {
-  if (!_previewSource) return;
-  _previewSource.items[i].done = checked;
+  if (!_previewSource || !_previewSource.items[i]) return;
+  setItemDone(_previewSource.items, i, checked);   // a block ticks its subtasks too, same as on the card
   renderPreviewList();
 }
 
@@ -6892,8 +6916,8 @@ async function loadHolidays() {
   if (el('pane-pozdeji')?.classList.contains('active')) { renderLater(); renderTimeline(); }   // renderTimeline = the Later overview calendar (holiday cells)
 }
 
-function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WK(WEEK_KEY)) || '[]'); } catch(e) { weekDays = []; } }
-function saveWeek()  { try { localStorage.setItem(WK(WEEK_KEY), JSON.stringify(weekDays)); } catch(e) {} }
+function loadWeek()  { try { weekDays = JSON.parse(localStorage.getItem(WK(WEEK_KEY)) || '[]'); } catch(e) { weekDays = []; } syncRecordsDone(weekDays); }
+function saveWeek()  { syncRecordsDone(weekDays); try { localStorage.setItem(WK(WEEK_KEY), JSON.stringify(weekDays)); } catch(e) {} }
 
 // ── WEEK NOTES (legacy): free-text evaluation per Done week, keyed by 'YYYY-Wnn' ──
 // Superseded by evals below — no longer rendered anywhere. The collection is still loaded, saved
@@ -7479,7 +7503,9 @@ function normItem(it) {
 }
 function normLaterBucket(b) {
   if (!b || !b.ym) return null;
-  return { ...b, ym: b.ym, items: (b.items || []).map(normItem).filter(Boolean), mt: +b.mt || 0 };   // spread → keep unknown/newer bucket fields
+  const items = (b.items || []).map(normItem).filter(Boolean);
+  syncBlockDone(items);
+  return { ...b, ym: b.ym, items, mt: +b.mt || 0 };   // spread → keep unknown/newer bucket fields
 }
 // normalize an imported recurrence rule — guards against an incomplete shape (missing rules/payload/exceptions)
 function normRecur(r) {
@@ -7526,6 +7552,7 @@ function loadLater() {
 }
 function saveLater() {
   later = later.filter(b => b && Array.isArray(b.items) && b.items.length);   // drop empty months (ghosts count)
+  syncRecordsDone(later);
   try { localStorage.setItem(WK(LATER_KEY), JSON.stringify(cleanLater())); } catch(e) {}   // ghosts are NEVER saved
 }
 function laterBucket(ym) {
@@ -8100,6 +8127,7 @@ function applyLaterFilter() {
 
 function autoSavePlanDay() {
   if (!activePlanDate) return;
+  syncBlockDone(items);
   const snap = JSON.parse(JSON.stringify(stripGhosts(items)));   // ghosts are not saved into weekDays
   const existing = weekDays.find(d => d.date === activePlanDate);
   if (existing) {
