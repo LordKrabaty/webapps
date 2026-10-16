@@ -834,6 +834,10 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Archived teas</p>
       <div class="modal-list" id="importArchList"></div>
     </div>
+    <div id="importSellerSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Seller notes</p>
+      <div class="modal-list" id="importSellerList"></div>
+    </div>
     <div class="modal-row" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
       <button class="modal-btn primary" id="importApplyBtn" onclick="doImport()">import selected</button>
@@ -2769,6 +2773,8 @@ let importData=[],importTplData=[],importArchData=[];
 // stamped mt=now so the restored state propagates to other devices. Reset on every modal open.
 let importForceRestore=false;
 let importSelected=new Set(),importTplSelected=new Set(),importArchSelected=new Set();
+// seller notes are keyed by the normalized name (like the autosync merge) → addressed by their index in importSellerData
+let importSellerData=[],importSellerSelected=new Set();
 let importNameActions={}; // tea_id -> 'add'|'rename'|'merge'|'merge-pick'
 let importMergeConfig={}; // tea_id -> {logIds:Set, applySettings:bool, targetLibId?}
 let currentMergeTeaId=null;
@@ -2776,14 +2782,16 @@ let libPickForTeaId=null;
 function openImportModal(){
   importForceRestore=false;
   importData=[];importTplData=[];importArchData=[];importSelected=new Set();importTplSelected=new Set();importArchSelected=new Set();importNameActions={};importMergeConfig={};
+  importSellerData=[];importSellerSelected=new Set();
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent='Import';
   const applyBtn=el('importApplyBtn');if(applyBtn)applyBtn.textContent='import selected';
   el('importFile').value='';el('importPaste').value='';
-  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';
+  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';el('importSellerList').innerHTML='';
   el('importTeaSection').style.display='none';
   el('importTplSection').style.display='none';
   el('importArchSection').style.display='none';
+  el('importSellerSection').style.display='none';
   el('importActions').style.display='none';
   el('importCancel').style.display='flex';
   el('importModal').classList.add('open');
@@ -2909,6 +2917,24 @@ function parseImportJson(text){
           ${esc(e.name)}${e.archivedAt?' <span style="font-size:.7rem;color:var(--muted)">('+e.archivedAt+')</span>':''}${e._dup?' <span style="font-size:.7rem;opacity:.6">(duplicate)</span>':''}
         </label>`).join('');
     }
+    // Seller notes — matched to local ones by the normalized name; identical ones are left out (nothing to import).
+    // Preselected: new + newer than local; in restore mode everything that differs (a rollback may go back in time).
+    importSellerData=(parsed.sellers||[]).filter(s=>s&&normTag(s.name)).map(s=>{
+      const x=normSeller(s),ex=sellerRec(normTag(x.name));
+      x._st=!ex?'new':(ex.notes===x.notes&&ex.url===x.url)?'same':x.mt>(+ex.mt||0)?'newer':'older';
+      return x;
+    }).filter(x=>x._st!=='same');
+    importSellerSelected=new Set(importSellerData.map((x,i)=>(importForceRestore||x._st!=='older')?i:-1).filter(i=>i>=0));
+    if(importSellerData.length){
+      const stLabel={new:'new',newer:'newer',older:'yours is newer'};
+      el('importSellerSection').style.display='block';
+      el('importSellerList').innerHTML=importSellerData.map((x,i)=>`
+        <label class="modal-item ${importSellerSelected.has(i)?'sel':''}" id="isi-${i}">
+          <input type="checkbox" ${importSellerSelected.has(i)?'checked':''}
+            onchange="toggleImportSellerSel(${i},this.checked)" />
+          ${esc(x.name)}<span class="dup-name-tag">${stLabel[x._st]}</span>
+        </label>`).join('');
+    }
     const _dupCount=importData.filter(t=>t._nameDup&&!t._idMatchRenamed).length;
     el('importBulkControls').style.display=_dupCount>=2?'block':'none';
     if(_dupCount>=2){
@@ -2934,15 +2960,15 @@ function applyImportFilter(){
 function previewImportPaste(){
   const text=el('importPaste').value.trim();
   if(!text)return;
-  el('importTeaSection').style.display='none';el('importTplSection').style.display='none';el('importArchSection').style.display='none';
-  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';
+  el('importTeaSection').style.display='none';el('importTplSection').style.display='none';el('importArchSection').style.display='none';el('importSellerSection').style.display='none';
+  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';el('importSellerList').innerHTML='';
   parseImportJson(text);
 }
 function previewImport(){
   const file=el('importFile').files[0];if(!file)return;
   el('importPaste').value='';
-  el('importTeaSection').style.display='none';el('importTplSection').style.display='none';el('importArchSection').style.display='none';
-  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';
+  el('importTeaSection').style.display='none';el('importTplSection').style.display='none';el('importArchSection').style.display='none';el('importSellerSection').style.display='none';
+  el('importList').innerHTML='';el('importTplList').innerHTML='';el('importArchList').innerHTML='';el('importSellerList').innerHTML='';
   const r=new FileReader();
   r.onload=ev=>{
     try{
@@ -2963,6 +2989,24 @@ function toggleImportTplSel(id,on){
 function toggleImportArchSel(id,on){
   on?importArchSelected.add(id):importArchSelected.delete(id);
   el('iai-'+id)?.classList.toggle('sel',on);
+}
+function toggleImportSellerSel(i,on){
+  on?importSellerSelected.add(i):importSellerSelected.delete(i);
+  el('isi-'+i)?.classList.toggle('sel',on);
+}
+// selected seller notes overwrite the local record with the same (normalized) name — stamped mt=now: an import is
+// an explicit choice, so it has to beat the local copy and reach the other devices through sync
+function applyImportSellers(){
+  let n=0;
+  importSellerData.forEach((x,i)=>{
+    if(!importSellerSelected.has(i))return;
+    const rec={...x,mt:Date.now()};delete rec._st;
+    const ex=sellerRec(normTag(rec.name));
+    if(ex)sellers[sellers.indexOf(ex)]=rec;else sellers.push(rec);
+    n++;
+  });
+  if(n){saveSellers();renderSellers();updateSellerFilter();}
+  return n;
 }
 function setImportAction(id,action){
   importNameActions[id]=action;
@@ -3225,6 +3269,7 @@ function doRestoreImport(){
     arc++;
   });
   saveArchive();renderArchive();
+  const sel=applyImportSellers();
   // the active tea may have been overwritten — reload its form state so the next flush doesn't re-save the old version
   if(activeLibId&&libById.has(activeLibId)&&typeof refreshActiveFromLibrary==='function')refreshActiveFromLibrary();
   closeModal('importModal');
@@ -3232,6 +3277,7 @@ function doRestoreImport(){
   if(teas)parts.push(teas+' teas');
   if(tpls)parts.push(tpls+' templates');
   if(arc)parts.push(arc+' archive');
+  if(sel)parts.push(sel+' seller notes');
   showSave('↩ restored: '+(parts.join(', ')||'nothing'));
 }
 function doImport(){
@@ -3285,11 +3331,13 @@ function doImport(){
     archive.push(entry);
   });
   saveArchive();renderArchive();
+  const sel=applyImportSellers();
   closeModal('importModal');
   const parts=[];
   if(added)parts.push(added+' teas');
   if(tplsToAdd.length)parts.push(tplsToAdd.length+' templates');
   if(archToAdd.length)parts.push(archToAdd.length+' archive');
+  if(sel)parts.push(sel+' seller notes');
   if(merged)parts.push(merged+' merged');
   showSave('↓ imported: '+(parts.join(', ')||'nothing'));
 }
@@ -4052,11 +4100,20 @@ function startSellerRename(i){
 function sellerTeaChipHtml(t){
   return`<span class="seller-tea${t.arch?' arch':''}" title="${esc(t.name)}${t.arch?' — archived':''}" onclick="${t.arch?`openArchPreview(${t.id})`:`loadFromLibrary(${t.id})`}">${esc(t.name)}${t.arch?' <span class="seller-tea-arch">arch</span>':''}</span>`;
 }
-function renderSellers(){
+// opts.keepFocus (sync merge): re-render even while a card field holds the focus, then put the focus and caret back.
+// The field you last typed in keeps the focus across app/window switches — deferring until it leaves would hide the
+// other device's notes, and the next keystroke would overwrite them with the stale text still in the field.
+function renderSellers(opts){
   const pane=el('pane-sellers');if(!pane)return;
-  if(pane.contains(document.activeElement)){sellerRenderPending=true;return;}   // typing in a card → re-render only after the focus leaves
-  sellerRenderPending=false;
   const list=el('sellerList'),count=el('sellerCount');
+  const ae=document.activeElement;
+  let refocus=null;
+  if(list.contains(ae)){
+    // typing in a card → re-render only after the focus leaves (a re-render would eat it); a rename in progress always waits
+    if(!(opts&&opts.keepFocus)||ae.classList.contains('seller-rename-input')){sellerRenderPending=true;return;}
+    if(ae.dataset.sf)refocus={key:ae.dataset.sk,f:ae.dataset.sf,s:ae.selectionStart,e:ae.selectionEnd};
+  }
+  sellerRenderPending=false;
   sellerView=allSellerNames().map(r=>({...r,rec:sellerRec(r.key)}));
   count.textContent=sellerView.length?sellerView.length+(sellerView.length===1?' seller':' sellers'):'';
   if(!sellerView.length){list.innerHTML='<div class="log-empty">No sellers yet — fill in the seller field of a tea, or add one here.</div>';return;}
@@ -4081,10 +4138,10 @@ function renderSellers(){
       </div>
       ${open?`<div class="seller-body">
         <div class="seller-url-row">
-          <input class="seller-url" type="text" inputmode="url" placeholder="shop website — teashop.com" value="${esc((rec&&rec.url)||'')}" oninput="updateSellerUrl(${i},this)" />
+          <input class="seller-url" type="text" inputmode="url" placeholder="shop website — teashop.com" value="${esc((rec&&rec.url)||'')}" data-sk="${esc(row.key)}" data-sf="url" oninput="updateSellerUrl(${i},this)" />
           <a class="seller-url-open" id="seller-open-${i}" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="open the shop website"${url?'':' style="display:none"'}>open ↗</a>
         </div>
-        <textarea class="seller-ta" placeholder="What to buy here, what to skip, shipping, prices…" oninput="updateSellerNotes(${i},this)">${esc((rec&&rec.notes)||'')}</textarea>
+        <textarea class="seller-ta" placeholder="What to buy here, what to skip, shipping, prices…" data-sk="${esc(row.key)}" data-sf="notes" oninput="updateSellerNotes(${i},this)">${esc((rec&&rec.notes)||'')}</textarea>
         <div>
           <span class="seller-sub">teas from this seller</span>
           <div class="seller-teas">${teas.length?teas.map(sellerTeaChipHtml).join(''):'<span class="log-empty">none yet</span>'}</div>
@@ -4094,6 +4151,13 @@ function renderSellers(){
     </div>`;
   }).join('');
   list.querySelectorAll('textarea').forEach(autoResizeTA);
+  if(refocus){
+    const f=[...list.querySelectorAll('[data-sf]')].find(x=>x.dataset.sk===refocus.key&&x.dataset.sf===refocus.f);
+    if(f){
+      f.focus({preventScroll:true});
+      const n=f.value.length;try{f.setSelectionRange(Math.min(refocus.s,n),Math.min(refocus.e,n));}catch(e){}
+    }
+  }
 }
 
 function init(){
@@ -4110,7 +4174,7 @@ function init(){
   initLibLongPress();
   // a re-render while a seller card is being typed into is deferred (it would eat the focus) → catch up once the focus leaves
   el('pane-sellers').addEventListener('focusout',()=>setTimeout(()=>{
-    if(sellerRenderPending&&!el('pane-sellers').contains(document.activeElement))renderSellers();
+    if(sellerRenderPending&&!el('sellerList').contains(document.activeElement))renderSellers();
   },0));
   const restored=loadSession();
   if(!restored)defaultSteeps.forEach(s=>addSteep(s,'',true));
@@ -4601,7 +4665,8 @@ document.addEventListener('keydown',e=>{
         if(typeof renderLibrary==='function')renderLibrary();
         if(typeof renderTemplates==='function')renderTemplates();
         if(typeof renderArchive==='function')renderArchive();
-        if(typeof renderSellers==='function')renderSellers();
+        // changed seller notes must show even while a card field is focused (the stale text would be typed over)
+        if(typeof renderSellers==='function')renderSellers((selR.added+selR.updated+selR.removed)?{keepFocus:true}:undefined);
         // if the merge changed/deleted the currently edited tea, reflect it in the form (otherwise the next flush overwrites it with the old version)
         if(activeLibId){
           const cur=library.find(e=>e.id===activeLibId);
@@ -4865,7 +4930,13 @@ document.addEventListener('keydown',e=>{
       const idSig=arr=>arr.map(x=>String(x.id||'')).sort().join(',')+':'+arr.length;
       const localSig=idSig(library)+'|'+idSig(templates)+'|'+idSig(archive);
       const cloudSig=idSig(cloudTeas)+'|'+idSig(cloudTpls)+'|'+idSig(cloudArch);
-      if(localSig===cloudSig) return;
+      // seller notes change in place (same name, new text) → an id set can't see that; offer them when the cloud has a new or newer one
+      const sellersNews=(record.sellers||[]).some(s=>{
+        const k=normTag(s&&s.name);if(!k)return false;
+        const ex=sellerRec(k),x=normSeller(s);
+        return !ex||(x.mt>(+ex.mt||0)&&(ex.notes!==x.notes||ex.url!==x.url));
+      });
+      if(localSig===cloudSig&&!sellersNews) return;
       openImportModal();
       el('importModal').classList.add('from-cloud');
       el('importModal').querySelector('h2').textContent='Import from Gist';
