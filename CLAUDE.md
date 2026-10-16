@@ -248,6 +248,7 @@ API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH 
 | pracovní dny | week key | union (zatím) |
 | pořadí typů bloků (`blockTypeOrder`) | — | **nesynchronizuje se** (kosmetické) |
 | zobrazení popisu položky v `todo-app` (⟨⟩ zdroj, skrýt hotové, záložka Text/Checklist) | `i:<id>` / `r:<recurId>` | **nesynchronizuje se** (kosmetické, jen `todo-app-v1-item-view` v localStorage) — na položce by přepnutí záložky razítkovalo `mt` celého dne a LWW by mohlo přebít skutečnou editaci z jiného zařízení |
+| připnutí položky do hlavičky v `todo-app` (`pin: { all, at }` na položce inboxu / Later / dne) | — | **synchronizuje se s položkou** (součást jejího obsahu → inbox LWW po položce, den/měsíc LWW celého záznamu; pin je vědomá a vzácná akce, ne kosmetika). Kopie (duplikát, šablona, plán) pin nedědí. `all` = vidět ve všech oknech: cizí okna se čtou přímo z jejich localStorage a klik nejdřív přepne do okna položky — položka se edituje jen ve svém okně |
 
 Mazání = **tombstones** `{ "<ns>:<id>": deletedAtTs }`. Konflikt edit-vs-delete řeší čas: pozdější akce vyhrává (editace po smazání = vzkříšení).
 

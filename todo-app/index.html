@@ -517,6 +517,18 @@ textarea::placeholder{color:var(--mid)}
 .win-tab-add{font-family:'DM Sans',sans-serif;font-size:.72rem;padding:.24rem .5rem;background:none;color:var(--muted);border:1.5px dashed var(--mid);border-radius:var(--r);cursor:pointer;line-height:1.2;white-space:nowrap}
 .win-tab-add:active{color:var(--black);border-color:var(--dark)}
 @media(hover:hover){.win-tab-add:hover{color:var(--black);border-color:var(--dark)}}
+/* ── PINNED ITEMS (header) — one tap opens the item from any card ── */
+.pin-bar{display:flex;flex-wrap:wrap;align-items:center;gap:calc(.3rem/var(--pzc,1));flex:1 1 12rem;min-width:0;align-self:center}
+.pin-bar-ico{color:var(--muted);display:inline-flex}
+.pin-chip{display:inline-flex;align-items:center;gap:.3rem;max-width:200px;min-width:0;font-family:'DM Sans',sans-serif;font-size:.74rem;padding:.24rem .5rem;background:var(--w);color:var(--black);border:var(--b);border-radius:var(--r);cursor:pointer;line-height:1.2}
+@media(hover:hover){.pin-chip:hover{background:var(--off);border-color:var(--dark)}}
+.pin-chip:active{background:var(--off)}
+.pin-chip-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pin-chip.is-done .pin-chip-text{text-decoration:line-through;color:var(--muted)}
+.pin-chip-win{font-size:.66rem;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.pin-chip-cnt{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);flex-shrink:0}
+.pin-ico{width:.95em;height:.95em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ie-bar .ie-pin{display:inline-flex;align-items:center;justify-content:center}   /* icon only — sits with the note tools */
 /* ── DAY BUTTONS ── */
 .day-buttons{display:flex;gap:.3rem;margin-bottom:.35rem;flex-shrink:0}
 .day-btn-wrap{flex:1;display:flex;flex-direction:column;border:var(--bh);border-radius:var(--r);background:var(--w);cursor:pointer;overflow:hidden;min-width:0;user-select:none;position:relative}
@@ -671,7 +683,7 @@ textarea::placeholder{color:var(--mid)}
 /* ── RESPONSIVE ── */
 @media(max-width:1020px){.app{grid-template-columns:185px 1fr;padding:calc(1rem/var(--pzc,1)) calc(1rem/var(--pzc,1)) calc(1.5rem/var(--pzc,1))}.notes-panel{grid-column:1/-1;grid-row:2}}
 @media(max-width:820px){.app{grid-template-columns:1fr;padding:calc(1rem/var(--pzc,1)) calc(.85rem/var(--pzc,1));gap:calc(.85rem/var(--pzc,1))}.library-panel,.main-panel,.notes-panel{grid-column:1!important;grid-row:auto!important}.setup-grid{grid-template-columns:1fr 1fr}header{flex-direction:column;align-items:flex-start;gap:.35rem;padding:calc(.65rem/var(--pzc,1)) calc(.85rem/var(--pzc,1)) calc(.65rem/var(--pzc,1))}.brand h1{font-size:1.5rem}.header-sub,.header-sep{font-size:1.15rem}.header-right{gap:.4rem}#libList{display:flex;flex-direction:column;gap:.15rem}textarea{min-height:100px}}
-@media(max-width:820px){header{flex-wrap:wrap;row-gap:.5rem;padding-bottom:calc(.85rem/var(--pzc,1))}.header-right{flex-wrap:wrap;gap:.35rem}}
+@media(max-width:820px){header{flex-wrap:wrap;row-gap:.5rem;padding-bottom:calc(.85rem/var(--pzc,1))}.header-right{flex-wrap:wrap;gap:.35rem}.pin-bar{flex:none;width:100%}}
 @media(max-width:400px){.app{padding:calc(.75rem/var(--pzc,1)) calc(.65rem/var(--pzc,1));gap:calc(.7rem/var(--pzc,1))}.setup-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -683,6 +695,7 @@ textarea::placeholder{color:var(--mid)}
     <span class="header-sep" id="headerSep">—</span>
     <span class="header-sub" id="headerSub">Daily planner</span>
   </div>
+  <div class="pin-bar" id="pinBar" style="display:none"></div>
   <div class="header-right">
     <span id="statusMsg"></span>
     <div class="sync-group">
@@ -1222,6 +1235,8 @@ textarea::placeholder{color:var(--mid)}
             </span>
             <button class="btn-io" id="ieSrcBtn" onmousedown="event.preventDefault()" onclick="toggleNoteSrcMode()" title="show the whole description as raw markdown">⟨⟩</button>
             <button class="btn-io" id="ieHelpBtn" onmousedown="event.preventDefault()" onclick="openMdHelp()" title="how to format a description">?</button>
+            <button class="btn-io ie-pin" onmousedown="event.preventDefault()" onclick="toggleItemPin()"><svg class="pin-ico" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 4H7l3-4z"/><line x1="12" y1="13" x2="12" y2="21"/></svg></button>
+            <button class="btn-io ie-pin-all" onmousedown="event.preventDefault()" onclick="toggleItemPinScope()">all</button>
           </div>
         </div>
         <div class="ie-pane" id="iePaneList">
@@ -1231,6 +1246,8 @@ textarea::placeholder{color:var(--mid)}
             <button class="btn-io" onclick="setAllChkItems(false)" title="untick every item">☐ none</button>
             <button class="btn-io" id="ieChkHideBtn" onclick="toggleChkHideDone()" title="hide the items that are already ticked off">hide</button>
             <button class="btn-io" onclick="addChkItem()" title="add a checklist item (Ctrl+L)">+</button>
+            <button class="btn-io ie-pin" onclick="toggleItemPin()"><svg class="pin-ico" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 4H7l3-4z"/><line x1="12" y1="13" x2="12" y2="21"/></svg></button>
+            <button class="btn-io ie-pin-all" onclick="toggleItemPinScope()">all</button>
           </div>
           <div class="chk-list" id="ieChkList"></div>
         </div>
@@ -1958,12 +1975,16 @@ let addCtx = DAYCTX;                              // target for menu/quick-add
 function setAddCtx(x) { addCtx = (x === 'day') ? DAYCTX : (x === 'inbox') ? INBOXCTX : MCTX(x); }
 
 // "2/6" — how much of the checklist in the item's description is ticked off (nothing when it has none)
-function chkBadge(item, clickAttr = '') {
+function chkCounts(item) {
   let total = 0, done = 0;
   (item.note || '').split('\n').forEach(ln => {
     const it = parseChkLine(ln);
     if (it) { total++; if (it.done) done++; }
   });
+  return { done, total };
+}
+function chkBadge(item, clickAttr = '') {
+  const { done, total } = chkCounts(item);
   if (!total) return '';
   return `<span class="chk-badge${done === total ? ' full' : ''}" ${clickAttr}`
     + ` title="checklist in the description — ${done} of ${total} done">${done}/${total}</span>`;
@@ -2371,6 +2392,7 @@ function renderAll() {
   syncDayNoteUi();
   updateDirtyState();
   updateAbbrevHint();
+  renderPinBar();          // a pinned day item may have been renamed / ticked / deleted
 }
 
 // ── HIGHLIGHT ─────────────────────────────────────────────────────────────────
@@ -2827,6 +2849,7 @@ function openItemEdit(ctx, idx) {
   // a whole block (header + its tasks) can become a block type — only on cards that HAVE blocks
   // (day, Done record, template preview); Inbox and Later are flat single-line lists
   el('itemEditBlockRow').style.display = (!item.isSubtask && isBlockCard(ctx)) ? '' : 'none';
+  syncItemPinUi();
   el('itemEditModal').classList.add('open');
   const nameEl = el('itemEditName');
   autoGrowTextarea(nameEl);                  // name first — the note's cap is measured against it
@@ -3996,6 +4019,112 @@ async function revertItemToGhost() {
   ctx.save(); ctx.render();
 }
 
+// ── PINNED ITEMS (header) ─────────────────────────────────────────────────────
+// Any inbox / Later / day item can be pinned (item.pin = { all, at }) → a chip in the header opens its
+// detail with one tap from whichever card is showing. The pin lives ON the item, so it syncs with it
+// (inbox per-item LWW, day/month record LWW) and older builds keep it (preserve-unknown) — no new
+// collection. all = shown in every window: only the active window is loaded, so the other windows'
+// pins are read straight from their storage, and a tap switches to that window first — an item is
+// only ever edited inside its own window (its own data, sync and gist).
+const PIN_SVG = '<svg class="pin-ico" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 4H7l3-4z"/><line x1="12" y1="13" x2="12" y2="21"/></svg>';
+// pinned items of one window: { win, kind: 'inbox'|'month'|'day', key: ''|ym|date, item }; the active
+// day is taken from the live buffer, not from its (possibly older) weekDays record
+function pinRefs(win, inb, lat, days, liveDate, live) {
+  const out = [];
+  const add = (it, kind, key) => { if (it && it.pin && !it.isGhost) out.push({ win, kind, key, item: it }); };
+  (Array.isArray(inb) ? inb : []).forEach(it => add(it, 'inbox', ''));
+  (Array.isArray(lat) ? lat : []).forEach(b => { if (b && Array.isArray(b.items)) b.items.forEach(it => add(it, 'month', b.ym)); });
+  (Array.isArray(days) ? days : []).forEach(d => { if (d && d.date !== liveDate && Array.isArray(d.items)) d.items.forEach(it => add(it, 'day', d.date)); });
+  if (liveDate) (live || []).forEach(it => add(it, 'day', liveDate));
+  return out;
+}
+// the other windows' "all windows" pins — their data changes only while they are active, so it is read
+// once per active window (a switch re-reads it: switchWindow saves the outgoing window first)
+let _foreignPins = null;   // { win, refs }
+function foreignPins() {
+  if (_foreignPins && _foreignPins.win === activeWin) return _foreignPins.refs;
+  const read = (base, w) => { try { return JSON.parse(localStorage.getItem(w === 'main' ? base : base + '::' + w) || 'null'); } catch(e) { return null; } };
+  const refs = [];
+  dayWindows.forEach(w => {
+    if (w.id === activeWin) return;
+    const inb = read(INBOX_KEY, w.id);
+    pinRefs(w.id, Array.isArray(inb) ? inb : (inb && inb.items), read(LATER_KEY, w.id), read(WEEK_KEY, w.id))
+      .forEach(r => { if (r.item.pin.all) refs.push(r); });
+  });
+  _foreignPins = { win: activeWin, refs };
+  return refs;
+}
+function renderPinBar() {
+  const bar = el('pinBar'); if (!bar) return;
+  const seen = new Set();
+  const list = pinRefs(activeWin, inbox, later, weekDays, activePlanDate, items)
+    .concat(foreignPins().filter(r => dayWindows.some(w => w.id === r.win)))   // a window deleted meanwhile
+    .filter(r => { const k = r.win + '|' + r.item.id; if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => (+a.item.pin.at || 0) - (+b.item.pin.at || 0));            // in the order they were pinned
+  bar.style.display = list.length ? '' : 'none';
+  if (!list.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = `<span class="pin-bar-ico" title="pinned items — pin one from its detail">${PIN_SVG}</span>` + list.map(r => {
+    const it = r.item, foreign = r.win !== activeWin;
+    const where = r.kind === 'inbox' ? 'Inbox' : r.kind === 'month' ? 'Later · ' + monthLabel(r.key).toLowerCase() : formatDateCz(r.key);
+    const text = String(it.text || '').trim();
+    const title = 'open: ' + text + ' — ' + where + (foreign ? ' · window ' + windowName(r.win) + ' (switches there)' : '');
+    const { done, total } = chkCounts(it);
+    return `<button class="pin-chip${it.done ? ' is-done' : ''}" data-win="${esc(r.win)}" data-kind="${r.kind}" data-key="${esc(r.key)}" data-id="${esc(String(it.id))}" onclick="openPin(this)" title="${esc(title)}">`
+      + (foreign ? `<span class="pin-chip-win">${esc(windowName(r.win))}</span>` : '')
+      + `<span class="pin-chip-text">${esc(text.split(/\s+/)[0] || '…')}</span>`   // first word only — the full text is in the tooltip
+      + (total ? `<span class="pin-chip-cnt">${done}/${total}</span>` : '')
+      + `</button>`;
+  }).join('');
+}
+// where a pinned item lives now → the ctx + index its detail opens with (null = gone)
+function pinTarget(kind, key, id) {
+  const find = list => (list || []).findIndex(it => it && String(it.id) === id);
+  let i;
+  if (kind === 'inbox') return (i = find(inbox)) < 0 ? null : { ctx: INBOXCTX, idx: i };
+  if (kind === 'month') { const b = later.find(x => x.ym === key); return (i = find(b && b.items)) < 0 ? null : { ctx: MCTX(key), idx: i }; }
+  if (key === activePlanDate) return (i = find(items)) < 0 ? null : { ctx: DAYCTX, idx: i };
+  const rec = weekDays.find(d => d.date === key);   // another day → edited in its stored record, like an open Done row
+  return (i = find(rec && rec.items)) < 0 ? null : { ctx: DNCTX('weekDay', rec.id), idx: i };
+}
+function openPin(btn) {
+  const { win, kind, key, id } = btn.dataset;
+  if (win !== activeWin) {
+    if (!dayWindows.some(w => w.id === win)) { renderPinBar(); return; }
+    switchWindow(win);
+  }
+  const t = pinTarget(kind, key, id);
+  if (!t) { showStatusMsg('the pinned item is no longer there', 2200); renderPinBar(); return; }
+  openItemEdit(t.ctx, t.idx);
+}
+// pin buttons of the item detail (one pair in each tab's tool bar) — act at once (like ↻ edit rule), not on
+// "save"; a template draft has no pin. "all" = the scope toggle, only once pinned and with 2+ windows.
+function syncItemPinUi() {
+  const ctx = _itemEditCtx, item = _itemEditItem;
+  const show = !!ctx && !!item && ctx.kind !== 'preview' && !item.isGhost;
+  const on = show && !!item.pin, all = on && !!item.pin.all, multi = dayWindows.length > 1;
+  document.querySelectorAll('#itemEditModal .ie-pin').forEach(b => {
+    b.style.display = show ? '' : 'none';
+    b.classList.toggle('on', on);
+    b.title = on ? 'pinned to the toolbar — tap to unpin' : 'pin to the toolbar — opens with one tap from any card';
+  });
+  document.querySelectorAll('#itemEditModal .ie-pin-all').forEach(b => {
+    b.style.display = (on && multi) ? '' : 'none';
+    b.classList.toggle('on', all);
+    b.title = all ? 'shown in every window — tap to show it only in this one'
+                  : 'shown only in this window — tap to show it in every window (from another one a tap switches here first)';
+  });
+}
+function setItemPin(pin) {
+  const ctx = _itemEditCtx, item = _itemEditItem;
+  if (!ctx || !item) return;
+  ctx.undo();
+  if (pin) item.pin = pin; else delete item.pin;
+  ctx.save(); ctx.render();                              // every ctx render redraws the pin bar
+  syncItemPinUi();
+}
+function toggleItemPin() { const it = _itemEditItem; if (it) setItemPin(it.pin ? null : { all: false, at: Date.now() }); }
+function toggleItemPinScope() { const it = _itemEditItem; if (it && it.pin) setItemPin({ ...it.pin, all: !it.pin.all }); }
+
 // ── DURATION HELPERS ──────────────────────────────────────────────────────────
 function findParentBlock(idx, arr = items) {
   for (let i = idx - 1; i >= 0; i--) {
@@ -4126,7 +4255,7 @@ function duplicateItem(ctx, idx) {
     const c = JSON.parse(JSON.stringify(x));
     c.id = Date.now() + Math.random();
     c.done = false;
-    delete c.recurId; delete c.isGhost;
+    delete c.recurId; delete c.isGhost; delete c.pin;   // a copy is not pinned a second time
     return c;
   });
   list.splice(idx + count, 0, ...copies);
@@ -5115,9 +5244,10 @@ function applyBlockTplSync() {
   showSave('✓ updated ' + blocks + ' block' + (blocks === 1 ? '' : 's') + ' in ' + tpls + ' template' + (tpls === 1 ? '' : 's'));
 }
 
-// Templates never contain checked-off items → reset done to not-completed
+// Templates never contain checked-off items → reset done to not-completed; nor pins (a loaded
+// template would put a pinned copy on every day it lands on)
 function stripDone(items) {
-  return JSON.parse(JSON.stringify(items || [])).map(it => ({ ...it, done: false }));
+  return JSON.parse(JSON.stringify(items || [])).map(it => { const c = { ...it, done: false }; delete c.pin; return c; });
 }
 
 async function saveToLibrary() {
@@ -7456,6 +7586,7 @@ function saveInbox() {
 function renderInbox() {
   const c = el('inbox-list'); if (!c) return;
   updateAbbrevHint();
+  renderPinBar();
   if (!inbox.length) {
     c.innerHTML = '<div style="color:var(--muted);font-size:.82rem;font-style:italic;padding:.5rem 0">Empty — add a task or block above (for next time / what was not finished).</div>';
     return;
@@ -8029,6 +8160,7 @@ function renderLater() {
   updateAbbrevHint();
   const searching = (laterSearchTerm || '').trim().length > 0;   // while searching, expand everything so matches in collapsed months/years are reachable
   syncLaterGhosts();        // F2: add/refresh recurrence ghosts into the monthly buckets (idempotent)
+  renderPinBar();
   const now = new Date();
   const hsel = el('laterHorizonSel'); if (hsel) hsel.value = String(laterHorizon());
   const todayHtml = `<div class="later-today-bar">Today: <b>${DAY_NAMES_CZ_LONG[now.getDay()]}</b> ${now.getDate()}. ${now.getMonth()+1}. ${now.getFullYear()}</div>`;
@@ -8152,7 +8284,7 @@ function savePlanSnapshot() {
   weekDates.forEach(({ iso }) => {
     const wd = weekDays.find(d => d.date === iso);
     if (!wd || !wd.items.length) return;
-    const planItems = wd.items.map(item => ({ ...item, done: false }));
+    const planItems = wd.items.map(item => { const c = { ...item, done: false }; delete c.pin; return c; });   // the pin stays on the day
     const existing = weekPlans.find(p => p.date === iso);
     if (existing) {
       existing.items = planItems;
@@ -8810,7 +8942,7 @@ function persistInlineRecord(type, id) {
   const rec = getInlinePreviewRecord(type, id);
   if (!rec) return;
   rec.mt = Date.now();
-  if (type === 'weekDay') { saveWeek(); renderDayButtons(); } else saveWeekPlans();
+  if (type === 'weekDay') { saveWeek(); renderDayButtons(); renderPinBar(); } else saveWeekPlans();
 }
 
 function commitInlineChange(type, id) {
