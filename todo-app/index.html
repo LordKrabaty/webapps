@@ -585,8 +585,18 @@ textarea::placeholder{color:var(--mid)}
 .lib-item.active .lib-item-time{color:var(--w);opacity:.7}
 /* block list names start with emoji — disable line-clamp so they don't clip/overlap */
 #blockTypeList .lib-item-name{display:block;line-height:1.5;word-break:break-word}
+#blockTypeList{display:flex;flex-direction:column;gap:.15rem;max-height:200px;overflow-y:auto}
 /* scrollable flex column would shrink rows below natural height → text overlap; keep them */
 #blockTypeList .lib-item{flex-shrink:0}
+/* expanded left panel scrolls as a whole: every section keeps its natural height. A scroll box (#blockTypeList) has
+   min-height 0 as a flex item, so in the fixed-height expanded panel it absorbed all the overflow and collapsed to
+   nothing — the Blocks list vanished. There is room for it in full, so the 200px cap goes too. */
+.lib-card.panel-expanded>*{flex-shrink:0}
+.lib-card.panel-expanded #blockTypeList{max-height:none}
+/* ↕ in the Templates / Blocks titles — reorder mode (see toggleReorder) */
+.reorder-btn{font-family:'DM Sans',sans-serif;font-size:.72rem;font-weight:400;letter-spacing:0;text-transform:none;line-height:1.3;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.05rem .4rem;cursor:pointer;flex-shrink:0}
+.reorder-btn.on{background:var(--black);color:var(--w);border-color:var(--black)}
+.lib-item.reordering{cursor:grab}
 /* ── WEEK TAB ── */
 .week-section{display:flex;flex-direction:column;gap:.15rem}
 .week-sub-hdr{font-size:.65rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:.2rem .1rem .1rem;margin-top:.15rem;border-top:1px dashed var(--light)}
@@ -795,15 +805,15 @@ textarea::placeholder{color:var(--mid)}
     <div id="workDayPicker" style="display:flex;gap:.3rem;margin-top:.2rem"></div>
     <div id="workDayDefaultRow" style="display:flex;align-items:center;gap:.3rem;margin-top:.3rem"></div>
 
-    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Templates</span></div>
+    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Templates</span><button class="reorder-btn" id="libReorderBtn" onclick="toggleReorder('lib')" title="reorder templates — ↑/↓ on each row (a row can also be dragged)">↕</button></div>
     <div id="libList" style="display:flex;flex-direction:column;gap:.2rem;margin-top:.3rem"></div>
     <div class="lib-io">
       <button class="btn-io" onclick="saveToLibrary()">+ save day</button>
       <button class="btn-io" onclick="saveWeekAsTemplate()">+ save week</button>
     </div>
 
-    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Blocks</span></div>
-    <div id="blockTypeList" style="display:flex;flex-direction:column;gap:.15rem;max-height:200px;overflow-y:auto"></div>
+    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text">Blocks</span><button class="reorder-btn" id="btReorderBtn" onclick="toggleReorder('bt')" title="reorder blocks (also their order in the + Block / + Event menus) — ↑/↓ on each row (a row can also be dragged)">↕</button></div>
+    <div id="blockTypeList"></div>
     <div style="margin-top:.3rem">
       <button class="btn-lib" onclick="openBlockTypeEdit(null)">+ new block type</button>
     </div>
@@ -4937,11 +4947,52 @@ function normalizeBlockKey(label) {
     .replace(/[^A-Z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,24) || 'BLOCK';
 }
 
+// block types in the user's order (↕ / drag in the Blocks list) — drives the list and the + Block / + Event menus.
+// TASK is not a choosable type; a key missing from the order goes last instead of vanishing from the menus.
+function orderedBlockTypes() {
+  const keys = blockTypeOrder.filter(k => BLOCK_TYPES[k] && k !== 'TASK');
+  Object.keys(BLOCK_TYPES).forEach(k => { if (k !== 'TASK' && !keys.includes(k)) keys.push(k); });
+  return keys.map(k => [k, BLOCK_TYPES[k]]);
+}
+
+// Reorder mode of the left-panel lists (↕ in the Templates / Blocks titles): every row gets ↑/↓ — the reliable way
+// on e-ink, where dragging is imprecise — and loses delete + click-to-open, so a near-miss never deletes or opens
+// anything. Dragging a row works in both modes. Not stored: a reload starts in the normal mode.
+const reorderMode = { lib: false, bt: false };
+function toggleReorder(which) {
+  reorderMode[which] = !reorderMode[which];
+  const b = el(which === 'lib' ? 'libReorderBtn' : 'btReorderBtn');
+  if (b) { b.classList.toggle('on', reorderMode[which]); b.textContent = reorderMode[which] ? 'done' : '↕'; }
+  if (which === 'lib') renderLibrary(); else renderBlockTypeList();
+}
+function reorderBtns(fn, idx, len) {
+  return `<button class="bet-move" onclick="event.stopPropagation();${fn}(${idx},-1)" title="up"${idx === 0 ? ' disabled' : ''}>↑</button>`
+    + `<button class="bet-move" onclick="event.stopPropagation();${fn}(${idx},1)" title="down"${idx === len - 1 ? ' disabled' : ''}>↓</button>`;
+}
+// order only — no content changes, so nothing gets an mt stamp (same as a drag: the order is per device)
+function moveLibEntry(idx, dir) {
+  const j = idx + dir;
+  if (!library[idx] || j < 0 || j >= library.length) return;
+  [library[idx], library[j]] = [library[j], library[idx]];
+  saveLibrary(); renderLibrary();
+}
+function moveBlockType(idx, dir) {
+  const j = idx + dir;
+  if (!blockTypeOrder[idx] || j < 0 || j >= blockTypeOrder.length) return;
+  [blockTypeOrder[idx], blockTypeOrder[j]] = [blockTypeOrder[j], blockTypeOrder[idx]];
+  saveBlockTypes(); renderBlockTypeList();
+}
+
 function renderBlockTypeList() {
   const list = el('blockTypeList');
   if (!list) return;
+  const ro = reorderMode.bt;
   list.innerHTML = blockTypeOrder.map((key, idx) => {
     const bt = BLOCK_TYPES[key]; if (!bt) return '';
+    if (ro) return `<div class="lib-item reordering" data-idx="${idx}" data-key="${key}" draggable="true">
+      <span class="lib-item-name">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</span>
+      ${reorderBtns('moveBlockType', idx, blockTypeOrder.length)}
+    </div>`;
     const tasks = bt.defaultTasks || [];
     const taskTotal = tasks.reduce((s, t) => s + (t.duration || 0), 0);
     const durStr = formatDur(tasks.length ? taskTotal : bt.defaultDuration);
@@ -5371,11 +5422,17 @@ function renderLibrary() {
       const typeBadge = isWeek
         ? `<span class="lib-type-badge lib-type-week">${weekDayCount}d</span>`
         : `<span class="lib-type-badge lib-type-day">1d</span>`;
+      // reorder mode: badge + name + ↑/↓ only (the time badge would squeeze the name in the 185–210px column)
+      if (reorderMode.lib) return `<div class="lib-item reordering" data-idx="${idx}" data-id="${entry.id}" draggable="true">
+        ${typeBadge}
+        <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
+        ${reorderBtns('moveLibEntry', idx, library.length)}
+      </div>`;
       const totalMin = isWeek
         ? Object.values(entry.weekData || {}).reduce((s, d) => s + dayTotalMinutes(d?.items), 0)
         : dayTotalMinutes(entry.data?.items);
       const timeBadge = totalMin ? `<span class="lib-item-time">${formatDur(totalMin)}</span>` : '';
-      return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="${isWeek ? 'false' : 'true'}" onclick="openLibEntry(${entry.id})">
+      return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="true" onclick="openLibEntry(${entry.id})">
         ${typeBadge}
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
         ${timeBadge}
@@ -5945,8 +6002,8 @@ function toggleBlockMenu(e) {
   const menu = el('blockMenu');
   menu._ctx = _previewMenuCtx; _previewMenuCtx = null;   // null = regular card (addCtx), otherwise preview
   if (menu._src === 'block' && menu.style.display === 'flex') { closeBlockMenu(); return; }
-  let html = Object.entries(BLOCK_TYPES)
-    .filter(([k, bt]) => k !== 'TASK' && !bt.isEvent)
+  let html = orderedBlockTypes()
+    .filter(([k, bt]) => !bt.isEvent)
     .map(([k, bt]) => `<button class="block-menu-item" onclick="addBlockItem('${k}')">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</button>`)
     .join('');
   // a new type straight from here — saved AND inserted on this card in one go (see newBlockTypeFromMenu)
@@ -5960,7 +6017,7 @@ function toggleEventMenu(e) {
   const menu = el('blockMenu');
   menu._ctx = _previewMenuCtx; _previewMenuCtx = null;
   if (menu._src === 'event' && menu.style.display === 'flex') { closeBlockMenu(); return; }
-  const eventTypes = Object.entries(BLOCK_TYPES).filter(([k, bt]) => k !== 'TASK' && bt.isEvent);
+  const eventTypes = orderedBlockTypes().filter(([k, bt]) => bt.isEvent);
   let html = eventTypes.map(([k, bt]) =>
     `<button class="block-menu-item" onclick="addBlockItem('${k}')">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</button>`
   ).join('');
