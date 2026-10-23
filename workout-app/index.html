@@ -554,6 +554,9 @@ textarea::placeholder{color:var(--mid)}
 /* body chart (single-series monochrome line, inline SVG) */
 .bc-ctrls{display:flex;gap:.3rem;margin:.55rem 0 .3rem;flex-wrap:wrap}
 .bc-ctrls select.bf-in{flex:1;min-width:6em}
+.jb-field .tn-text{max-height:28vh;overflow-y:auto}
+.tn-v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn-to{font-size:.74rem;color:var(--muted);white-space:nowrap}
 /* the svg keeps its 440×180 ratio, so a wide (expanded) panel would make it absurdly tall —
    cap the WRAPPER width so the chart never exceeds ~46vh, border included */
 .bc-wrap{position:relative;flex-shrink:0;max-width:min(100%,112vh)}
@@ -891,6 +894,20 @@ textarea::placeholder{color:var(--mid)}
     <div class="modal-row">
       <button class="modal-btn" onclick="closeModal('actModal')">cancel</button>
       <button class="modal-btn primary" onclick="saveActivity()">save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tanita paste modal — the text My TANITA shares for one measurement ("• Weight:  73.8 kg" lines) fills the body form -->
+<div class="modal-bg" id="tanitaModal">
+  <div class="modal" style="max-width:420px;gap:.6rem">
+    <h2>Measurement from Tanita</h2>
+    <p>My TANITA → share the measurement → copy the text and paste it here. The text carries no timestamp — date &amp; time stay as set in the form.</p>
+    <div class="jb-field"><label>shared text</label><textarea id="tanitaText" class="tn-text" rows="3" placeholder="• Weight:  73.8 kg&#10;• Body fat:  16.3 %&#10;…" spellcheck="false" oninput="autoResizeTA(this);renderTanitaPreview()"></textarea></div>
+    <div class="modal-list" id="tanitaPreview"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal('tanitaModal')">cancel</button>
+      <button class="modal-btn primary" onclick="applyTanita()">fill form</button>
     </div>
   </div>
 </div>
@@ -4752,6 +4769,7 @@ function loadBodyFields() {
 }
 function saveBodyFields() { try { localStorage.setItem(BODYF_KEY, JSON.stringify(bodyFields)); } catch(e) {} }
 function bodyFieldList() { return bodyFields.fields; }
+function bodyKeyOf(label) { return String(label).toLowerCase().replace(/[^a-z0-9]+/g, ''); }
 function valOf(b, key) {
   if (b.vals && b.vals[key] != null) return b.vals[key];
   return b[key] != null ? b[key] : null;
@@ -4760,7 +4778,7 @@ function addBodyField() {
   const inp = el('newBodyField');
   const label = (inp && inp.value || '').trim();
   if (!label) return;
-  const key = label.toLowerCase().replace(/[^a-z0-9]+/g, '') || ('f' + Date.now());
+  const key = bodyKeyOf(label) || ('f' + Date.now());
   if (bodyFieldList().some(f => f.key === key)) { customAlert('This field already exists.'); return; }
   bodyFields.fields.push({key, label});
   bodyFields.mt = Date.now();
@@ -4825,6 +4843,7 @@ function renderBodyForm() {
   <div style="display:flex;gap:.4rem">
     <button class="btn-lib primary" style="flex:1;width:auto" onclick="addBodyEntry()">${editing ? '✓ save changes' : '+ add measurement'}</button>
     ${editing ? `<button class="btn-lib" style="width:auto" onclick="cancelBodyEdit()">cancel</button>` : ''}
+    <button class="btn-lib" style="width:auto" onclick="openTanitaModal()" title="paste the text My TANITA shares for a measurement — fills the values below">⇩ tanita</button>
     <button class="btn-lib" style="width:auto" onclick="toggleBodyFieldsMgr()" title="add / remove tracked columns">⚙</button>
   </div>
   <div id="bodyFieldsMgr" style="display:${bodyMgrOpen ? 'block' : 'none'};margin-top:.45rem">
@@ -4967,6 +4986,95 @@ function renderBody() {
         + `<button class="log-del" onclick="deleteBodyEntry(${jsArg(b.id)})" title="delete">✕</button></div>`
         + (b.note ? `<div class="body-note">${esc(b.note)}</div>` : '');
     }).join('');
+}
+
+// ── TANITA PASTE — the text My TANITA shares for one measurement ("• Weight:  73.8 kg") ──
+// Known metrics map onto the default columns / short labels; any other "label: number" line is
+// offered as a new column (keyed like addBodyField), so other Tanita models work as well.
+// It only fills the form — date & time (the text has none) are checked before + add measurement.
+const TANITA_MAP = [
+  {re: /^weight/i,                     key: 'weight',   label: 'kg'},
+  {re: /^body\s*fat/i,                 key: 'fat',      label: 'fat%'},
+  {re: /^(total\s*)?(body\s*)?water/i, key: 'water',    label: 'h₂o%'},
+  {re: /^muscle\s*mass/i,              key: 'muscle',   label: 'musc'},
+  {re: /^visceral/i,                   key: 'visceral', label: 'visc'},
+  {re: /^bmi\b/i,                      key: 'bmi',      label: 'bmi'},
+  {re: /^bone/i,                       key: 'bone',     label: 'bone'},
+  {re: /^bmr\b/i,                      key: 'bmr',      label: 'bmr'},
+  {re: /^metabolic\s*age/i,            key: 'metage',   label: 'met.age'},
+  {re: /^(body\s*type|physique)/i,     key: 'bodytype', label: 'type'},
+];
+function tanitaNum(s) {
+  s = String(s);
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, '');   // "1,787 kcal" → thousands separator
+  else s = normDec(s);                                                // "55,5 %" → decimal comma
+  const v = parseFloat(s);
+  return isNaN(v) ? null : v;
+}
+function tanitaParse(text) {
+  const out = [], seen = new Set();
+  String(text || '').split(/\r?\n/).forEach(line => {
+    // "• Label:  number unit" — a line without a label (the app sends "• :  2") is skipped
+    const m = line.replace(/^[^\p{L}\p{N}:]+/u, '').match(/^([^:]+?)\s*:\s*(\d[\d.,]*)\s*[^\d\s:/]*\s*$/);
+    if (!m) return;
+    const src = m[1].trim(), v = tanitaNum(m[2]);
+    if (!src || v == null) return;
+    const known = TANITA_MAP.find(t => t.re.test(src));
+    const key = known ? known.key : bodyKeyOf(src);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push({src, v, key, label: known ? known.label : src.toLowerCase()});
+  });
+  return out;
+}
+// the tracked column a parsed value lands in — by key, or by a user-made column's own key/label
+function tanitaField(p) {
+  const c = [p.key, bodyKeyOf(p.src), bodyKeyOf(p.label)];
+  return bodyFieldList().find(f => c.includes(f.key) || c.includes(bodyKeyOf(f.label)));
+}
+let tanitaPick = {};   // key → ticked, only where the user changed the default (tracked = on, new column = off)
+function tanitaOn(p) { return p.key in tanitaPick ? tanitaPick[p.key] : !!tanitaField(p); }
+function openTanitaModal() {
+  tanitaPick = {};
+  const ta = el('tanitaText');
+  ta.value = '';
+  renderTanitaPreview();
+  el('tanitaModal').classList.add('open');
+  autoResizeTA(ta);
+  // the shared text is usually on the clipboard already — take it only when it parses (never dump unrelated clipboard text in)
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(t => {
+      if (!ta.value && tanitaParse(t).length) { ta.value = t; autoResizeTA(ta); renderTanitaPreview(); }
+    }).catch(() => {});
+  } catch(e) {}
+}
+function renderTanitaPreview() {
+  const c = el('tanitaPreview'); if (!c) return;
+  const text = el('tanitaText').value;
+  const ps = tanitaParse(text);
+  if (!ps.length) { c.innerHTML = text.trim() ? '<p class="lib-empty">No "label: number" lines recognised.</p>' : ''; return; }
+  c.innerHTML = ps.map(p => {
+    const f = tanitaField(p);
+    return `<label class="modal-item"><input type="checkbox"${tanitaOn(p) ? ' checked' : ''} onchange="tanitaPick[${jsArg(p.key)}]=this.checked">`
+      + `<span class="tn-v">${esc(p.src)} · ${esc(p.v)}</span>`
+      + `<span class="tn-to">${f ? '→ ' + esc(f.label) : '+ new column “' + esc(p.label) + '”'}</span></label>`;
+  }).join('');
+}
+function applyTanita() {
+  const picks = tanitaParse(el('tanitaText').value).filter(tanitaOn);
+  if (!picks.length) { customAlert('Nothing to fill — paste the shared text and tick at least one value.'); return; }
+  const missing = picks.filter(p => !tanitaField(p));
+  if (missing.length) {
+    // new columns re-render the form — carry over what is already typed in it (date, time, note, values)
+    const keep = [...el('bodyForm').querySelectorAll('input[id]')].map(i => [i.id, i.value]);
+    missing.forEach(p => bodyFields.fields.push({key: p.key, label: p.label}));
+    bodyFields.mt = Date.now();
+    saveBodyFields(); renderBody();
+    keep.forEach(([id, v]) => { const i = el(id); if (i) i.value = v; });
+  }
+  picks.forEach(p => { const f = tanitaField(p), inp = f && el('bf-' + f.key); if (inp) inp.value = String(p.v); });
+  closeModal('tanitaModal');
+  showStatusMsg('✓ filled from Tanita — check date & time, then + add measurement', 4500);
 }
 
 // ── SEED TEMPLATES (from the training protocols; fixed ids + mt:0 → devices merge, never duplicate) ──
