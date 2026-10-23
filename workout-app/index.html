@@ -551,12 +551,13 @@ textarea::placeholder{color:var(--mid)}
 /* two-line cell: value + a muted second line (target in the head, ± in the monthly table) */
 .body-row .body-2l{display:flex;flex-direction:column;line-height:1.25}
 .body-row .body-sub{font-size:.64rem;color:var(--muted)}
+.body-row .body-sub.body-out{color:var(--black)}
 /* monthly change — the average of each month on the measurement table's columns */
 #bodyMonths{flex-shrink:0;min-width:0}
 #bodyMonths summary{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dark);cursor:pointer;user-select:none;margin-bottom:calc(.25rem/var(--pzc,1))}
 .bm-sub{display:block;font-weight:400;letter-spacing:0;text-transform:none;color:var(--muted);font-size:.68rem}
 /* body field manager — one row per tracked column: label · desired min · max · remove */
-.bf-tg{display:grid;grid-template-columns:minmax(0,1fr) 4.6em 4.6em 1.1em;gap:.3rem;align-items:center;padding:calc(.1rem/var(--pzc,1)) 0;font-size:.76rem;color:var(--dark)}
+.bf-tg{display:grid;grid-template-columns:minmax(0,1fr) repeat(4,3.6em) 1.1em;gap:.3rem;align-items:center;padding:calc(.1rem/var(--pzc,1)) 0;font-size:.76rem;color:var(--dark)}
 .bf-tg>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .bf-tg-h{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .bf-tg .bf-in{width:100%;font-family:'DM Mono',monospace;padding:.2rem .35rem;text-align:right}
@@ -5268,8 +5269,9 @@ function copyStatsText() {
 }
 
 // ── BODY MEASUREMENTS (Tanita) ──────────────────────────────────────────────
-// Tracked columns are configurable (bodyFields = {mt, fields:[{key,label,min?,max?}]} — whole-object LWW on sync).
-// min/max = the desired range of a column (either optional) — additive: older builds keep the field objects whole.
+// Tracked columns are configurable (bodyFields = {mt, fields:[{key,label,min?,max?,dmin?,dmax?}]} — whole-object LWW on sync).
+// min/max = the desired range of a column, dmin/dmax = of its monthly change (each optional) — additive:
+// older builds keep the field objects whole.
 // New entries store values in vals{key:number}; legacy entries keep the old top-level keys, valOf reads both.
 const BODYF_KEY = 'workout-v1-bodyfields';
 const BODY_DEFAULT_FIELDS = [
@@ -5289,48 +5291,60 @@ function valOf(b, key) {
   if (b.vals && b.vals[key] != null) return b.vals[key];
   return b[key] != null ? b[key] : null;
 }
-// desired range of a column — {min, max}, null where not set
-function bodyTgt(f) {
+// desired range of a column — {min, max}, null where not set. d = the desired monthly change of
+// the month's average instead (f.dmin / f.dmax, signed: losing 0.5–1.5 kg a month = −1.5 … −0.5)
+function bodyTgt(f, d) {
   const n = v => v != null && v !== '' && !isNaN(+v) ? +v : null;
-  return {min: n(f && f.min), max: n(f && f.max)};
+  return {min: n(f && f[d ? 'dmin' : 'min']), max: n(f && f[d ? 'dmax' : 'max'])};
 }
-function bodyTgtTxt(f) {
-  const t = bodyTgt(f);
-  return t.min != null && t.max != null ? t.min + '–' + t.max : t.min != null ? '≥' + t.min : t.max != null ? '≤' + t.max : '';
+function bodySigned(v) { return v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0'; }
+function bodyTgtTxt(f, d) {
+  const t = bodyTgt(f, d), s = d ? bodySigned : String;
+  return t.min != null && t.max != null ? s(t.min) + (d ? '…' : '–') + s(t.max) : t.min != null ? '≥' + s(t.min) : t.max != null ? '≤' + s(t.max) : '';
 }
 // ▴ above the max · ▾ below the min · '' inside the range or no target
-function bodyMark(f, v) {
+function bodyMark(f, v, d) {
   if (v == null || isNaN(+v)) return '';
-  const t = bodyTgt(f);
+  const t = bodyTgt(f, d);
   return t.max != null && +v > t.max ? '▴' : t.min != null && +v < t.min ? '▾' : '';
 }
-function bodyValHtml(f, v, txt) {
-  const m = bodyMark(f, v);
-  if (!m) return `<span>${esc(txt)}</span>`;
-  const t = bodyTgt(f);
-  return `<span class="body-out" title="${m === '▴' ? 'above the max ' + t.max : 'below the min ' + t.min}">${esc(txt)}${m}</span>`;
+function bodyOutTitle(f, m, d) {
+  const t = bodyTgt(f, d), s = d ? bodySigned : String;
+  return (m === '▴' ? 'above the ' : 'below the ') + (d ? 'monthly-change ' : '') + (m === '▴' ? 'max ' + s(t.max) : 'min ' + s(t.min));
 }
-function bodyNum(v) { return String(Math.abs(v) >= 1000 ? Math.round(v) : Math.round(v * 10) / 10); }
+// a value (or with d a monthly change) — out of the desired range it gets ▴/▾ and .body-out
+function bodyValHtml(f, v, txt, d, cls, title) {
+  const m = bodyMark(f, v, d);
+  const c = [cls, m ? 'body-out' : ''].filter(Boolean).join(' '), ttl = [title, m ? bodyOutTitle(f, m, d) : ''].filter(Boolean).join(' · ');
+  return `<span${c ? ` class="${c}"` : ''}${ttl ? ` title="${esc(ttl)}"` : ''}>${esc(txt)}${m}</span>`;
+}
+// averages & changes are shown rounded — and judged against the targets as shown (75.04 shows "75", no ▴ at max 75)
+function bodyRound(v) { return Math.sign(v) * (Math.abs(v) >= 1000 ? Math.round(Math.abs(v)) : Math.round(Math.abs(v) * 10) / 10); }
+function bodyNum(v) { return String(bodyRound(v)); }
 function bodyDelta(d) { const s = bodyNum(Math.abs(d)); return +s === 0 ? '±0' : (d > 0 ? '+' : '−') + s; }
 // the measurement and monthly tables share columns — date/month · one per field · ✎ · ✕
 function bodyCols(fields) { return `grid-template-columns:minmax(0,1.5fr) repeat(${fields.length},minmax(0,1fr)) 18px 18px`; }
-function bodyHead(fields, first) {
+// withDelta (the monthly table) adds the monthly-change target under the value target
+function bodyHead(fields, first, withDelta) {
   return `<div class="body-row body-head" style="${bodyCols(fields)}"><span>${esc(first)}</span>`
-    + fields.map(f => { const t = bodyTgtTxt(f);
-      return t ? `<span class="body-2l" title="${esc(f.label + ' · target ' + t)}"><span>${esc(f.label)}</span><span class="body-sub">${esc(t)}</span></span>`
+    + fields.map(f => { const t = bodyTgtTxt(f), dt = withDelta ? bodyTgtTxt(f, true) : '';
+      return t || dt ? `<span class="body-2l" title="${esc(f.label + (t ? ' · target ' + t : '') + (dt ? ' · change per month ' + dt : ''))}"><span>${esc(f.label)}</span>`
+          + (t ? `<span class="body-sub">${esc(t)}</span>` : '') + (dt ? `<span class="body-sub">Δ${esc(dt)}</span>` : '') + '</span>'
         : `<span title="${esc(f.label)}">${esc(f.label)}</span>`; }).join('')
     + '<span></span><span></span></div>';
 }
+// which = min / max (the value) or dmin / dmax (the monthly change, signed)
 function setBodyTarget(key, which, inp) {
   const f = bodyFieldList().find(x => x.key === key); if (!f) return;
-  const s = normDec((inp.value || '').trim());
-  const v = s === '' ? null : parseFloat(s), t = bodyTgt(f);
-  const back = msg => { inp.value = t[which] ?? ''; showStatusMsg(msg); };
+  const d = which[0] === 'd', k = d ? which.slice(1) : which;
+  const s = normDec((inp.value || '').trim()).replace(/−/g, '-');   // "−0.5" pasted with a real minus
+  const v = s === '' ? null : parseFloat(s), t = bodyTgt(f, d);
+  const back = msg => { inp.value = t[k] ?? ''; showStatusMsg(msg); };
   if (s !== '' && isNaN(v)) { back('⚠ not a number'); return; }
-  const lo = which === 'min' ? v : t.min, hi = which === 'max' ? v : t.max;
+  const lo = k === 'min' ? v : t.min, hi = k === 'max' ? v : t.max;
   if (lo != null && hi != null && lo > hi) { back('⚠ the min must not be above the max'); return; }
   inp.value = v ?? '';
-  if (v === t[which]) return;   // nothing changed → no mt stamp (whole-object LWW)
+  if (v === t[k]) return;   // nothing changed → no mt stamp (whole-object LWW)
   if (v == null) delete f[which]; else f[which] = v;
   bodyFields.mt = Date.now();
   saveBodyFields(); renderBodyView();   // not the form — a measurement being typed stays
@@ -5409,13 +5423,17 @@ function renderBodyForm() {
     <button class="btn-lib" style="width:auto" onclick="toggleBodyFieldsMgr()" title="tracked columns & their desired min / max">⚙</button>
   </div>
   <div id="bodyFieldsMgr" style="display:${bodyMgrOpen ? 'block' : 'none'};margin-top:.45rem">
-    <div class="bf-tg bf-tg-h"><span>column</span><span>min</span><span>max</span><span></span></div>
-    ${fields.map(f => { const t = bodyTgt(f);
+    <div class="bf-tg bf-tg-h"><span>column</span><span>min</span><span>max</span><span title="desired change of the monthly average — the lowest (signed)">Δ min</span><span title="desired change of the monthly average — the highest (signed)">Δ max</span><span></span></div>
+    ${fields.map(f => { const t = bodyTgt(f), dt = bodyTgt(f, true);
+      // the Δ boxes take a minus — the numeric keypad (inputmode=decimal) has none on Android
+      const box = (which, v, dec, title) => `<input type="text"${dec ? ' inputmode="decimal"' : ''} class="bf-in" placeholder="–" value="${v ?? ''}" onchange="setBodyTarget(${jsArg(f.key)},'${which}',this)" title="${title}">`;
       return `<div class="bf-tg"><span title="${esc(f.label)}">${esc(f.label)}</span>`
-        + `<input type="text" inputmode="decimal" class="bf-in" placeholder="–" value="${t.min ?? ''}" onchange="setBodyTarget(${jsArg(f.key)},'min',this)" title="desired minimum — lower values get ▾">`
-        + `<input type="text" inputmode="decimal" class="bf-in" placeholder="–" value="${t.max ?? ''}" onchange="setBodyTarget(${jsArg(f.key)},'max',this)" title="desired maximum — higher values get ▴">`
+        + box('min', t.min, true, 'desired minimum — lower values get ▾')
+        + box('max', t.max, true, 'desired maximum — higher values get ▴')
+        + box('dmin', dt.min, false, 'desired change per month, the lowest (signed: −1.5 = lose at most 1.5) — below gets ▾')
+        + box('dmax', dt.max, false, 'desired change per month, the highest (signed: −0.5 = lose at least 0.5) — above gets ▴')
         + `<button class="bf-x" onclick="removeBodyField(${jsArg(f.key)})" title="remove this column">✕</button></div>`; }).join('')}
-    <div class="bf-hint">min / max = your desired range, either one optional — values outside get ▴ (above) / ▾ (below), the chart shades the range</div>
+    <div class="bf-hint">min / max = desired value · Δ min / Δ max = desired change of the monthly average, signed (lose 0.5–1.5 kg a month: Δ min −1.5, Δ max −0.5) · every box optional · outside the range gets ▴ above / ▾ below</div>
     <div style="display:flex;gap:.3rem;margin-top:.35rem">
       <input type="text" class="bf-in" id="newBodyField" placeholder="new column label (e.g. BMR)" onkeydown="if(event.key==='Enter')addBodyField()">
       <button class="btn-add" onclick="addBodyField()" title="add column">+</button>
@@ -5480,17 +5498,20 @@ function renderBodyChart() {
       + (tg.min != null ? edge(tg.min, tight ? '' : 'min ' + tg.min) : '');
   }
   // monthly overlay: each month's average as a gray step under the line, a dashed boundary between
-  // months, and above the plot the month + its ± vs. the month before (skipped where the slice is too narrow)
+  // months, and above the plot the month + its ± vs. the month before, ▴/▾ outside the desired
+  // monthly change (skipped where the slice is too narrow for the label)
+  const dTxt = d => d == null ? '' : bodyDelta(d) + bodyMark(fm, bodyRound(d), true);
   let mSteps = '', mLbls = '';
   mons.forEach((o, i) => {
-    const xa = xs(Math.max(o.s, x0)), xb = xs(Math.min(o.e, x1)), y = ys(o.r.avg[bcMetric]).toFixed(1), d = o.r.d[bcMetric];
+    const xa = xs(Math.max(o.s, x0)), xb = xs(Math.min(o.e, x1)), y = ys(o.r.avg[bcMetric]).toFixed(1), dt = dTxt(o.r.d[bcMetric]);
     if (i) mSteps += `<line class="bc-msep" x1="${xa.toFixed(1)}" y1="2" x2="${xa.toFixed(1)}" y2="${H - B}"/>`;
     mSteps += `<line class="bc-mavg" x1="${xa.toFixed(1)}" y1="${y}" x2="${xb.toFixed(1)}" y2="${y}"/>`;
-    if (xb - xa < 32) return;
+    if (xb - xa < Math.max(26, dt.length * 7.3 + 4)) return;   // ~7.3 = one 12px DM Mono character
     const cx = ((xa + xb) / 2).toFixed(1);
     mLbls += `<text x="${cx}" y="12" text-anchor="middle" class="bc-mname">${esc(bodyMonthLabel(o.r.mk).split(' ')[0])}</text>`
-      + (d != null ? `<text x="${cx}" y="27" text-anchor="middle" class="bc-mdelta">${esc(bodyDelta(d))}</text>` : '');
+      + (dt ? `<text x="${cx}" y="27" text-anchor="middle" class="bc-mdelta">${esc(dt)}</text>` : '');
   });
+  const dTgt = bodyTgtTxt(fm, true);
   const path = pts.map((p, i) => (i ? 'L' : 'M') + xs(p.ts).toFixed(1) + ' ' + ys(p.v).toFixed(1)).join(' ');
   const dots = pts.map(p => `<circle cx="${xs(p.ts).toFixed(1)}" cy="${ys(p.v).toFixed(1)}" r="3" fill="var(--black)" stroke="var(--w)" stroke-width="1.5"/>`).join('');
   // selective direct labels: only the extremes (the tooltip covers the rest)
@@ -5511,9 +5532,9 @@ function renderBodyChart() {
     </svg>
     <div id="bcTip" class="bc-tip" style="display:none"></div>
   </div>`
-    + (mons.length ? '<div class="bc-note">gray step = the month’s average · top = its change vs. the month before</div>' : '');
+    + (mons.length ? `<div class="bc-note">gray step = the month’s average · top = its change vs. the month before${dTgt ? esc(' · desired ' + dTgt + ' a month (▴ above · ▾ below)') : ''}</div>` : '');
   initBcHover(pts.map(p => { const m = bodyMark(fm, p.v), r = mByKey.get(p.date.slice(0, 7));
-    const mo = r && mons.length ? '\n' + bodyMonthLabel(r.mk) + ' ø ' + bodyNum(r.avg[bcMetric]) + (r.d[bcMetric] != null ? ' (' + bodyDelta(r.d[bcMetric]) + ' vs. ' + bodyMonthLabel(r.vs[bcMetric]) + ')' : '') : '';
+    const mo = r && mons.length ? '\n' + bodyMonthLabel(r.mk) + ' ø ' + bodyNum(r.avg[bcMetric]) + (r.d[bcMetric] != null ? ' (' + dTxt(r.d[bcMetric]) + ' vs. ' + bodyMonthLabel(r.vs[bcMetric]) + ')' : '') : '';
     return {x: xs(p.ts), y: ys(p.v), v: p.v, date: p.date, time: p.time, out: (m ? ' ' + m + (m === '▴' ? ' above max ' + tg.max : ' below min ' + tg.min) : '') + mo}; }));
 }
 // crosshair + tooltip: nearest point under the pointer (tap works on touch/e-ink)
@@ -5547,9 +5568,10 @@ function bodyRangeText() {
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || ((b.id || 0) - (a.id || 0)));
   if (!items.length) return '';
   const n = v => { const x = Math.round(+v * 100) / 100; return isNaN(x) ? String(v) : String(x); };
-  const tgs = fields.map(f => bodyTgtTxt(f) ? f.label + ' ' + bodyTgtTxt(f) : null).filter(Boolean);
+  const tgs = fields.map(f => { const t = [bodyTgtTxt(f), bodyTgtTxt(f, true) ? 'Δ/month ' + bodyTgtTxt(f, true) : ''].filter(Boolean).join(' · ');
+    return t ? f.label + ' ' + t : null; }).filter(Boolean);
   const lines = ['BODY · ' + fmtDate(bcFrom) + ' – ' + fmtDate(bcTo) + ' · ' + items.length + '×',
-    ...(tgs.length ? ['targets: ' + tgs.join(' · ') + '  (▴ above max · ▾ below min)'] : []), ''];
+    ...(tgs.length ? ['targets: ' + tgs.join(' | ') + '  (▴ above max · ▾ below min)'] : []), ''];
   items.forEach(b => {
     const vals = fields.map(f => valOf(b, f.key) != null ? f.label + ' ' + n(valOf(b, f.key)) + bodyMark(f, valOf(b, f.key)) : null).filter(Boolean);
     lines.push(fmtDate(b.date) + (b.time ? ' ' + b.time : '') + (vals.length ? ' · ' + vals.join(' · ') : ''));
@@ -5571,7 +5593,8 @@ function bodyRangeText() {
   if (months.length) {
     lines.push('', 'monthly (average · ± vs. the month before):');
     months.forEach(r => lines.push(bodyMonthLabel(r.mk) + ' (' + r.n + '×) · ' + fields.filter(f => r.avg[f.key] != null)
-      .map(f => f.label + ' ' + bodyNum(r.avg[f.key]) + bodyMark(f, r.avg[f.key]) + (r.d[f.key] != null ? ' (' + bodyDelta(r.d[f.key]) + ')' : '')).join(' · ')));
+      .map(f => f.label + ' ' + bodyNum(r.avg[f.key]) + bodyMark(f, bodyRound(r.avg[f.key]))
+        + (r.d[f.key] != null ? ' (' + bodyDelta(r.d[f.key]) + bodyMark(f, bodyRound(r.d[f.key]), true) + ')' : '')).join(' · ')));
   }
   return lines.join('\n');
 }
@@ -5614,11 +5637,11 @@ function renderBodyMonths() {
   const cols = bodyCols(fields);
   c.innerHTML = `<details${bodyMonthsOpen ? ' open' : ''} ontoggle="bodyMonthsOpen=this.open">`
     + `<summary>monthly change<span class="bm-sub">average of each month · ± = change vs. the month before</span></summary>`
-    + bodyHead(fields, 'month')
+    + bodyHead(fields, 'month', true)
     + rows.map(r => `<div class="body-row" style="${cols}"><span class="body-2l"><span>${esc(bodyMonthLabel(r.mk))}</span><span class="body-sub">${r.n}×</span></span>`
       + fields.map(f => r.avg[f.key] == null ? '<span>–</span>'
-        : `<span class="body-2l">${bodyValHtml(f, r.avg[f.key], bodyNum(r.avg[f.key]))}`
-          + (r.d[f.key] != null ? `<span class="body-sub" title="${esc('vs. ' + bodyMonthLabel(r.vs[f.key]) + ' · ' + bodyNum(r.avg[f.key] - r.d[f.key]))}">${bodyDelta(r.d[f.key])}</span>` : '')
+        : `<span class="body-2l">${bodyValHtml(f, bodyRound(r.avg[f.key]), bodyNum(r.avg[f.key]))}`
+          + (r.d[f.key] != null ? bodyValHtml(f, bodyRound(r.d[f.key]), bodyDelta(r.d[f.key]), true, 'body-sub', 'vs. ' + bodyMonthLabel(r.vs[f.key]) + ' · ' + bodyNum(r.avg[f.key] - r.d[f.key])) : '')
           + '</span>').join('')
       + '<span></span><span></span></div>').join('')
     + '</details>';
