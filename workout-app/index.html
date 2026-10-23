@@ -3978,8 +3978,11 @@ function openLogEntry(id, focusNote) {
 }
 
 // ── LOG (notes panel) ───────────────────────────────────────────────────────
-// one exercise line: "10/10/9 @ 20kg · 3.8 s/rep" — shared by the log view and the text export
-function exStatText(e) {
+// a plain number typed into a set field ("12", "16.5", "16,5") — anything else ("8+2", "BW", "2x10") is NaN
+function plainNum(v) { const s = String(v ?? '').trim(); return /^\d+(?:[.,]\d+)?$/.test(s) ? parseFloat(s.replace(',', '.')) : NaN; }
+// one exercise line: "10/10/9 @ 20 · 3.8 s/rep" — shared by the log view and the text export
+// (txt = the export: it spells out the kg unit, the panel stays compact)
+function exStatText(e, txt) {
   const sets = e.sets || [];
   // logged rests (effective rest after each set) — uniform shows once, mixed lists all
   const rests = [...new Set(sets.map(s => s.restSec).filter(v => v != null))];
@@ -3990,7 +3993,8 @@ function exStatText(e) {
     return (e.rep > 1 ? '×' + e.rep + ' ' : '') + body + restStr;
   }
   const reps = sets.map(s => (s.reps === '' || s.reps == null) ? '–' : s.reps).join('/');
-  const w = [...new Set(sets.map(s => s.weight).filter(Boolean))].join(', ');
+  const ws = [...new Set(sets.map(s => s.weight).filter(Boolean))];
+  const w = ws.join(', ') + (txt && ws.length && ws.every(v => !isNaN(plainNum(v))) ? ' kg' : '');   // a free-text weight ("BW") gets no unit
   const durs = sets.filter(s => s.durSec != null);
   let sp = '';
   if (durs.length) {
@@ -4267,14 +4271,19 @@ function openWeekDetail(wkk) {
   el('weekDetailModal').classList.add('open');
   autoResizeTA(el('weekDetailBody').querySelector('.le-note'));   // hidden while closed → grow it once open
 }
+// weeks whose note shows even without entries — the period filter applies, a text search hides them
+function logNoteWeeks() {
+  return logFilter.trim() ? [] : weekNotes.filter(n => n && n.note && isWeekKey(n.id) && logPeriodOkWeek(n.id)).map(n => n.id);
+}
 // text export of one grouped section — 'm' = calendar month, 'w' = the WHOLE ISO week
 // (even the part rendered under the neighbouring month); both honor the active filter
 function copyLogGroup(kind, key) {
   const items = filteredLog().filter(a => (kind === 'm' ? logMonthKey(a.date || a.id) : logWeekKey(a.date || a.id)) === key);
-  const wnote = kind === 'w' ? weekNoteOf(key) : '';   // the week note leads the copied text
-  if (!items.length && !wnote) { showStatusMsg('⚠ nothing to copy in this group'); return; }
-  const head = wnote ? logWeekLabel(key) + '\n' + wnote + '\n\n' : '';
-  copyText(head + items.map(logEntryText).join('\n\n'), '✓ ' + (kind === 'm' ? logMonthLabel(key) : logWeekLabel(key)) + ' copied as text');
+  // note-only weeks land under the month of their Monday, as in the panel
+  const extra = kind === 'w' ? [key] : logNoteWeeks().filter(wkk => logMonthKey(weekMonday(wkk)) === key);
+  const txt = logGroupedText(items, extra, kind === 'm');
+  if (!txt) { showStatusMsg('⚠ nothing to copy in this group'); return; }
+  copyText(txt, '✓ ' + (kind === 'm' ? logMonthLabel(key) : logWeekLabel(key)) + ' copied as text');
 }
 function renderLog() {
   const c = el('logList'); if (!c) return;
@@ -4293,7 +4302,7 @@ function renderLog() {
   // header) and hides the entry-less week headers, week notes included
   const searching = !!logFilter.trim();
   syncLogPeriodUi();
-  const noteWeeks = searching ? [] : weekNotes.filter(n => n && n.note && isWeekKey(n.id) && logPeriodOkWeek(n.id));
+  const noteWeeks = logNoteWeeks();
   if (!archive.length && !noteWeeks.length) { c.innerHTML = '<p class="lib-empty">No workouts logged yet.</p>'; return; }
   if (!items.length && !noteWeeks.length) { c.innerHTML = '<p class="lib-empty">Nothing matches the filter.</p>'; return; }
   const itemHtml = a => {
@@ -4363,7 +4372,7 @@ function renderLog() {
     const extra = [];
     const cwk = logWeekKey(Date.now());
     if (!have.has(cwk) && logPeriodOkWeek(cwk) && library.some(e => e.data && +e.data.weekTarget > 0)) { extra.push(cwk); have.add(cwk); }
-    noteWeeks.forEach(n => { if (!have.has(n.id)) { extra.push(n.id); have.add(n.id); } });
+    noteWeeks.forEach(wkk => { if (!have.has(wkk)) { extra.push(wkk); have.add(wkk); } });
     if (extra.length) {
       extra.forEach(wkk => {
         const mk = logMonthKey(weekMonday(wkk));   // a note-only week lands under the month of its Monday
@@ -4708,15 +4717,72 @@ function confirmLogToTemplate() {
 }
 
 // ── LOG TEXT EXPORT ─────────────────────────────────────────────────────────
+// a logged ⚖ combo in words: "2× single-hand bar 6 + 4× concrete 3 = 24 kg · 12 kg per bar" —
+// names matter here (steel and concrete plates share weights). The combo holds only item ids,
+// so it resolves through the CURRENT equipment; an item edited or removed since is flagged
+// against the logged weight instead of silently showing a different load
+function eqLogDesc(sel, loggedW) {
+  const nm = (it, n) => (n > 1 ? n + '× ' : '') + [it.name, fmtKg(it.kg)].filter(Boolean).join(' ');
+  const parts = [];
+  let gone = false;
+  const bar = sel.bar != null ? eqItem(sel.bar) : null, bn = eqBarN(sel);
+  if (bar) parts.push(nm(bar, bn)); else if (sel.bar != null) gone = true;
+  Object.entries(sel.pl || {}).forEach(([id, n]) => {
+    if (!(n > 0)) return;
+    const it = eqItem(id);
+    if (it) parts.push(nm(it, n)); else gone = true;
+  });
+  if (!parts.length && !gone) return '';
+  const tot = eqTotal(sel), lw = plainNum(loggedW);
+  const changed = gone || (!isNaN(lw) && Math.abs(tot - lw) > 0.01);
+  return (parts.join(' + ') || '?') + ' = ' + fmtKg(tot) + ' kg' + (bn > 1 ? ' · ' + fmtKg(tot / bn) + ' kg per bar' : '')
+    + (changed ? ' (equipment edited since — logged ' + (isNaN(lw) ? '?' : fmtKg(lw)) + ' kg)' : '');
+}
+// equipment lines of one exercise — one line when every set used the same combo,
+// otherwise one per combo with its rounds ("equipment r3: …")
+function eqLogLines(e) {
+  const sets = e.sets || [], groups = new Map();   // combo key → {sel, w, rds}
+  sets.forEach((s, i) => {
+    if (!s.eq) return;
+    const k = JSON.stringify([s.eq.bar ?? null, eqBarN(s.eq), Object.entries(s.eq.pl || {}).filter(([, n]) => n > 0).sort(), s.weight]);
+    if (!groups.has(k)) groups.set(k, {sel: s.eq, w: s.weight, rds: []});
+    groups.get(k).rds.push(s.rd || i + 1);
+  });
+  const all = groups.size === 1 && [...groups.values()][0].rds.length === sets.length;
+  return [...groups.values()].map(g => {
+    const d = eqLogDesc(g.sel, g.w);
+    return d ? '    equipment' + (all ? '' : ' r' + g.rds.join(',')) + ': ' + d : '';
+  }).filter(Boolean);
+}
+// training volume of one logged exercise: Σ reps × kg — an L/R set counts both sides, a
+// repeated set every pass; only sets with a plain-number reps AND weight count (0 = none)
+function exVolume(e) {
+  const sets = e.sets || [];
+  if (sets.some(s => s.iname || s.lvl != null)) return 0;   // cardio segments carry no load
+  const k = (e.side ? 2 : 1) * Math.max(1, +e.rep || 1);
+  return sets.reduce((t, s) => {
+    const r = plainNum(s.reps), w = plainNum(s.weight);
+    return r > 0 && w > 0 ? t + r * w * k : t;
+  }, 0);
+}
 function logEntryText(a) {
+  const vol = (a.entries || []).reduce((t, e) => t + exVolume(e), 0);
   const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)
     + (a.type === 'activity' && actSubName(a) ? ' · as ' + actSubName(a) : '')
     + (a.intensity ? ' · intensity ' + a.intensity + '/5' : '')
-    + (sessScoreText(a) ? ' · ' + sessScoreText(a) : '')];
+    + (sessScoreText(a) ? ' · ' + sessScoreText(a) : '')
+    + (vol ? ' · volume ' + Math.round(vol) + ' kg' : '')];
+  const zt = zoneTimeText(a.hrZoneSec);
+  if (zt) lines.push('  HR zones: ' + zt);
   if (a.bike) lines.push('  bike: ' + bikeSummaryText(a.bike));
   (a.entries || []).forEach(e => {
     if (!(e.sets || []).length) return;
-    lines.push('  ' + (e.code || e.name) + ' ' + exStatText(e) + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
+    // code AND name — the code alone means nothing to whoever reads the export
+    const lbl = [...new Set([e.code, e.name].map(x => String(x || '').trim()).filter(Boolean))].join(' ') || 'exercise';
+    const v = exVolume(e);
+    lines.push('  ' + lbl + ': ' + exStatText(e, true) + (v ? ' · volume ' + Math.round(v) + ' kg' : '')
+      + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
+    lines.push(...eqLogLines(e));
     (e.sets || []).forEach((s, i) => {
       if (s.note) lines.push('    r' + (s.rd || i + 1) + ': ' + s.note.replace(/\n+/g, ' · '));
     });
@@ -4724,12 +4790,48 @@ function logEntryText(a) {
   if (a.note) lines.push('  note: ' + a.note.replace(/\n/g, '\n  '));
   return lines.join('\n');
 }
+// several entries as text, grouped like the log panel: month → ISO week (label, count, the
+// week note) → entries. extraWeeks = week keys to include even without entries (note-only);
+// withMonths = false keeps the ISO week whole, even across a month boundary
+function logGroupedText(items, extraWeeks, withMonths) {
+  const mkOf = t => withMonths ? logMonthKey(t) : '';
+  const months = new Map();   // monthKey → Map(weekKey → entries)
+  const slot = (mk, wkk) => {
+    if (!months.has(mk)) months.set(mk, new Map());
+    const wm = months.get(mk);
+    if (!wm.has(wkk)) wm.set(wkk, []);
+    return wm.get(wkk);
+  };
+  items.forEach(a => { const t = a.date || a.id; slot(mkOf(t), logWeekKey(t)).push(a); });
+  const shownIn = new Map();   // weekKey → the month keys it shows under (newest first)
+  months.forEach((wm, mk) => wm.forEach((_, wkk) => shownIn.set(wkk, [...(shownIn.get(wkk) || []), mk])));
+  extraWeeks.forEach(wkk => { if (!shownIn.has(wkk)) { const mk = mkOf(weekMonday(wkk)); slot(mk, wkk); shownIn.set(wkk, [mk]); } });
+  // a week split across two months carries its note once — under the month of its Monday
+  const noteHome = wkk => { const ms = shownIn.get(wkk), home = mkOf(weekMonday(wkk)); return ms.includes(home) ? home : ms[0]; };
+  const desc = (a, b) => a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0;
+  return [...months.entries()].sort(desc).map(([mk, wm]) => {
+    const weeks = [...wm.entries()].sort(desc).map(([wkk, arr]) => {
+      const note = noteHome(wkk) === mk ? weekNoteOf(wkk) : '';
+      if (!arr.length && !note) return '';
+      return '--- ' + logWeekLabel(wkk) + (arr.length ? ' · ' + arr.length + '×' : '') + ' ---' + (note ? '\n' + note : '')
+        + arr.map(a => '\n\n' + logEntryText(a)).join('');
+    }).filter(Boolean);
+    if (!weeks.length) return '';
+    const all = [...wm.values()].flat(), tot = all.reduce((t, a) => t + (a.totalSec || 0), 0);
+    return (mk ? '=== ' + logMonthLabel(mk) + ' · ' + all.length + '×' + (tot ? ' · ' + fmtEst(tot) : '') + ' ===\n\n' : '')
+      + weeks.join('\n\n');
+  }).filter(Boolean).join('\n\n');
+}
 function copyLogText(id) {
-  const items = id != null
-    ? archive.filter(a => String(a.id) === String(id))
-    : filteredLog();   // the text export honors the active filter
-  if (!items.length) { showStatusMsg('⚠ log is empty (or nothing matches the filter)'); return; }
-  copyText(items.map(logEntryText).join('\n\n'), id != null ? '✓ entry copied as text' : '✓ log copied as text');
+  if (id != null) {
+    const a = archive.find(x => String(x.id) === String(id));
+    if (!a) { showStatusMsg('⚠ log entry not found'); return; }
+    copyText(logEntryText(a), '✓ entry copied as text');
+    return;
+  }
+  const txt = logGroupedText(filteredLog(), logNoteWeeks(), true);   // the text export honors the active filter
+  if (!txt) { showStatusMsg('⚠ log is empty (or nothing matches the filter)'); return; }
+  copyText(txt, '✓ log copied as text');
 }
 function copyText(txt, okMsg) {
   const done = () => showSave(okMsg || '✓ copied');
