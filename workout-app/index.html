@@ -513,7 +513,7 @@ textarea::placeholder{color:var(--mid)}
 .log-note-week{margin-top:-.3rem;padding-left:.55rem}   /* note of a whole ISO week — sits right under its header */
 .log-set-note{display:flex;gap:.3rem;align-items:flex-start;padding-left:.4rem}
 .log-rn{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-top:.16rem;flex-shrink:0}
-.log-month-hdr{display:flex;align-items:center;gap:.45rem;font-size:.72rem;font-weight:600;letter-spacing:.06em;color:var(--dark);padding:.3rem .1rem 0;cursor:pointer;user-select:none}
+.log-month-hdr{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;font-size:.72rem;font-weight:600;letter-spacing:.06em;color:var(--dark);padding:.3rem .1rem 0;cursor:pointer;user-select:none}
 .log-week-hdr{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;font-size:.65rem;color:var(--muted);letter-spacing:.04em;padding:.15rem .15rem 0;border-top:1px dashed var(--light);cursor:pointer;user-select:none}
 .log-grp-sum{font-family:'DM Mono',monospace;font-weight:400;color:var(--muted);font-size:.68rem}
 .log-wk-badge{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);border:var(--b);border-radius:var(--r);padding:.02rem .25rem;flex-shrink:1;min-width:0;max-width:11em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:0}
@@ -4005,6 +4005,21 @@ function exStatText(e, txt) {
   return (e.rep > 1 ? '×' + e.rep + ' ' : '') + reps + (w ? ' @ ' + w : '') + sp + (e.side ? ' · L/R' : '') + restStr
     + (e.tech ? ' · tech ' + e.tech : '') + (e.rir != null ? ' · RIR ' + e.rir : '');
 }
+// training volume of one logged exercise: Σ reps × kg — an L/R set counts both sides, a
+// repeated set every pass; only sets with a plain-number reps AND weight count (0 = none).
+// Shown in the log panel (entry, week, month) and the text export
+function exVolume(e) {
+  const sets = e.sets || [];
+  if (sets.some(s => s.iname || s.lvl != null)) return 0;   // cardio segments carry no load
+  const k = (e.side ? 2 : 1) * Math.max(1, +e.rep || 1);
+  return sets.reduce((t, s) => {
+    const r = plainNum(s.reps), w = plainNum(s.weight);
+    return r > 0 && w > 0 ? t + r * w * k : t;
+  }, 0);
+}
+function entryVolume(a) { return (a.entries || []).reduce((t, e) => t + exVolume(e), 0); }
+function groupVolume(items) { return items.reduce((t, a) => t + entryVolume(a), 0); }
+function fmtVol(v) { return Math.round(v).toLocaleString('en-GB') + ' kg'; }
 // compact session-rating line: "energy 4 · focus 3" / "RPE 4 · HR 152/178" — log head + text export
 function sessScoreText(a) {
   const p = [];
@@ -4308,6 +4323,7 @@ function renderLog() {
   const itemHtml = a => {
     const open = !!logOpen[a.id];
     const isAct = a.type === 'activity';
+    const vol = entryVolume(a);
     // action buttons stay visible on collapsed entries too
     const actions = `<div class="log-actions">` + (isAct
       ? `<button class="log-act-btn" onclick="openActivityModal(${jsArg(a.id)})" title="edit this activity">✎ edit</button>`
@@ -4318,12 +4334,13 @@ function renderLog() {
     if (open) {
       const lines = (a.entries || []).map((e, idx) => {
         if (!(e.sets || []).length) return '';
+        const ev = exVolume(e);
         // per-round notes (editable) — rendered only for sets that have one
         const setNotes = e.sets.map((s, sIdx) => s.note
           ? `<div class="log-set-note"><span class="log-rn">r${s.rd || sIdx + 1}</span>
              <textarea class="log-note-in" rows="1" title="round note — editable" oninput="autoResizeTA(this)" onchange="updateLogSetNote(${jsArg(a.id)},${idx},${sIdx},this.value)">${esc(s.note)}</textarea></div>`
           : '').join('');
-        return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(exStatText(e))}</div>
+        return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(exStatText(e))}${ev ? ` · <span title="training volume of this exercise — Σ reps × kg${e.side ? ', both sides' : ''}">vol ${esc(fmtVol(ev))}</span>` : ''}</div>
           ${setNotes}
           <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
       }).join('');
@@ -4346,6 +4363,7 @@ function renderLog() {
         ${isAct && actSubName(a) ? `<span class="log-int" title="counts as a substitute for this workout">↷ ${esc(actSubName(a))}</span>` : ''}
         ${a.intensity ? `<span class="log-int" title="felt intensity">int ${esc(a.intensity)}/5</span>` : ''}
         ${sessScoreText(a) ? `<span class="log-int" title="session ratings (1–5) — set in the finish &amp; log dialog, editable via ✎ edit">${esc(sessScoreText(a))}</span>` : ''}
+        ${vol ? `<span class="log-int" title="training volume — Σ reps × kg over the logged sets (an L/R set counts both sides)">vol ${esc(fmtVol(vol))}</span>` : ''}
         <span class="log-total">${mmss(a.totalSec || 0)}</span>
         <button class="log-del" onclick="copyLogText(${jsArg(a.id)})" title="copy this entry as text">⧉</button>
         <button class="log-del" onclick="deleteLogEntry(${jsArg(a.id)})" title="delete log entry">✕</button></div>
@@ -4387,17 +4405,17 @@ function renderLog() {
   c.innerHTML = [...months.entries()].map(([mk, weeks]) => {
     const all = [...weeks.values()].flat();
     const coll = !searching && logMonthColl.has(mk);
-    const tot = all.reduce((t, a) => t + (a.totalSec || 0), 0);
+    const tot = all.reduce((t, a) => t + (a.totalSec || 0), 0), mv = groupVolume(all);
     const head = `<div class="log-month-hdr" onclick="toggleLogMonth('${mk}')" title="${coll ? 'expand' : 'collapse'} this month">
       <span class="rnd-tgl">${coll ? '▸' : '▾'}</span>${logMonthLabel(mk)}
-      <span class="log-grp-sum">${all.length}×${tot ? ' · ' + fmtEst(tot) : ''}</span>
+      <span class="log-grp-sum">${all.length}×${tot ? ' · ' + fmtEst(tot) : ''}${mv ? ' · vol ' + fmtVol(mv) : ''}</span>
       <button class="log-del" onclick="event.stopPropagation();copyLogGroup('m','${mk}')" title="copy this month as text">⧉</button></div>`;
     if (coll) return head;
     return head + [...weeks.entries()].map(([wkk, arr]) => {
-      const wcoll = !searching && logWeekColl.has(wkk);
+      const wcoll = !searching && logWeekColl.has(wkk), wv = groupVolume(arr);
       const whead = `<div class="log-week-hdr" onclick="toggleLogWeek('${wkk}')" title="${wcoll ? 'expand' : 'collapse'} this week">
         <span class="rnd-tgl">${wcoll ? '▸' : '▾'}</span>${logWeekLabel(wkk)}
-        <span class="log-grp-sum">${arr.length}×</span>
+        <span class="log-grp-sum">${arr.length}×${wv ? ' · vol ' + fmtVol(wv) : ''}</span>
         ${weekWorkoutBadges(wkk, items)}
         <button class="log-del" onclick="event.stopPropagation();copyLogGroup('w','${wkk}')" title="copy this week as text (the whole ISO week)">⧉</button></div>`;
       // week note: always editable on an expanded week, kept visible on a collapsed one
@@ -4754,24 +4772,13 @@ function eqLogLines(e) {
     return d ? '    equipment' + (all ? '' : ' r' + g.rds.join(',')) + ': ' + d : '';
   }).filter(Boolean);
 }
-// training volume of one logged exercise: Σ reps × kg — an L/R set counts both sides, a
-// repeated set every pass; only sets with a plain-number reps AND weight count (0 = none)
-function exVolume(e) {
-  const sets = e.sets || [];
-  if (sets.some(s => s.iname || s.lvl != null)) return 0;   // cardio segments carry no load
-  const k = (e.side ? 2 : 1) * Math.max(1, +e.rep || 1);
-  return sets.reduce((t, s) => {
-    const r = plainNum(s.reps), w = plainNum(s.weight);
-    return r > 0 && w > 0 ? t + r * w * k : t;
-  }, 0);
-}
 function logEntryText(a) {
-  const vol = (a.entries || []).reduce((t, e) => t + exVolume(e), 0);
+  const vol = entryVolume(a);
   const lines = [logDateStr(a, true) + ' · ' + (a.name || 'workout') + ' · ' + mmss(a.totalSec || 0)
     + (a.type === 'activity' && actSubName(a) ? ' · as ' + actSubName(a) : '')
     + (a.intensity ? ' · intensity ' + a.intensity + '/5' : '')
     + (sessScoreText(a) ? ' · ' + sessScoreText(a) : '')
-    + (vol ? ' · volume ' + Math.round(vol) + ' kg' : '')];
+    + (vol ? ' · volume ' + fmtVol(vol) : '')];
   const zt = zoneTimeText(a.hrZoneSec);
   if (zt) lines.push('  HR zones: ' + zt);
   if (a.bike) lines.push('  bike: ' + bikeSummaryText(a.bike));
@@ -4780,7 +4787,7 @@ function logEntryText(a) {
     // code AND name — the code alone means nothing to whoever reads the export
     const lbl = [...new Set([e.code, e.name].map(x => String(x || '').trim()).filter(Boolean))].join(' ') || 'exercise';
     const v = exVolume(e);
-    lines.push('  ' + lbl + ': ' + exStatText(e, true) + (v ? ' · volume ' + Math.round(v) + ' kg' : '')
+    lines.push('  ' + lbl + ': ' + exStatText(e, true) + (v ? ' · volume ' + fmtVol(v) : '')
       + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
     lines.push(...eqLogLines(e));
     (e.sets || []).forEach((s, i) => {
@@ -4813,12 +4820,13 @@ function logGroupedText(items, extraWeeks, withMonths) {
     const weeks = [...wm.entries()].sort(desc).map(([wkk, arr]) => {
       const note = noteHome(wkk) === mk ? weekNoteOf(wkk) : '';
       if (!arr.length && !note) return '';
-      return '--- ' + logWeekLabel(wkk) + (arr.length ? ' · ' + arr.length + '×' : '') + ' ---' + (note ? '\n' + note : '')
+      const wv = groupVolume(arr);
+      return '--- ' + logWeekLabel(wkk) + (arr.length ? ' · ' + arr.length + '×' : '') + (wv ? ' · volume ' + fmtVol(wv) : '') + ' ---' + (note ? '\n' + note : '')
         + arr.map(a => '\n\n' + logEntryText(a)).join('');
     }).filter(Boolean);
     if (!weeks.length) return '';
-    const all = [...wm.values()].flat(), tot = all.reduce((t, a) => t + (a.totalSec || 0), 0);
-    return (mk ? '=== ' + logMonthLabel(mk) + ' · ' + all.length + '×' + (tot ? ' · ' + fmtEst(tot) : '') + ' ===\n\n' : '')
+    const all = [...wm.values()].flat(), tot = all.reduce((t, a) => t + (a.totalSec || 0), 0), mv = groupVolume(all);
+    return (mk ? '=== ' + logMonthLabel(mk) + ' · ' + all.length + '×' + (tot ? ' · ' + fmtEst(tot) : '') + (mv ? ' · volume ' + fmtVol(mv) : '') + ' ===\n\n' : '')
       + weeks.join('\n\n');
   }).filter(Boolean).join('\n\n');
 }
