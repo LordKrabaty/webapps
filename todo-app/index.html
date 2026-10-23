@@ -1319,6 +1319,9 @@ textarea::placeholder{color:var(--mid)}
           <div class="chk-list" id="ieChkList"></div>
         </div>
       </div>
+      <div class="modal-row" id="itemEditWinRow" style="display:none;justify-content:flex-start;gap:.4rem">
+        <button class="btn-io" id="ieWinBtn" onclick="openFxInWindow()" title="this item lives in another window — the edits here are saved there; open that window to delete or move it">↗ open in its window</button>
+      </div>
       <div class="modal-row" id="itemEditRecurRow" style="display:none;justify-content:flex-start;gap:.4rem">
         <button class="btn-io" onclick="editGhostRule()" title="edit the recurrence rule this occurrence belongs to">↻ edit rule</button>
         <button class="btn-io" onclick="revertItemToGhost()" title="discard this occurrence and turn it back into a recurrence ghost">↺ back to ghost</button>
@@ -1328,7 +1331,7 @@ textarea::placeholder{color:var(--mid)}
       </div>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
-      <button class="modal-btn danger" onclick="deleteItemEdit()">delete</button>
+      <button class="modal-btn danger" id="ieDelBtn" onclick="deleteItemEdit()">delete</button>
       <button class="modal-btn" onclick="closeModal('itemEditModal')">cancel</button>
       <button class="modal-btn primary" onclick="saveItemEdit()">save</button>
     </div>
@@ -2914,10 +2917,16 @@ function openItemEdit(ctx, idx) {
   el('itemEditName').value = ieNameValue(item);
   _ieLink = linksTasks(ctx, item) ? openBlockLink(ctx, item) : null;   // a block lists its tasks in the note
   el('itemEditNote').value = _ieLink ? _ieLink.base : (item.note || '');
-  el('itemEditRecurRow').style.display = (item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
+  // another window's item (a pin): edited right here, but its rules, block types and the delete / move
+  // belong to its own window → those stay there, one tap away
+  const foreign = ctx.kind === 'foreign';
+  el('itemEditWinRow').style.display = foreign ? '' : 'none';
+  if (foreign) el('ieWinBtn').textContent = '↗ open in ' + (windowName(ctx.win) || 'its window');
+  el('ieDelBtn').style.display = foreign ? 'none' : '';
+  el('itemEditRecurRow').style.display = (!foreign && item.recurId != null) ? '' : 'none';   // recurrence actions only for occurrences linked to a rule
   // a whole block (header + its tasks) can become a block type — only on cards that HAVE blocks
   // (day, Done record, template preview); Inbox and Later are flat single-line lists
-  el('itemEditBlockRow').style.display = (!item.isSubtask && isBlockCard(ctx)) ? '' : 'none';
+  el('itemEditBlockRow').style.display = (!foreign && !item.isSubtask && isBlockCard(ctx)) ? '' : 'none';
   syncItemPinUi();
   el('itemEditModal').classList.add('open');
   const nameEl = el('itemEditName');
@@ -2939,7 +2948,7 @@ function ieNextTab(which) { _ieNextTab = which; }
 // descriptions, its icon, event times and description — and opens the Blocks editor prefilled with it.
 // A block that came from a type opens on that type, so "save" updates it and "save as new" branches off;
 // a plain line (TASK) opens as a new type. Unsaved edits in this modal count — they are read from the fields.
-function isBlockCard(ctx) { return !!ctx && (ctx.kind === 'day' || ctx.kind === 'done' || ctx.kind === 'preview'); }
+function isBlockCard(ctx) { return !!ctx && (ctx.kind === 'day' || ctx.kind === 'done' || ctx.kind === 'preview' || (ctx.kind === 'foreign' && ctx.src === 'day')); }
 
 // ── BLOCK ⇄ ITS TASKS ────────────────────────────────────────────────────────
 // A block's list and the tasks under it are one and the same: the dialog of a block shows every task
@@ -4147,8 +4156,8 @@ async function revertItemToGhost() {
 // detail with one tap from whichever card is showing. The pin lives ON the item, so it syncs with it
 // (inbox per-item LWW, day/month record LWW) and older builds keep it (preserve-unknown) — no new
 // collection. all = shown in every window: only the active window is loaded, so the other windows'
-// pins are read straight from their storage, and a tap switches to that window first — an item is
-// only ever edited inside its own window (its own data, sync and gist).
+// pins are read straight from their storage, and a tap opens the item right where you are (see FOREIGN
+// PIN below) — the active window, its open day and its undo history stay as they were.
 const PIN_SVG = '<svg class="pin-ico" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 4H7l3-4z"/><line x1="12" y1="13" x2="12" y2="21"/></svg>';
 // pinned items of one window: { win, kind: 'inbox'|'month'|'day', key: ''|ym|date, item }; the active
 // day is taken from the live buffer, not from its (possibly older) weekDays record
@@ -4161,22 +4170,41 @@ function pinRefs(win, inb, lat, days, liveDate, live) {
   if (liveDate) (live || []).forEach(it => add(it, 'day', liveDate));
   return out;
 }
-// the other windows' "all windows" pins — their data changes only while they are active, so it is read
-// once per active window (a switch re-reads it: switchWindow saves the outgoing window first)
+// another window's stored data (only the active window is loaded into the globals)
+function winStoreKey(base, w) { return w === 'main' ? base : base + '::' + w; }
+function winStoreRead(base, w) { try { return JSON.parse(localStorage.getItem(winStoreKey(base, w)) || 'null'); } catch(e) { return null; } }
+function winStoreWrite(base, w, v) { try { localStorage.setItem(winStoreKey(base, w), JSON.stringify(v)); } catch(e) {} }
+// the stored records a pin kind lives in: inbox items / Later months / days, with the record key, the
+// tombstone namespace and a writer that keeps the stored shape (the inbox is { items, mt })
+function winStoreList(kind, w) {
+  if (kind === 'inbox') {
+    const raw = winStoreRead(INBOX_KEY, w), flat = Array.isArray(raw);
+    const arr = flat ? raw : (raw && Array.isArray(raw.items) ? raw.items : []);
+    const mt = flat ? arr.reduce((m, it) => Math.max(m, +(it && it.mt) || 0), 0) : (+(raw && raw.mt) || 0);
+    return { arr, keyOf: x => x.id, ns: 'inb', put: a => winStoreWrite(INBOX_KEY, w, { ...(flat ? {} : raw), items: a, mt }) };
+  }
+  const base = kind === 'month' ? LATER_KEY : WEEK_KEY, raw = winStoreRead(base, w);
+  return { arr: Array.isArray(raw) ? raw : [], keyOf: kind === 'month' ? (b => b.ym) : (d => d.date), ns: kind === 'month' ? 'lat' : 'wd',
+           put: a => winStoreWrite(base, w, a) };
+}
+// key of the record a pin lives in: an inbox item is its own record, Later = its month, day = its date
+function pinRecKey(kind, key, id) { return kind === 'inbox' ? String(id) : String(key); }
+// the other windows' "all windows" pins — read once per active window; a switch, an edit of a foreign
+// pin (saveForeignRec) and a refresh from its gist drop the cache (foreignPinsChanged)
 let _foreignPins = null;   // { win, refs }
 function foreignPins() {
   if (_foreignPins && _foreignPins.win === activeWin) return _foreignPins.refs;
-  const read = (base, w) => { try { return JSON.parse(localStorage.getItem(w === 'main' ? base : base + '::' + w) || 'null'); } catch(e) { return null; } };
   const refs = [];
   dayWindows.forEach(w => {
     if (w.id === activeWin) return;
-    const inb = read(INBOX_KEY, w.id);
-    pinRefs(w.id, Array.isArray(inb) ? inb : (inb && inb.items), read(LATER_KEY, w.id), read(WEEK_KEY, w.id))
+    const inb = winStoreRead(INBOX_KEY, w.id);
+    pinRefs(w.id, Array.isArray(inb) ? inb : (inb && inb.items), winStoreRead(LATER_KEY, w.id), winStoreRead(WEEK_KEY, w.id))
       .forEach(r => { if (r.item.pin.all) refs.push(r); });
   });
   _foreignPins = { win: activeWin, refs };
   return refs;
 }
+function foreignPinsChanged() { _foreignPins = null; renderPinBar(); }
 function renderPinBar() {
   const bar = el('pinBar'); if (!bar) return;
   const seen = new Set();
@@ -4190,7 +4218,7 @@ function renderPinBar() {
     const it = r.item, foreign = r.win !== activeWin;
     const where = r.kind === 'inbox' ? 'Inbox' : r.kind === 'month' ? 'Later · ' + monthLabel(r.key).toLowerCase() : formatDateCz(r.key);
     const text = String(it.text || '').trim();
-    const title = 'open: ' + text + ' — ' + where + (foreign ? ' · window ' + windowName(r.win) + ' (switches there)' : '');
+    const title = 'open: ' + text + ' — ' + where + (foreign ? ' · window ' + windowName(r.win) : '');
     const { done, total } = chkCounts(it);
     return `<button class="pin-chip${it.done ? ' is-done' : ''}" data-win="${esc(r.win)}" data-kind="${r.kind}" data-key="${esc(r.key)}" data-id="${esc(String(it.id))}" onclick="openPin(this)" title="${esc(title)}">`
       + (foreign ? `<span class="pin-chip-win">${esc(windowName(r.win))}</span>` : '')
@@ -4211,13 +4239,88 @@ function pinTarget(kind, key, id) {
 }
 function openPin(btn) {
   const { win, kind, key, id } = btn.dataset;
-  if (win !== activeWin) {
-    if (!dayWindows.some(w => w.id === win)) { renderPinBar(); return; }
-    switchWindow(win);
-  }
+  if (win !== activeWin) { openForeignPin(win, kind, key, id); return; }
   const t = pinTarget(kind, key, id);
   if (!t) { showStatusMsg('the pinned item is no longer there', 2200); renderPinBar(); return; }
   openItemEdit(t.ctx, t.idx);
+}
+
+// ── FOREIGN PIN: another window's item, edited without leaving the active one ────────────────
+// The detail works on that window's STORED record (inbox item / Later month / day) through FXCTX: a
+// save stamps the record's mt (only on a real change), writes it back into that window's storage and
+// hands it to the sync (window.foreignPush), which patches just that record into that window's gist.
+// Before opening, the record is refreshed from the gist (window.foreignPull) — the stored copy is only
+// as fresh as the last visit to that window here, and an edit on top of a stale copy would win LWW
+// over newer edits from other devices. The detail never adds, deletes or moves a record, so that
+// window's tombstones and baseline stay untouched; delete / move / recurrence go through ↗ (its window).
+function recSig(r) { const o = { ...r }; delete o.mt; return JSON.stringify(o); }
+function loadForeignRec(win, kind, key, id) {
+  const st = winStoreList(kind, win), k = pinRecKey(kind, key, id);
+  const rec = st.arr.find(x => x && String(st.keyOf(x)) === k);
+  const list = !rec ? null : kind === 'inbox' ? [rec] : (Array.isArray(rec.items) ? rec.items : null);
+  const idx = list ? list.findIndex(it => it && String(it.id) === String(id)) : -1;
+  if (idx < 0) return null;
+  if (kind !== 'inbox') syncBlockDone(list);    // as loadWeek / loadLater do — before the baseline signature
+  return { win, kind, key, id: String(id), rec, list, idx, sig: recSig(rec) };
+}
+function saveForeignRec(fx) {
+  if (fx.kind !== 'inbox') syncBlockDone(fx.list);
+  const sig = recSig(fx.rec);
+  if (sig === fx.sig) return;                   // nothing changed → no stamp (an empty re-save must not win LWW)
+  const st = winStoreList(fx.kind, fx.win), k = pinRecKey(fx.kind, fx.key, fx.id);
+  const i = st.arr.findIndex(x => x && String(st.keyOf(x)) === k);
+  if (i < 0) { showStatusMsg('⚠ the item is no longer in window ' + windowName(fx.win) + ' — not saved', 3500); return; }
+  fx.rec.mt = Date.now(); fx.sig = sig;
+  st.arr[i] = fx.rec;                           // only this record — the rest of that window's data as stored now
+  st.put(st.arr);
+  _foreignPins = null;
+  if (typeof window.foreignPush === 'function') window.foreignPush(fx.win, { kind: fx.kind, key: fx.key, id: fx.id });
+}
+// same contract as DAYCTX / MCTX for the item detail (the rows of that window are not on screen here)
+function FXCTX(fx) {
+  return {
+    kind: 'foreign', src: fx.kind, win: fx.win, fx,
+    h: {}, rowsEl() { return null; }, input: 'quickInput',
+    get list() { return fx.list; },
+    winStart() { return (fx.kind === 'day' && fx.rec.windowStart) || '8:00'; },
+    undo() {},
+    save() { saveForeignRec(fx); },
+    render() { renderPinBar(); },
+    call() { return ''; },
+  };
+}
+let _fxOpening = false;
+async function openForeignPin(win, kind, key, id) {
+  if (!dayWindows.some(w => w.id === win)) { foreignPinsChanged(); return; }   // the window was deleted meanwhile
+  if (_fxOpening) return;                       // a second tap while the gist is being read
+  _fxOpening = true;
+  try {
+    if (typeof window.foreignPull === 'function') {
+      // every pin of that window rides the same read → its chips show the fresh counts too
+      const refs = foreignPins().filter(r => r.win === win).map(r => ({ kind: r.kind, key: r.key, id: String(r.item.id) }));
+      if (!refs.some(r => r.kind === kind && pinRecKey(r.kind, r.key, r.id) === pinRecKey(kind, key, id))) refs.push({ kind, key, id });
+      await window.foreignPull(win, refs);
+    }
+  } finally { _fxOpening = false; }
+  if (win === activeWin) {                      // switched into that window meanwhile → it is a normal item now
+    const t = pinTarget(kind, key, id);
+    if (t) openItemEdit(t.ctx, t.idx);
+    return;
+  }
+  const fx = loadForeignRec(win, kind, key, id);
+  if (!fx) { showStatusMsg('the pinned item is no longer there', 2200); foreignPinsChanged(); return; }
+  openItemEdit(FXCTX(fx), fx.idx);
+}
+// ↗ in the detail of another window's item: keep what was typed, then go there with the item open
+function openFxInWindow() {
+  const ctx = _itemEditCtx;
+  if (!ctx || ctx.kind !== 'foreign') return;
+  const { win, kind, key, id } = ctx.fx;
+  saveItemEdit();                               // written into that window's storage first → activateWindow loads it
+  if (!dayWindows.some(w => w.id === win)) return;
+  switchWindow(win);
+  const t = pinTarget(kind, key, id);
+  if (t) openItemEdit(t.ctx, t.idx);
 }
 // pin buttons of the item detail (one pair in each tab's tool bar) — act at once (like ↻ edit rule), not on
 // "save"; a template draft has no pin. "all" = the scope toggle, only once pinned and with 2+ windows.
@@ -4234,7 +4337,7 @@ function syncItemPinUi() {
     b.style.display = (on && multi) ? '' : 'none';
     b.classList.toggle('on', all);
     b.title = all ? 'shown in every window — tap to show it only in this one'
-                  : 'shown only in this window — tap to show it in every window (from another one a tap switches here first)';
+                  : 'shown only in this window — tap to show it in every window (it opens right there, without switching)';
   });
 }
 function setItemPin(pin) {
@@ -10789,6 +10892,104 @@ window.addEventListener('resize', updateAppGrid);
       await fetch(gistUrl(mainGist), gistWriteInit(token, false, rec, 'main'));
     } catch(e) { /* silent — the registry will also be written by the next push of the main window */ }
   }
+
+  // ── FOREIGN RECORD SYNC (a pinned item of another window, edited in place — see openForeignPin) ──
+  // That window's engine runs only while it is active, so the records of its pins travel on their own,
+  // straight against ITS gist: LWW per record (inbox item / Later month / day — the newer mt wins, as in
+  // autoImportSilent), everything else in the gist written back exactly as just read (read-before-
+  // overwrite). Only records that exist on both sides are refreshed locally — adding or dropping one is
+  // that window's own merge (its tombstones and baseline are never touched here). Pushes are coalesced,
+  // one window at a time, and back off on a rate limit like doAutoPush. Whatever does not get through
+  // stays in that window's storage and goes up with its own sync the next time it is opened.
+  const FX_FIELD = { inbox: 'inbox', month: 'later', day: 'weekDays' };
+  const FX_PULL_FRESH = 20000;          // a pin re-opened within 20 s does not download again
+  const fxPulledAt = new Map();         // win → last successful read of its gist
+  const fxDirty = new Map();            // win → Map(record → ref) waiting for upload
+  const fxBusy = new Set();
+  let fxTimer = null;
+  async function fxSync(win, refs, push) {
+    const token = localStorage.getItem(GHTOKEN), gistId = winBinId(win);
+    if (!autosyncEnabled() || !token || !gistId || win === activeWin) return false;
+    if (push && Date.now() < pushCooldownUntil) { fxRetry(win, refs, pushCooldownUntil - Date.now() + 100); return false; }
+    let record = null;
+    try { const res = await gistGet(gistId, token); if (res.ok) record = await gistRecord(res); } catch(e) {}
+    // unreadable / offline / rate-limited / gone → the stored copy stays as it is
+    if (!record || typeof record !== 'object') { if (push) showStatusMsg('⚠ sync: ' + windowName(win) + ' unreachable — the change is saved here, it uploads when you open that window', 4500); return false; }
+    if (win === activeWin) return false;      // switched into that window meanwhile → its own engine has it now
+    if (!push) fxPulledAt.set(win, Date.now());   // a pull refreshes every pin of the window, a push only its records
+    const tomb = (record.tombstones && typeof record.tombstones === 'object') ? record.tombstones : {};
+    let localChanged = false, cloudChanged = false;
+    refs.forEach(ref => {
+      const st = winStoreList(ref.kind, win), k = pinRecKey(ref.kind, ref.key, ref.id), f = FX_FIELD[ref.kind];
+      const cArr = Array.isArray(record[f]) ? record[f] : [];
+      const li = st.arr.findIndex(x => x && String(st.keyOf(x)) === k), ci = cArr.findIndex(x => x && String(st.keyOf(x)) === k);
+      const l = st.arr[li], c = cArr[ci];
+      const lmt = l ? (+l.mt || 0) : -1, cmt = c ? (+c.mt || 0) : -1;
+      if (l && c && cmt > lmt) { st.arr[li] = c; st.put(st.arr); localChanged = true; return; }   // newer elsewhere → take it
+      if (!push || !l || lmt <= cmt) return;
+      const tk = st.ns + ':' + k, t = +tomb[tk] || 0;
+      if (c) cArr[ci] = l;
+      else if (lmt >= t) { cArr.push(l); if (t) delete tomb[tk]; }   // edit after a deletion = resurrection (lwwMerge rule)
+      else return;                                                    // deleted elsewhere after this edit → its merge drops it
+      record[f] = cArr; cloudChanged = true;
+    });
+    if (localChanged) foreignPinsChanged();
+    if (!cloudChanged) return true;
+    if ((+record.schema || 0) > APP_SCHEMA) {   // never let an older build overwrite newer data
+      showStatusMsg('⚠ sync paused — a newer app version wrote window ' + windowName(win) + '. Reload to update.', 5000); return true;
+    }
+    if (win === activeWin) return true;         // re-check right before the write — that window's own push takes over
+    record.device = getDeviceName(); record.schema = APP_SCHEMA;
+    setSyncState('syncing');
+    try {
+      const res = await fetch(gistUrl(gistId), gistWriteInit(token, false, record, win));
+      if (res.status === 403 || res.status === 429) {   // rate limited → one retry after the wait, never a loop
+        const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+        const reset = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
+        const remaining = res.headers.get('x-ratelimit-remaining');
+        let waitMs = retryAfter ? retryAfter * 1000 : (remaining === '0' && reset) ? (reset * 1000 - Date.now()) : 60000;
+        waitMs = Math.min(Math.max(waitMs || 0, 10000), 3600000);
+        pushCooldownUntil = Math.max(pushCooldownUntil, Date.now() + waitMs);   // the limit is per account — the active window waits too
+        showStatusMsg('⚠ sync paused (GitHub rate limit) — auto-retry in ' + Math.ceil(waitMs/1000) + ' s', 6000);
+        setSyncState('err');
+        fxRetry(win, refs, waitMs + 100);
+        return true;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      setSyncState('ok');
+    } catch(e) {
+      console.warn('[autosync] foreign push failed (' + win + '):', (e && e.message) ? e.message : e);
+      setSyncState('err');
+      showStatusMsg('⚠ sync: upload to ' + windowName(win) + ' failed — the change is saved here, it uploads when you open that window', 4500);
+    }
+    return true;
+  }
+  function fxQueue(win, ref) {
+    if (!fxDirty.has(win)) fxDirty.set(win, new Map());
+    fxDirty.get(win).set(ref.kind + '|' + pinRecKey(ref.kind, ref.key, ref.id), ref);
+    clearTimeout(fxTimer); fxTimer = setTimeout(fxFlush, 1500);   // a pin toggle + save → one upload
+  }
+  function fxRetry(win, refs, ms) {
+    refs.forEach(ref => { if (!fxDirty.has(win)) fxDirty.set(win, new Map()); fxDirty.get(win).set(ref.kind + '|' + pinRecKey(ref.kind, ref.key, ref.id), ref); });
+    clearTimeout(fxTimer); fxTimer = setTimeout(fxFlush, ms);
+  }
+  async function fxFlush() {
+    fxTimer = null;
+    for (const [win, m] of [...fxDirty]) {
+      if (fxBusy.has(win)) { if (!fxTimer) fxTimer = setTimeout(fxFlush, 1500); continue; }   // one at a time per gist
+      fxDirty.delete(win);
+      fxBusy.add(win);
+      try { await fxSync(win, [...m.values()], true); } catch(e) {} finally { fxBusy.delete(win); }
+    }
+  }
+  window.foreignPush = fxQueue;
+  window.foreignPull = function(win, refs) {
+    if (Date.now() - (fxPulledAt.get(win) || 0) < FX_PULL_FRESH) return Promise.resolve(true);
+    // never keep the detail waiting on a slow network — after 5 s it opens with the stored copy
+    return Promise.race([fxSync(win, refs, false).catch(() => false), new Promise(r => setTimeout(() => r(false), 5000))]);
+  };
+  // leaving the app → upload a pending foreign edit now instead of after the debounce
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && fxTimer && fxDirty.size) { clearTimeout(fxTimer); fxFlush(); } });
 
   // LWW merge of a keyed array (templates / days / plans):
   //  • both sides have the item → the newer mt wins
