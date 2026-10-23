@@ -327,6 +327,8 @@ textarea::placeholder{color:var(--mid)}
 .wk-hint{flex-basis:100%;font-size:.72rem;line-height:1.45;color:var(--muted)}
 .wk-hint b{color:var(--dark);font-weight:600}
 .wk-runbar{display:flex;align-items:center;gap:calc(.7rem/var(--pzc,1));margin-bottom:calc(.75rem/var(--pzc,1));flex-wrap:wrap}
+.wk-vol{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--dark);margin-left:auto;min-width:0;overflow-wrap:anywhere}
+.wd-vol{color:var(--muted);white-space:nowrap}
 /* reps/weight changed but not trained yet — the strip above the workout + the row marker */
 .wk-chg{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;border:var(--bh);border-radius:var(--r);padding:.3rem .45rem;margin-bottom:.7rem;min-width:0}
 .wk-chg-t{font-size:.62rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);flex-shrink:0}
@@ -1797,6 +1799,7 @@ function renderMain() {
     <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="sound &amp; music — music on/off, track selection, end countdown, halfway alert, rep pacer">${musicOn ? '♪' : '♪ off'}</button>
     ${wkHistoryFor().length ? `<button class="btn-sm" onclick="openWkHistory()" title="history of this workout — past sessions, ratings, time &amp; heart rate">⏱ history</button>` : ''}
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
+    ${wkVolHtml()}
   </div>
   ${pendingStripHtml()}
   <div class="now-hr-row" id="nowHrRow" style="display:none"></div>
@@ -4020,6 +4023,23 @@ function exVolume(e) {
 function entryVolume(a) { return (a.entries || []).reduce((t, e) => t + exVolume(e), 0); }
 function groupVolume(items) { return items.reduce((t, a) => t + entryVolume(a), 0); }
 function fmtVol(v) { return Math.round(v).toLocaleString('en-GB') + ' kg'; }
+function fmtVolDelta(cur, prev) {   // "+56" / "−44" / "±0" (kg)
+  const d = Math.round(cur) - Math.round(prev);
+  return d > 0 ? '+' + d.toLocaleString('en-GB') : d < 0 ? '−' + (-d).toLocaleString('en-GB') : '±0';
+}
+// planned volume of the live workout — every planned set, counted the way exVolume counts a logged one
+function wkPlannedVolume() {
+  if (wk.type === 'cardio') return 0;
+  return (wk.exercises || []).reduce((t, ex) => t + exVolume({sets: ex.sets, side: ex.side, rep: exRepeat(ex)}), 0);
+}
+// runbar chip: planned volume vs. the last logged session of this workout (wkHistoryFor)
+function wkVolHtml() {
+  const v = wkPlannedVolume(); if (!v) return '';
+  const last = wkHistoryFor().find(a => entryVolume(a) > 0), lv = last ? entryVolume(last) : 0;
+  const tip = 'planned volume — Σ reps × kg over every planned set (an L/R set counts both sides)'
+    + (last ? ' · last session ' + wkHistDate(last.date || last.id) + ': ' + fmtVol(lv) : ' · no logged session to compare with yet');
+  return `<span class="wk-vol" title="${esc(tip)}">vol ${esc(fmtVol(v))}${last ? ` · last ${esc(Math.round(lv).toLocaleString('en-GB'))} (${esc(fmtVolDelta(v, lv))})` : ''}</span>`;
+}
 // compact session-rating line: "energy 4 · focus 3" / "RPE 4 · HR 152/178" — log head + text export
 function sessScoreText(a) {
   const p = [];
@@ -4050,8 +4070,8 @@ function logPeriodOkWeek(wkk) {
   if (logPickOn()) return logPick.has(wkk) || logPick.has(logMonthKey(mon));
   return !(logRange > 0 && mon + 7 * 864e5 < Date.now() - logRange * 864e5);
 }
-function logMatches(a) {
-  if (!logPeriodOk(a.date || a.id || 0)) return false;
+function logMatches(a) { return logPeriodOk(a.date || a.id || 0) && logTextMatch(a); }
+function logTextMatch(a) {   // the free-text half of the filter alone (the week breakdown compares across the period)
   const q = logFilter.trim().toLowerCase();
   if (!q) return true;
   const tpl = a.tplId != null ? library.find(x => String(x.id) === String(a.tplId)) : null;
@@ -4273,6 +4293,24 @@ function openWeekDetail(wkk) {
       if (cd && !map.has(cd)) map.set(cd, {n: 0, name: e.name || ''});
     });
   });
+  // volume per code this week vs. the ISO week before — that one ignores the period filter
+  // (a picked week would hide its predecessor) but keeps the text filter, like `items`
+  const volByCode = list => {
+    const m = new Map();
+    list.forEach(a => (a.entries || []).forEach(e => {
+      const cd = (e.code || '').trim(), v = exVolume(e);
+      if (cd && v) m.set(cd, (m.get(cd) || 0) + v);
+    }));
+    return m;
+  };
+  const prevMon = weekMonday(wkk); prevMon.setDate(prevMon.getDate() - 7);
+  const pwk = logWeekKey(prevMon.getTime());
+  const vol = volByCode(items), pvol = volByCode(archive.filter(a => logWeekKey(a.date || a.id) === pwk && logTextMatch(a)));
+  const volHtml = cd => {
+    const v = vol.get(cd) || 0, pv = pvol.get(cd) || 0;
+    if (!v && !pv) return '';
+    return ` <span class="wd-vol" title="training volume of this code this week — Σ reps × kg (an L/R set counts both sides)${pv ? ' · previous week: ' + fmtVol(pv) : ''}">vol ${fmtVol(v)}${pv ? ' (' + fmtVolDelta(v, pv) + ')' : ''}</span>`;
+  };
   el('weekDetailTitle').textContent = logWeekLabel(wkk);
   // the same week note as in the log — editing it here rerenders the log
   const wnote = `<textarea class="le-note" rows="1" placeholder="· week note" title="note for this week — the same one as in the log" oninput="autoResizeTA(this)" onchange="updateWeekNote('${wkk}',this.value,true)">${esc(weekNoteOf(wkk))}</textarea>`;
@@ -4280,7 +4318,7 @@ function openWeekDetail(wkk) {
     ? [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([cd, g]) => {
         const t = codeWeekTarget(cd);
         const state = t ? (g.n >= t ? ' met' : g.n ? '' : ' miss') : '';
-        return `<div class="log-ex"><span class="log-code">${esc(cd)}</span> ${esc(g.name)} <span class="log-wk-badge${state}" title="sessions that week${t ? ' / weekly goal (summed from templates using this code)' : ''}">${g.n}${t ? '/' + t : '×'}</span></div>`;
+        return `<div class="log-ex"><span class="log-code">${esc(cd)}</span> ${esc(g.name)} <span class="log-wk-badge${state}" title="sessions that week${t ? ' / weekly goal (summed from templates using this code)' : ''}">${g.n}${t ? '/' + t : '×'}</span>${volHtml(cd)}</div>`;
       }).join('')
     : '<p class="lib-empty">No coded exercises this week.</p>');
   el('weekDetailModal').classList.add('open');
