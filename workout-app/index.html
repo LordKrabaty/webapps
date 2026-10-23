@@ -546,9 +546,21 @@ textarea::placeholder{color:var(--mid)}
 .body-row.body-head{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1.5px solid var(--black)}
 .body-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .body-note{font-size:.72rem;color:var(--muted);font-style:italic;padding:.05rem .2rem .25rem;flex-shrink:0}
-/* body field manager */
-.bf-chips{display:flex;flex-wrap:wrap;gap:.3rem}
-.bf-chip{display:inline-flex;align-items:center;gap:.3rem;border:var(--b);border-radius:var(--r);padding:.15rem .45rem;font-size:.72rem;color:var(--dark)}
+/* a value outside its column's desired min–max: ▴ above the max, ▾ below the min (no color — e-ink) */
+.body-out{font-weight:500}
+/* two-line cell: value + a muted second line (target in the head, ± in the monthly table) */
+.body-row .body-2l{display:flex;flex-direction:column;line-height:1.25}
+.body-row .body-sub{font-size:.64rem;color:var(--muted)}
+/* monthly change — the average of each month on the measurement table's columns */
+#bodyMonths{flex-shrink:0;min-width:0}
+#bodyMonths summary{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dark);cursor:pointer;user-select:none;margin-bottom:calc(.25rem/var(--pzc,1))}
+.bm-sub{display:block;font-weight:400;letter-spacing:0;text-transform:none;color:var(--muted);font-size:.68rem}
+/* body field manager — one row per tracked column: label · desired min · max · remove */
+.bf-tg{display:grid;grid-template-columns:minmax(0,1fr) 4.6em 4.6em 1.1em;gap:.3rem;align-items:center;padding:calc(.1rem/var(--pzc,1)) 0;font-size:.76rem;color:var(--dark)}
+.bf-tg>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.bf-tg-h{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.bf-tg .bf-in{width:100%;font-family:'DM Mono',monospace;padding:.2rem .35rem;text-align:right}
+.bf-hint{font-size:.68rem;color:var(--muted);margin-top:calc(.2rem/var(--pzc,1))}
 .bf-x{border:none;background:none;color:var(--muted);cursor:pointer;font-size:.62rem;padding:0;line-height:1}
 @media(hover:hover){.bf-x:hover{color:var(--black)}}
 .bf-in{font-family:'DM Sans',sans-serif;font-size:.8rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none;min-width:0;flex:1}
@@ -564,6 +576,14 @@ textarea::placeholder{color:var(--mid)}
 .bc-wrap{position:relative;flex-shrink:0;max-width:min(100%,112vh)}
 .bc-svg{width:100%;height:auto;display:block;border:var(--b);border-radius:var(--r);background:var(--w);touch-action:pan-y}
 .bc-lbl{font-family:'DM Mono',monospace;font-size:9px;fill:var(--muted)}
+.bc-band{fill:var(--off)}
+/* monthly overlay — the month's average as a gray step, month boundaries, the ± above the plot */
+.bc-mavg{stroke:var(--mid);stroke-width:3}
+.bc-msep{stroke:var(--light);stroke-width:1;stroke-dasharray:2 3}
+.bc-mname{font-family:'DM Mono',monospace;font-size:10px;fill:var(--muted)}
+.bc-mdelta{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;fill:var(--black)}
+#bcTip{white-space:pre}
+.bc-note{font-size:.66rem;color:var(--muted);margin-top:calc(.2rem/var(--pzc,1))}
 .bc-vlbl{font-family:'DM Mono',monospace;font-size:10px;fill:var(--black)}
 .bc-tip{position:absolute;top:2px;background:var(--w);border:var(--bh);border-radius:var(--r);padding:.15rem .4rem;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--black);pointer-events:none;white-space:nowrap;z-index:2}
 /* stats tab — trend charts on the body chart's chrome (bc-*); zones Z1→Z5 = the gray scale light→black */
@@ -716,6 +736,7 @@ textarea::placeholder{color:var(--mid)}
     <div class="notes-pane" id="pane-body">
       <div id="bodyForm"></div>
       <div id="bodyChart"></div>
+      <div id="bodyMonths"></div>
       <div id="bodyList" class="body-list"></div>
     </div>
     <div class="notes-pane" id="pane-stats">
@@ -5247,7 +5268,8 @@ function copyStatsText() {
 }
 
 // ── BODY MEASUREMENTS (Tanita) ──────────────────────────────────────────────
-// Tracked columns are configurable (bodyFields = {mt, fields:[{key,label}]} — whole-object LWW on sync).
+// Tracked columns are configurable (bodyFields = {mt, fields:[{key,label,min?,max?}]} — whole-object LWW on sync).
+// min/max = the desired range of a column (either optional) — additive: older builds keep the field objects whole.
 // New entries store values in vals{key:number}; legacy entries keep the old top-level keys, valOf reads both.
 const BODYF_KEY = 'workout-v1-bodyfields';
 const BODY_DEFAULT_FIELDS = [
@@ -5266,6 +5288,53 @@ function bodyKeyOf(label) { return String(label).toLowerCase().replace(/[^a-z0-9
 function valOf(b, key) {
   if (b.vals && b.vals[key] != null) return b.vals[key];
   return b[key] != null ? b[key] : null;
+}
+// desired range of a column — {min, max}, null where not set
+function bodyTgt(f) {
+  const n = v => v != null && v !== '' && !isNaN(+v) ? +v : null;
+  return {min: n(f && f.min), max: n(f && f.max)};
+}
+function bodyTgtTxt(f) {
+  const t = bodyTgt(f);
+  return t.min != null && t.max != null ? t.min + '–' + t.max : t.min != null ? '≥' + t.min : t.max != null ? '≤' + t.max : '';
+}
+// ▴ above the max · ▾ below the min · '' inside the range or no target
+function bodyMark(f, v) {
+  if (v == null || isNaN(+v)) return '';
+  const t = bodyTgt(f);
+  return t.max != null && +v > t.max ? '▴' : t.min != null && +v < t.min ? '▾' : '';
+}
+function bodyValHtml(f, v, txt) {
+  const m = bodyMark(f, v);
+  if (!m) return `<span>${esc(txt)}</span>`;
+  const t = bodyTgt(f);
+  return `<span class="body-out" title="${m === '▴' ? 'above the max ' + t.max : 'below the min ' + t.min}">${esc(txt)}${m}</span>`;
+}
+function bodyNum(v) { return String(Math.abs(v) >= 1000 ? Math.round(v) : Math.round(v * 10) / 10); }
+function bodyDelta(d) { const s = bodyNum(Math.abs(d)); return +s === 0 ? '±0' : (d > 0 ? '+' : '−') + s; }
+// the measurement and monthly tables share columns — date/month · one per field · ✎ · ✕
+function bodyCols(fields) { return `grid-template-columns:minmax(0,1.5fr) repeat(${fields.length},minmax(0,1fr)) 18px 18px`; }
+function bodyHead(fields, first) {
+  return `<div class="body-row body-head" style="${bodyCols(fields)}"><span>${esc(first)}</span>`
+    + fields.map(f => { const t = bodyTgtTxt(f);
+      return t ? `<span class="body-2l" title="${esc(f.label + ' · target ' + t)}"><span>${esc(f.label)}</span><span class="body-sub">${esc(t)}</span></span>`
+        : `<span title="${esc(f.label)}">${esc(f.label)}</span>`; }).join('')
+    + '<span></span><span></span></div>';
+}
+function setBodyTarget(key, which, inp) {
+  const f = bodyFieldList().find(x => x.key === key); if (!f) return;
+  const s = normDec((inp.value || '').trim());
+  const v = s === '' ? null : parseFloat(s), t = bodyTgt(f);
+  const back = msg => { inp.value = t[which] ?? ''; showStatusMsg(msg); };
+  if (s !== '' && isNaN(v)) { back('⚠ not a number'); return; }
+  const lo = which === 'min' ? v : t.min, hi = which === 'max' ? v : t.max;
+  if (lo != null && hi != null && lo > hi) { back('⚠ the min must not be above the max'); return; }
+  inp.value = v ?? '';
+  if (v === t[which]) return;   // nothing changed → no mt stamp (whole-object LWW)
+  if (v == null) delete f[which]; else f[which] = v;
+  bodyFields.mt = Date.now();
+  saveBodyFields(); renderBodyView();   // not the form — a measurement being typed stays
+  showSave('✓ target saved');
 }
 function addBodyField() {
   const inp = el('newBodyField');
@@ -5337,10 +5406,16 @@ function renderBodyForm() {
     <button class="btn-lib primary" style="flex:1;width:auto" onclick="addBodyEntry()">${editing ? '✓ save changes' : '+ add measurement'}</button>
     ${editing ? `<button class="btn-lib" style="width:auto" onclick="cancelBodyEdit()">cancel</button>` : ''}
     <button class="btn-lib" style="width:auto" onclick="openTanitaModal()" title="paste the text My TANITA shares for a measurement — fills the values below">⇩ tanita</button>
-    <button class="btn-lib" style="width:auto" onclick="toggleBodyFieldsMgr()" title="add / remove tracked columns">⚙</button>
+    <button class="btn-lib" style="width:auto" onclick="toggleBodyFieldsMgr()" title="tracked columns & their desired min / max">⚙</button>
   </div>
   <div id="bodyFieldsMgr" style="display:${bodyMgrOpen ? 'block' : 'none'};margin-top:.45rem">
-    <div class="bf-chips">${fields.map(f => `<span class="bf-chip">${esc(f.label)}<button class="bf-x" onclick="removeBodyField('${esc(f.key)}')" title="remove this column">✕</button></span>`).join('')}</div>
+    <div class="bf-tg bf-tg-h"><span>column</span><span>min</span><span>max</span><span></span></div>
+    ${fields.map(f => { const t = bodyTgt(f);
+      return `<div class="bf-tg"><span title="${esc(f.label)}">${esc(f.label)}</span>`
+        + `<input type="text" inputmode="decimal" class="bf-in" placeholder="–" value="${t.min ?? ''}" onchange="setBodyTarget(${jsArg(f.key)},'min',this)" title="desired minimum — lower values get ▾">`
+        + `<input type="text" inputmode="decimal" class="bf-in" placeholder="–" value="${t.max ?? ''}" onchange="setBodyTarget(${jsArg(f.key)},'max',this)" title="desired maximum — higher values get ▴">`
+        + `<button class="bf-x" onclick="removeBodyField(${jsArg(f.key)})" title="remove this column">✕</button></div>`; }).join('')}
+    <div class="bf-hint">min / max = your desired range, either one optional — values outside get ▴ (above) / ▾ (below), the chart shades the range</div>
     <div style="display:flex;gap:.3rem;margin-top:.35rem">
       <input type="text" class="bf-in" id="newBodyField" placeholder="new column label (e.g. BMR)" onkeydown="if(event.key==='Enter')addBodyField()">
       <button class="btn-add" onclick="addBodyField()" title="add column">+</button>
@@ -5372,11 +5447,19 @@ function renderBodyChart() {
     .filter(p => !isNaN(p.ts) && !isNaN(p.v))
     .sort((a, b) => a.ts - b.ts);
   if (!pts.length) { c.innerHTML = ctrls + '<p class="lib-empty">No data in this range.</p>'; return; }
-  const W = 440, H = 180, L = 40, R = 12, T = 16, B = 20;
+  const W = 440, H = 180, L = 40, R = 12, B = 20;
   const x0 = pts[0].ts, x1 = pts[pts.length - 1].ts;
   const xs = ts => x1 > x0 ? L + (ts - x0) / (x1 - x0) * (W - L - R) : (L + W - R) / 2;
   const dMin = Math.min(...pts.map(p => p.v)), dMax = Math.max(...pts.map(p => p.v));
-  let vmin = dMin, vmax = dMax;
+  const fm = fields.find(f => f.key === bcMetric), tg = bodyTgt(fm);
+  // the months the plot spans (oldest first) with their whole-month average — the same numbers as the monthly table
+  const mByKey = new Map(bodyMonths().filter(r => r.avg[bcMetric] != null).map(r => [r.mk, r]));
+  const mons = x1 > x0 ? [...mByKey.values()].reverse()
+    .map(r => { const [y, m] = r.mk.split('-').map(Number); return {r, s: new Date(y, m - 1, 1).getTime(), e: new Date(y, m, 1).getTime()}; })
+    .filter(o => o.e > x0 && o.s <= x1) : [];
+  const T = mons.length ? 34 : 16;   // room above the plot for the month labels
+  const mAvgs = mons.map(o => o.r.avg[bcMetric]);
+  let vmin = Math.min(dMin, tg.min ?? dMin, ...mAvgs), vmax = Math.max(dMax, tg.max ?? dMax, ...mAvgs);   // the target & averages stay in view
   if (vmin === vmax) { vmin -= 1; vmax += 1; }
   const pad = (vmax - vmin) * 0.1;
   vmin -= pad; vmax += pad;
@@ -5385,6 +5468,29 @@ function renderBodyChart() {
   const gvs = dMin === dMax ? [dMin] : [dMin, (dMin + dMax) / 2, dMax];
   const grid = gvs.map(v => `<line x1="${L}" y1="${ys(v).toFixed(1)}" x2="${W - R}" y2="${ys(v).toFixed(1)}" stroke="var(--light)" stroke-width="1"/>
     <text x="${L - 4}" y="${(ys(v) + 3).toFixed(1)}" text-anchor="end" class="bc-lbl">${fmtV(v)}</text>`).join('');
+  // the desired range: a shaded band (open-ended toward the plot edge) + dashed edges labelled above them
+  let band = '', edges = '';
+  if (tg.min != null || tg.max != null) {
+    const yT = tg.max != null ? ys(tg.max) : T, yB = tg.min != null ? ys(tg.min) : H - B;
+    const tight = tg.min != null && tg.max != null && yB - yT < 12;   // the two labels would collide — one on the top edge
+    const edge = (v, lbl) => `<line class="st-ref" x1="${L}" y1="${ys(v).toFixed(1)}" x2="${W - R}" y2="${ys(v).toFixed(1)}"/>`
+      + (lbl ? `<text x="${L + 3}" y="${(ys(v) - 3).toFixed(1)}" class="bc-lbl">${esc(lbl)}</text>` : '');
+    band = `<rect class="bc-band" x="${L}" y="${yT.toFixed(1)}" width="${W - L - R}" height="${Math.max(0, yB - yT).toFixed(1)}"/>`;
+    edges = (tg.max != null ? edge(tg.max, tight ? 'target ' + bodyTgtTxt(fm) : 'max ' + tg.max) : '')
+      + (tg.min != null ? edge(tg.min, tight ? '' : 'min ' + tg.min) : '');
+  }
+  // monthly overlay: each month's average as a gray step under the line, a dashed boundary between
+  // months, and above the plot the month + its ± vs. the month before (skipped where the slice is too narrow)
+  let mSteps = '', mLbls = '';
+  mons.forEach((o, i) => {
+    const xa = xs(Math.max(o.s, x0)), xb = xs(Math.min(o.e, x1)), y = ys(o.r.avg[bcMetric]).toFixed(1), d = o.r.d[bcMetric];
+    if (i) mSteps += `<line class="bc-msep" x1="${xa.toFixed(1)}" y1="2" x2="${xa.toFixed(1)}" y2="${H - B}"/>`;
+    mSteps += `<line class="bc-mavg" x1="${xa.toFixed(1)}" y1="${y}" x2="${xb.toFixed(1)}" y2="${y}"/>`;
+    if (xb - xa < 32) return;
+    const cx = ((xa + xb) / 2).toFixed(1);
+    mLbls += `<text x="${cx}" y="12" text-anchor="middle" class="bc-mname">${esc(bodyMonthLabel(o.r.mk).split(' ')[0])}</text>`
+      + (d != null ? `<text x="${cx}" y="27" text-anchor="middle" class="bc-mdelta">${esc(bodyDelta(d))}</text>` : '');
+  });
   const path = pts.map((p, i) => (i ? 'L' : 'M') + xs(p.ts).toFixed(1) + ' ' + ys(p.v).toFixed(1)).join(' ');
   const dots = pts.map(p => `<circle cx="${xs(p.ts).toFixed(1)}" cy="${ys(p.v).toFixed(1)}" r="3" fill="var(--black)" stroke="var(--w)" stroke-width="1.5"/>`).join('');
   // selective direct labels: only the extremes (the tooltip covers the rest)
@@ -5394,7 +5500,7 @@ function renderBodyChart() {
     <text x="${W - R}" y="${H - 5}" text-anchor="end" class="bc-lbl">${esc(fmtDate(pts[pts.length - 1].date))}</text>`;
   c.innerHTML = ctrls + `<div class="bc-wrap">
     <svg viewBox="0 0 ${W} ${H}" class="bc-svg" id="bcSvg">
-      ${grid}${xlbl}
+      ${band}${grid}${edges}${mSteps}${xlbl}${mLbls}
       <path d="${path}" fill="none" stroke="var(--black)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
       ${dots}
       ${pts.length > 1 && iMax !== iMin ? vlbl(iMax, true) : ''}${pts.length > 1 ? vlbl(iMin, false) : vlbl(0, true)}
@@ -5404,8 +5510,11 @@ function renderBodyChart() {
       </g>
     </svg>
     <div id="bcTip" class="bc-tip" style="display:none"></div>
-  </div>`;
-  initBcHover(pts.map(p => ({x: xs(p.ts), y: ys(p.v), v: p.v, date: p.date, time: p.time})));
+  </div>`
+    + (mons.length ? '<div class="bc-note">gray step = the month’s average · top = its change vs. the month before</div>' : '');
+  initBcHover(pts.map(p => { const m = bodyMark(fm, p.v), r = mByKey.get(p.date.slice(0, 7));
+    const mo = r && mons.length ? '\n' + bodyMonthLabel(r.mk) + ' ø ' + bodyNum(r.avg[bcMetric]) + (r.d[bcMetric] != null ? ' (' + bodyDelta(r.d[bcMetric]) + ' vs. ' + bodyMonthLabel(r.vs[bcMetric]) + ')' : '') : '';
+    return {x: xs(p.ts), y: ys(p.v), v: p.v, date: p.date, time: p.time, out: (m ? ' ' + m + (m === '▴' ? ' above max ' + tg.max : ' below min ' + tg.min) : '') + mo}; }));
 }
 // crosshair + tooltip: nearest point under the pointer (tap works on touch/e-ink)
 function initBcHover(pts) {
@@ -5420,7 +5529,7 @@ function initBcHover(pts) {
     el('bcHx').setAttribute('x1', p.x); el('bcHx').setAttribute('x2', p.x);
     el('bcHc').setAttribute('cx', p.x); el('bcHc').setAttribute('cy', p.y);
     tip.style.display = 'block';
-    tip.textContent = fmtDate(p.date) + (p.time ? ' ' + p.time : '') + ' · ' + p.v;
+    tip.textContent = fmtDate(p.date) + (p.time ? ' ' + p.time : '') + ' · ' + p.v + (p.out || '');
     const px = p.x / 440 * r.width;
     tip.style.left = Math.max(0, Math.min(r.width - tip.offsetWidth, px - tip.offsetWidth / 2)) + 'px';
   }
@@ -5438,9 +5547,11 @@ function bodyRangeText() {
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || ((b.id || 0) - (a.id || 0)));
   if (!items.length) return '';
   const n = v => { const x = Math.round(+v * 100) / 100; return isNaN(x) ? String(v) : String(x); };
-  const lines = ['BODY · ' + fmtDate(bcFrom) + ' – ' + fmtDate(bcTo) + ' · ' + items.length + '×', ''];
+  const tgs = fields.map(f => bodyTgtTxt(f) ? f.label + ' ' + bodyTgtTxt(f) : null).filter(Boolean);
+  const lines = ['BODY · ' + fmtDate(bcFrom) + ' – ' + fmtDate(bcTo) + ' · ' + items.length + '×',
+    ...(tgs.length ? ['targets: ' + tgs.join(' · ') + '  (▴ above max · ▾ below min)'] : []), ''];
   items.forEach(b => {
-    const vals = fields.map(f => valOf(b, f.key) != null ? f.label + ' ' + n(valOf(b, f.key)) : null).filter(Boolean);
+    const vals = fields.map(f => valOf(b, f.key) != null ? f.label + ' ' + n(valOf(b, f.key)) + bodyMark(f, valOf(b, f.key)) : null).filter(Boolean);
     lines.push(fmtDate(b.date) + (b.time ? ' ' + b.time : '') + (vals.length ? ' · ' + vals.join(' · ') : ''));
     if ((b.note || '').trim()) lines.push('  ' + b.note.trim());
   });
@@ -5454,6 +5565,14 @@ function bodyRangeText() {
     return f.label + ' ' + n(first) + ' → ' + n(last) + ' (' + (d > 0 ? '+' : d < 0 ? '−' : '±') + n(Math.abs(d)) + ')';
   }).filter(Boolean);
   if (chg.length) lines.push('', 'change: ' + chg.join(' · '));
+  // the months the range touches — whole-month averages, like the monthly table
+  const m0 = (bcFrom || '').slice(0, 7), m1 = (bcTo || '9999').slice(0, 7);
+  const months = bodyMonths().filter(r => r.mk >= m0 && r.mk <= m1);
+  if (months.length) {
+    lines.push('', 'monthly (average · ± vs. the month before):');
+    months.forEach(r => lines.push(bodyMonthLabel(r.mk) + ' (' + r.n + '×) · ' + fields.filter(f => r.avg[f.key] != null)
+      .map(f => f.label + ' ' + bodyNum(r.avg[f.key]) + bodyMark(f, r.avg[f.key]) + (r.d[f.key] != null ? ' (' + bodyDelta(r.d[f.key]) + ')' : '')).join(' · ')));
+  }
   return lines.join('\n');
 }
 function copyBodyText() {
@@ -5461,20 +5580,65 @@ function copyBodyText() {
   if (!t) { showStatusMsg('⚠ no measurements in this range'); return; }
   copyText(t, '✓ body measurements copied as text');
 }
-function renderBody() {
-  renderBodyForm();
+// ── BODY MONTHS — each calendar month's average and its change vs. the month before ──
+// Averages, not the last reading: one morning's water swing would otherwise decide the month.
+// Per column the change looks back to the latest earlier month that has a value for it.
+function bodyMonthLabel(mk) { const [y, m] = mk.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-GB', {month: 'short'}) + ' ' + String(y).slice(2); }
+function bodyMonths() {
+  const fields = bodyFieldList(), m = new Map();
+  body.forEach(b => {
+    const mk = String(b.date || '').slice(0, 7); if (!/^\d{4}-\d{2}$/.test(mk)) return;
+    const vs = fields.map(f => [f.key, +valOf(b, f.key)]).filter(([k, v]) => valOf(b, k) != null && !isNaN(v));
+    if (!vs.length) return;
+    if (!m.has(mk)) m.set(mk, {mk, n: 0, acc: {}});
+    const r = m.get(mk); r.n++;
+    vs.forEach(([k, v]) => { const a = r.acc[k] || (r.acc[k] = {s: 0, n: 0}); a.s += v; a.n++; });
+  });
+  const rows = [...m.values()].sort((a, b) => a.mk.localeCompare(b.mk)), prev = {};   // oldest first — Δ looks back
+  rows.forEach(r => {
+    r.avg = {}; r.d = {}; r.vs = {};
+    Object.entries(r.acc).forEach(([k, a]) => {
+      r.avg[k] = a.s / a.n;
+      if (prev[k]) { r.d[k] = r.avg[k] - prev[k].v; r.vs[k] = prev[k].mk; }
+      prev[k] = {v: r.avg[k], mk: r.mk};
+    });
+  });
+  return rows.reverse();   // newest first, like the measurement table
+}
+let bodyMonthsOpen = false;   // session-only, like the chart's range; collapsed — the chart carries the selected metric's ±
+function renderBodyMonths() {
+  const c = el('bodyMonths'); if (!c) return;
+  const fields = bodyFieldList();
+  const rows = fields.length ? bodyMonths() : [];
+  if (!rows.length) { c.innerHTML = ''; return; }
+  const cols = bodyCols(fields);
+  c.innerHTML = `<details${bodyMonthsOpen ? ' open' : ''} ontoggle="bodyMonthsOpen=this.open">`
+    + `<summary>monthly change<span class="bm-sub">average of each month · ± = change vs. the month before</span></summary>`
+    + bodyHead(fields, 'month')
+    + rows.map(r => `<div class="body-row" style="${cols}"><span class="body-2l"><span>${esc(bodyMonthLabel(r.mk))}</span><span class="body-sub">${r.n}×</span></span>`
+      + fields.map(f => r.avg[f.key] == null ? '<span>–</span>'
+        : `<span class="body-2l">${bodyValHtml(f, r.avg[f.key], bodyNum(r.avg[f.key]))}`
+          + (r.d[f.key] != null ? `<span class="body-sub" title="${esc('vs. ' + bodyMonthLabel(r.vs[f.key]) + ' · ' + bodyNum(r.avg[f.key] - r.d[f.key]))}">${bodyDelta(r.d[f.key])}</span>` : '')
+          + '</span>').join('')
+      + '<span></span><span></span></div>').join('')
+    + '</details>';
+}
+function renderBody() { renderBodyForm(); renderBodyView(); }
+// everything below the form — a target change re-renders only this, never a half-typed measurement
+function renderBodyView() {
   renderBodyChart();
+  renderBodyMonths();
   const c = el('bodyList'); if (!c) return;
   if (!body.length) { c.innerHTML = '<p class="lib-empty">No measurements yet.</p>'; return; }
   const fields = bodyFieldList();
-  const cols = `grid-template-columns:minmax(0,1.5fr) repeat(${fields.length},minmax(0,1fr)) 18px 18px`;
+  const cols = bodyCols(fields);
   const nv = v => (v == null || isNaN(v)) ? '–' : String(v);
   const items = [...body].sort((a,b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || ((b.id || 0) - (a.id || 0)));
-  c.innerHTML = `<div class="body-row body-head" style="${cols}"><span>date</span>${fields.map(f => `<span title="${esc(f.label)}">${esc(f.label)}</span>`).join('')}<span></span><span></span></div>`
+  c.innerHTML = bodyHead(fields, 'date')
     + items.map(b => {
       const ds = fmtDate(b.date) + (b.time ? ' ' + b.time : '');
       return `<div class="body-row" style="${cols}"><span title="${esc(ds)}">${esc(ds)}</span>`
-        + fields.map(f => `<span>${nv(valOf(b, f.key))}</span>`).join('')
+        + fields.map(f => bodyValHtml(f, valOf(b, f.key), nv(valOf(b, f.key)))).join('')
         + `<button class="log-del" onclick="editBodyEntry(${jsArg(b.id)})" title="edit this measurement">✎</button>`
         + `<button class="log-del" onclick="deleteBodyEntry(${jsArg(b.id)})" title="delete">✕</button></div>`
         + (b.note ? `<div class="body-note">${esc(b.note)}</div>` : '');
