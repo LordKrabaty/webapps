@@ -566,6 +566,32 @@ textarea::placeholder{color:var(--mid)}
 .bc-lbl{font-family:'DM Mono',monospace;font-size:9px;fill:var(--muted)}
 .bc-vlbl{font-family:'DM Mono',monospace;font-size:10px;fill:var(--black)}
 .bc-tip{position:absolute;top:2px;background:var(--w);border:var(--bh);border-radius:var(--r);padding:.15rem .4rem;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--black);pointer-events:none;white-space:nowrap;z-index:2}
+/* stats tab — trend charts on the body chart's chrome (bc-*); zones Z1→Z5 = the gray scale light→black */
+#pane-stats{overflow-y:auto;overflow-x:hidden}
+.st-body{display:flex;flex-direction:column;gap:calc(1rem/var(--pzc,1));min-width:0}
+.st-ctrls{display:flex;gap:.3rem;flex-wrap:wrap}
+.st-ctrls select.bf-in{flex:1;min-width:7em}
+.st-sec{display:flex;flex-direction:column;gap:calc(.3rem/var(--pzc,1));min-width:0}
+.st-h{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dark)}
+.st-sub{display:block;font-weight:400;letter-spacing:0;text-transform:none;color:var(--muted);font-size:.68rem}
+.st-empty{font-size:.74rem;color:var(--muted)}
+.st-grid{stroke:var(--light);stroke-width:1}
+.st-bar{fill:var(--black)}
+.st-z1{fill:var(--light)}.st-z2{fill:var(--mid)}.st-z3{fill:var(--muted)}.st-z4{fill:var(--dark)}.st-z5{fill:var(--black)}
+.st-hl{fill:var(--off)}
+.st-line{fill:none;stroke:var(--black);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.st-dot{fill:var(--black);stroke:var(--w);stroke-width:2}
+.st-hx{stroke:var(--mid);stroke-width:1}
+.st-hc{fill:var(--w);stroke:var(--black);stroke-width:2}
+.bc-tip.st-tip{white-space:pre}
+.st-legend{display:flex;gap:.7rem;flex-wrap:wrap;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted)}
+.st-sw{display:inline-block;width:.75em;height:.75em;border-radius:2px;margin-right:.25rem;vertical-align:-.08em}
+.st-sw.st-bar{background:var(--black)}.st-sw.st-z1{background:var(--light)}.st-sw.st-z2{background:var(--mid)}.st-sw.st-z3{background:var(--muted)}.st-sw.st-z4{background:var(--dark)}.st-sw.st-z5{background:var(--black)}
+.st-tbl summary{font-size:.68rem;color:var(--muted);cursor:pointer;user-select:none}
+.st-tbl table{border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.68rem;width:100%;margin-top:.2rem;font-variant-numeric:tabular-nums}
+.st-tbl th{font-weight:500;color:var(--muted)}
+.st-tbl th,.st-tbl td{padding:.1rem .3rem;text-align:right;border-bottom:1px solid var(--off);color:var(--dark)}
+.st-tbl th:first-child,.st-tbl td:first-child{text-align:left}
 </style>
 </head>
 <body>
@@ -656,11 +682,12 @@ textarea::placeholder{color:var(--mid)}
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">log &amp; body</span></div>
+    <div class="card-title"><span class="card-title-text">log, body &amp; stats</span></div>
     <div class="notes-tabs">
       <button class="notes-tab active" onclick="switchTab('log',this)">log</button>
       <button class="notes-tab" onclick="switchTab('note',this)">notes</button>
       <button class="notes-tab" onclick="switchTab('body',this)">body</button>
+      <button class="notes-tab" onclick="switchTab('stats',this)">stats</button>
     </div>
     <div class="notes-pane active" id="pane-log">
       <div class="log-tools">
@@ -687,6 +714,9 @@ textarea::placeholder{color:var(--mid)}
       <div id="bodyForm"></div>
       <div id="bodyChart"></div>
       <div id="bodyList" class="body-list"></div>
+    </div>
+    <div class="notes-pane" id="pane-stats">
+      <div id="statsBody" class="st-body"></div>
     </div>
   </div>
 </div>
@@ -2557,6 +2587,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.notes-tab').forEach(b => b.classList.toggle('active', b === btn));
   document.querySelectorAll('.notes-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
   document.querySelectorAll('.notes-pane.active .log-note-in').forEach(autoResizeTA);   // grow after becoming visible
+  if (name === 'stats') renderStats();   // built only while visible — renderLog keeps it fresh after that
 }
 
 // ── STRUCTURE EDITS ─────────────────────────────────────────────────────────
@@ -4339,6 +4370,7 @@ function copyLogGroup(kind, key) {
   copyText(txt, '✓ ' + (kind === 'm' ? logMonthLabel(key) : logWeekLabel(key)) + ' copied as text');
 }
 function renderLog() {
+  if (statsVisible()) renderStats();   // every archive change re-renders the log — the open stats tab follows
   const c = el('logList'); if (!c) return;
   const items = archive.length ? filteredLog() : [];
   if (logMonthColl === null) {   // first render: only the current month starts expanded
@@ -4899,6 +4931,269 @@ async function deleteLogEntry(id) {
   archive = archive.filter(x => String(x.id) !== String(id));
   saveArchive(); renderLog(); renderLibrary();
   showSave('✕ log entry deleted');
+}
+
+// ── STATS TAB — trends over ISO weeks (Mon–Sun) or, for all time, calendar months ──
+// Monochrome inline SVG on the body chart's chrome (bc-*). Every chart shares one x span
+// (the buckets), so the weekly columns and the per-session lines line up. Each chart has a
+// tap/hover readout and a table twin; ⧉ copies all the tables as text. View settings are
+// session-only, like the log filter.
+let stRange = 12;   // weeks shown; 0 = all time, by calendar month
+let stCode = '';    // '' = every exercise; else one code — scopes the volume + best-set charts
+let stCharts = [];  // per rendered chart: {xs, tips, ys | slot} for the hover readout
+const ST_W = 360, ST_H = 140, ST_L = 34, ST_R = 8, ST_T = 14, ST_B = 18;
+function statsVisible() { const p = el('pane-stats'); return !!(p && p.classList.contains('active')); }
+function stBuckets() {
+  const out = [];
+  if (stRange > 0) {   // the last stRange ISO weeks, the current one included
+    const mon = new Date(); mon.setHours(0, 0, 0, 0);
+    mon.setDate(mon.getDate() - (mon.getDay() + 6) % 7 - (stRange - 1) * 7);
+    for (let i = 0; i < stRange; i++) {
+      const s = new Date(mon); s.setDate(mon.getDate() + i * 7);
+      const e = new Date(s); e.setDate(s.getDate() + 7);
+      out.push({start: s.getTime(), end: e.getTime(), label: logWeekLabel(logWeekKey(s.getTime())),
+        axis: String(s.getDate()).padStart(2, '0') + '.' + String(s.getMonth() + 1).padStart(2, '0')});
+    }
+    return out;
+  }
+  const s = new Date(archive.reduce((m, a) => Math.min(m, a.date || a.id || m), Date.now()));
+  s.setHours(0, 0, 0, 0); s.setDate(1);
+  while (s.getTime() <= Date.now()) {
+    const e = new Date(s); e.setMonth(s.getMonth() + 1);
+    out.push({start: s.getTime(), end: e.getTime(), label: logMonthLabel(logMonthKey(s.getTime())),
+      axis: s.toLocaleDateString('en-GB', {month: 'short'}) + ' ' + String(s.getFullYear()).slice(2)});
+    s.setMonth(s.getMonth() + 1);
+  }
+  return out;
+}
+function stNice(v) { if (!(v > 0)) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+function stCompact(v) { return Math.abs(v) >= 1000 ? Math.round(v / 100) / 10 + 'K' : String(Math.round(v * 10) / 10); }
+function stF(v) { return (+v).toFixed(1); }
+function stGrid(vals, y, fmt) {
+  return vals.map(v => `<line class="st-grid" x1="${ST_L}" y1="${stF(y(v))}" x2="${ST_W - ST_R}" y2="${stF(y(v))}"/>`
+    + `<text class="bc-lbl" x="${ST_L - 4}" y="${stF(y(v) + 3)}" text-anchor="end">${esc(fmt(v))}</text>`).join('');
+}
+function stXLabels(bk) {   // first, middle and last bucket — the table and readout carry the rest
+  const n = bk.length, mid = Math.floor((n - 1) / 2), slot = (ST_W - ST_L - ST_R) / n;
+  const lb = (i, x, anchor) => `<text class="bc-lbl" x="${stF(x)}" y="${ST_H - 5}" text-anchor="${anchor}">${esc(bk[i].axis)}</text>`;
+  return lb(0, ST_L, 'start') + (n > 2 ? lb(mid, ST_L + slot * (mid + .5), 'middle') : '') + (n > 1 ? lb(n - 1, ST_W - ST_R, 'end') : '');
+}
+// a column (or the top segment of a stack): 4px rounded data end, square at the baseline
+function stBarPath(x, w, yt, yb, round) {
+  if (yb - yt < .5) return '';
+  const r = round ? Math.min(4, w / 2, yb - yt) : 0;
+  return `<path d="M${stF(x)} ${stF(yb)}V${stF(yt + r)}`
+    + (r ? `Q${stF(x)} ${stF(yt)} ${stF(x + r)} ${stF(yt)}H${stF(x + w - r)}Q${stF(x + w)} ${stF(yt)} ${stF(x + w)} ${stF(yt + r)}` : `H${stF(x + w)}`)
+    + `V${stF(yb)}Z"/>`;
+}
+function stSvg(title, inner, hover) {
+  const i = stCharts.push(hover) - 1;
+  return `<div class="bc-wrap"><svg viewBox="0 0 ${ST_W} ${ST_H}" class="bc-svg st-svg" data-st="${i}" role="img" aria-label="${esc(title)}">${inner}</svg>`
+    + `<div class="bc-tip st-tip" style="display:none"></div></div>`;
+}
+// columns over the buckets; series = [{cls, vals}] stacked bottom-up (one series = plain columns),
+// a 2px surface gap between stacked segments; direct labels only on the highest and the latest bucket
+function stColumns(bk, s) {
+  const n = bk.length, slot = (ST_W - ST_L - ST_R) / n;
+  const bw = Math.max(1, Math.min(24, slot * .62, slot - 2));
+  const tot = bk.map((_, i) => s.series.reduce((t, x) => t + (x.vals[i] || 0), 0));
+  const max = stNice(Math.max(...tot));
+  const y = v => ST_H - ST_B - v / max * (ST_H - ST_T - ST_B);
+  const xc = i => ST_L + slot * (i + .5);
+  let bars = '';
+  bk.forEach((_, i) => {
+    const segs = s.series.map(x => x.vals[i] || 0);
+    const top = segs.reduce((k, v, j) => v > 0 ? j : k, -1);
+    let base = 0;
+    segs.forEach((v, j) => {
+      if (!(v > 0)) return;
+      const yb = y(base) - (base > 0 ? 2 : 0);
+      base += v;
+      bars += `<g class="${s.series[j].cls}">${stBarPath(xc(i) - bw / 2, bw, y(base), yb, j === top)}</g>`;
+    });
+  });
+  const iMax = tot.indexOf(Math.max(...tot)), last = n - 1;
+  const vlbl = i => `<text class="bc-vlbl" x="${stF(Math.max(ST_L + 12, Math.min(ST_W - ST_R - 12, xc(i))))}" y="${stF(y(tot[i]) - 4)}" text-anchor="middle">${esc(s.fmt(tot[i]))}</text>`;
+  const near = Math.abs(xc(last) - xc(iMax)) < 34 && Math.abs(y(tot[last]) - y(tot[iMax])) < 12;   // the two labels would collide
+  const labels = (tot[iMax] > 0 ? vlbl(iMax) : '') + (last !== iMax && tot[last] > 0 && !near ? vlbl(last) : '');
+  return stSvg(s.title, `<rect class="st-hl" x="0" y="${ST_T}" width="0" height="${ST_H - ST_T - ST_B}" style="display:none"/>`
+    + stGrid([0, max / 2, max], y, s.fmt) + stXLabels(bk) + bars + labels,
+    {xs: bk.map((_, i) => xc(i)), tips: s.tips, slot});
+}
+// one value per session across the buckets' span; pts = [{t, v, tip}] oldest first
+function stLine(bk, s) {
+  const pts = s.pts, t0 = bk[0].start, t1 = bk[bk.length - 1].end;
+  const x = t => ST_L + (t - t0) / (t1 - t0) * (ST_W - ST_L - ST_R);
+  const dMin = Math.min(...pts.map(p => p.v)), dMax = Math.max(...pts.map(p => p.v));
+  let lo = dMin, hi = dMax;
+  if (hi - lo < 1e-9) { lo -= Math.max(1, Math.abs(lo) * .1); hi += Math.max(1, Math.abs(hi) * .1); }
+  const pad = (hi - lo) * .12; lo -= pad; hi += pad;
+  const y = v => ST_T + (hi - v) / (hi - lo) * (ST_H - ST_T - ST_B);
+  const xs = pts.map(p => x(p.t)), ys = pts.map(p => y(p.v));
+  const path = pts.length > 1 ? `<path class="st-line" d="${xs.map((px, i) => (i ? 'L' : 'M') + stF(px) + ' ' + stF(ys[i])).join('')}"/>` : '';
+  const r = pts.length > 40 ? 2.5 : 4;
+  const dots = xs.map((px, i) => `<circle class="st-dot" cx="${stF(px)}" cy="${stF(ys[i])}" r="${r}"/>`).join('');
+  const iMax = pts.findIndex(p => p.v === dMax), last = pts.length - 1;
+  const vlbl = (i, below) => `<text class="bc-vlbl" x="${stF(Math.max(ST_L + 12, Math.min(ST_W - ST_R - 12, xs[i])))}" y="${stF(ys[i] + (below ? 15 : -8))}" text-anchor="middle">${esc(s.fmt(pts[i].v))}</text>`;
+  const below = ys[last] < ST_T + 20;
+  const near = Math.abs(xs[last] - xs[iMax]) < 34 && Math.abs(ys[last] + (below ? 15 : -8) - ys[iMax] + 8) < 12;   // the two labels would collide
+  const labels = vlbl(iMax, false) + (last !== iMax && !near ? vlbl(last, below) : '');
+  return stSvg(s.title, stGrid(dMin === dMax ? [dMin] : [dMin, (dMin + dMax) / 2, dMax], y, s.fmt) + stXLabels(bk) + path + dots + labels
+    + `<g class="st-hover" style="display:none"><line class="st-hx" x1="0" y1="${ST_T}" x2="0" y2="${ST_H - ST_B}"/><circle class="st-hc" r="4.5"/></g>`,
+    {xs, ys, tips: pts.map(p => p.tip)});
+}
+// nearest bucket / session under the pointer — tap works on touch and e-ink
+function initStatsHover(root) {
+  root.querySelectorAll('.st-svg').forEach(svg => {
+    const h = stCharts[+svg.dataset.st], tip = svg.nextElementSibling;
+    if (!h || !h.xs.length || !tip) return;
+    const hl = svg.querySelector('.st-hl, .st-hover');
+    const show = evt => {
+      const r = svg.getBoundingClientRect();
+      const mx = (evt.clientX - r.left) / r.width * ST_W;
+      let best = 0, bd = Infinity;
+      h.xs.forEach((px, i) => { const d = Math.abs(px - mx); if (d < bd) { bd = d; best = i; } });
+      const px = h.xs[best];
+      if (h.slot) { hl.setAttribute('x', stF(px - h.slot / 2)); hl.setAttribute('width', stF(h.slot)); }
+      else {
+        const hx = hl.querySelector('.st-hx'), hc = hl.querySelector('.st-hc');
+        hx.setAttribute('x1', stF(px)); hx.setAttribute('x2', stF(px));
+        hc.setAttribute('cx', stF(px)); hc.setAttribute('cy', stF(h.ys[best]));
+      }
+      hl.style.display = '';
+      tip.textContent = h.tips[best];
+      tip.style.display = 'block';
+      tip.style.left = Math.max(0, Math.min(r.width - tip.offsetWidth, px / ST_W * r.width - tip.offsetWidth / 2)) + 'px';
+    };
+    svg.addEventListener('pointermove', show);
+    svg.addEventListener('pointerdown', show);
+    svg.addEventListener('pointerleave', () => { hl.style.display = 'none'; tip.style.display = 'none'; });
+  });
+}
+// exercise codes that carry volume anywhere in the log, with their latest name
+function statsCodes() {
+  const m = new Map();
+  [...archive].sort((a, b) => (a.date || a.id || 0) - (b.date || b.id || 0)).forEach(a => (a.entries || []).forEach(e => {
+    const cd = (e.code || '').trim();
+    if (cd && exVolume(e) > 0) m.set(cd, (e.name || '').trim() || m.get(cd) || '');
+  }));
+  return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+// best set of one logged exercise — Epley estimate kg × (1 + reps/30); a single counts as its weight
+function bestSetOf(e) {
+  let best = null;
+  (e.sets || []).forEach(s => {
+    const r = plainNum(s.reps), w = plainNum(s.weight);
+    if (!(r > 0 && w > 0)) return;
+    const v = r === 1 ? w : w * (1 + r / 30);
+    if (!best || v > best.v) best = {v, txt: r + ' × ' + fmtKg(w) + ' kg'};
+  });
+  return best;
+}
+// every chart's data — shared by the render and the ⧉ text copy. A section is either a chart
+// ({kind:'cols', series, tips} / {kind:'line', pts}) with a table ({head, rows}) or {empty: text}
+function statsSections() {
+  const bk = stBuckets(), n = bk.length, unit = stRange ? 'week' : 'month';
+  const t0 = bk[0].start, t1 = bk[n - 1].end;
+  const items = archive.filter(a => { const t = a.date || a.id || 0; return t >= t0 && t < t1; })
+    .sort((a, b) => (a.date || a.id || 0) - (b.date || b.id || 0));
+  const bi = a => { const t = a.date || a.id || 0; return bk.findIndex(b => t >= b.start && t < b.end); };
+  const per = () => bk.map(() => 0);
+  const anyOf = vals => vals.some(v => v > 0);
+  const S = [];
+  // 1 · training time — every logged session, activities included
+  const sec = per(), cnt = per();
+  items.forEach(a => { const i = bi(a); if (i >= 0) { sec[i] += a.totalSec || 0; cnt[i]++; } });
+  S.push(anyOf(cnt) ? {title: 'Training time', sub: 'hours per ' + unit + ' — every logged session, activities included', kind: 'cols',
+    series: [{cls: 'st-bar', vals: sec.map(v => v / 3600)}], fmt: v => stCompact(v) + 'h',
+    tips: bk.map((b, i) => (cnt[i] ? fmtEst(sec[i]) + ' · ' + cnt[i] + '×' : 'nothing logged') + '\n' + b.label),
+    head: [unit, 'sessions', 'time'], rows: bk.map((b, i) => cnt[i] ? [b.label, cnt[i], fmtEst(sec[i])] : null).filter(Boolean)}
+    : {title: 'Training time', empty: 'Nothing logged in this range.'});
+  // 2 · strength volume — all exercises or the picked code
+  const vol = per();
+  items.forEach(a => { const i = bi(a); if (i >= 0) (a.entries || []).forEach(e => { if (!stCode || (e.code || '').trim() === stCode) vol[i] += exVolume(e); }); });
+  const vTitle = 'Strength volume' + (stCode ? ' — ' + stCode : '');
+  S.push(anyOf(vol) ? {title: vTitle, sub: 'Σ reps × kg per ' + unit + ' — an L/R set counts both sides', kind: 'cols',
+    series: [{cls: 'st-bar', vals: vol}], fmt: stCompact,
+    tips: bk.map((b, i) => (vol[i] ? fmtVol(vol[i]) : 'no weighted sets') + '\n' + b.label),
+    head: [unit, 'volume'], rows: bk.map((b, i) => vol[i] ? [b.label, fmtVol(vol[i])] : null).filter(Boolean)}
+    : {title: vTitle, empty: 'No sets with reps and weight in this range.'});
+  // 3 · best set of the picked exercise, one point per session
+  if (stCode) {
+    const pts = [];
+    items.forEach(a => {
+      let best = null;
+      (a.entries || []).forEach(e => { if ((e.code || '').trim() !== stCode) return; const b = bestSetOf(e); if (b && (!best || b.v > best.v)) best = b; });
+      if (best) { const t = a.date || a.id; pts.push({t, v: best.v, txt: best.txt, tip: fmtKg(best.v) + ' kg est. 1RM\n' + best.txt + ' · ' + wkHistDate(t)}); }
+    });
+    S.push(pts.length ? {title: 'Best set — ' + stCode, sub: 'estimated 1-rep max per session (Epley: kg × (1 + reps/30))', kind: 'line', pts, fmt: v => stCompact(v),
+      head: ['date', 'est. 1RM', 'best set'], rows: pts.slice().reverse().map(p => [wkHistDate(p.t), fmtKg(p.v) + ' kg', p.txt])}
+      : {title: 'Best set — ' + stCode, empty: 'No sets with reps and weight for ' + stCode + ' in this range.'});
+  } else S.push({title: 'Best set', empty: 'Pick an exercise above to follow its best set (estimated 1-rep max).'});
+  // 4 · time in HR zones — the configured zones only, stacked Z1 (light) → Z5 (black)
+  const zi = hrZones.zones.map((z, k) => z != null ? k : -1).filter(k => k >= 0);
+  const zm = zi.map(() => per());
+  items.forEach(a => { const i = bi(a); if (i >= 0 && Array.isArray(a.hrZoneSec)) zi.forEach((k, j) => { zm[j][i] += (+a.hrZoneSec[k] || 0) / 60; }); });
+  const zTot = bk.map((_, i) => zm.reduce((t, z) => t + z[i], 0));
+  const zTxt = i => zi.map((k, j) => 'Z' + (k + 1) + ' ' + Math.round(zm[j][i])).join(' · ');
+  S.push(!zi.length ? {title: 'Time in HR zones', empty: 'Set your heart-rate zones first — the chart stacks the time spent in each.'}
+    : anyOf(zTot) ? {title: 'Time in HR zones', sub: 'minutes per ' + unit + ' — sessions recorded with the HR sensor', kind: 'cols',
+      series: zi.map((k, j) => ({cls: 'st-z' + (k + 1), name: 'Z' + (k + 1), vals: zm[j]})), fmt: v => stCompact(v) + 'm',
+      tips: bk.map((b, i) => (zTot[i] ? Math.round(zTot[i]) + ' min in zones\n' + zTxt(i) : 'no HR recording') + '\n' + b.label),
+      head: [unit, ...zi.map(k => 'Z' + (k + 1)), 'total'], rows: bk.map((b, i) => zTot[i] ? [b.label, ...zm.map(z => Math.round(z[i])), Math.round(zTot[i])] : null).filter(Boolean)}
+    : {title: 'Time in HR zones', empty: 'No session recorded with the HR sensor in this range.'});
+  // 5 · bike power per ride, 6 · power per heartbeat (fitness: more watts at the same pulse)
+  const rides = items.filter(a => a.bike && +a.bike.avgW > 0);
+  const bpts = rides.map(a => { const t = a.date || a.id, b = a.bike; return {t, v: +b.avgW,
+    tip: b.avgW + ' W avg\nmax ' + b.maxW + ' W · ' + b.avgRpm + ' rpm · ' + b.kj + ' kJ\n' + wkHistDate(t)}; });
+  S.push(bpts.length ? {title: 'Bike power', sub: 'average watts per ride', kind: 'line', pts: bpts, fmt: v => stCompact(v),
+    head: ['date', 'avg W', 'max W', 'rpm', 'km', 'kJ'], rows: rides.slice().reverse().map(a => [wkHistDate(a.date || a.id), a.bike.avgW, a.bike.maxW, a.bike.avgRpm, (+a.bike.distKm || 0).toFixed(1), a.bike.kj])}
+    : {title: 'Bike power', empty: 'No ride recorded from the exercise bike in this range.'});
+  const eff = rides.filter(a => +a.hrAvg > 0);
+  const epts = eff.map(a => { const t = a.date || a.id, v = a.bike.avgW / a.hrAvg; return {t, v,
+    tip: v.toFixed(2) + ' W per bpm\n' + a.bike.avgW + ' W at ' + a.hrAvg + ' bpm avg\n' + wkHistDate(t)}; });
+  S.push(epts.length ? {title: 'Power per heartbeat', sub: 'average watts ÷ average heart rate — rising = fitter at the same effort', kind: 'line', pts: epts, fmt: v => v.toFixed(2),
+    head: ['date', 'W/bpm', 'avg W', 'avg HR'], rows: eff.slice().reverse().map(a => [wkHistDate(a.date || a.id), (a.bike.avgW / a.hrAvg).toFixed(2), a.bike.avgW, a.hrAvg])}
+    : {title: 'Power per heartbeat', empty: 'Needs rides with both the bike power and an average heart rate.'});
+  return {bk, unit, sections: S};
+}
+function stRangeLabel() { return stRange ? 'last ' + stRange + ' weeks' : 'all time'; }
+function renderStats() {
+  const c = el('statsBody'); if (!c) return;
+  stCharts = [];
+  const codes = statsCodes();
+  if (stCode && !codes.some(([cd]) => cd === stCode)) stCode = '';
+  const ctrls = `<div class="st-ctrls">
+    <select class="bf-in" onchange="stRange=+this.value;renderStats()" title="time span — weeks run Mon–Sun, all time goes by month">
+      ${[[12, '12 weeks'], [26, '26 weeks'], [52, '1 year'], [0, 'all time (months)']].map(([v, l]) => `<option value="${v}"${v === stRange ? ' selected' : ''}>${l}</option>`).join('')}</select>
+    <select class="bf-in" onchange="stCode=this.value;renderStats()" title="exercise for the volume and best-set charts">
+      <option value="">all exercises</option>${codes.map(([cd, nm]) => `<option value="${esc(cd)}"${cd === stCode ? ' selected' : ''}>${esc(cd + (nm && nm !== cd ? ' ' + nm : ''))}</option>`).join('')}</select>
+    <button class="btn-io" style="flex:0 0 auto" onclick="copyStatsText()" title="copy the numbers behind every chart as plain text">⧉ text</button>
+  </div>`;
+  if (!archive.length) { c.innerHTML = ctrls + '<p class="lib-empty">Nothing logged yet.</p>'; return; }
+  const {bk, sections} = statsSections();
+  c.innerHTML = ctrls + sections.map(s => {
+    const head = `<div class="st-h">${esc(s.title)}${s.sub ? `<span class="st-sub">${esc(s.sub)}</span>` : ''}</div>`;
+    if (s.empty) return `<div class="st-sec">${head}<p class="st-empty">${esc(s.empty)}</p></div>`;
+    const legend = s.series && s.series.length > 1
+      ? `<div class="st-legend">${s.series.map(x => `<span><span class="st-sw ${x.cls}"></span>${esc(x.name)}</span>`).join('')}</div>` : '';
+    const table = `<details class="st-tbl"><summary>table</summary><table><tr>${s.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr>`
+      + s.rows.map(r => `<tr>${r.map(v => `<td>${esc(String(v))}</td>`).join('')}</tr>`).join('') + `</table></details>`;
+    return `<div class="st-sec">${head}${legend}${s.kind === 'cols' ? stColumns(bk, s) : stLine(bk, s)}${table}</div>`;
+  }).join('');
+  initStatsHover(c);
+}
+function copyStatsText() {
+  if (!archive.length) { showStatusMsg('⚠ nothing logged yet'); return; }
+  const {sections} = statsSections();
+  const out = ['STATS · ' + stRangeLabel() + (stCode ? ' · exercise ' + stCode : '')];
+  sections.forEach(s => {
+    out.push('', s.title + (s.sub ? ' — ' + s.sub : ''));
+    if (s.empty) { out.push('  ' + s.empty); return; }
+    out.push('  ' + s.head.join(' · '));
+    s.rows.forEach(r => out.push('  ' + r.join(' · ')));
+  });
+  copyText(out.join('\n'), '✓ stats copied as text');
 }
 
 // ── BODY MEASUREMENTS (Tanita) ──────────────────────────────────────────────
