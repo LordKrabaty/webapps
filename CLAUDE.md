@@ -6,6 +6,7 @@
 C:\dev\webapps\
 ├── CLAUDE.md
 ├── README.md
+├── _inbox-webapps\        ← podklady k promptům (není app)
 ├── _template\index.html   ← základ pro každou novou app
 ├── tea-app\index.html
 ├── workout-app\index.html
@@ -14,6 +15,14 @@ C:\dev\webapps\
 
 Každá app = samostatná složka s `index.html`.
 Před prací na konkrétní app si přečti její složku — může obsahovat vlastní `CLAUDE.md` s app-specifickými doplňky.
+
+### `_inbox-webapps\` — podklady k promptům
+
+Sem občas dám soubory, které upřesňují zadání (screenshoty, exporty dat, ukázky, specifikace, …).
+
+- Když se prompt odkazuje na soubor bez cesty („viz screenshot", „přiložil jsem", „soubor v inboxu"), **hledej nejdřív tady**.
+- Je to jen vstup pro tebe: soubory **neměň, nemaž ani nepřesouvej**, pokud to neřeknu; nekopíruj je do appek a neodkazuj na ně z rozcestníku.
+- Složka **není v `.gitignore`** (záměrně), ale **obsah necommituj sám od sebe** — jen když to řeknu. Repo se publikuje na GitHub Pages, takže by se podklady (často osobní data) zveřejnily.
 
 ---
 
