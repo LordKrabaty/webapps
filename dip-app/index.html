@@ -1,0 +1,2702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dip-app</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --w:#ffffff;--off:#f2f2f2;--light:#e0e0e0;--mid:#aaaaaa;
+  --muted:#777777;--dark:#333333;--black:#000000;
+  --b:1.5px solid #aaaaaa;--bh:1.5px solid #000000;--r:4px;
+  --fs:1;
+}
+html{font-size:calc(16px * var(--fs))}
+html.dark{
+  --w:#000000;--off:#111111;--light:#222222;--mid:#555555;
+  --muted:#888888;--dark:#cccccc;--black:#ffffff;
+  --b:1.5px solid #555555;--bh:1.5px solid #ffffff;
+}
+html.dark body{background:var(--w);color:var(--black)}
+html.dark .lib-item.active{background:var(--black);border-color:var(--black)}
+html.dark .lib-item.active .lib-item-name{color:var(--w)}
+html.dark .lib-item.active .lib-item-del svg{stroke:var(--mid)}
+html.dark .lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){html.dark .btn-lib.primary:hover{background:var(--dark)}}
+@media(hover:hover){html.dark .btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+
+/* dark mode toggle */
+#darkToggle{font-size:1rem;width:34px;height:34px;border:var(--bh);border-radius:50%;background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
+@media(hover:hover){#darkToggle:hover{background:var(--light)}}
+
+/* Gist sync */
+.sync-group{display:flex;align-items:center;gap:.15rem}
+.btn-sync{font-size:.85rem;width:32px;height:32px;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s;font-family:'DM Mono',monospace}
+@media(hover:hover){.btn-sync:hover{background:var(--light)}}
+.btn-sync:active{background:var(--light)}
+.btn-sync:disabled{opacity:.4;cursor:default}
+.btn-sync.on{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.btn-sync.on:hover{background:var(--dark)}}
+.btn-sync.syncing{animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:.3}}
+.btn-sync-cfg{width:20px;height:20px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:3px;padding:0;line-height:1}
+@media(hover:hover){.btn-sync-cfg:hover{color:var(--black)}}
+#statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
+#statusToast{display:none;position:fixed;top:.7rem;left:50%;transform:translateX(-50%);z-index:300;background:var(--w);color:var(--black);border:var(--bh);border-radius:var(--r);padding:.45rem .85rem;font-size:.78rem;font-family:'DM Mono',monospace;letter-spacing:.03em;max-width:min(480px,92vw);text-align:center;pointer-events:none}
+.jb-field{display:flex;flex-direction:column;gap:.3rem}
+.jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
+.jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
+#importModal.from-cloud .jb-import-hide{display:none!important}
+
+/* export/import buttons */
+.lib-io{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.1rem}
+.btn-io{flex:1;font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.32rem .4rem;cursor:pointer;text-align:center;white-space:nowrap}
+.btn-io:active{background:var(--off);border-color:var(--dark)}
+@media(hover:hover){.btn-io:hover{background:var(--off);border-color:var(--dark)}}
+
+/* modal overlay */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
+html.dark .modal-bg{background:rgba(255,255,255,.25)}
+.modal-bg.open{display:flex}
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
+.modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+.gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
+.gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
+.gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
+.gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
+.gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
+.modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
+@media(hover:hover){.modal-item:hover{background:var(--off)}}
+.modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
+.modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
+@media(hover:hover){.modal-btn:hover{background:var(--light)}}
+.modal-btn.primary{background:var(--black);color:var(--w)}
+@media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
+.modal-btn.danger{border-color:#c0392b;color:#c0392b}
+@media(hover:hover){.modal-btn.danger:hover{background:#c0392b;color:var(--w)}}
+html{-webkit-text-size-adjust:100%;overflow-x:clip}
+body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min-height:100vh;overflow-x:clip}
+
+.app{
+  padding:calc(1.25rem/var(--pzc,1)) calc(1.25rem/var(--pzc,1)) calc(1.5rem/var(--pzc,1));
+  display:grid;grid-template-columns:210px minmax(0,1fr) 440px;
+  gap:calc(1.25rem/var(--pzc,1));
+  overflow-x:clip;
+  max-width:1480px;
+  margin:0 auto;
+}
+
+/* HEADER */
+header{
+  position:sticky;top:0;z-index:50;background:var(--w);
+  display:flex;align-items:baseline;
+  justify-content:space-between;
+  padding:calc(.9rem/var(--pzc,1)) calc(1.25rem/var(--pzc,1)) calc(.85rem/var(--pzc,1));
+  border-bottom:2.5px solid var(--black);flex-wrap:wrap;gap:.5rem;
+}
+.brand{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.brand h1{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:600;color:var(--black);letter-spacing:-.02em;line-height:1}
+.header-sep{font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:var(--mid);display:none}
+.header-sub{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:500;color:var(--dark);font-style:italic;display:none;letter-spacing:-.01em}
+.header-right{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+
+.btn-sm{font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.38rem .8rem;cursor:pointer;transition:background .08s;letter-spacing:.02em}
+.btn-sm:active{background:var(--light)}
+@media(hover:hover){.btn-sm:hover{background:var(--light)}}
+.btn-sm.danger:active{background:var(--black);color:var(--w)}
+@media(hover:hover){.btn-sm.danger:hover{background:var(--black);color:var(--w)}}
+
+/* CARDS */
+.card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:calc(1rem/var(--pzc,1)) calc(1.15rem/var(--pzc,1));overflow:hidden;position:relative}
+.card-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:var(--black);letter-spacing:.07em;text-transform:uppercase;margin-bottom:calc(.7rem/var(--pzc,1));padding-bottom:.4rem;border-bottom:1.5px solid var(--black)}
+.card-title-text svg{display:block;stroke:var(--black);width:17px;height:17px}
+
+/* LIBRARY */
+.library-panel{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:calc(.75rem/var(--pzc,1));min-width:0}
+.lib-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:calc(.9rem/var(--pzc,1)) calc(1rem/var(--pzc,1));display:flex;flex-direction:column;gap:calc(.32rem/var(--pzc,1));flex:1;position:relative;min-width:0;overflow:hidden}
+.lib-item{display:flex;align-items:center;gap:.35rem;padding:calc(.42rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));border-radius:var(--r);border:1.5px solid transparent;cursor:pointer;min-width:0;overflow:hidden}
+.lib-item:active{background:var(--off);border-color:var(--mid)}
+@media(hover:hover){.lib-item:hover{background:var(--off);border-color:var(--mid)}}
+.lib-item.active{background:var(--black);border-color:var(--black)}
+.lib-item.active .lib-item-name{color:var(--w)}
+.lib-item-name{flex:1;font-size:.85rem;color:var(--black);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3}
+.lib-item-del{width:22px;height:22px;border-radius:3px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0}
+.lib-item.active .lib-item-del{opacity:.55}
+@media(hover:hover){.lib-item:hover .lib-item-del{opacity:.55}}
+@media(hover:hover){.lib-item-del:hover{opacity:1!important;background:rgba(0,0,0,.1)}}
+.lib-item-del svg{width:10px;height:10px;stroke:var(--w);fill:none;stroke-width:2.5;stroke-linecap:round}
+.lib-item:not(.active) .lib-item-del svg{stroke:var(--black)}
+.lib-empty{font-size:.82rem;color:var(--muted);font-style:italic;padding:.1rem}
+.lib-cat-header{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.55rem .55rem .1rem;margin-top:.1rem}
+.lib-cat-header:first-child{margin-top:0;padding-top:.1rem}
+.btn-lib{width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.42rem .6rem;cursor:pointer;text-align:center;letter-spacing:.02em}
+.btn-lib:active{background:var(--light)}
+@media(hover:hover){.btn-lib:hover{background:var(--light)}}
+.btn-lib.primary{background:var(--black);color:var(--w);border-color:var(--black)}
+.btn-lib.primary:active{background:var(--dark)}
+@media(hover:hover){.btn-lib.primary:hover{background:var(--dark)}}
+
+/* MAIN */
+.main-panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:calc(1rem/var(--pzc,1));min-width:0}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:calc(.9rem/var(--pzc,1)) calc(1.5rem/var(--pzc,1))}
+.field{display:flex;flex-direction:column;gap:calc(.3rem/var(--pzc,1))}
+.field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.field input[type="text"],.field input[type="number"],.field select{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.44rem .7rem;outline:none}
+.field input:focus,.field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.field select{cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .6rem center;padding-right:1.8rem}
+input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:var(--black);border-radius:1px;outline:none;cursor:pointer;margin:.35rem 0}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--w);border:2.5px solid var(--black);cursor:pointer}
+html.dark input[type="range"]::-webkit-slider-thumb{background:var(--w)}
+
+/* CHECKS */
+.checks-row{display:flex;gap:calc(.5rem/var(--pzc,1));flex-wrap:wrap}
+.check-item{display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none;padding:.42rem .72rem .42rem .5rem;border-radius:var(--r);border:var(--bh);background:var(--w);font-size:.85rem;color:var(--dark)}
+.check-item:active{background:var(--off)}
+@media(hover:hover){.check-item:hover{background:var(--off)}}
+.check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+.check-box{width:17px;height:17px;border:2px solid var(--mid);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--w)}
+.check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+html.dark .check-item.checked{background:var(--black);border-color:var(--black);color:var(--w)}
+html.dark .check-item.checked .check-box{background:var(--w);border-color:var(--w)}
+.check-mark{width:9px;height:6px;border-left:2px solid var(--black);border-bottom:2px solid var(--black);transform:rotate(-45deg) translateY(-1px);opacity:0}
+.check-item.checked .check-mark{opacity:1}
+html.dark .check-item.checked .check-mark{border-color:var(--black)}
+
+/* NOTES */
+.notes-panel{grid-column:3;grid-row:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;min-width:0}
+.notes-card{background:var(--w);border:var(--bh);border-radius:var(--r);padding:calc(.95rem/var(--pzc,1)) calc(1.05rem/var(--pzc,1));flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.card-controls{position:absolute;top:.4rem;right:.5rem;display:flex;align-items:center;gap:.15rem;z-index:2}
+textarea{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:max(1.4,calc(1.8/var(--pzc,1)));color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:calc(.7rem/var(--pzc,1)) calc(.75rem/var(--pzc,1));outline:none;resize:none;flex:1;min-height:220px}
+textarea:focus{outline:2px solid var(--black);outline-offset:1px}
+textarea::placeholder{color:var(--mid)}
+
+/* dirty / undo */
+.btn-lib.dirty{background:var(--w);color:var(--black);border:var(--bh);font-weight:600}
+.btn-lib.dirty::before{content:'! ';color:var(--black)}
+.btn-sm.dirty{font-weight:700}
+.btn-sm.dirty::before{content:'! '}
+.btn-sm.saved{color:var(--muted);border-color:var(--light);pointer-events:none}
+#undoBtn,#redoBtn{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.33rem .65rem;cursor:pointer;transition:all .1s;letter-spacing:.02em}
+@media(hover:hover){#undoBtn:not(:disabled):hover,#redoBtn:not(:disabled):hover{background:var(--light);color:var(--black);border-color:var(--dark)}}
+#undoBtn:disabled,#redoBtn:disabled{opacity:.3;cursor:default}
+
+/* FONT SIZE CONTROL */
+.fs-ctrl{display:flex;align-items:center;border:var(--bh);border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.fs-btn{width:28px;height:28px;border:none;background:var(--w);color:var(--black);cursor:pointer;font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fs-btn:active{background:var(--light)}
+@media(hover:hover){.fs-btn:hover{background:var(--light)}}
+.fs-val{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);padding:0 .3rem;border-left:var(--b);border-right:var(--b);line-height:28px;white-space:nowrap;min-width:36px;text-align:center}
+
+/* EXPAND / FULLSCREEN PANEL */
+.card-title{display:flex;align-items:center;gap:.3rem;flex-wrap:nowrap}
+.expand-btn{width:18px;height:18px;border:var(--b);border-radius:2px;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45;transition:opacity .15s;margin-left:.2rem}
+.expand-btn:active{opacity:1;background:var(--off)}
+@media(hover:hover){.expand-btn:hover{opacity:1;background:var(--off)}}
+.expand-btn svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel-expanded{position:fixed!important;inset:0!important;z-index:80;border-radius:0!important;overflow-y:auto;padding:calc(1.1rem/var(--pzc,1)) calc(1.3rem/var(--pzc,1))!important;background:var(--w)!important;border:none!important;display:flex;flex-direction:column}
+.notes-card.panel-expanded{overflow:hidden}
+.panel-expanded .expand-btn{opacity:1}
+.expand-esc{font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;margin-left:.4rem;letter-spacing:.04em}
+
+/* PER-PANEL FONT SIZE */
+.pfs-ctrl{display:flex;align-items:center;gap:0;margin-left:.3rem;flex-shrink:0}
+.pfs-btn{width:15px;height:15px;border:var(--b);background:none;color:var(--black);cursor:pointer;font-size:.68rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.45}
+.pfs-btn:first-child{border-radius:2px 0 0 2px}
+.pfs-btn:last-child{border-radius:0 2px 2px 0;border-left:none}
+.pfs-btn:active{background:var(--off);opacity:1}
+@media(hover:hover){.pfs-btn:hover{background:var(--off);opacity:1}}
+.pfs-val{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted);padding:0 .12rem;border-top:var(--b);border-bottom:var(--b);line-height:17px;min-width:22px;text-align:center;white-space:nowrap}
+.card-title-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* MOBILE LIB TOGGLE */
+#libToggleBtn{display:inline-flex;align-items:center;font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.35rem .7rem;border:var(--bh);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;white-space:nowrap}
+.library-panel.lib-hidden{display:none!important}
+
+/* NEW MENU DROPDOWN */
+.new-menu{position:fixed;background:var(--w);border:var(--bh);border-radius:var(--r);z-index:200;min-width:160px;flex-direction:column;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.new-menu-item{background:none;border:none;padding:.38rem .72rem;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.8rem;text-align:left;color:var(--black);white-space:nowrap;width:100%;border-radius:0}
+@media(hover:hover){.new-menu-item:hover{background:var(--off)}}
+.new-menu-sep{height:1px;background:var(--light);margin:.2rem 0}
+
+/* TOUCH DEVICE TWEAKS */
+@media(hover:none){
+  .lib-item:not(.active) .lib-item-del{opacity:.45}
+}
+
+/* RESPONSIVE */
+@media(max-width:1020px){
+  .app{grid-template-columns:185px 1fr;padding:calc(1rem/var(--pzc,1)) calc(1rem/var(--pzc,1)) calc(1.5rem/var(--pzc,1))}
+  .notes-panel{grid-column:1/-1;grid-row:2}
+}
+@media(max-width:820px){
+  .app{grid-template-columns:1fr;padding:calc(1rem/var(--pzc,1)) calc(.85rem/var(--pzc,1));gap:calc(.85rem/var(--pzc,1))}
+  .library-panel,.main-panel,.notes-panel{grid-column:1!important;grid-row:auto!important}
+  .setup-grid{grid-template-columns:1fr 1fr}
+  header{flex-direction:column;align-items:flex-start;gap:.35rem;padding:calc(.65rem/var(--pzc,1)) calc(.85rem/var(--pzc,1)) calc(.65rem/var(--pzc,1))}
+  .brand h1{font-size:1.5rem}
+  .header-sub,.header-sep{font-size:1.15rem}
+  .header-right{gap:.4rem}
+  #libList{display:flex;flex-direction:column;gap:.15rem}
+  textarea{min-height:100px}
+}
+@media(max-width:820px){
+  header{flex-wrap:wrap;row-gap:.5rem;padding-bottom:calc(.85rem/var(--pzc,1))}
+  .header-right{flex-wrap:wrap;gap:.35rem}
+}
+@media(max-width:400px){
+  .app{padding:calc(.75rem/var(--pzc,1)) calc(.65rem/var(--pzc,1));gap:calc(.7rem/var(--pzc,1))}
+  .setup-grid{grid-template-columns:1fr}
+  .checks-row{gap:calc(.35rem/var(--pzc,1))}
+}
+
+/* NOTES TABS (optional — keep for multi-pane notes) */
+.notes-tabs{display:flex;border-bottom:var(--bh);margin-bottom:calc(.75rem/var(--pzc,1));gap:0}
+.notes-tab{font-family:'DM Sans',sans-serif;font-size:.78rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:.4rem .85rem;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .1s}
+.notes-tab.active{color:var(--black);border-bottom-color:var(--black)}
+@media(hover:hover){.notes-tab:hover:not(.active){color:var(--dark)}}
+.notes-pane{display:none;flex-direction:column;flex:1;min-height:0;gap:calc(.55rem/var(--pzc,1))}
+.notes-pane.active{display:flex}
+
+/* FIELD placeholder state */
+.field input:placeholder-shown:not(:focus){background:var(--off);border-color:var(--light)}
+
+/* ── DIP-APP ─────────────────────────────────────────────────────────── */
+.field input{width:100%;min-width:0}
+.field input[type="date"]{font-family:'DM Sans',sans-serif;font-size:.95rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.38rem .6rem;outline:none}
+html.dark input[type="date"]{color-scheme:dark}
+
+/* library */
+.lib-search{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.36rem .55rem;outline:none}
+.lib-search:focus{outline:2px solid var(--black);outline-offset:1px}
+.lib-btns{display:flex;flex-direction:column;gap:calc(.3rem/var(--pzc,1));margin-bottom:calc(.2rem/var(--pzc,1))}
+#libList{display:flex;flex-direction:column;gap:calc(.1rem/var(--pzc,1))}
+.lib-item-name b{font-weight:600}
+.lib-item-n{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);flex-shrink:0}
+.lib-item.active .lib-item-n{color:var(--mid)}
+
+/* main — recipe */
+#panel-main{container-type:inline-size}
+.empty-state{display:flex;flex-direction:column;gap:calc(.7rem/var(--pzc,1));font-size:.88rem;color:var(--dark);line-height:1.5;padding:calc(.4rem/var(--pzc,1)) 0}
+.empty-state .modal-row .btn-lib{flex:1;width:auto}
+.var-chips{display:flex;flex-wrap:wrap;gap:calc(.3rem/var(--pzc,1));align-items:center;margin-bottom:calc(.75rem/var(--pzc,1))}
+.var-chips-label{font-size:.68rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-right:.15rem}
+.chip{font-family:'DM Mono',monospace;font-size:.76rem;padding:.22rem .55rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);cursor:pointer;max-width:12rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.on{background:var(--black);color:var(--w);border-color:var(--black)}
+@media(hover:hover){.chip:not(.on):hover{background:var(--off);border-color:var(--dark)}}
+.hg{display:grid;gap:calc(.6rem/var(--pzc,1)) calc(.8rem/var(--pzc,1));margin-bottom:calc(.65rem/var(--pzc,1))}
+.hg-sol{grid-template-columns:minmax(0,9rem) minmax(0,1fr)}
+.hg-var{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+.rc{display:flex;flex-direction:column;margin-top:calc(.5rem/var(--pzc,1))}
+.rc-grid{display:grid;grid-template-columns:minmax(0,1fr) 3.9rem 4.9rem 3.9rem 3.9rem 3.9rem 3.6rem 3.4rem;grid-template-areas:"name conc m dip solid wet price act";column-gap:.35rem;align-items:center}
+.a-name{grid-area:name;min-width:0}.a-conc{grid-area:conc;min-width:0}.a-m{grid-area:m;min-width:0}.a-dip{grid-area:dip}.a-solid{grid-area:solid}.a-wet{grid-area:wet}.a-price{grid-area:price}.a-act{grid-area:act}
+.rc-head{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:.3rem;border-bottom:1.5px solid var(--black)}
+.rc-head span{text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-head .a-name{text-align:left}
+.num{display:block;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.num-dash{color:var(--mid)}
+.rc-row{padding:calc(.26rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light)}
+.rc-in{width:100%;min-width:0;font-family:'DM Mono',monospace;font-size:.82rem;text-align:right;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .35rem;outline:none}
+.rc-in:focus{outline:2px solid var(--black);outline-offset:0;border-color:var(--black)}
+.rc-in.diff{border:1.5px dashed var(--black);font-weight:500}
+.rc-mat{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.85rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.26rem .35rem;outline:none;cursor:pointer}
+.rc-mat:focus{outline:2px solid var(--black);outline-offset:0}
+.rc-sub{font-size:.66rem;color:var(--muted);margin-top:.12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.rc-sub:empty{display:none}
+.rc-sub b{color:var(--black);font-weight:600}
+.rc-act{display:flex;justify-content:flex-end;gap:.1rem}
+.ib{width:1.05rem;height:1.35rem;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.78rem;line-height:1;padding:0;border-radius:3px;flex-shrink:0}
+@media(hover:hover){.ib:not(:disabled):hover{color:var(--black);background:var(--off)}}
+.ib:disabled{opacity:.25;cursor:default}
+.sec-head{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .5rem;padding:calc(.75rem/var(--pzc,1)) 0 calc(.3rem/var(--pzc,1))}
+.sec-name{flex:0 1 13rem;min-width:7rem;font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:600;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.2rem .35rem;outline:none}
+.sec-note{flex:1 1 10rem;min-width:6rem;font-family:'DM Sans',sans-serif;font-size:.78rem;font-style:italic;color:var(--dark);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.2rem .35rem;outline:none}
+.sec-name:focus,.sec-note:focus{border-color:var(--black)}
+@media(hover:hover){.sec-name:hover,.sec-note:hover{border-color:var(--light)}}
+.sec-kind{font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.15rem .3rem;outline:none;cursor:pointer}
+.sec-btns{display:flex;gap:.1rem;margin-left:auto}
+.rc-sum{padding:calc(.3rem/var(--pzc,1)) 0}
+.rc-sum .num{font-weight:600}
+.sum-l{font-size:.74rem;font-weight:600;color:var(--black);letter-spacing:.03em;white-space:nowrap}
+.sec-foot{display:flex;align-items:center;justify-content:space-between;gap:.4rem}
+.rc-sum.total{border-top:2px solid var(--black);margin-top:calc(.5rem/var(--pzc,1))}
+.rc-sum.total .num{font-size:.84rem}
+.btn-add-row{font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--muted);background:var(--w);border:1px dashed var(--mid);border-radius:var(--r);padding:.18rem .5rem;cursor:pointer;white-space:nowrap}
+@media(hover:hover){.btn-add-row:hover{color:var(--black);border-color:var(--black)}}
+.rc-under{display:flex;gap:.5rem;margin-top:calc(.45rem/var(--pzc,1))}
+/* narrow recipe: every component takes two lines (name + buttons / numbers) — container query + viewport fallback */
+@container (max-width:620px){
+  .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
+  .rc-head{grid-template-areas:"conc m dip solid wet price"}
+  .rc-head .a-name,.rc-head .a-act{display:none}
+  .hg-var{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:620px){
+  .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
+  .rc-head{grid-template-areas:"conc m dip solid wet price"}
+  .rc-head .a-name,.rc-head .a-act{display:none}
+  .hg-var{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+.str-help{font-size:.78rem;color:var(--dark);margin-top:calc(.7rem/var(--pzc,1));line-height:1.6;border-left:2px solid var(--black);padding-left:calc(.6rem/var(--pzc,1))}
+.str-help b{font-family:'DM Mono',monospace;font-weight:500;color:var(--black)}
+.tools{display:flex;flex-wrap:wrap;gap:calc(.5rem/var(--pzc,1)) calc(1.2rem/var(--pzc,1));margin-top:calc(.8rem/var(--pzc,1));align-items:center}
+.tool{display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:var(--dark)}
+.tool .rc-in{width:5.4rem}
+.tool-hint{font-size:.7rem;color:var(--muted);margin-top:calc(.35rem/var(--pzc,1));line-height:1.45}
+.sub-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--black);margin:calc(1.1rem/var(--pzc,1)) 0 calc(.45rem/var(--pzc,1));padding-bottom:.3rem;border-bottom:1.5px solid var(--black)}
+.par-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));column-gap:calc(1.4rem/var(--pzc,1))}
+.par{display:flex;align-items:baseline;gap:.4rem;padding:calc(.3rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light);min-width:0}
+.par-l{flex:1;min-width:0;font-size:.8rem;color:var(--dark)}
+.par-t{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);white-space:nowrap}
+.par-v{font-family:'DM Mono',monospace;font-size:.86rem;color:var(--black);white-space:nowrap}
+.par.key .par-l{color:var(--black)}
+.par.key .par-v{font-weight:500}
+.par.out .par-l,.par.out .par-v{font-weight:700;color:var(--black)}
+.par.out .par-v::before{content:'⚠ '}
+.meas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(8rem,1fr));gap:calc(.6rem/var(--pzc,1)) calc(.8rem/var(--pzc,1))}
+.meas-d{font-family:'DM Mono',monospace;font-size:.9rem;color:var(--black);padding:.44rem 0}
+
+/* notes panel — variants */
+.vars-body{display:flex;flex-direction:column;flex:1;min-height:0}
+.var-tools{display:flex;align-items:center;justify-content:space-between;gap:.4rem;margin-bottom:calc(.55rem/var(--pzc,1))}
+.var-count{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted)}
+.var-list{display:flex;flex-direction:column;gap:calc(.55rem/var(--pzc,1));overflow-y:auto;min-height:0;flex:1}
+.var-item{border:var(--b);border-radius:var(--r);display:flex;flex-direction:column;min-width:0;flex-shrink:0}
+.var-item.active{border:var(--bh)}
+.var-head{display:flex;align-items:baseline;gap:.5rem;padding:calc(.38rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));cursor:pointer;min-width:0}
+@media(hover:hover){.var-item:not(.active) .var-head:hover{background:var(--off)}}
+.var-item.active .var-head{background:var(--black);color:var(--w)}
+.var-name{font-weight:600;font-size:.88rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.var-code,.var-date{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);white-space:nowrap}
+.var-item.active .var-code,.var-item.active .var-date,.var-item.active .ib{color:var(--mid)}
+.var-btns{margin-left:auto;display:flex;gap:.1rem;flex-shrink:0}
+.var-body{padding:calc(.4rem/var(--pzc,1)) calc(.55rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));display:flex;flex-direction:column;gap:calc(.35rem/var(--pzc,1))}
+.var-stats{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dark)}
+.var-diff{font-size:.7rem;color:var(--muted);line-height:1.45}
+.var-stats:empty,.var-diff:empty{display:none}
+.var-note{flex:0 0 auto;min-height:2.8rem;resize:none;overflow:hidden;font-size:.84rem;padding:calc(.45rem/var(--pzc,1)) calc(.55rem/var(--pzc,1))}
+.sol-note{flex:0 0 auto;min-height:220px;resize:none;overflow:hidden}
+
+/* materials modal */
+.mat-modal{max-width:760px;width:94%;max-height:92vh;overflow-y:auto}
+.mat-top{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem}
+.mat-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.mat-bar{display:flex;gap:.5rem;align-items:center}
+.mat-bar .lib-search{flex:1}
+.mat-list{display:flex;flex-direction:column;gap:.35rem}
+.mat-group{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.5rem .1rem .05rem}
+.mat-item{border:var(--b);border-radius:var(--r);min-width:0}
+.mat-item.open{border:var(--bh)}
+.mat-head{display:flex;align-items:baseline;gap:.5rem;padding:.4rem .6rem;cursor:pointer;flex-wrap:wrap;min-width:0}
+@media(hover:hover){.mat-head:hover{background:var(--off)}}
+.mat-name{font-weight:600;font-size:.86rem;color:var(--black)}
+.mat-meta{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex:1;min-width:0}
+.mat-caret{font-size:.7rem;color:var(--muted)}
+.mat-body{padding:.5rem .6rem .7rem;display:flex;flex-direction:column;gap:.55rem;border-top:1px solid var(--light)}
+.mat-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.4fr) minmax(0,1fr);gap:.5rem}
+.alt-title{font-size:.66rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-top:.15rem}
+.alt{border:1px solid var(--light);border-radius:var(--r);padding:.45rem .5rem;display:flex;flex-direction:column;gap:.4rem}
+.alt.on{border:var(--bh)}
+.alt-top{display:flex;align-items:center;gap:.45rem}
+.alt-radio{width:18px;height:18px;border-radius:50%;border:var(--bh);background:var(--w);cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center}
+.alt.on .alt-radio::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--black)}
+.alt-name{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.84rem;font-weight:500;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .45rem;outline:none}
+.alt-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.6rem,1fr));gap:.35rem .5rem}
+.mf{display:flex;flex-direction:column;gap:.15rem;min-width:0}
+.mf label{font-size:.6rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mf input,.mf select{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .45rem;outline:none}
+.mf input[inputmode="decimal"]{font-family:'DM Mono',monospace}
+.mf input:focus,.mf select:focus,.alt-name:focus{outline:2px solid var(--black);outline-offset:0}
+.mat-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.mat-info{font-size:.74rem;color:var(--muted);line-height:1.5}
+@media(max-width:560px){.mat-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>dip-app</h1>
+    <span class="header-sep" id="headerSep">—</span>
+    <span class="header-sub" id="headerSub"></span>
+  </div>
+  <div class="header-right">
+    <span id="statusMsg"></span>
+    <div class="sync-group">
+      <button class="btn-sync" id="syncUpBtn" onclick="openExportModal()" title="export / upload to cloud (Gist)">↑</button>
+      <button class="btn-sync" onclick="openImportModal()" title="import from JSON file">⇩</button>
+      <button class="btn-sync" id="syncDownBtn" onclick="syncDownload()" title="download data from cloud (Gist)">↓</button>
+      <button class="btn-sync" id="autoSyncBtn" onclick="toggleAutoSync()" title="enable automatic sync (Gist)">☁</button>
+      <button class="btn-sync-cfg" onclick="openJsonBinSettings()" title="Gist sync settings">⚙</button>
+    </div>
+    <div class="fs-ctrl" title="font size">
+      <button class="fs-btn" onclick="changeFs(-1)" title="decrease font">−</button>
+      <span class="fs-val" id="fsVal">100%</span>
+      <button class="fs-btn" onclick="changeFs(1)" title="increase font">+</button>
+    </div>
+    <button id="darkToggle" onclick="toggleDark()" title="toggle dark/light mode">☀</button>
+    <button id="libToggleBtn" onclick="toggleLibPanel()" title="library">☰</button>
+    <button id="undoBtn" onclick="undo()" disabled title="undo (Ctrl+Z)">↩</button>
+    <button id="redoBtn" onclick="redo()" disabled title="redo (Ctrl+Y)">↪</button>
+    <div style="position:relative;display:inline-flex">
+      <button class="btn-sm" onclick="toggleNewMenu(event)" title="new dip / variant">+</button>
+      <div id="newMenu" class="new-menu" style="display:none">
+        <button class="new-menu-item" onclick="newSolution();closeNewMenu()">new dip</button>
+        <button class="new-menu-item" id="headerSaveNewBtn" onclick="saveToLibrary();closeNewMenu()">duplicate dip</button>
+        <div class="new-menu-sep"></div>
+        <button class="new-menu-item" onclick="newVariant();closeNewMenu()">new variant (copy of active)</button>
+        <button class="new-menu-item" onclick="openMaterials();closeNewMenu()">⚗ materials</button>
+      </div>
+    </div>
+    <button class="btn-sm danger" onclick="clearStorage()" title="delete">✕</button>
+  </div>
+</header>
+
+<div class="app">
+
+<div class="library-panel">
+  <div class="lib-card" id="panel-library">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-library">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-library',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-library')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Dips</span></div>
+    <div class="lib-btns">
+      <button class="btn-lib primary" onclick="newSolution()">+ new dip</button>
+      <button class="btn-lib" onclick="openMaterials()" title="raw materials — concentrations, prices, approved alternatives">⚗ materials</button>
+    </div>
+    <input type="text" id="libSearch" class="lib-search" placeholder="search…" oninput="renderLibrary()" autocomplete="off">
+    <div id="libList"></div>
+  </div>
+</div>
+
+<div class="main-panel">
+  <div class="card" id="panel-main">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-main">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-main',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-main')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Lab recipe</span></div>
+    <div id="mainBody"></div>
+  </div>
+</div>
+
+<div class="notes-panel">
+  <div class="notes-card" id="panel-notes">
+    <div class="card-controls">
+      <div class="pfs-ctrl">
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',-1)" title="decrease section font">−</button>
+        <span class="pfs-val" id="pfs-panel-notes">100%</span>
+        <button class="pfs-btn" onclick="changePanelFs('panel-notes',1)" title="increase section font">+</button>
+      </div>
+      <button class="expand-btn" onclick="toggleExpand('panel-notes')" title="fullscreen">
+        <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+    <div class="card-title"><span class="card-title-text">Variants &amp; notes</span></div>
+    <div class="notes-tabs">
+      <button class="notes-tab" data-tab="vars" onclick="switchNotesTab('vars')">Variants</button>
+      <button class="notes-tab" data-tab="gen" onclick="switchNotesTab('gen')">Dip note</button>
+    </div>
+    <div class="notes-pane" id="pane-vars"><div id="varsBody" class="vars-body"></div></div>
+    <div class="notes-pane" id="pane-gen"><div id="genBody"></div></div>
+  </div>
+</div>
+
+</div>
+
+<!-- Export modal -->
+<div class="modal-bg" id="exportModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Export</h2>
+    <p style="font-size:.8rem;color:var(--muted)">Dips</p>
+    <div class="modal-list" id="exportList"></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem">Materials</p>
+    <div class="modal-list" id="exportMatList"></div>
+    <div style="margin-top:.8rem">
+      <label style="font-size:.78rem;color:var(--muted)">File name</label>
+      <input id="exportFilename" type="text" style="width:100%;box-sizing:border-box;margin-top:.25rem;padding:.35rem .5rem;font-family:'DM Mono',monospace;font-size:.8rem;border:var(--b);border-radius:4px;background:var(--off);color:var(--black)" />
+    </div>
+    <div class="modal-row" style="margin-top:.5rem">
+      <button class="modal-btn" onclick="toggleAllExport()">select/deselect all</button>
+      <button class="modal-btn" onclick="closeModal('exportModal')">cancel</button>
+      <button class="modal-btn" onclick="doCloudUpload()">↑ upload to Gist</button>
+      <button class="modal-btn primary" onclick="doExport()">download JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export copy fallback modal -->
+<div class="modal-bg" id="exportCopyModal">
+  <div class="modal" style="max-width:520px">
+    <h2>Copy JSON</h2>
+    <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Download failed. Copy the content below and save it as a .json file.</p>
+    <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
+    <div class="modal-row">
+      <button class="modal-btn primary" id="exportCopyBtn" onclick="copyExportText()">📋 copy</button>
+      <button class="modal-btn" onclick="closeModal('exportCopyModal')">close</button>
+    </div>
+  </div>
+</div>
+<div id="statusToast"></div>
+
+<!-- Import modal -->
+<div class="modal-bg" id="importModal">
+  <div class="modal" style="max-width:460px">
+    <h2>Import</h2>
+    <p class="jb-import-hide">Select a JSON file exported from this app.</p>
+    <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
+    <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">or paste JSON content:</p>
+    <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"items":[...],"materials":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
+    <p id="importErr" style="display:none;color:var(--muted);font-size:.82rem"></p>
+    <div id="importItemSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Dips</p>
+      <div class="modal-list" id="importList"></div>
+    </div>
+    <div id="importMatSection" style="display:none">
+      <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Materials</p>
+      <div class="modal-list" id="importMatList"></div>
+    </div>
+    <div class="modal-row" id="importActions" style="display:none">
+      <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
+      <button class="modal-btn primary" onclick="doImport()">import selected</button>
+    </div>
+    <div class="modal-row" id="importCancel">
+      <button class="modal-btn" onclick="closeModal('importModal')">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Materials modal -->
+<div class="modal-bg" id="matModal">
+  <div class="modal mat-modal">
+    <div class="mat-top"><h2>Materials</h2><span class="mat-count" id="matCount"></span></div>
+    <p>Raw materials for the recipes. A material can hold several approved alternatives — ● marks the one mixed in production now; its price and as-delivered concentration are what the recipes use.</p>
+    <div class="mat-bar">
+      <input type="text" id="matSearch" class="lib-search" placeholder="search…" oninput="renderMaterials()" autocomplete="off">
+      <button class="btn-sm" onclick="addMaterial()">+ material</button>
+    </div>
+    <div class="mat-list" id="matList"></div>
+    <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('matModal')">done</button></div>
+  </div>
+</div>
+
+<script>
+// ── SCHEMA VERSION (forward-compat guard) ─────────────────────────────────
+// Bump when the synced data shape changes in a way older clients can't fully
+// represent. A client that pulls a payload with a higher `schema` PAUSES its own
+// push (so it can't overwrite newer data) and warns the user to reload. The
+// merge keeps whole objects (identity normalize) → additive fields round-trip
+// losslessly; if you add a whitelisting normalizer, spread the original first
+// ({ ...it, …known }) so it never strips unknown/newer fields.
+const APP_SCHEMA = 1;
+// ── STORAGE KEYS ──────────────────────────────────────────────────────────
+const SESSION_KEY = 'dip-app-v1-session';
+const LIBRARY_KEY = 'dip-app-v1-library';      // solutions (each with all its variants) — synced, LWW per solution
+const MATERIALS_KEY = 'dip-app-v1-materials';  // raw materials — synced, LWW per material
+const ACTVAR_KEY = 'dip-app-active-var';       // { solutionId: variantId } — local view state, NOT synced (see CLAUDE.md: view state must not stamp mt)
+const NOTES_TAB_KEY = 'dip-app-notes-tab';
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let library = [], activeLibId = null;
+let materials = [];
+let cur = null;              // live working copy of the open solution — a deep copy, never a reference into library[]
+let activeVarMap = {};
+let notesTab = 'vars';
+let undoStack = [], redoStack = [], savedSnapshot = null;
+const UNDO_MAX = 40;
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function parseNum(v) { return parseFloat(String(v).replace(',','.')); }
+function normDec(v) { return (v || '').toString().replace(',','.'); }
+
+document.addEventListener('input', function(e) {
+  const inp = e.target; if (inp.inputMode !== 'decimal') return;
+  const v = inp.value; if (!v.includes(',')) return;
+  const s = inp.selectionStart; inp.value = v.replace(',','.'); inp.setSelectionRange(s,s);
+}, true);
+
+// ── STATUS / SAVE ─────────────────────────────────────────────────────────
+let saveT;
+function showStatusMsg(msg, duration=2200) {
+  const e = el('statusMsg');
+  clearTimeout(e._to); clearTimeout(e._hide);
+  e.style.display = 'inline'; e.textContent = msg;
+  requestAnimationFrame(() => { e.style.opacity = '1'; });
+  e._to = setTimeout(() => {
+    e.style.opacity = '0';
+    e._hide = setTimeout(() => { e.style.display = 'none'; }, 400);
+  }, duration);
+  // an open modal overlay (z-index 100) covers the header — mirror the message into a toast above it
+  const t = el('statusToast');
+  if (t && document.querySelector('.modal-bg.open')) {
+    clearTimeout(t._to);
+    t.textContent = msg; t.style.display = 'block';
+    t._to = setTimeout(() => { t.style.display = 'none'; }, duration);
+  }
+}
+function showSave(msg='✓ saved') { showStatusMsg(msg, 2200); }
+// temporary label swap on a button — feedback right where the user clicked
+function flashBtn(id, label, ms=1600) {
+  const btn = el(id);
+  if (!btn) return;
+  if (btn._flashTo) clearTimeout(btn._flashTo); else btn._flashOrig = btn.textContent;
+  btn.textContent = label;
+  btn._flashTo = setTimeout(() => { btn.textContent = btn._flashOrig; btn._flashTo = null; }, ms);
+}
+function schedSave() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    saveSession(); showSave();
+    // edits of the open solution always auto-save into library[] (saveLibrary is wrapped → autosync)
+    if (activeLibId && isDirty()) updateLibraryEntry();
+  }, 300);
+}
+
+// ── LIBRARY / MATERIALS ───────────────────────────────────────────────────
+function loadLibrary() { try { library = (JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]') || []).map(normSolution); } catch(e) { library = []; } }
+function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
+function loadMaterials() {
+  let raw = null;
+  try { raw = localStorage.getItem(MATERIALS_KEY); } catch(e) {}
+  if (raw == null) { materials = defaultMaterials(); return; }   // first run: just water — the rest is added in ⚗ or imported
+  try { materials = (JSON.parse(raw) || []).map(normMaterial); } catch(e) { materials = []; }
+}
+function saveMaterials() { try { localStorage.setItem(MATERIALS_KEY, JSON.stringify(materials)); } catch(e) {} }
+function loadActiveVarMap() { try { activeVarMap = JSON.parse(localStorage.getItem(ACTVAR_KEY) || '{}') || {}; } catch(e) { activeVarMap = {}; } }
+function saveActiveVarMap() { try { localStorage.setItem(ACTVAR_KEY, JSON.stringify(activeVarMap)); } catch(e) {} }
+
+// ── SESSION ────────────────────────────────────────────────────────────────
+// The "session" is the open solution: every solution lives in library[] from the moment it is created,
+// edits go into `cur` (a deep copy) and schedSave() flushes them back. The session key only remembers which one is open.
+function solContent(s) { return s ? JSON.stringify({ ...s, mt: 0 }) : ''; }   // content without the sync timestamp
+function sessionSnap() { return cur ? solContent(cur) : ''; }
+function applySnap(snap) {   // undo/redo — the snapshot is a JSON copy, so cur never shares a reference with library[]
+  let d = null; try { d = JSON.parse(snap); } catch(e) {}
+  if (!d || !cur || d.id !== cur.id) return false;
+  cur = normSolution(d); return true;
+}
+function saveSession() { try { localStorage.setItem(SESSION_KEY, JSON.stringify({ activeLibId })); } catch(e) {} }
+function loadSession() {
+  let d = null; try { d = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch(e) {}
+  if (!d || d.activeLibId == null || !library.some(x => x.id === d.activeLibId)) return false;
+  loadSolution(d.activeLibId, true);
+  return true;
+}
+function markSaved() { savedSnapshot = sessionSnap(); }
+function isDirty() {
+  if (!activeLibId || !savedSnapshot) return false;
+  return sessionSnap() !== savedSnapshot;
+}
+
+// ── LIBRARY OPERATIONS ────────────────────────────────────────────────────
+function saveToLibrary() { duplicateSolution(); }   // "save as new" = a copy of the open solution
+function updateLibraryEntry() {
+  if (!activeLibId || !cur) return;
+  const i = library.findIndex(e => e.id === activeLibId);
+  if (i < 0) return;
+  if (solContent(library[i]) === solContent(cur)) { markSaved(); return; }   // stamp mt only on a real change
+  const next = clone(cur);
+  next.mt = cur.mt = Date.now();
+  library[i] = next;
+  saveLibrary(); markSaved(); renderLibrary();
+}
+// flush a pending (debounced) edit of the open solution right now — before switching, merging, importing, leaving
+function flushActiveEdit() { clearTimeout(saveT); if (activeLibId && cur) updateLibraryEntry(); }
+// after a merge/import: reload the open solution if its stored record changed — returns true when it did
+function refreshActiveFromLibrary() {
+  if (!activeLibId) return false;
+  const e = library.find(x => x.id === activeLibId);
+  if (!e) { activeLibId = null; cur = null; savedSnapshot = null; undoStack = []; redoStack = []; updateUndoBtn(); saveSession(); return true; }
+  if (cur && solContent(e) === solContent(cur)) return false;
+  cur = clone(e); markSaved();
+  undoStack = []; redoStack = []; updateUndoBtn();
+  return true;
+}
+function renderLibrary() {
+  const box = el('libList'); if (!box) return;
+  const q = (el('libSearch') ? el('libSearch').value : '').trim().toLowerCase();
+  if (!library.length) { box.innerHTML = '<div class="lib-empty">No dips yet.</div>'; return; }
+  const hit = e => !q || (e.name + ' ' + e.desc).toLowerCase().includes(q) || e.vars.some(v => (v.name + ' ' + v.code).toLowerCase().includes(q));
+  const list = library.filter(hit).sort(byName);
+  if (!list.length) { box.innerHTML = '<div class="lib-empty">Nothing matches.</div>'; return; }
+  box.innerHTML = list.map(e => `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" onclick="loadSolution(${e.id})">
+      <span class="lib-item-name"><b>${esc(e.name || 'untitled')}</b>${e.desc ? ' · ' + esc(e.desc) : ''}</span>
+      <span class="lib-item-n" title="variants">${e.vars.length}</span>
+      <button class="lib-item-del" onclick="event.stopPropagation();deleteSolution(${e.id})" title="delete dip"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
+    </div>`).join('');
+}
+function loadSolution(id, force) {
+  if (id === activeLibId && cur && !force) return;
+  flushActiveEdit();
+  const e = library.find(x => x.id === id); if (!e) return;
+  activeLibId = id; cur = clone(e);
+  undoStack = []; redoStack = []; updateUndoBtn();
+  markSaved(); saveSession(); renderAll();
+}
+function newSolution() {
+  flushActiveEdit();
+  const s = normSolution({ id: uid(), name: '', desc: '', note: '', vars: [defaultVariant()], mt: Date.now() });
+  library.push(s); saveLibrary();
+  loadSolution(s.id, true);
+  const i = el('fSolName'); if (i) i.focus();
+  showSave('+ new dip');
+}
+function duplicateSolution() {
+  if (!cur) { showStatusMsg('open a dip first'); return; }
+  flushActiveEdit();
+  const av = activeVar();
+  const s = clone(cur);
+  s.id = uid(); s.name = (cur.name || 'untitled') + ' copy'; s.mt = Date.now();
+  library.push(normSolution(s)); saveLibrary();
+  if (av) { activeVarMap[s.id] = av.id; saveActiveVarMap(); }   // variant ids are copied → the same variant stays shown
+  loadSolution(s.id, true);
+  showSave('⧉ dip duplicated');
+}
+async function deleteSolution(id) {
+  const e = library.find(x => x.id === id); if (!e) return;
+  if (!await customConfirm('Delete dip “' + (e.name || 'untitled') + '” with all its ' + e.vars.length + ' variant(s)?', 'delete')) return;
+  if (id === activeLibId) { clearTimeout(saveT); activeLibId = null; cur = null; savedSnapshot = null; undoStack = []; redoStack = []; updateUndoBtn(); }
+  library = library.filter(x => x.id !== id); saveLibrary();
+  delete activeVarMap[id]; saveActiveVarMap();
+  saveSession(); renderAll();
+  showSave('✕ dip deleted');
+}
+
+// ── UNDO ──────────────────────────────────────────────────────────────────
+function pushUndo() {
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = [];
+  updateUndoBtn();
+}
+function undo() {
+  if (!undoStack.length || !cur) return;
+  redoStack.push(sessionSnap());
+  applySnap(undoStack.pop());
+  _focusSnap = null; _pushedThisFocus = false;
+  schedSave(); updateUndoBtn(); renderAll();
+}
+function redo() {
+  if (!redoStack.length || !cur) return;
+  undoStack.push(sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  applySnap(redoStack.pop());
+  _focusSnap = null; _pushedThisFocus = false;
+  schedSave(); updateUndoBtn(); renderAll();
+}
+// typing coalesces into one undo step per focused field: the state is captured on focus, pushed on the first edit
+let _focusSnap = null, _pushedThisFocus = false;
+function coalesceUndo() {
+  if (_pushedThisFocus) return;
+  undoStack.push(_focusSnap != null ? _focusSnap : sessionSnap());
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = []; updateUndoBtn(); _pushedThisFocus = true;
+}
+function updateUndoBtn() {
+  const u = el('undoBtn');
+  if (u) { u.disabled = undoStack.length === 0; u.title = undoStack.length ? 'undo '+undoStack.length+' (Ctrl+Z)' : 'nothing to undo'; }
+  const r = el('redoBtn');
+  if (r) { r.disabled = redoStack.length === 0; r.title = redoStack.length ? 'redo '+redoStack.length+' (Ctrl+Y)' : 'nothing to redo'; }
+}
+
+// ── CLEAR STORAGE ─────────────────────────────────────────────────────────
+function clearStorage() { el('clearStorageModal').classList.add('open'); }
+function toggleAllClear() {
+  const boxes = ['clr-session','clr-library','clr-materials','clr-appearance'].map(id => el(id));
+  const anyUnchecked = boxes.some(b => !b.checked);
+  boxes.forEach(b => b.checked = anyUnchecked);
+}
+async function doSelectiveClear() {
+  const toDelete = [];
+  if (el('clr-session').checked)    toDelete.push(SESSION_KEY, ACTVAR_KEY, NOTES_TAB_KEY);
+  if (el('clr-library').checked)    toDelete.push(LIBRARY_KEY);
+  if (el('clr-materials').checked)  toDelete.push(MATERIALS_KEY);
+  if (el('clr-appearance').checked) toDelete.push('dip-app-fs','dip-app-dark','dip-app-panel-fs');
+  // clearing a synced collection → reset the sync baseline so the state is cleanly downloaded from the cloud after reload
+  // (otherwise stale knownIds would generate mass tombstones and delete data on other devices too)
+  if (el('clr-library').checked || el('clr-materials').checked) {
+    toDelete.push('dip-app-syncknown');
+    try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {}
+  }
+  if (!toDelete.length) { closeModal('clearStorageModal'); return; }
+  closeModal('clearStorageModal');
+  if (!await customConfirm('Really delete the selected data?','delete')) return;
+  try { toDelete.forEach(k => localStorage.removeItem(k)); } catch(e) {}
+  location.reload();
+}
+
+// ── FONT SIZE ─────────────────────────────────────────────────────────────
+const FS_STEPS = [0.75,0.85,0.9,1,1.1,1.2,1.35,1.5,1.7,2.0];
+let fsIdx = 3;
+function applyFs() {
+  const v = FS_STEPS[fsIdx];
+  document.documentElement.style.setProperty('--fs', v);
+  // above 100% only the text grows — the calc(… / var(--pzc)) spacing rules divide the
+  // gaps/padding back out, so enlarging doesn't inflate the whitespace with it
+  document.documentElement.style.setProperty('--pzc', Math.max(1, v));
+  el('fsVal').textContent = Math.round(v*100)+'%';
+  try { localStorage.setItem('dip-app-fs', fsIdx); } catch(e) {}
+  PFS_ALL.forEach(applyPanelFs);   // panel compensation folds the global factor in
+}
+function changeFs(dir) {
+  fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, fsIdx+dir));
+  applyFs();
+}
+function initFs() {
+  try { const s = localStorage.getItem('dip-app-fs'); if (s !== null) { const p = parseInt(s); if (!isNaN(p)) fsIdx = Math.max(0, Math.min(FS_STEPS.length-1, p)); } } catch(e) {}
+  applyFs();
+}
+
+// ── DARK MODE ─────────────────────────────────────────────────────────────
+function toggleDark() {
+  const on = document.documentElement.classList.toggle('dark');
+  el('darkToggle').textContent = on ? '☾' : '☀';
+  try { localStorage.setItem('dip-app-dark', on ? '1' : '0'); } catch(e) {}
+}
+function initDark() {
+  try { if (localStorage.getItem('dip-app-dark') === '1') { document.documentElement.classList.add('dark'); el('darkToggle').textContent = '☾'; } } catch(e) {}
+}
+
+// ── PER-PANEL FONT SIZE ───────────────────────────────────────────────────
+const PFS_STEPS = [0.7,0.8,0.9,1.0,1.1,1.2,1.35,1.5,1.7,2.0];
+const PFS_DEFAULT = 3;
+const PFS_ALL = ['panel-library','panel-main','panel-notes'];
+let panelFs = {};
+
+function loadPanelFs() {
+  try { const s = localStorage.getItem('dip-app-panel-fs'); if (s) panelFs = JSON.parse(s); } catch(e) {}
+  PFS_ALL.forEach(pid => {
+    if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+    applyPanelFs(pid);
+  });
+}
+function savePanelFs() { try { localStorage.setItem('dip-app-panel-fs', JSON.stringify(panelFs)); } catch(e) {} }
+function isPanelExpanded(pid) { return expandedPanel && expandedPanel === el(pid); }
+function applyPanelFs(pid) {
+  const panel = el(pid); if (!panel) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  const z = PFS_STEPS[idx];
+  panel.style.zoom = z;
+  // zoom scales spacing along with the text — setting --pzc here lets the calc(… / var(--pzc))
+  // spacing rules cancel that out, so above 100% (panel zoom × global size) only the text grows
+  panel.style.setProperty('--pzc', +(Math.max(1, z) * Math.max(1, FS_STEPS[fsIdx])).toFixed(3));
+  updatePfsVal(pid);
+}
+function updatePfsVal(pid) {
+  const valEl = el('pfs-'+pid); if (!valEl) return;
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  const idx = (panelFs[pid] || {})[mode] ?? PFS_DEFAULT;
+  const ni = (panelFs[pid] || {}).n ?? PFS_DEFAULT;
+  const ei = (panelFs[pid] || {}).e ?? PFS_DEFAULT;
+  const marker = isPanelExpanded(pid) && ni !== ei ? '*' : '';
+  valEl.textContent = Math.round(PFS_STEPS[idx]*100)+'%'+marker;
+  valEl.title = isPanelExpanded(pid)
+    ? 'size in expanded view (normal: '+Math.round(PFS_STEPS[ni]*100)+'%)'
+    : 'size in normal view (expanded: '+Math.round(PFS_STEPS[ei]*100)+'%)';
+}
+function changePanelFs(pid, dir) {
+  if (!panelFs[pid] || typeof panelFs[pid] !== 'object') panelFs[pid] = {n:PFS_DEFAULT,e:PFS_DEFAULT};
+  const mode = isPanelExpanded(pid) ? 'e' : 'n';
+  panelFs[pid][mode] = Math.max(0, Math.min(PFS_STEPS.length-1, (panelFs[pid][mode] ?? PFS_DEFAULT)+dir));
+  applyPanelFs(pid); savePanelFs();
+}
+
+// ── EXPAND PANEL ──────────────────────────────────────────────────────────
+let expandedPanel = null;
+function toggleExpand(id) {
+  const panel = el(id); if (!panel) return;
+  if (expandedPanel && expandedPanel !== panel) collapsePanel(expandedPanel);
+  if (panel.classList.contains('panel-expanded')) collapsePanel(panel);
+  else expandPanel(panel);
+  setTimeout(growAll, 0);   // the width changed → re-fit the auto-growing notes
+}
+function expandPanel(panel) {
+  panel.classList.add('panel-expanded');
+  expandedPanel = panel;
+  applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>';
+  if (!panel.querySelector('.expand-esc')) {
+    const hint = document.createElement('span');
+    hint.className = 'expand-esc'; hint.textContent = 'Esc';
+    btn && btn.parentNode.appendChild(hint);
+  }
+  document.addEventListener('keydown', onExpandEsc);
+}
+function collapsePanel(panel) {
+  panel.classList.remove('panel-expanded');
+  expandedPanel = null;
+  applyPanelFs(panel.id);
+  const btn = panel.querySelector('.expand-btn');
+  if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+  const hint = panel.querySelector('.expand-esc'); if (hint) hint.remove();
+  document.removeEventListener('keydown', onExpandEsc);
+}
+function onExpandEsc(e) { if (e.key === 'Escape' && expandedPanel) { collapsePanel(expandedPanel); setTimeout(growAll, 0); } }
+
+// ── CUSTOM CONFIRM / ALERT ────────────────────────────────────────────────
+let _confirmResolve = null;
+function customConfirm(msg, okLabel='confirm') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmCancelBtn').style.display = '';
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); _confirmResolve = null; resolve(val); };
+  });
+}
+function customAlert(msg, okLabel='ok') {
+  return new Promise(resolve => {
+    if (_confirmResolve) { const old = _confirmResolve; _confirmResolve = null; old(false); }
+    el('confirmMsg').textContent = msg;
+    el('confirmOkBtn').textContent = okLabel;
+    el('confirmCancelBtn').style.display = 'none';
+    el('confirmModal').classList.add('open');
+    _confirmResolve = val => { el('confirmModal').classList.remove('open'); el('confirmCancelBtn').style.display = ''; _confirmResolve = null; resolve(val); };
+  });
+}
+
+// ── MODALS ────────────────────────────────────────────────────────────────
+function closeModal(id) { el(id).classList.remove('open'); }
+document.addEventListener('click', e => {
+  closeNewMenu();
+  ['exportModal','importModal','exportCopyModal','clearStorageModal','jsonbinModal','gistHistoryModal','matModal'].forEach(id => {
+    const m = el(id); if (m && m.classList.contains('open') && e.target === m) m.classList.remove('open');
+  });
+  const cm = el('confirmModal');
+  if (cm && cm.classList.contains('open') && e.target === cm && _confirmResolve) _confirmResolve(false);
+});
+
+// ── LIBRARY PANEL TOGGLE ──────────────────────────────────────────────────
+function toggleLibPanel() {
+  const lp = document.querySelector('.library-panel'); if (!lp) return;
+  const hidden = lp.classList.toggle('lib-hidden');
+  el('libToggleBtn').textContent = hidden ? '☰' : '«';
+  updateAppGrid();
+}
+function updateAppGrid() {
+  const lp = document.querySelector('.library-panel');
+  const app = document.querySelector('.app');
+  if (!app || !lp) return;
+  const hidden = lp.classList.contains('lib-hidden');
+  const w = window.innerWidth;
+  if (w <= 820) { app.style.gridTemplateColumns = ''; }
+  else if (w <= 1020) { app.style.gridTemplateColumns = hidden ? '0 1fr' : '185px 1fr'; }
+  else { app.style.gridTemplateColumns = hidden ? '0 1fr 440px' : '210px 1fr 440px'; }
+}
+
+// ── NEW MENU ──────────────────────────────────────────────────────────────
+function toggleNewMenu(e) {
+  e.stopPropagation();
+  const m = el('newMenu');
+  if (m.style.display === 'flex') { m.style.display = 'none'; return; }
+  m.style.display = 'flex';
+  const btn = e.currentTarget;
+  const br = btn.getBoundingClientRect();
+  m.style.top = (br.bottom+4+window.scrollY)+'px';
+  m.style.left = ''; m.style.right = '';
+  requestAnimationFrame(() => {
+    const mw = m.offsetWidth, vw = window.innerWidth;
+    let left = br.right - mw;
+    if (left < 8) left = 8;
+    if (left+mw > vw-8) left = vw-mw-8;
+    m.style.left = left+'px';
+  });
+}
+function closeNewMenu() { const m = el('newMenu'); if (m) m.style.display = 'none'; }
+
+// ── EXPORT ────────────────────────────────────────────────────────────────
+let exportSelected = new Set(), exportMatSelected = new Set();
+function openExportModal() {
+  flushActiveEdit();
+  exportSelected = new Set(library.map(e => e.id));
+  exportMatSelected = new Set(materials.map(e => e.id));
+  el('exportList').innerHTML = library.length
+    ? library.slice().sort(byName).map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||'untitled')}${e.desc ? ' · ' + esc(e.desc) : ''}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">No dips.</p>';
+  el('exportMatList').innerHTML = materials.length
+    ? materials.slice().sort(byName).map(e => `<label class="modal-item sel" id="emi-${e.id}"><input type="checkbox" checked onchange="toggleExportMatSel(${e.id},this.checked)" />${esc(e.name||'unnamed')}</label>`).join('')
+    : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">No materials.</p>';
+  updateExportFilename();
+  el('exportModal').classList.add('open');
+}
+function updateExportFilename() {
+  const d = new Date();
+  const yymmdd = String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  el('exportFilename').value = 'DIP_'+yymmdd+'_S'+exportSelected.size+'M'+exportMatSelected.size+'.json';
+}
+function toggleExportSel(id, on) {
+  on ? exportSelected.add(id) : exportSelected.delete(id);
+  el('ei-'+id)?.classList.toggle('sel', on);
+  updateExportFilename();
+}
+function toggleExportMatSel(id, on) {
+  on ? exportMatSelected.add(id) : exportMatSelected.delete(id);
+  el('emi-'+id)?.classList.toggle('sel', on);
+  updateExportFilename();
+}
+function toggleAllExport() {
+  // anything unchecked → select all, otherwise deselect all
+  const on = library.some(e => !exportSelected.has(e.id)) || materials.some(e => !exportMatSelected.has(e.id));
+  library.forEach(e => { on ? exportSelected.add(e.id) : exportSelected.delete(e.id); const el2=el('ei-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  materials.forEach(e => { on ? exportMatSelected.add(e.id) : exportMatSelected.delete(e.id); const el2=el('emi-'+e.id); el2?.classList.toggle('sel',on); const cb=el2?.querySelector('input'); if(cb)cb.checked=on; });
+  updateExportFilename();
+}
+function doExport() {
+  const items = library.filter(e => exportSelected.has(e.id));
+  const mats = materials.filter(e => exportMatSelected.has(e.id));
+  if (!items.length && !mats.length) { customAlert('Nothing is selected.'); return; }
+  const json = JSON.stringify({v:1, schema: APP_SCHEMA, items, materials: mats}, null, 2);
+  const rawName = (el('exportFilename').value.trim() || 'export');
+  const fname = rawName.endsWith('.json') ? rawName : rawName+'.json';
+  let downloaded = false;
+  try {
+    const dataUri = 'data:application/json;charset=utf-8,'+encodeURIComponent(json);
+    const a = document.createElement('a'); a.href = dataUri; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    downloaded = true;
+  } catch(e) { downloaded = false; }
+  closeModal('exportModal');
+  el('exportCopyText').value = json;
+  el('exportCopyNote').textContent = downloaded
+    ? 'The file should be downloaded as "'+fname+'". If not, copy the content below.'
+    : 'Download failed — copy the content below and save it as a .json file.';
+  el('exportCopyModal').classList.add('open');
+  showSave('↑ exported');
+}
+function copyExportText() {
+  const ta = el('exportCopyText');
+  const done = () => { showSave('✓ copied'); flashBtn('exportCopyBtn', '✓ copied'); };
+  const legacy = () => { ta.select(); document.execCommand('copy'); done(); };
+  try {
+    // writeText can reject (permissions / non-secure context) — fall back to execCommand so feedback always comes
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done).catch(legacy);
+    else legacy();
+  } catch(e) { ta.select(); showStatusMsg('⚠ copy failed — press Ctrl+C', 3000); }
+}
+
+// ── IMPORT ────────────────────────────────────────────────────────────────
+let importData = [], importSelected = new Set(), importMatData = [], importMatSelected = new Set();
+function resetImportLists() {
+  importData = []; importSelected = new Set(); importMatData = []; importMatSelected = new Set();
+  el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
+  el('importMatList').innerHTML = ''; el('importMatSection').style.display = 'none';
+  el('importErr').style.display = 'none';
+  el('importActions').style.display = 'none';
+  el('importCancel').style.display = 'flex';
+}
+function openImportModal() {
+  el('importModal').classList.remove('from-cloud');
+  el('importModal').querySelector('h2').textContent = 'Import';
+  el('importFile').value = ''; el('importPaste').value = '';
+  resetImportLists();
+  el('importModal').classList.add('open');
+}
+// ids are numeric (inline handlers interpolate them unquoted) — anything else is skipped
+function importIdOk(x) { return x && typeof x.id === 'number' && isFinite(x.id); }
+function parseImportJson(text) {
+  resetImportLists();
+  try {
+    const parsed = JSON.parse(text);
+    const items = (parsed.items || parsed.teas || []).filter(importIdOk);
+    const mats = (parsed.materials || []).filter(importIdOk);
+    if (!items.length && !mats.length) throw new Error('no dips or materials in the file');
+    importData = items; importSelected = new Set(items.map(x => x.id));
+    importMatData = mats; importMatSelected = new Set(mats.map(x => x.id));
+    const tag = (arr, x) => arr.some(e => e.id === x.id) ? ' <span style="color:var(--muted)">(replaces the local one)</span>' : '';
+    el('importList').innerHTML = items.map(x => `
+      <label class="modal-item sel" id="ii-${x.id}">
+        <input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />
+        <span>${esc(x.name||'untitled')}${x.desc ? ' · ' + esc(x.desc) : ''}${tag(library, x)}</span>
+      </label>`).join('');
+    el('importMatList').innerHTML = mats.map(x => `
+      <label class="modal-item sel" id="imi-${x.id}">
+        <input type="checkbox" checked onchange="toggleImportMatSel(${x.id},this.checked)" />
+        <span>${esc(x.name||'unnamed')}${tag(materials, x)}</span>
+      </label>`).join('');
+    el('importItemSection').style.display = items.length ? 'block' : 'none';
+    el('importMatSection').style.display = mats.length ? 'block' : 'none';
+    el('importActions').style.display = 'flex';
+    el('importCancel').style.display = 'none';
+  } catch(err) {
+    el('importErr').textContent = 'Error: ' + err.message;
+    el('importErr').style.display = 'block';
+  }
+}
+function previewImportPaste() { const text = el('importPaste').value.trim(); if (!text) return; parseImportJson(text); }
+function previewImport() {
+  const file = el('importFile').files[0]; if (!file) return;
+  el('importPaste').value = '';
+  const r = new FileReader(); r.onload = ev => parseImportJson(ev.target.result); r.readAsText(file);
+}
+function toggleImportSel(id, on) { on ? importSelected.add(id) : importSelected.delete(id); el('ii-'+id)?.classList.toggle('sel', on); }
+function toggleImportMatSel(id, on) { on ? importMatSelected.add(id) : importMatSelected.delete(id); el('imi-'+id)?.classList.toggle('sel', on); }
+function doImport() {
+  const toAdd = importData.filter(x => importSelected.has(x.id));
+  const matsToAdd = importMatData.filter(x => importMatSelected.has(x.id));
+  if (!toAdd.length && !matsToAdd.length) { customAlert('Nothing is selected.'); return; }
+  flushActiveEdit();
+  // dedup by id — update an existing record in place, do not duplicate; mt = now (import wins on sync)
+  const now = Date.now();
+  const put = (arr, rec) => { const i = arr.findIndex(e => e.id === rec.id); if (i >= 0) { arr[i] = rec; return 1; } arr.push(rec); return 0; };
+  let updated = 0;
+  toAdd.forEach(t => { updated += put(library, normSolution({ ...clone(t), mt: now })); });
+  matsToAdd.forEach(t => { updated += put(materials, normMaterial({ ...clone(t), mt: now })); });
+  if (toAdd.length) saveLibrary();
+  if (matsToAdd.length) saveMaterials();
+  closeModal('importModal');
+  refreshActiveFromLibrary();
+  renderAll();
+  if (el('matModal').classList.contains('open')) renderMaterials();
+  showSave('↓ imported: ' + toAdd.length + ' dips, ' + matsToAdd.length + ' materials' + (updated ? ' (' + updated + ' replaced)' : ''));
+}
+
+// ── DOMAIN ────────────────────────────────────────────────────────────────
+// Data model (all records keep unknown fields — normalizers spread the original first):
+//   material  { id, name, role, work (working conc. %, null = as delivered), note, alts:[alt], act (active alt id), mt }
+//   alt       { id, name, producer, conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
+//   solution  { id, name, desc, note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
+//   variant   { id, name, code, date, str (strength %), from (parent variant id), note, secs:[section], meas:{phRF, ph, solid} }
+//   section   { id, kind: 'rf'|'latex'|'add', name, note, rows:[row] }
+//   row       { id, mat, nm, role (name/role snapshots for a deleted material), conc (%chem), m (g) }
+// Material roles drive the maths: which rows count as RF resin, latex, ammonia, NaOH…
+const ROLES = [
+  ['water', 'Water'], ['naoh', 'NaOH (caustic soda)'], ['resin', 'RF resin'], ['formaldehyde', 'Formaldehyde'],
+  ['latex-vp', 'VP latex'], ['latex-sbr', 'SBR latex'], ['latex-nr', 'NR latex'], ['ammonia', 'Ammonia'],
+  ['wax', 'Wax emulsion'], ['defoamer', 'Defoamer'], ['epoxy', 'Epoxy'], ['isocyanate', 'Isocyanate (IK)'], ['other', 'Other']
+];
+const ROLE_NAME = Object.fromEntries(ROLES);
+function roleKey(r) { return ROLE_NAME[r] ? r : 'other'; }   // a role from a newer build counts as "other" but is stored untouched
+const SEC_KINDS = [['rf', 'RF resin'], ['latex', 'Latex'], ['add', 'Additives / IK']];
+const SEC_SHORT = { rf: 'RF', latex: 'L', add: 'IK' };
+const MW = { F: 30, R: 110, NaOH: 40 };              // g/mol
+const RESIN_F = 12, RESIN_R = 88;                    // default F / R share of the RF resin solid (%)
+const THEORY = { phr: [15, 20], fr: [1.2, 2], lInSolid: [70, null] };
+
+let _uidLast = 0;
+function uid() { let t = Date.now(); if (t <= _uidLast) t = _uidLast + 1; _uidLast = t; return t; }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function numOrNull(v) { if (v == null || v === '') return null; const n = typeof v === 'number' ? v : parseNum(v); return isFinite(n) ? n : null; }
+function fmt(n, d = 2) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(d); }
+function pct(n, d = 2) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(d) + '%'; }
+function fmtNum(n) { return (n == null || !isFinite(n)) ? '' : String(+(+n).toFixed(4)); }
+function eur(n, ok = true, d = 3, unit = ' €') { return (n == null || !isFinite(n)) ? '—' : (ok ? '' : '≥ ') + n.toFixed(d) + unit; }
+function round2(n) { return Math.round(n * 100) / 100; }
+function byName(a, b) { return (a.name || '').localeCompare(b.name || '', 'en', { numeric: true, sensitivity: 'base' }); }
+function todayIso() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function setText(id, t) { const e = el(id); if (e && e.textContent !== t) e.textContent = t; }
+
+// ── NORMALIZERS (preserve-unknown) ─────────────────────────────────────────
+function normAlt(a) {
+  a = a || {};
+  return { ...a, id: a.id ?? uid(), name: String(a.name ?? ''), producer: String(a.producer ?? ''),
+    conc: numOrNull(a.conc), price: numOrNull(a.price), cons: numOrNull(a.cons),
+    fF: numOrNull(a.fF), fR: numOrNull(a.fR), vp: numOrNull(a.vp), note: String(a.note ?? '') };
+}
+function normMaterial(m) {
+  m = m || {};
+  const alts = (Array.isArray(m.alts) && m.alts.length ? m.alts : [{}]).map(normAlt);
+  return { ...m, id: m.id ?? uid(), name: String(m.name ?? ''), role: m.role || 'other', work: numOrNull(m.work),
+    note: String(m.note ?? ''), alts, act: alts.some(a => a.id === m.act) ? m.act : alts[0].id, mt: +m.mt || 0 };
+}
+function normRow(r) {
+  r = r || {};
+  return { ...r, id: r.id ?? uid(), mat: r.mat ?? null, nm: String(r.nm ?? ''), role: r.role || 'other', conc: numOrNull(r.conc), m: numOrNull(r.m) };
+}
+function normSection(s) {
+  s = s || {};
+  return { ...s, id: s.id ?? uid(), kind: s.kind || 'rf', name: String(s.name ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
+}
+function normVariant(v) {
+  v = v || {};
+  return { ...v, id: v.id ?? uid(), name: String(v.name ?? ''), code: String(v.code ?? ''), date: String(v.date ?? ''),
+    str: numOrNull(v.str), from: v.from ?? null, note: String(v.note ?? ''),
+    secs: (Array.isArray(v.secs) ? v.secs : []).map(normSection), meas: { ...(v.meas || {}) } };
+}
+function normSolution(s) {
+  s = s || {};
+  const vars = (Array.isArray(s.vars) && s.vars.length ? s.vars : [defaultVariant()]).map(normVariant);
+  return { ...s, id: s.id ?? uid(), name: String(s.name ?? ''), desc: String(s.desc ?? ''), note: String(s.note ?? ''), vars, mt: +s.mt || 0 };
+}
+// first run only: water with a fixed id (two fresh devices must not create two different "Water" records)
+function defaultMaterials() { return [normMaterial({ id: 1, name: 'Water', role: 'water', alts: [{ id: 2, name: 'Demineralized water' }], mt: 0 })]; }
+function defaultVariant() {
+  const first = roles => { for (const r of roles) { const m = materials.filter(x => x.role === r).sort(byName)[0]; if (m) return m; } return null; };
+  const row = roles => { const m = first(roles); return m ? { id: uid(), mat: m.id, nm: m.name, role: m.role, conc: matWork(m), m: null } : null; };
+  return { id: uid(), name: 'V1', code: '', date: todayIso(), str: null, from: null, note: '', meas: {},
+    secs: [
+      { id: uid(), kind: 'rf', name: '1. RF resin', note: 'maturing min. 30 min', rows: [['water'], ['naoh'], ['resin'], ['formaldehyde']].map(row).filter(Boolean) },
+      { id: uid(), kind: 'latex', name: '2. Latex', note: 'maturing min. 2 h', rows: [['water'], ['latex-vp', 'latex-sbr', 'latex-nr'], ['ammonia']].map(row).filter(Boolean) }
+    ] };
+}
+
+// ── MATERIAL HELPERS ──────────────────────────────────────────────────────
+function matById(id) { return id == null ? null : (materials.find(m => m.id === id) || null); }
+function actAlt(m) { return m ? (m.alts.find(a => a.id === m.act) || m.alts[0] || null) : null; }
+// concentration a material is mixed at (its default %chem in recipes)
+function matWork(m) { if (!m) return null; if (m.role === 'water') return 0; if (m.work != null) return m.work; const a = actAlt(m); return a ? a.conc : null; }
+function waterPrice() { const a = actAlt(materials.find(m => m.role === 'water')); return a && a.price != null ? a.price : 0; }
+// € per kg of the material at `conc` % — pre-diluted with water from the as-delivered concentration of the active alternative
+function workPrice(m, conc) {
+  const a = actAlt(m); if (!a || a.price == null) return null;
+  if (m.role === 'water' || !a.conc || conc == null || conc >= a.conc) return a.price;
+  const f = conc / a.conc;
+  return a.price * f + waterPrice() * (1 - f);
+}
+function rowRole(r) { const m = matById(r.mat); return m ? m.role : (r.role || 'other'); }
+function rowName(r) { const m = matById(r.mat); return m ? (m.name || 'unnamed') : (r.nm || '—'); }
+function concDiffers(r, m) { if (!m || m.role === 'water') return false; const d = matWork(m); return d != null && r.conc != null && Math.abs(d - r.conc) > 1e-9; }
+
+// ── CALCULATION ───────────────────────────────────────────────────────────
+// % in dip = m·%chem / Σm · solid (TSC) = Σ % in dip · % in solid = % in dip / TSC · % wet = m / Σm
+// PHR = dry RF (resin + formaldehyde) / dry latex part without ammonia × 100
+// F/R: F = resin solid × F share / 30 + formaldehyde / 30 · R = resin solid × R share / 110  (mol, shown per 100 g solid)
+function calcVariant(v) {
+  const c = { rows: {}, secs: {}, total: 0, dry: 0, nh3: 0, rfDry: 0, lDry: 0, naoh: 0, nF: 0, nR: 0,
+              vpDry: 0, sbrDry: 0, nrDry: 0, vpMon: 0, vpMonOk: true, price: 0, priceOk: true,
+              sumRF: 0, sumL: 0, sumAdd: 0, hasAdd: false };
+  const secs = v ? v.secs : [], list = [];
+  secs.forEach(s => {
+    const kind = s.kind === 'rf' || s.kind === 'latex' ? s.kind : 'add';
+    if (kind === 'add') c.hasAdd = true;
+    s.rows.forEach(r => {
+      const mat = matById(r.mat), role = mat ? mat.role : (r.role || 'other'), m = +r.m || 0;
+      const dry = role === 'water' ? 0 : m * (+r.conc || 0) / 100;
+      list.push({ s, kind, r, mat, role, m, dry });
+      c.total += m; c.dry += dry;
+    });
+  });
+  list.forEach(({ s, kind, r, mat, role, m, dry }) => {
+    if (kind === 'rf') c.sumRF += m; else if (kind === 'latex') c.sumL += m; else c.sumAdd += m;
+    if (role === 'resin') {
+      const a = actAlt(mat), fF = a && a.fF != null ? a.fF : RESIN_F, fR = a && a.fR != null ? a.fR : RESIN_R;
+      c.rfDry += dry; c.nF += dry * fF / 100 / MW.F; c.nR += dry * fR / 100 / MW.R;
+    }
+    if (role === 'formaldehyde') { c.rfDry += dry; c.nF += dry / MW.F; }
+    if (role === 'naoh') c.naoh += dry;
+    if (role === 'ammonia') c.nh3 += dry;
+    if (kind === 'latex' && role !== 'ammonia') c.lDry += dry;
+    if (role === 'latex-vp') { c.vpDry += dry; const a = actAlt(mat); if (a && a.vp != null) c.vpMon += dry * a.vp / 100; else if (dry > 0) c.vpMonOk = false; }
+    if (role === 'latex-sbr') c.sbrDry += dry;
+    if (role === 'latex-nr') c.nrDry += dry;
+    const p = mat ? workPrice(mat, role === 'water' ? null : r.conc) : null;
+    const pr = p == null ? null : (c.total > 0 ? p * m / c.total : 0);
+    const sc = c.secs[s.id] || (c.secs[s.id] = { m: 0, dry: 0, price: 0, priceOk: true });
+    sc.m += m; sc.dry += dry;
+    if (pr == null) { if (m > 0) { c.priceOk = false; sc.priceOk = false; } }
+    else { c.price += pr; sc.price += pr; }
+    c.rows[r.id] = { role, m, dry, price: pr, dip: c.total > 0 ? dry / c.total * 100 : null, wet: c.total > 0 ? m / c.total * 100 : null, solid: c.dry > 0 ? dry / c.dry * 100 : null };
+  });
+  const T = c.total, D = c.dry, latex = c.vpDry + c.sbrDry + c.nrDry;
+  c.tsc = T > 0 ? D / T * 100 : null;
+  c.tscNoNH3 = T > 0 ? (D - c.nh3) / T * 100 : null;
+  c.phr = c.rfDry > 0 && c.lDry > 0 ? c.rfDry / c.lDry * 100 : null;
+  c.fMol = D > 0 && c.nF > 0 ? c.nF / D * 100 : null;
+  c.rMol = D > 0 && c.nR > 0 ? c.nR / D * 100 : null;
+  c.fr = c.nR > 0 ? c.nF / c.nR : null;
+  c.naohRf = c.naoh > 0 && c.nF + c.nR > 0 ? (c.naoh / MW.NaOH) / (c.nF + c.nR) : null;
+  c.naohInRf = c.naoh > 0 ? c.naoh / (c.rfDry + c.naoh) * 100 : null;
+  c.lInSolid = D > 0 && c.lDry > 0 ? c.lDry / D * 100 : null;
+  c.synNr = latex > 0 ? [c.vpDry + c.sbrDry, c.nrDry] : null;
+  c.sbrVp = c.sbrDry + c.vpDry > 0 ? [c.sbrDry, c.vpDry] : null;
+  c.vpMonL = latex > 0 && c.vpDry > 0 && c.vpMonOk ? c.vpMon / latex * 100 : null;
+  c.nh3InL = c.lDry > 0 && c.nh3 > 0 ? c.nh3 / c.lDry * 100 : null;
+  c.priceSolid = c.tsc ? c.price / (c.tsc / 100) : null;
+  c.str = v && v.str != null && v.str > 0 && v.str < 100 ? v.str : null;
+  c.tsc100 = c.str && c.tsc != null ? c.tsc * 100 / c.str : null;
+  return c;
+}
+function outOf(key, val) {
+  const t = THEORY[key]; if (!t || val == null || !isFinite(val)) return false;
+  const x = +val.toFixed(2);
+  return (t[0] != null && x < t[0]) || (t[1] != null && x > t[1]);
+}
+// what changed from variant a (parent) to b — matched by row id (a copied variant keeps its row ids)
+function varDiff(a, b) {
+  const ca = calcVariant(a), cb = calcVariant(b), out = [];
+  const num = (label, x, y, d, unit = '') => { const fx = fmt(x, d), fy = fmt(y, d); if (fx !== fy) out.push(label + ' ' + fx + ' → ' + fy + unit); };
+  num('solid', ca.tsc, cb.tsc, 2, '%');
+  num('PHR', ca.phr, cb.phr, 2);
+  num('F/R', ca.fr, cb.fr, 2);
+  num('L in solid', ca.lInSolid, cb.lInSolid, 2, '%');
+  if (fmtNum(a.str) !== fmtNum(b.str)) out.push('strength ' + (fmtNum(a.str) || '100') + ' → ' + (fmtNum(b.str) || '100') + '%');
+  const rowsOf = v => { const m = new Map(); v.secs.forEach(s => s.rows.forEach(r => m.set(r.id, { r, s }))); return m; };
+  const A = rowsOf(a), B = rowsOf(b);
+  const label = (x, map) => {   // the same material in two sections (water) → add the section
+    const n = rowName(x.r); let dup = 0;
+    map.forEach(y => { if (rowName(y.r) === n) dup++; });
+    return dup > 1 ? n + ' (' + (SEC_SHORT[x.s.kind] || x.s.kind) + ')' : n;
+  };
+  B.forEach((x, id) => {
+    const o = A.get(id);
+    if (!o) { out.push('+ ' + label(x, B) + ' ' + fmt(+x.r.m || 0, 1) + ' g'); return; }
+    if (o.r.mat !== x.r.mat) out.push(label(o, A) + ' → ' + label(x, B));
+    if (fmt(+o.r.m || 0, 1) !== fmt(+x.r.m || 0, 1)) out.push(label(x, B) + ' ' + fmt(+o.r.m || 0, 1) + ' → ' + fmt(+x.r.m || 0, 1) + ' g');
+    if (rowRole(x.r) !== 'water' && fmtNum(o.r.conc) !== fmtNum(x.r.conc)) out.push(label(x, B) + ' ' + (fmtNum(o.r.conc) || '?') + ' → ' + (fmtNum(x.r.conc) || '?') + '%');
+  });
+  A.forEach((x, id) => { if (!B.has(id)) out.push('− ' + label(x, A)); });
+  return out;
+}
+
+// ── ACTIVE SOLUTION / VARIANT ─────────────────────────────────────────────
+function activeVar() {
+  if (!cur || !cur.vars.length) return null;
+  const id = activeVarMap[cur.id];
+  return cur.vars.find(v => v.id === id) || cur.vars[cur.vars.length - 1];
+}
+function findSec(sid) { const v = activeVar(); return v ? (v.secs.find(s => s.id === sid) || null) : null; }
+function findRow(sid, rid) { const s = findSec(sid); return s ? (s.rows.find(r => r.id === rid) || null) : null; }
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+function renderAll() { renderLibrary(); renderMain(); renderVariants(); renderGeneral(); updateHeaderSub(); }
+let _rmT = null;
+function renderMainSoon() { clearTimeout(_rmT); _rmT = setTimeout(renderMain, 250); }
+function updateHeaderSub() {
+  const v = activeVar();
+  const t = cur ? [cur.name || 'untitled', v ? v.name : ''].filter(Boolean).join(' · ') : '';
+  const sub = el('headerSub'), sep = el('headerSep');
+  if (sub) { sub.textContent = t; sub.style.display = t ? 'inline' : 'none'; }
+  if (sep) sep.style.display = t ? 'inline' : 'none';
+  document.title = (cur && cur.name ? cur.name + ' · ' : '') + 'dip-app';
+}
+function renderMain() {
+  const box = el('mainBody'); if (!box) return;
+  const v = activeVar();
+  if (!cur || !v) {
+    const fresh = !materials.some(m => m.role !== 'water');
+    box.innerHTML = '<div class="empty-state"><p>No dip open — pick one in the library, or start a new one.</p>'
+      + (fresh ? '<p>Tip: set up the raw materials first (⚗ materials), or import a JSON file that contains them (⇩ in the header).</p>' : '')
+      + '<div class="modal-row"><button class="btn-lib primary" onclick="newSolution()">+ new dip</button><button class="btn-lib" onclick="openMaterials()">⚗ materials</button></div></div>';
+    updateHeaderSub();
+    return;
+  }
+  box.innerHTML = chipsHtml(v) + headHtml(v) + recipeHtml(v)
+    + '<div class="str-help" id="strHelp"></div>'
+    + toolsHtml()
+    + '<div class="sub-title">Parameters</div><div class="par-grid" id="parGrid"></div>'
+    + '<div class="sub-title">Measured</div>' + measHtml(v);
+  updateCalc();
+}
+function chipsHtml(av) {
+  return '<div class="var-chips"><span class="var-chips-label">variants</span>'
+    + cur.vars.map(v => `<button class="chip${v === av ? ' on' : ''}" id="chip-${v.id}" onclick="selectVariant(${v.id})">${esc(v.name || '—')}</button>`).join('')
+    + '<button class="chip" onclick="newVariant()" title="new variant — a copy of the active one">+</button></div>';
+}
+function headHtml(v) {
+  return `<div class="hg hg-sol">
+      <div class="field"><label>dip</label><input type="text" id="fSolName" class="ed" value="${esc(cur.name)}" placeholder="R01" oninput="onSolField('name',this)" autocomplete="off"></div>
+      <div class="field"><label>description</label><input type="text" class="ed" value="${esc(cur.desc)}" placeholder="latex system, use…" oninput="onSolField('desc',this)" autocomplete="off"></div>
+    </div>
+    <div class="hg hg-var">
+      <div class="field"><label>variant</label><input type="text" id="fVarName" class="ed" value="${esc(v.name)}" placeholder="W85" oninput="onVarField('name',this)" autocomplete="off"></div>
+      <div class="field"><label>system code</label><input type="text" class="ed" value="${esc(v.code)}" placeholder="IR0000_01" oninput="onVarField('code',this)" autocomplete="off"></div>
+      <div class="field"><label>date</label><input type="date" class="ed" value="${esc(v.date)}" onchange="onVarField('date',this)"></div>
+      <div class="field"><label>strength %</label><input type="text" inputmode="decimal" class="ed" value="${v.str ?? ''}" placeholder="100" oninput="onVarField('str',this)" title="dilution against the full-strength (100 %) dip — e.g. W85 = 85" autocomplete="off"></div>
+    </div>`;
+}
+function matOptions(r) {
+  let h = '<option value="">— choose material —</option>';
+  ROLES.forEach(([k, label]) => {
+    const ms = materials.filter(m => roleKey(m.role) === k).sort(byName);
+    if (!ms.length) return;
+    h += `<optgroup label="${esc(label)}">` + ms.map(m => `<option value="${m.id}"${m.id === r.mat ? ' selected' : ''}>${esc(m.name || 'unnamed')}</option>`).join('') + '</optgroup>';
+  });
+  if (r.mat != null && !matById(r.mat)) h += `<option value="${r.mat}" selected>${esc(r.nm || '?')} (deleted)</option>`;
+  return h;
+}
+function rowSubHtml(r) {
+  const m = matById(r.mat), parts = [];
+  if (m) {
+    const a = actAlt(m);
+    if (a && a.name && a.name !== m.name) parts.push(esc(a.name));
+    if (m.alts.length > 1) parts.push(m.alts.length + ' alternatives');
+    if (concDiffers(r, m)) parts.push('<b>≠ material ' + fmtNum(matWork(m)) + '%</b>');
+    if (m.role !== 'water' && (!a || a.price == null)) parts.push('no price');
+  } else if (r.mat != null) parts.push('material deleted');
+  return parts.join(' · ');
+}
+function rowHtml(s, r, i) {
+  const m = matById(r.mat), water = rowRole(r) === 'water', last = i === s.rows.length - 1;
+  const def = m ? matWork(m) : null;
+  const conc = water ? '<span class="num num-dash">—</span>'
+    : `<input class="rc-in ed${concDiffers(r, m) ? ' diff' : ''}" inputmode="decimal" value="${r.conc ?? ''}" oninput="onRowNum(${s.id},${r.id},'conc',this)" title="%chem — concentration as mixed${def != null ? ' (material: ' + fmtNum(def) + ' %)' : ''}" autocomplete="off">`;
+  return `<div class="rc-grid rc-row" data-row="${r.id}">
+      <div class="a-name"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material">${matOptions(r)}</select><div class="rc-sub" id="sub${r.id}"${m ? ` onclick="openMaterials(${m.id})" title="edit the material"` : ''}>${rowSubHtml(r)}</div></div>
+      <div class="a-conc">${conc}</div>
+      <div class="a-m"><input class="rc-in m-in ed" inputmode="decimal" value="${r.m ?? ''}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
+      <span class="num a-dip" id="c${r.id}d"></span><span class="num a-solid" id="c${r.id}s"></span><span class="num a-wet" id="c${r.id}w"></span><span class="num a-price" id="c${r.id}p"></span>
+      <div class="a-act rc-act"><button class="ib" onclick="moveRow(${s.id},${r.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="moveRow(${s.id},${r.id},1)"${last ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="delRow(${s.id},${r.id})" title="remove component">✕</button></div>
+    </div>`;
+}
+function secHtml(s, i, n) {
+  return `<div class="sec">
+      <div class="sec-head">
+        <input class="sec-name ed" value="${esc(s.name)}" placeholder="section" oninput="onSecField(${s.id},'name',this.value)" title="section name" autocomplete="off">
+        <select class="sec-kind ed" onchange="onSecField(${s.id},'kind',this.value)" title="what this section counts as in the parameters">${SEC_KINDS.map(([k, l]) => `<option value="${k}"${s.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <input class="sec-note ed" value="${esc(s.note)}" placeholder="note — e.g. maturing min. 30 min" oninput="onSecField(${s.id},'note',this.value)" autocomplete="off">
+        <span class="sec-btns"><button class="ib" onclick="moveSection(${s.id},-1)"${i === 0 ? ' disabled' : ''} title="move section up">↑</button><button class="ib" onclick="moveSection(${s.id},1)"${i === n - 1 ? ' disabled' : ''} title="move section down">↓</button><button class="ib" onclick="delSection(${s.id})" title="delete section">✕</button></span>
+      </div>
+      ${s.rows.map((r, j) => rowHtml(s, r, j)).join('')}
+      <div class="rc-grid rc-sum">
+        <div class="a-name sec-foot"><button class="btn-add-row" onclick="addRow(${s.id})">+ component</button><span class="sum-l">sum ${SEC_SHORT[s.kind] || 'IK'}</span></div>
+        <span class="num a-m" id="s${s.id}m"></span><span class="num a-dip" id="s${s.id}d"></span><span class="num a-solid" id="s${s.id}s"></span><span class="num a-wet" id="s${s.id}w"></span><span class="num a-price" id="s${s.id}p"></span>
+      </div>
+    </div>`;
+}
+function recipeHtml(v) {
+  return `<div class="rc">
+      <div class="rc-grid rc-head"><span class="a-name">component</span><span class="a-conc">%chem</span><span class="a-m">m (g)</span><span class="a-dip">% in dip</span><span class="a-solid">% in solid</span><span class="a-wet">% wet</span><span class="a-price">€/kg</span><span class="a-act"></span></div>
+      ${v.secs.map((s, i) => secHtml(s, i, v.secs.length)).join('')}
+      <div class="rc-grid rc-sum total"><div class="a-name"><span class="sum-l" id="totL">sum RFL</span></div><span class="num a-m" id="tm"></span><span class="num a-dip" id="td"></span><span class="num a-solid" id="ts"></span><span class="num a-wet" id="tw"></span><span class="num a-price" id="tp"></span></div>
+    </div>
+    <div class="rc-under"><button class="btn-add-row" onclick="addSection()">+ section</button></div>`;
+}
+function toolsHtml() {
+  return `<div class="tools">
+      <span class="tool">scale batch to <input id="toolScale" class="rc-in" inputmode="decimal" placeholder="g" onkeydown="if(event.key==='Enter')toolScale()" autocomplete="off"><button class="btn-sm" onclick="toolScale()">scale</button></span>
+      <span class="tool">set solid to <input id="toolSolid" class="rc-in" inputmode="decimal" placeholder="%" onkeydown="if(event.key==='Enter')toolSolid()" autocomplete="off"><button class="btn-sm" onclick="toolSolid()">apply</button></span>
+    </div>
+    <div class="tool-hint">Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference. Tip: make a new variant first (+), then adjust it.</div>`;
+}
+function measHtml(v) {
+  const ms = v.meas || {};
+  const f = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" inputmode="decimal" class="ed" value="${esc(ms[key] ?? '')}" placeholder="${ph}" oninput="onMeas('${key}',this)" autocomplete="off"></div>`;
+  return '<div class="meas-grid">' + f('phRF', 'pH RF', '—') + f('ph', 'pH RFL', '—') + f('solid', 'solid measured %', '—')
+    + '<div class="field"><label>Δ solid vs calc.</label><div class="meas-d" id="measD">—</div></div></div>';
+}
+function parHtml(c) {
+  const P = (label, val, o = {}) => `<div class="par${o.out ? ' out' : ''}${o.key ? ' key' : ''}"${o.tip ? ` title="${esc(o.tip)}"` : ''}><span class="par-l">${label}${o.t ? ` <span class="par-t">${o.t}</span>` : ''}</span><span class="par-v">${val}</span></div>`;
+  const ratio = p => { if (!p) return '—'; const s = p[0] + p[1]; if (!(s > 0)) return '—'; const a = Math.round(p[0] / s * 100); return a + ':' + (100 - a); };
+  const out = [
+    P('solid', pct(c.tsc), { key: true, tip: 'TSC = Σ % in dip' }),
+    P('solid w/o NH₃', pct(c.tscNoNH3), { tip: 'TSC without the ammonia' }),
+    P('RF resin / L (PHR)', fmt(c.phr), { key: true, t: '15–20', out: outOf('phr', c.phr), tip: 'dry RF (resin + formaldehyde) ÷ dry latex part (without ammonia) × 100' }),
+    P('F / R (mol/mol)', fmt(c.fr), { key: true, t: '1.2–2', out: outOf('fr', c.fr), tip: 'F = resin solid × F share ÷ 30 + formaldehyde ÷ 30;  R = resin solid × R share ÷ 110' }),
+    P('F (mol)', fmt(c.fMol, 3), { tip: 'per 100 g of solid' }),
+    P('R (mol)', fmt(c.rMol, 3), { tip: 'per 100 g of solid' }),
+    P('NaOH / RF (mol/mol)', fmt(c.naohRf, 3), { tip: 'n(NaOH) ÷ (n(F) + n(R))' }),
+    P('NaOH in RF', pct(c.naohInRf), { tip: 'dry NaOH ÷ (dry RF + dry NaOH)' }),
+    P('L in solid', pct(c.lInSolid), { key: true, t: '>70', out: outOf('lInSolid', c.lInSolid), tip: 'dry latex part (without ammonia) ÷ total solid' }),
+    P('Syn : NR', ratio(c.synNr), { tip: 'dry (VP + SBR) : dry NR latex' }),
+    P('SBR : VP', ratio(c.sbrVp), { tip: 'dry SBR : dry VP latex' }),
+    P('VP monomer in L', pct(c.vpMonL), { tip: 'needs the VP monomer % of every VP latex (⚗ materials)' }),
+    P('NH₄OH in L', pct(c.nh3InL), { tip: 'NH₃ ÷ dry latex part' }),
+    P('price / kg dip', eur(c.price, c.priceOk), { key: true, tip: c.priceOk ? 'active alternatives, incl. the pre-dilution' : 'some components have no price — the sum is a lower bound' }),
+    P('price / kg solid', eur(c.priceSolid, c.priceOk)),
+    P('sum RF', fmt(c.sumRF, 1) + ' g'),
+    P('sum L', fmt(c.sumL, 1) + ' g'),
+    P('sum RFL', fmt(c.sumRF + c.sumL, 1) + ' g')
+  ];
+  if (c.hasAdd) out.push(P('sum RFL+IK', fmt(c.total, 1) + ' g'));
+  return out.join('');
+}
+function strHtml(c) {
+  if (!c.str || !(c.total > 0)) return '';
+  const T = c.total, w = T * (100 / c.str - 1), full = T * c.str / 100;
+  return 'strength <b>' + fmtNum(c.str) + '%</b> — the 100% dip has <b>' + pct(c.tsc100) + '</b> solid<br>'
+    + 'dilute: <b>' + fmt(T, 1) + ' g</b> of the 100% dip + <b>' + fmt(w, 1) + ' g</b> water = ' + fmt(T + w, 1) + ' g<br>'
+    + 'or for ' + fmt(T, 1) + ' g: <b>' + fmt(full, 1) + ' g</b> of the 100% dip + <b>' + fmt(T - full, 1) + ' g</b> water';
+}
+// computed cells only — inputs are never re-rendered while typing
+function updateCalc() {
+  const v = activeVar(); if (!cur || !v) return;
+  const c = calcVariant(v);
+  v.secs.forEach(s => {
+    const sc = c.secs[s.id] || { m: 0, dry: 0, price: 0, priceOk: true };
+    setText('s' + s.id + 'm', fmt(sc.m, 1));
+    setText('s' + s.id + 'd', pct(c.total > 0 ? sc.dry / c.total * 100 : null));
+    setText('s' + s.id + 's', pct(c.dry > 0 ? sc.dry / c.dry * 100 : null));
+    setText('s' + s.id + 'w', pct(c.total > 0 ? sc.m / c.total * 100 : null));
+    setText('s' + s.id + 'p', eur(sc.price, sc.priceOk, 3, ''));
+    s.rows.forEach(r => {
+      const x = c.rows[r.id]; if (!x) return;
+      const water = x.role === 'water';
+      setText('c' + r.id + 'd', water ? '' : pct(x.dip));
+      setText('c' + r.id + 's', water ? '' : pct(x.solid));
+      setText('c' + r.id + 'w', pct(x.wet));
+      setText('c' + r.id + 'p', eur(x.price, true, 3, ''));
+    });
+  });
+  setText('totL', c.hasAdd ? 'sum RFL+IK' : 'sum RFL');
+  setText('tm', fmt(c.total, 1));
+  setText('td', pct(c.tsc));
+  setText('ts', c.dry > 0 ? '100%' : '—');
+  setText('tw', c.total > 0 ? '100%' : '—');
+  setText('tp', eur(c.price, c.priceOk, 3, ''));
+  const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c);
+  const sh = el('strHelp'); if (sh) { const h = strHtml(c); sh.innerHTML = h; sh.style.display = h ? '' : 'none'; }
+  const ms = numOrNull((v.meas || {}).solid);
+  setText('measD', ms != null && c.tsc != null ? (ms - c.tsc >= 0 ? '+' : '') + (ms - c.tsc).toFixed(2) + '%' : '—');
+  updateVarMeta();
+  updateHeaderSub();
+}
+
+// ── NOTES PANEL: variants + solution note ─────────────────────────────────
+function varStats(c) { return [pct(c.tsc), 'PHR ' + fmt(c.phr), 'F/R ' + fmt(c.fr), eur(c.price, c.priceOk, 2) + '/kg', fmt(c.total, 1) + ' g'].join(' · '); }
+function varDiffText(v) {
+  const p = v.from != null ? cur.vars.find(x => x.id === v.from) : null;
+  if (!p) return '';
+  const d = varDiff(p, v);
+  return 'vs ' + (p.name || '—') + ': ' + (d.length ? d.slice(0, 8).join(' · ') + (d.length > 8 ? ' · …' : '') : 'no change yet');
+}
+function updateVarMeta() {
+  if (!cur) return;
+  cur.vars.forEach(v => { setText('vs-' + v.id, varStats(calcVariant(v))); setText('vd-' + v.id, varDiffText(v)); });
+}
+function renderVariants() {
+  const box = el('varsBody'); if (!box) return;
+  if (!cur) { box.innerHTML = '<div class="lib-empty">No dip open.</div>'; return; }
+  const av = activeVar();
+  box.innerHTML = `<div class="var-tools"><button class="btn-sm" onclick="newVariant()" title="a copy of the active variant — change it and note what and why">+ new variant</button><span class="var-count">${cur.vars.length} variant${cur.vars.length === 1 ? '' : 's'}</span></div>`
+    + '<div class="var-list">' + cur.vars.slice().reverse().map(v => `
+      <div class="var-item${v === av ? ' active' : ''}">
+        <div class="var-head" onclick="selectVariant(${v.id})" title="show this variant">
+          <span class="var-name" id="vn-${v.id}">${esc(v.name || '—')}</span>
+          <span class="var-code" id="vc-${v.id}">${esc(v.code)}</span>
+          <span class="var-date" id="vt-${v.id}">${esc(v.date)}</span>
+          <span class="var-btns"><button class="ib" onclick="event.stopPropagation();newVariant(${v.id})" title="new variant from this one">⧉</button><button class="ib" onclick="event.stopPropagation();deleteVariant(${v.id})" title="delete variant">✕</button></span>
+        </div>
+        <div class="var-body">
+          <div class="var-stats" id="vs-${v.id}"></div>
+          <div class="var-diff" id="vd-${v.id}"></div>
+          <textarea class="var-note ed" placeholder="What changed and why — observations, test results…" oninput="onVarNote(${v.id},this)">${esc(v.note)}</textarea>
+        </div>
+      </div>`).join('') + '</div>';
+  updateVarMeta();
+  growAll();
+}
+function renderGeneral() {
+  const box = el('genBody'); if (!box) return;
+  if (!cur) { box.innerHTML = '<div class="lib-empty">No dip open.</div>'; return; }
+  box.innerHTML = `<div class="field"><label>general note — <span id="genName">${esc(cur.name || 'untitled')}</span></label><textarea id="solNote" class="sol-note ed" placeholder="Purpose, products it is used for, history, open questions…" oninput="onSolNote(this)">${esc(cur.note)}</textarea></div>`;
+  growAll();
+}
+function switchNotesTab(t) {
+  notesTab = t;
+  document.querySelectorAll('.notes-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  document.querySelectorAll('#panel-notes .notes-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + t));
+  try { localStorage.setItem(NOTES_TAB_KEY, t); } catch(e) {}
+  growAll();
+}
+// multi-line fields grow with their content (see CLAUDE.md "auto-grow")
+function autoGrow(ta) {
+  if (!ta || ta.offsetParent === null) return;   // hidden → scrollHeight would be 0
+  ta.style.height = 'auto';
+  const max = Math.max(320, Math.round(window.innerHeight * (isPanelExpanded('panel-notes') ? 0.78 : 0.55)));
+  const h = ta.scrollHeight + (ta.offsetHeight - ta.clientHeight);
+  if (h > max) { ta.style.height = max + 'px'; ta.style.overflowY = 'auto'; }
+  else { ta.style.height = h + 'px'; ta.style.overflowY = 'hidden'; }
+}
+function growAll() { document.querySelectorAll('#panel-notes textarea').forEach(autoGrow); }
+
+// ── EDIT HANDLERS ─────────────────────────────────────────────────────────
+function onSolField(key, inp) {
+  if (!cur) return;
+  coalesceUndo(); cur[key] = inp.value;
+  if (key === 'name') setText('genName', cur.name || 'untitled');
+  updateHeaderSub(); schedSave();
+}
+function onVarField(key, inp) {
+  const v = activeVar(); if (!v) return;
+  coalesceUndo();
+  v[key] = key === 'str' ? numOrNull(inp.value) : inp.value;
+  if (key === 'name') { setText('chip-' + v.id, v.name || '—'); setText('vn-' + v.id, v.name || '—'); }
+  if (key === 'code') setText('vc-' + v.id, v.code);
+  if (key === 'date') setText('vt-' + v.id, v.date);
+  updateCalc();   // strength helper, header, diffs of child variants (they quote this name)
+  schedSave();
+}
+function onSecField(sid, key, val) {
+  const s = findSec(sid); if (!s) return;
+  coalesceUndo(); s[key] = val;
+  if (key === 'kind') renderMain();
+  schedSave();
+}
+function onRowNum(sid, rid, key, inp) {
+  const r = findRow(sid, rid); if (!r) return;
+  coalesceUndo();
+  r[key] = numOrNull(inp.value);
+  if (key === 'conc') { inp.classList.toggle('diff', concDiffers(r, matById(r.mat))); const sub = el('sub' + r.id); if (sub) sub.innerHTML = rowSubHtml(r); }
+  updateCalc(); schedSave();
+}
+function onRowMat(sid, rid, val) {
+  const r = findRow(sid, rid); if (!r) return;
+  const m = val === '' ? null : matById(+val);
+  if (!m && val !== '') return;   // the "(deleted)" entry re-selected — nothing to change
+  coalesceUndo();
+  r.mat = m ? m.id : null; r.nm = m ? m.name : ''; r.role = m ? m.role : 'other';
+  r.conc = m ? matWork(m) : null;
+  renderMain(); schedSave();
+}
+function onVarNote(vid, ta) {
+  const v = cur && cur.vars.find(x => x.id === vid); if (!v) return;
+  coalesceUndo(); v.note = ta.value; autoGrow(ta); schedSave();
+}
+function onSolNote(ta) { if (!cur) return; coalesceUndo(); cur.note = ta.value; autoGrow(ta); schedSave(); }
+function onMeas(key, inp) {
+  const v = activeVar(); if (!v) return;
+  coalesceUndo();
+  v.meas = v.meas || {};
+  if (inp.value === '') delete v.meas[key]; else v.meas[key] = inp.value;
+  if (key === 'solid') updateCalc();
+  schedSave();
+}
+// Enter in a mass field jumps to the next one — quick entry while weighing
+function rcEnter(e, inp) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const all = [...document.querySelectorAll('#panel-main .m-in')], i = all.indexOf(inp);
+  if (i >= 0 && all[i + 1]) { all[i + 1].focus(); all[i + 1].select(); } else inp.blur();
+}
+function addRow(sid) {
+  const s = findSec(sid); if (!s) return;
+  pushUndo();
+  const r = { id: uid(), mat: null, nm: '', role: 'other', conc: null, m: null };
+  s.rows.push(r);
+  renderMain(); schedSave();
+  const sel = document.querySelector('#panel-main [data-row="' + r.id + '"] .rc-mat'); if (sel) sel.focus();
+}
+function delRow(sid, rid) {
+  const s = findSec(sid); if (!s) return;
+  pushUndo();
+  s.rows = s.rows.filter(r => r.id !== rid);
+  renderMain(); schedSave();
+}
+function moveRow(sid, rid, dir) {
+  const s = findSec(sid); if (!s) return;
+  const i = s.rows.findIndex(r => r.id === rid), j = i + dir;
+  if (i < 0 || j < 0 || j >= s.rows.length) return;
+  pushUndo();
+  [s.rows[i], s.rows[j]] = [s.rows[j], s.rows[i]];
+  renderMain(); schedSave();
+}
+function addSection() {
+  const v = activeVar(); if (!v) return;
+  pushUndo();
+  const has = k => v.secs.some(s => s.kind === k);
+  const kind = !has('rf') ? 'rf' : !has('latex') ? 'latex' : 'add';
+  const label = SEC_KINDS.find(k => k[0] === kind)[1];
+  v.secs.push({ id: uid(), kind, name: (v.secs.length + 1) + '. ' + label, note: '', rows: [] });
+  renderMain(); schedSave();
+}
+async function delSection(sid) {
+  const v = activeVar(), s = findSec(sid); if (!s) return;
+  if (s.rows.length && !await customConfirm('Delete section “' + (s.name || '—') + '” with ' + s.rows.length + ' component(s)?', 'delete')) return;
+  pushUndo();
+  v.secs = v.secs.filter(x => x.id !== sid);
+  renderMain(); schedSave();
+}
+function moveSection(sid, dir) {
+  const v = activeVar(); if (!v) return;
+  const i = v.secs.findIndex(s => s.id === sid), j = i + dir;
+  if (i < 0 || j < 0 || j >= v.secs.length) return;
+  pushUndo();
+  [v.secs[i], v.secs[j]] = [v.secs[j], v.secs[i]];
+  renderMain(); schedSave();
+}
+
+// ── VARIANTS ──────────────────────────────────────────────────────────────
+function selectVariant(vid) {
+  if (!cur || !cur.vars.some(v => v.id === vid)) return;
+  activeVarMap[cur.id] = vid; saveActiveVarMap();
+  renderMain(); renderVariants();
+}
+function nextVarName() {
+  let n = cur.vars.length + 1;
+  while (cur.vars.some(v => v.name === 'V' + n)) n++;
+  return 'V' + n;
+}
+function newVariant(fromId) {
+  if (!cur) { showStatusMsg('open a dip first'); return; }
+  const src = fromId != null ? cur.vars.find(v => v.id === fromId) : activeVar(); if (!src) return;
+  pushUndo();
+  const v = clone(src);   // row ids stay → the diff against the parent matches rows by id
+  v.id = uid(); v.name = nextVarName(); v.date = todayIso(); v.from = src.id; v.note = ''; v.meas = {};
+  cur.vars.push(v);
+  activeVarMap[cur.id] = v.id; saveActiveVarMap();
+  renderMain(); renderVariants(); schedSave();
+  const i = el('fVarName'); if (i) { i.focus(); i.select(); }
+  showSave('+ variant ' + v.name + ' (copy of ' + (src.name || '—') + ')');
+}
+async function deleteVariant(vid) {
+  if (!cur) return;
+  const v = cur.vars.find(x => x.id === vid); if (!v) return;
+  if (cur.vars.length < 2) { await customAlert('A dip keeps at least one variant — delete the whole dip in the library instead.'); return; }
+  if (!await customConfirm('Delete variant “' + (v.name || '—') + '”? (↩ undo brings it back)', 'delete')) return;
+  pushUndo();
+  cur.vars = cur.vars.filter(x => x.id !== vid);
+  if (activeVarMap[cur.id] === vid) { delete activeVarMap[cur.id]; saveActiveVarMap(); }
+  renderMain(); renderVariants(); schedSave();
+}
+
+// ── TOOLS (recalculation rules: keep the batch mass; solid changes go through the first water) ──
+function firstWater(v) { for (const s of v.secs) for (const r of s.rows) if (rowRole(r) === 'water') return r; return null; }
+function sumMass(v) { let t = 0; v.secs.forEach(s => s.rows.forEach(r => { t += +r.m || 0; })); return t; }
+function toolScale() {
+  const v = activeVar(); if (!v) return;
+  const target = parseNum(el('toolScale').value), T = sumMass(v);
+  if (!(target > 0)) { customAlert('Enter the new batch mass in grams.'); return; }
+  if (!(T > 0)) { customAlert('The recipe has no mass to scale yet.'); return; }
+  pushUndo();
+  const k = target / T;
+  v.secs.forEach(s => s.rows.forEach(r => { if (r.m != null) r.m = round2(r.m * k); }));
+  const w = firstWater(v); if (w) w.m = round2((+w.m || 0) + target - sumMass(v));   // rounding remainder → first water
+  renderMain(); schedSave();
+  showSave('⇲ scaled to ' + fmt(target, 1) + ' g');
+}
+function toolSolid() {
+  const v = activeVar(); if (!v) return;
+  const target = parseNum(el('toolSolid').value), c = calcVariant(v);
+  if (!(target > 0 && target < 100)) { customAlert('Enter the target solid in % (between 0 and 100).'); return; }
+  if (!(c.tsc > 0)) { customAlert('The recipe has no solid yet.'); return; }
+  const w = firstWater(v);
+  if (!w) { customAlert('The recipe has no water row — the solid is adjusted through the first water.'); return; }
+  const T = c.total, k = target / c.tsc;
+  const others = T - (+w.m || 0);
+  if (others * k > T) {
+    customAlert('Not possible: at ' + fmt(target) + '% solid the other components alone would weigh ' + fmt(others * k, 1) + ' g — more than the batch (' + fmt(T, 1) + ' g). The most this batch can reach is ' + pct(c.tsc * T / others) + '.');
+    return;
+  }
+  pushUndo();
+  v.secs.forEach(s => s.rows.forEach(r => { if (r !== w && r.m != null) r.m = round2(r.m * k); }));
+  w.m = round2((+w.m || 0) + T - sumMass(v));
+  renderMain(); schedSave();
+  showSave('solid set to ' + fmt(target) + '% — first water ' + fmt(w.m, 1) + ' g');
+}
+
+// ── MATERIALS (modal) ─────────────────────────────────────────────────────
+let matOpenId = null;
+function openMaterials(focusId) {
+  if (focusId != null) matOpenId = focusId;
+  el('matSearch').value = '';
+  renderMaterials();
+  el('matModal').classList.add('open');
+  if (focusId != null) setTimeout(() => { const it = el('mat-' + focusId); if (it) it.scrollIntoView({ block: 'nearest' }); }, 0);
+}
+function matUsage(id) {   // stored dips using the material → ["R01 (W85, W100)", …]
+  const out = [];
+  library.forEach(s => {
+    const vs = s.vars.filter(v => v.secs.some(sec => sec.rows.some(r => r.mat === id)));
+    if (vs.length) out.push((s.name || 'untitled') + ' (' + vs.map(v => v.name || '—').join(', ') + ')');
+  });
+  return out;
+}
+function matMetaText(m) {
+  const a = actAlt(m), w = matWork(m), parts = [ROLE_NAME[m.role] || m.role];
+  if (m.role !== 'water') parts.push(w != null ? fmtNum(w) + '%' : '? %');
+  if (a && a.name && a.name !== m.name) parts.push(a.name);
+  if (m.alts.length > 1) parts.push(m.alts.length + ' alternatives');
+  const p = workPrice(m, w);
+  parts.push(p != null ? p.toFixed(3) + ' €/kg' : 'no price');
+  return parts.join(' · ');
+}
+function matInfoHtml(m) {
+  const a = actAlt(m), w = matWork(m), p = workPrice(m, w), parts = [];
+  if (m.role !== 'water' && a && a.conc != null && w != null && w < a.conc) parts.push('pre-diluted ' + fmtNum(a.conc) + ' → ' + fmtNum(w) + '% with water');
+  parts.push('as mixed: ' + (p != null ? p.toFixed(3) + ' €/kg' : 'no price'));
+  const u = matUsage(m.id);
+  parts.push(u.length ? 'used in: ' + u.join('; ') : 'not used in any recipe');
+  return esc(parts.join(' · '));
+}
+function renderMaterials() {
+  const list = el('matList'); if (!list) return;
+  const q = (el('matSearch').value || '').trim().toLowerCase();
+  const match = m => !q || (m.name + ' ' + m.note + ' ' + m.alts.map(a => a.name + ' ' + a.producer).join(' ')).toLowerCase().includes(q);
+  let h = '';
+  ROLES.forEach(([k, label]) => {
+    const ms = materials.filter(m => roleKey(m.role) === k && match(m)).sort(byName);
+    if (ms.length) h += `<div class="mat-group">${esc(label)}</div>` + ms.map(matHtml).join('');
+  });
+  list.innerHTML = h || '<div class="lib-empty">' + (q ? 'Nothing matches.' : 'No materials yet — add one, or import a JSON file that contains them (⇩).') + '</div>';
+  setText('matCount', materials.length ? materials.length + ' materials' : '');
+}
+function matHtml(m) {
+  const open = m.id === matOpenId, water = m.role === 'water';
+  let h = `<div class="mat-item${open ? ' open' : ''}" id="mat-${m.id}">
+    <div class="mat-head" onclick="toggleMat(${m.id})"><span class="mat-name" id="matN-${m.id}">${esc(m.name || 'unnamed')}</span><span class="mat-meta" id="matM-${m.id}">${esc(matMetaText(m))}</span><span class="mat-caret">${open ? '▾' : '▸'}</span></div>`;
+  if (open) {
+    h += `<div class="mat-body">
+      <div class="mat-grid">
+        <div class="mf"><label>name in recipes</label><input type="text" value="${esc(m.name)}" oninput="matField(${m.id},'name',this.value)" autocomplete="off"></div>
+        <div class="mf"><label>role</label><select onchange="matField(${m.id},'role',this.value)">${ROLES.map(([k, l]) => `<option value="${k}"${roleKey(m.role) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        ${water ? '' : `<div class="mf"><label>working conc. %</label><input type="text" inputmode="decimal" value="${m.work ?? ''}" placeholder="as delivered" oninput="matField(${m.id},'work',this.value)" title="pre-diluted to this concentration for mixing (e.g. NaOH 50 → 10 %) — empty = used as delivered" autocomplete="off"></div>`}
+      </div>
+      <div class="mf"><label>note</label><input type="text" value="${esc(m.note)}" oninput="matField(${m.id},'note',this.value)" autocomplete="off"></div>
+      <div class="alt-title">approved alternatives — ● = mixed in production now</div>
+      ${m.alts.map(a => altHtml(m, a)).join('')}
+      <div class="mat-actions"><button class="btn-sm" onclick="addAlt(${m.id})">+ alternative</button><button class="btn-sm danger" onclick="deleteMaterial(${m.id})">delete material</button></div>
+      <div class="mat-info" id="matI-${m.id}">${matInfoHtml(m)}</div>
+    </div>`;
+  }
+  return h + '</div>';
+}
+function altHtml(m, a) {
+  const on = a.id === m.act, water = m.role === 'water';
+  const f = (key, label, ph, tip) => `<div class="mf"><label>${label}</label><input type="text"${key === 'producer' ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${m.id},${a.id},'${key}',this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off"></div>`;
+  return `<div class="alt${on ? ' on' : ''}">
+      <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${m.id},${a.id})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>
+        <input class="alt-name" type="text" value="${esc(a.name)}" placeholder="product name" oninput="altField(${m.id},${a.id},'name',this.value)" autocomplete="off">
+        <button class="ib" onclick="deleteAlt(${m.id},${a.id})" title="remove alternative"${m.alts.length < 2 ? ' disabled' : ''}>✕</button></div>
+      <div class="alt-fields">
+        ${f('producer', 'producer')}
+        ${water ? '' : f('conc', 'conc. %', 'as delivered', 'concentration as delivered')}
+        ${f('price', '€ / kg', '', 'price per kg as delivered')}
+        ${f('cons', 't / year', '', 'consumption')}
+        ${m.role === 'resin' ? f('fF', 'F in solid %', String(RESIN_F), 'formaldehyde share of the resin solid') + f('fR', 'R in solid %', String(RESIN_R), 'resorcinol share of the resin solid') : ''}
+        ${m.role === 'latex-vp' ? f('vp', 'VP monomer %', '?', 'vinylpyridine share of the latex polymer') : ''}
+      </div>
+    </div>`;
+}
+function toggleMat(id) { matOpenId = matOpenId === id ? null : id; renderMaterials(); }
+// every material edit: stamp mt only on a real change, save (wrapped → sync), refresh the recipe behind the modal
+function touchMaterial(m, before) {
+  if (JSON.stringify(m) === before) return false;
+  m.mt = Date.now(); saveMaterials(); renderMainSoon();
+  return true;
+}
+function updateMatHead(m) {
+  setText('matN-' + m.id, m.name || 'unnamed'); setText('matM-' + m.id, matMetaText(m));
+  const i = el('matI-' + m.id); if (i) i.innerHTML = matInfoHtml(m);
+}
+function matField(id, key, val) {
+  const m = matById(id); if (!m) return;
+  const before = JSON.stringify(m);
+  m[key] = key === 'work' ? numOrNull(val) : val;
+  if (!touchMaterial(m, before)) return;
+  if (key === 'role') renderMaterials(); else updateMatHead(m);
+}
+function altField(mid, aid, key, val) {
+  const m = matById(mid), a = m && m.alts.find(x => x.id === aid); if (!a) return;
+  const before = JSON.stringify(m);
+  a[key] = key === 'name' || key === 'producer' || key === 'note' ? val : numOrNull(val);
+  if (touchMaterial(m, before)) updateMatHead(m);
+}
+function setActAlt(mid, aid) {
+  const m = matById(mid); if (!m) return;
+  const before = JSON.stringify(m);
+  m.act = aid;
+  if (touchMaterial(m, before)) { renderMaterials(); showSave('production now uses ' + (actAlt(m).name || 'the selected alternative')); }
+}
+function addAlt(mid) {
+  const m = matById(mid); if (!m) return;
+  const before = JSON.stringify(m), a = actAlt(m);
+  m.alts.push(normAlt({ id: uid(), conc: a ? a.conc : null, fF: a ? a.fF : null, fR: a ? a.fR : null }));
+  touchMaterial(m, before); renderMaterials();
+}
+async function deleteAlt(mid, aid) {
+  const m = matById(mid); if (!m || m.alts.length < 2) return;
+  const a = m.alts.find(x => x.id === aid); if (!a) return;
+  if (!await customConfirm('Remove alternative “' + (a.name || 'unnamed') + '”?', 'remove')) return;
+  const before = JSON.stringify(m);
+  m.alts = m.alts.filter(x => x.id !== aid);
+  if (m.act === aid) m.act = m.alts[0].id;
+  touchMaterial(m, before); renderMaterials();
+}
+function addMaterial() {
+  const m = normMaterial({ id: uid(), name: '', role: 'other', alts: [{ id: uid() }], mt: Date.now() });
+  materials.push(m); saveMaterials();
+  matOpenId = m.id; el('matSearch').value = '';
+  renderMaterials();
+  const it = el('mat-' + m.id);
+  if (it) { it.scrollIntoView({ block: 'nearest' }); const i = it.querySelector('.mf input'); if (i) i.focus(); }
+}
+async function deleteMaterial(id) {
+  const m = matById(id); if (!m) return;
+  const u = matUsage(id);
+  if (!await customConfirm('Delete material “' + (m.name || 'unnamed') + '”?' + (u.length ? ' It is used in ' + u.join('; ') + ' — those rows keep the name and role, but lose the price.' : ''), 'delete')) return;
+  materials = materials.filter(x => x.id !== id); saveMaterials();
+  if (matOpenId === id) matOpenId = null;
+  renderMaterials(); renderMainSoon();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+function init() {
+  initFs();
+  initDark();
+  loadPanelFs();
+  loadMaterials();
+  loadLibrary();
+  loadActiveVarMap();
+  try { const t = localStorage.getItem(NOTES_TAB_KEY); if (t === 'vars' || t === 'gen') notesTab = t; } catch(e) {}
+  const restored = loadSession();
+  if (!restored) renderAll();
+  switchNotesTab(notesTab);
+  updateUndoBtn();
+  if (restored) showSave('↓ restored');
+  // undo coalescing: remember the state when an editable field gets focus (pushed on its first edit)
+  document.addEventListener('focusin', e => { const t = e.target; if (t && t.classList && t.classList.contains('ed')) { _focusSnap = sessionSnap(); _pushedThisFocus = false; } });
+  document.addEventListener('focusout', e => { const t = e.target; if (t && t.classList && t.classList.contains('ed')) { _focusSnap = null; _pushedThisFocus = false; } });
+  // leaving the page: write a pending edit right away (the debounce would lose it)
+  window.addEventListener('pagehide', flushActiveEdit);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushActiveEdit(); });
+  let growT = null;
+  window.addEventListener('resize', () => { clearTimeout(growT); growT = setTimeout(growAll, 150); });
+}
+init();
+window.addEventListener('resize', updateAppGrid);
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
+  }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); undo(); }
+  }
+});
+</script>
+
+<!-- Clear storage modal -->
+<div class="modal-bg" id="clearStorageModal">
+  <div class="modal" style="max-width:360px">
+    <h2>delete data</h2>
+    <p style="font-size:.82rem;color:var(--muted)">Select what you want to delete. This action cannot be undone.</p>
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
+      <label class="modal-item"><input type="checkbox" id="clr-session" checked><span>current session (open dip, shown variants)</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-library" checked><span>dips</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-materials" checked><span>materials</span></label>
+      <label class="modal-item"><input type="checkbox" id="clr-appearance"><span>appearance settings (font, dark mode)</span></label>
+    </div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" onclick="closeModal('clearStorageModal')">cancel</button>
+      <button class="modal-btn" onclick="toggleAllClear()">select/deselect all</button>
+      <button class="modal-btn primary" onclick="doSelectiveClear()">delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom confirm modal -->
+<div class="modal-bg" id="confirmModal">
+  <div class="modal" style="max-width:340px">
+    <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
+      <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gist settings modal -->
+<div class="modal-bg" id="jsonbinModal">
+  <div class="modal" style="max-width:400px;gap:.65rem">
+    <h2>Gist sync settings</h2>
+    <p>Enter your GitHub token and Gist ID. Data is stored only in this browser.</p>
+    <p style="font-size:.78rem;color:var(--muted)">Create a token at <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). You can find your gists at <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
+    <div class="jb-field">
+      <label>GitHub Token</label>
+      <input type="text" id="jbKeyInput" placeholder="ghp_..." spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label>Gist ID</label>
+      <input type="text" id="jbIdInput" placeholder="abc123def456… (empty = will be created)" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label>Device name</label>
+      <input type="text" id="jbDeviceInput" placeholder="e.g. work PC, phone…" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="modal-row" id="gistHistoryRow" style="display:none">
+      <button class="btn-io" onclick="openGistHistory()">⏱ version history</button>
+    </div>
+    <div class="modal-row" id="syncLinkRow" style="display:none">
+      <button class="btn-io" id="syncLinkBtn" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
+    </div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="saveJsonBinSettings()">save</button>
+      <button class="modal-btn" onclick="closeModal('jsonbinModal')">cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
+   Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
+   Data lives in a single private gist (file dip-app-sync.json).
+   Collections: library = solutions (LWW by id, one record incl. all variants) + materials (LWW by id).
+   No append-only collections. A new collection needs: currentKeySet, sigOf, buildAutoPayload,
+   autoImportSilent (lwwMerge), doCloudUpload and the list of wrapped save functions at the bottom. */
+(function(){
+  const GHTOKEN = 'dip-app-gist-token';      // GitHub token (scope gist)
+  const GISTID  = 'dip-app-gist-id';          // Gist ID (empty = sync will create it on the first push)
+  const ASKEY   = 'dip-app-autosync';
+  const GIST_API  = 'https://api.github.com/gists';
+  const GIST_FILE = 'dip-app-sync.json';      // file name inside the gist (data = JSON string)
+  const DEVICE = 'dip-app-device';           // name of this device (attached to the payload → visible in version history)
+  function defaultDeviceName() {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'Android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iPhone/iPad';
+    if (/Windows/i.test(ua)) return 'PC (Windows)';
+    if (/Macintosh|Mac OS/i.test(ua)) return 'Mac';
+    if (/Linux/i.test(ua)) return 'PC (Linux)';
+    return 'device';
+  }
+  function getDeviceName() {
+    try { let n = localStorage.getItem(DEVICE); if (!n) { n = defaultDeviceName(); localStorage.setItem(DEVICE, n); } return n; }
+    catch(e) { return defaultDeviceName(); }
+  }
+  const PUSH_MIN_INTERVAL = 4000;             // max 1 push / 4 s
+  let pushTimer = null, lastPushTs = 0, pushing = false, pushAgain = false, stateTimer = null, pulling = false;
+  let pushCooldownUntil = 0;                   // set when GitHub rate-limits us → don't push again until then (avoids hammering a secondary limit)
+  let applyingRemote = false;                 // true during a silent merge → suppresses the save-hook (no recursion)
+  let cloudSchemaAhead = false;               // cloud written by a newer app version → pause our push so we can't overwrite it
+  let schemaWarnShown = false;                // the blocking warning is shown at most once per session
+  // Inspect a freshly fetched cloud record: is its schema newer than what this build understands?
+  function checkCloudSchema(record) {
+    const cs = +(record && record.schema) || 0;
+    cloudSchemaAhead = cs > APP_SCHEMA;
+    updateAutoSyncBtn();
+    if (cloudSchemaAhead) {
+      showStatusMsg('⚠ A newer version of the app is in use on another device — reload this page before editing (sync paused to protect your data)', 8000);
+      if (!schemaWarnShown) {
+        schemaWarnShown = true;
+        try { customAlert('A newer version of this app is in use on another device.\n\nReload this page (Ctrl+Shift+R) before editing here. Until you do, this older version will NOT upload its changes, so it cannot overwrite the newer data in the cloud.'); } catch(e) {}
+      }
+    }
+    return cloudSchemaAhead;
+  }
+
+  // headers: reading (GET) does not need Content-Type, writing (POST/PATCH) does
+  function ghHeaders(token, write) {
+    const h = { 'Accept': 'application/vnd.github+json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    if (write) h['Content-Type'] = 'application/json';
+    return h;
+  }
+  function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
+  // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private
+  function gistWriteInit(token, creating, payload) {
+    const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
+    const body = creating ? { description: 'dip-app-sync', public: false, files } : { files };
+    return { method: creating ? 'POST' : 'PATCH', mode:'cors', credentials:'omit', headers: ghHeaders(token, true), body: JSON.stringify(body) };
+  }
+  function openJsonBinSettings() {
+    try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(GISTID)||''; } catch(e) {}
+    try { el('jbDeviceInput').value = getDeviceName(); } catch(e) {}
+    try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    el('jsonbinModal').classList.add('open');
+  }
+  function saveJsonBinSettings() {
+    let idChanged = false;
+    try {
+      const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
+      const dev = el('jbDeviceInput').value.trim();
+      if (dev) localStorage.setItem(DEVICE, dev); else localStorage.removeItem(DEVICE);
+      idChanged = id !== (localStorage.getItem(GISTID) || '');
+      if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
+      if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
+    } catch(e) {}
+    if (idChanged) {   // newly entered ID → download the cloud right away (otherwise only after reload)
+      try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {}
+      try { checkCloudOnStartup(); } catch(e) {}
+    }
+    closeModal('jsonbinModal');
+  }
+  function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
+  // link for a new device: Gist ID (optionally token + autosync) in the URL hash —
+  // the hash is not sent to the server and the recipient removes it from the address and history right after load
+  async function copySyncLink() {
+    const gistId = localStorage.getItem(GISTID) || '';
+    if (!gistId) { showSyncTooltip('⚠ save a Gist ID first'); return; }
+    const token = localStorage.getItem(GHTOKEN) || '';
+    let withTok = false;
+    if (token) withTok = await customConfirm('Include the GitHub token in the link too? The link will then expose all data — only send it between your own devices. Without the token you will enter it manually on the new device.', 'include token');
+    const p = new URLSearchParams();
+    p.set('gid', gistId);
+    if (withTok) p.set('tok', token);
+    if (autosyncEnabled()) p.set('as', '1');
+    // APP LOGIC: adjust the fallback URL if the app folder is named differently from dip-app
+    const base = /github\.io$/.test(location.hostname) ? location.origin + location.pathname : 'https://lordkrabaty.github.io/webapps/dip-app/';
+    const url = base + '#' + p.toString();
+    try { await navigator.clipboard.writeText(url); showSyncTooltip('🔗 link copied — open it on the new device'); flashBtn('syncLinkBtn', '✓ link copied'); }
+    catch(e) {   // clipboard API missing (http / old browser) → hidden textarea, otherwise at least show the link
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch(e2) {}
+      document.body.removeChild(ta);
+      if (ok) { showSyncTooltip('🔗 link copied — open it on the new device'); flashBtn('syncLinkBtn', '✓ link copied'); }
+      else await customAlert('Copy the link for the new device: ' + url);
+    }
+  }
+  function isCorsErr(e) { return (e instanceof TypeError) && /fetch/i.test(e.message); }
+  // GET the gist — returns the raw Response (the caller checks res.ok)
+  async function gistGet(gistId, token) {
+    return fetch(gistUrl(gistId), { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+  }
+  // extracts the stored data (GIST_FILE content) from the GET response as an object; null = cannot read
+  async function gistRecord(res) {
+    let json; try { json = await res.json(); } catch(e) { return null; }
+    const file = json && json.files && json.files[GIST_FILE];
+    if (!file) return null;
+    let content = file.content;
+    if (file.truncated && file.raw_url) {   // GitHub truncates content > ~1 MB → fetch it via raw_url
+      try { content = await (await fetch(file.raw_url, { mode:'cors', credentials:'omit' })).text(); } catch(e) {}
+    }
+    if (!content) return null;
+    try { return JSON.parse(content); } catch(e) { return null; }
+  }
+  function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
+  function hasToken() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // a token is enough → sync creates the gist itself
+
+  /* ── TOMBSTONES (propagation of deletions between devices) ── */
+  const TOMB_KEY  = 'dip-app-tombstones';    // { "<ns>:<id>": deletedAtTs }
+  const KNOWN_KEY = 'dip-app-syncknown';     // [ "<ns>:<id>", … ] state from the previous reconcile
+  const TOMB_TTL  = 90 * 864e5;               // drop tombstones older than 90 days
+  let tombstones = {};
+  let knownIds = null;                         // null = not tracked yet
+  function loadTombstones() { try { tombstones = JSON.parse(localStorage.getItem(TOMB_KEY) || '{}') || {}; } catch(e) { tombstones = {}; } }
+  function saveTombstones() { try { localStorage.setItem(TOMB_KEY, JSON.stringify(tombstones)); } catch(e) {} }
+  function loadKnownIds()   { try { const s = localStorage.getItem(KNOWN_KEY); knownIds = s ? new Set(JSON.parse(s)) : null; } catch(e) { knownIds = null; } }
+  function saveKnownIds()   { try { localStorage.setItem(KNOWN_KEY, JSON.stringify([...(knownIds || [])])); } catch(e) {} }
+  function isTombstoned(key) { return !!tombstones[key]; }
+  // set of "<ns>:<id>" of all currently existing items
+  function currentKeySet() {
+    const s = new Set();
+    library.forEach(e => { if (e && e.id != null) s.add('lib:' + e.id); });
+    materials.forEach(e => { if (e && e.id != null) s.add('mat:' + e.id); });
+    return s;
+  }
+  function pruneTombstones() {
+    const cutoff = Date.now() - TOMB_TTL;
+    Object.keys(tombstones).forEach(k => { if (!(tombstones[k] > cutoff)) delete tombstones[k]; });
+  }
+  // diff the current state against the last known → deletions are recorded as tombstones
+  function reconcileTombstones() {
+    const cur = currentKeySet(), now = Date.now();
+    if (knownIds) knownIds.forEach(k => { if (!cur.has(k)) tombstones[k] = now; });
+    cur.forEach(k => { if (tombstones[k]) delete tombstones[k]; });   // exists ⇒ alive
+    knownIds = cur;
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+  }
+  function mergeCloudTombstones(cloudTomb) {
+    if (!cloudTomb || typeof cloudTomb !== 'object') return;
+    Object.entries(cloudTomb).forEach(([k, ts]) => { const t = +ts || 0; if (!tombstones[k] || t > tombstones[k]) tombstones[k] = t; });
+  }
+  // locally delete append-only collections that have a tombstone — this app has none (solutions + materials are LWW → lwwMerge)
+  function applyTombstones() { return 0; }
+  // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
+  function sigOf(items, mats, tomb) {
+    const idS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
+    const tS  = o => Object.keys(o || {}).sort().join(',');
+    return [idS(items), idS(mats), tS(tomb)].join('||');
+  }
+  function localSig() { return sigOf(library, materials, tombstones); }
+  function cloudSig(r) { return sigOf(r.items || [], r.materials || [], r.tombstones || {}); }
+
+  // the toolbar button is also a status indicator
+  function updateAutoSyncBtn() {
+    const b = el('autoSyncBtn'); if (!b) return;
+    const on = autosyncEnabled();
+    b.classList.toggle('on', on);
+    if (cloudSchemaAhead) {   // outdated build — push is paused; make it visible
+      if (!b.classList.contains('syncing')) b.textContent = '⚠';
+      b.title = 'this app version is outdated — reload the page; uploads are paused so you cannot overwrite newer data';
+      return;
+    }
+    if (!b.classList.contains('syncing')) b.textContent = '☁';
+    b.title = on ? 'automatic sync enabled — click to disable'
+                 : 'enable automatic sync (Gist)';
+  }
+  function setSyncState(state) {
+    const b = el('autoSyncBtn'); if (!b) return;
+    clearTimeout(stateTimer);
+    b.classList.remove('syncing');
+    if (state === 'syncing')  { b.textContent = '↑'; b.classList.add('syncing'); }
+    else if (state === 'ok')  { b.textContent = '☁'; stateTimer = setTimeout(updateAutoSyncBtn, 3000); }
+    else if (state === 'err') { b.textContent = '⚠'; stateTimer = setTimeout(updateAutoSyncBtn, 5000); }
+    else updateAutoSyncBtn();
+  }
+  function toggleAutoSync() {
+    const on = !autosyncEnabled();
+    try { if (on) localStorage.setItem(ASKEY, '1'); else localStorage.removeItem(ASKEY); } catch(e) {}
+    updateAutoSyncBtn();
+    if (on && !hasToken()) { showStatusMsg('⚠ set a GitHub token via ⚙ first (the gist will be created automatically)', 4500); return; }
+    if (on) {
+      reconcileTombstones();   // tombstone baseline
+      // PULL → merge → push (via checkCloudOnStartup): a direct push on a new device would
+      // overwrite the gist with an empty local state before the cloud data is downloaded
+      try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {}
+      checkCloudOnStartup();
+    }
+  }
+
+  // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
+  function buildAutoPayload() {
+    return { v:1, schema: APP_SCHEMA, items: library, materials: materials, tombstones: tombstones, device: getDeviceName() };
+  }
+  function scheduleAutoPush() {
+    if (!autosyncEnabled() || !hasToken()) return;
+    if (pushTimer) return;        // already scheduled → coalesce
+    const wait = Math.max(0, PUSH_MIN_INTERVAL - (Date.now() - lastPushTs), pushCooldownUntil - Date.now());
+    pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, wait);
+  }
+  async function doAutoPush() {
+    if (!autosyncEnabled() || !hasToken()) return;
+    if (cloudSchemaAhead) { setSyncState('err'); showStatusMsg('⚠ sync paused — a newer app version is in the cloud. Reload to update.', 5000); return; }   // never let an older build overwrite newer data
+    if (pushing) { pushAgain = true; return; }
+    if (Date.now() < pushCooldownUntil) { scheduleAutoPush(); return; }   // rate-limit cooldown still active → defer
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) return;
+    let gistId = localStorage.getItem(GISTID);
+    let creating = !gistId;        // the gist does not exist yet → autosync creates it (POST)
+    pushing = true; setSyncState('syncing');
+    try {
+      const payload = buildAutoPayload();
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
+      if (!res.ok) {
+        let body = null;
+        try { body = await res.json(); } catch(_) {}
+        const detail = (body && body.message) ? ' — ' + body.message : '';
+        if (res.status === 403 || res.status === 429) {   // rate limited → back off instead of hammering (a secondary limit only clears if we stop)
+          const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+          const reset = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
+          const remaining = res.headers.get('x-ratelimit-remaining');
+          let waitMs = retryAfter ? retryAfter * 1000
+                     : (remaining === '0' && reset) ? (reset * 1000 - Date.now())
+                     : 60000;                              // secondary limit, no hint → wait a minute
+          waitMs = Math.min(Math.max(waitMs || 0, 10000), 3600000);
+          pushCooldownUntil = Date.now() + waitMs;
+          console.warn('[autosync] rate-limited, pausing ' + Math.ceil(waitMs/1000) + 's' + detail);
+          showStatusMsg('⚠ sync paused (GitHub rate limit) — auto-retry in ' + Math.ceil(waitMs/1000) + ' s', 6000);
+          setSyncState('err');
+          pushing = false; pushAgain = false;
+          clearTimeout(pushTimer); pushTimer = setTimeout(() => { pushTimer = null; doAutoPush(); }, waitMs + 100);
+          return;
+        }
+        throw new Error('HTTP ' + res.status + detail);   // surface GitHub's reason (bad credentials / missing gist scope / …)
+      }
+      pushCooldownUntil = 0;
+      if (creating) {
+        const json = await res.json().catch(() => null);
+        const newId = json && json.id;
+        if (newId) { try { localStorage.setItem(GISTID, newId); } catch(e) {} }
+      }
+      lastPushTs = Date.now(); setSyncState('ok');
+    } catch(e) {
+      console.warn('[autosync] push failed:', (e && e.message) ? e.message : e);
+      setSyncState('err');
+    } finally {
+      pushing = false;
+      if (pushAgain) { pushAgain = false; scheduleAutoPush(); }
+    }
+  }
+
+  // LWW merge of a keyed array: the newer mt wins; a deletion wins only if it is newer
+  // than the last edit (an edit after deletion = resurrection). Returns a new array + counts.
+  function lwwMerge(localArr, cloudArr, ns, keyOf, normalize) {
+    const byKey = new Map();
+    (localArr || []).forEach(x => { if (x && keyOf(x) != null) byKey.set(String(keyOf(x)), x); });
+    let added = 0, updated = 0, removed = 0;
+    (cloudArr || []).forEach(c => {
+      if (!c || keyOf(c) == null) return;
+      const k = String(keyOf(c)), cmt = +c.mt || 0, ex = byKey.get(k);
+      if (ex) {
+        if (cmt > (+ex.mt || 0)) { byKey.set(k, normalize(c)); updated++; }
+      } else {
+        const tomb = tombstones[ns + ':' + k] || 0;
+        if (cmt >= tomb) { byKey.set(k, normalize(c)); added++; if (tomb && cmt > tomb) delete tombstones[ns + ':' + k]; }
+      }
+    });
+    for (const [k, x] of byKey) {
+      const tomb = tombstones[ns + ':' + k] || 0;
+      if (tomb && tomb >= (+x.mt || 0)) { byKey.delete(k); removed++; }
+      else if (tomb) delete tombstones[ns + ':' + k];   // local edit newer than the deletion → keep it, drop the tombstone
+    }
+    return { arr: [...byKey.values()], added, updated, removed };
+  }
+
+  // silent two-way merge cloud → local
+  function autoImportSilent(record) {
+    if (!record || typeof record !== 'object') return;
+    // write a pending (debounced) edit of the open solution first → it gets its real mt before LWW compares
+    try { flushActiveEdit(); } catch(e) {}
+    applyingRemote = true;
+    try {
+    mergeCloudTombstones(record.tombstones);
+    let removed = applyTombstones();
+    let added = 0, updated = 0;
+    // solutions — LWW by id (the whole solution incl. all its variants is one record)
+    const libR = lwwMerge(library, (record.items || []), 'lib', x => x.id, normSolution);
+    library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
+    // materials — LWW by id
+    const matR = lwwMerge(materials, (record.materials || []), 'mat', x => x.id, normMaterial);
+    materials = matR.arr; added += matR.added; updated += matR.updated; removed += matR.removed;
+
+    if (added || updated || removed) {
+      saveLibrary(); saveMaterials();
+      // the open solution changed in the cloud → reload the working copy, otherwise the next flush writes the old one back
+      const curChanged = refreshActiveFromLibrary();
+      const matChanged = matR.added + matR.updated + matR.removed > 0;
+      renderLibrary();
+      if (curChanged || matChanged) { renderMain(); renderVariants(); renderGeneral(); }
+      if (matChanged && el('matModal').classList.contains('open')) renderMaterials();
+      let msg;
+      if (added && !updated && !removed)      msg = '☁ +' + added + ' new items from sync';
+      else if (updated && !added && !removed) msg = '☁ ' + updated + ' items updated from sync';
+      else {
+        const parts = [];
+        if (added)   parts.push('+' + added);
+        if (updated) parts.push('~' + updated);
+        if (removed) parts.push('−' + removed);
+        msg = '☁ synced: ' + parts.join(' ');
+      }
+      if (removed) msg += ' — something was deleted (check / restore from history)';
+      showStatusMsg(msg, 4000);
+    }
+    // align the baseline to the new state and save tombstones
+    knownIds = currentKeySet();
+    pruneTombstones();
+    saveKnownIds(); saveTombstones();
+    } finally { applyingRemote = false; }
+  }
+
+  // hook after each persistence of a synced collection: record deletions (tombstones) and schedule a push
+  function autoSyncOnSave() {
+    if (applyingRemote) return;      // changes from the merge must not trigger reconcile/push
+    if (!hasToken()) return;         // without a token there is nothing to track (sync creates the gist itself)
+    reconcileTombstones();
+    if (autosyncEnabled()) scheduleAutoPush();
+  }
+
+  // silent PULL (focus / visibilitychange / interval): download the cloud and merge if it differs — no spinner
+  let lastPullTs = 0;
+  const PULL_MIN_INTERVAL = 30000;            // max 1 pull / 30 s (focus + visibility fire together)
+  async function silentPull() {
+    if (Date.now() - lastPullTs < PULL_MIN_INTERVAL) return;
+    lastPullTs = Date.now();
+    const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(GISTID);
+    if (!token || !gistId) return;             // without a token and Gist ID there is nowhere to download from
+    if (pushing) return;                       // a push is in progress → let it finish
+    if (pulling) return;                       // a pull is already running → do not start a second
+    pulling = true;
+    const sBtn = el('syncDownBtn');
+    if (sBtn) { sBtn.disabled = true; sBtn.classList.add('syncing'); }
+    let changed = false;
+    try {
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
+      if (localSig() !== cloudSig(record)) {
+        const before = localSig();
+        autoImportSilent(record);
+        changed = localSig() !== before;
+      }
+      if (autosyncEnabled()) scheduleAutoPush();
+    } catch(e) { console.warn('[silentPull] failed:', (e && e.message) ? e.message : e); }
+    finally {
+      pulling = false;
+      if (sBtn) {
+        sBtn.disabled = false;
+        sBtn.classList.remove('syncing');
+        if (changed) { sBtn.textContent = '✓'; setTimeout(() => { sBtn.textContent = '↓'; }, 1500); }
+        else sBtn.textContent = '↓';
+      }
+    }
+  }
+
+  async function doCloudUpload() {
+    const token = localStorage.getItem(GHTOKEN);
+    if (!token) { showSyncTooltip('⚠ missing GitHub token — open ⚙'); return; }
+    let gistId = localStorage.getItem(GISTID);
+    const items = library.filter(e => exportSelected.has(e.id));
+    const mats  = materials.filter(e => exportMatSelected.has(e.id));
+    if (!items.length && !mats.length) { customAlert('Nothing is selected.'); return; }
+    const payload = {v:1, schema: APP_SCHEMA, items, materials: mats};
+    closeModal('exportModal');
+    showSyncTooltip('↑ uploading…');
+    try {
+      let creating = !gistId;
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
+        creating = true; gistId = '';
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+      }
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      if (creating) { const json = await res.json().catch(() => null); const newId = json && json.id; if (newId) localStorage.setItem(GISTID, newId); }
+      const t = new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
+      showSyncTooltip('↑ uploaded '+t+' ('+items.length+' dips, '+mats.length+' materials)');
+    } catch(e) {
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
+    }
+  }
+
+  async function syncDownload() {
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) { showSyncTooltip('⚠ missing Gist ID — open ⚙'); return; }
+    const btn = el('syncDownBtn'); btn.disabled = true;
+    showSyncTooltip('↓ downloading…');
+    try {
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token);
+      if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) throw new Error('Invalid data in the gist');
+      if (!record.items && !record.materials) throw new Error('The gist contains no data');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import from Gist';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('↓ downloaded — check the selection and import');
+    } catch(e) {
+      showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
+    } finally { btn.disabled = false; }
+  }
+
+  async function checkCloudOnStartup() {
+    const gistId = localStorage.getItem(GISTID);
+    if (!gistId) {
+      // the gist does not exist yet → with autosync on and existing data, create it right away
+      if (autosyncEnabled() && hasToken() && (library.length || materials.some(m => m.mt))) scheduleAutoPush();
+      return;
+    }
+    if (sessionStorage.getItem('dip-app-cloud-checked')) return;
+    sessionStorage.setItem('dip-app-cloud-checked','1');
+    const btn = el('syncDownBtn'); const origTitle = btn.title;
+    btn.disabled = true; btn.title = 'checking cloud…';
+    try {
+      const token = localStorage.getItem(GHTOKEN);
+      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const record = await gistRecord(res);
+      if (typeof record !== 'object' || record === null) return;
+      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
+      // AUTOSYNC: silent two-way merge (incl. deletions and edits)
+      if (autosyncEnabled()) {
+        if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
+        return;
+      }
+      // otherwise (autosync off): offer a manual import if the data differs
+      const cloudItems = record.items || [];
+      const cloudMats  = record.materials || [];
+      const idSig = arr => arr.map(x => String(x.id||'')).sort().join(',')+':'+arr.length;
+      if (idSig(library)+'|'+idSig(materials) === idSig(cloudItems)+'|'+idSig(cloudMats)) return;
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Import from Gist';
+      parseImportJson(JSON.stringify(record));
+      showSyncTooltip('☁ cloud has different data — check the selection');
+    } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
+  }
+
+  /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
+     Loads the gist history[], allows preview (via the import modal) and restore
+     (via the standard LWW merge autoImportSilent + push). */
+  let gistRevs = [];   // the last ≤20 revisions from openGistHistory (index = order in the list)
+  const gistRevCache = {};        // version → record (cached so reopening / filtering never refetches)
+  let historyRateLimited = false; // a 403/429 during history fetches → stop firing more
+  let ghFilterDev = '';           // device filter ('' = all)
+  function historyGistId() { try { return localStorage.getItem(GISTID); } catch(e) { return null; } }
+  async function openGistHistory() {
+    const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
+    if (!token || !gistId) { showStatusMsg('⚠ missing Gist token or ID', 3000); return; }
+    closeModal('jsonbinModal');
+    gistRevs = []; historyRateLimited = false; ghFilterDev = '';
+    { const fr = el('ghDevFilterRow'); if (fr) fr.style.display = 'none'; }
+    el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">loading history…</p>';
+    el('gistHistoryModal').classList.add('open');
+    try {
+      const res = await gistGet(gistId, token);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      gistRevs = ((json && json.history) || []).slice(0, 100);
+      renderGistHistory();
+    } catch(e) {
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+    }
+  }
+  function renderGistHistory() {
+    if (!gistRevs.length) { el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">No history available</p>'; return; }
+    el('gistHistoryList').innerHTML = gistRevs.map((rev, i) => {
+      const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
+      const tag = i === 0 ? '<span class="gh-rev-chg">newest</span>' : '';
+      return '<div class="gh-rev" id="ghRev' + i + '" data-device="' + esc(rev._device || '') + '"><div class="gh-rev-meta"><span class="gh-rev-date">' + esc(d) + '</span>'
+        + '<span class="gh-rev-dev" id="ghDev' + i + '">' + (rev._device ? '· ' + esc(rev._device) : '') + '</span>' + tag + '</div>'
+        + '<div class="gh-rev-btns"><button class="btn-io" onclick="gistHistoryPreview(' + i + ')">preview</button>'
+        + '<button class="btn-io" onclick="gistHistoryRestore(' + i + ')">restore</button></div></div>';
+    }).join('');
+    updateDeviceFilter(); applyGhFilter();
+    loadHistoryDevices();
+  }
+  // fetch the device name (payload.device) for the top ≤20 revisions — gently (2 workers, spaced, cached, stop on rate limit)
+  function loadHistoryDevices() {
+    const N = Math.min(gistRevs.length, 20);
+    let idx = 0;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const worker = async () => {
+      while (idx < N && !historyRateLimited) {
+        const i = idx++;
+        const rev = gistRevs[i]; if (!rev || !rev.version) continue;
+        const cached = rev.version in gistRevCache;
+        try {
+          const rec = await fetchGistRevision(rev.version);
+          if (rec && rec.device) {
+            rev._device = rec.device;
+            const row = el('ghRev' + i); if (row) row.dataset.device = rec.device;
+            const span = el('ghDev' + i); if (span) span.textContent = '· ' + rec.device;
+            updateDeviceFilter(); if (ghFilterDev) applyGhFilter();
+          }
+        } catch(_) { /* rate limit / error → historyRateLimited stops the loop */ }
+        if (!cached) await sleep(150);   // space network requests so we don't trip the secondary rate limit
+      }
+    };
+    worker(); worker();   // 2 gentle parallel workers
+  }
+  // distinct devices seen so far → populate the filter dropdown (only when ≥2 devices)
+  function updateDeviceFilter() {
+    const devs = [...new Set(gistRevs.map(r => r && r._device).filter(Boolean))].sort();
+    const row = el('ghDevFilterRow'), sel = el('ghDevFilter');
+    if (!row || !sel) return;
+    if (devs.length < 2) { row.style.display = 'none'; return; }
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">all devices</option>' + devs.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+    sel.value = devs.indexOf(cur) >= 0 ? cur : '';
+    row.style.display = '';
+  }
+  function onGhDevFilter() { ghFilterDev = el('ghDevFilter') ? el('ghDevFilter').value : ''; applyGhFilter(); }
+  function applyGhFilter() {
+    document.querySelectorAll('#gistHistoryList .gh-rev').forEach(row => {
+      const dev = row.dataset.device || '';
+      row.style.display = (!ghFilterDev || dev === ghFilterDev) ? '' : 'none';
+    });
+  }
+  // downloads the content of a specific revision → record (object) or null (cached per version)
+  async function fetchGistRevision(version) {
+    if (version in gistRevCache) return gistRevCache[version];
+    const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
+    const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
+    if (res.status === 403 || res.status === 429) { historyRateLimited = true; throw new Error('HTTP ' + res.status); }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    const file = json && json.files && json.files[GIST_FILE];
+    const rec = (!file || !file.content) ? null : JSON.parse(file.content);
+    gistRevCache[version] = rec;
+    return rec;
+  }
+  async function gistHistoryPreview(i) {
+    const rev = gistRevs[i]; if (!rev) return;
+    try {
+      const record = await fetchGistRevision(rev.version);
+      if (!record) throw new Error('empty revision');
+      openImportModal();
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Revision preview';
+      parseImportJson(JSON.stringify(record));
+      closeModal('gistHistoryModal');
+    } catch(e) {
+      el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
+    }
+  }
+  async function gistHistoryRestore(i) {
+    const rev = gistRevs[i]; if (!rev) return;
+    const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
+    if (!await customConfirm('Restore the version from ' + d + '? Current data stays — the older version will be merged via the standard merge.', 'restore')) return;
+    const winAtStart = (typeof activeWin !== 'undefined') ? activeWin : null;
+    try {
+      const record = await fetchGistRevision(rev.version);
+      if (!record) throw new Error('empty revision');
+      if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // the window switched → the data belongs to another window
+      autoImportSilent(record);
+      scheduleAutoPush();
+      showStatusMsg('↩ version restored', 3000);
+      closeModal('gistHistoryModal');
+    } catch(e) {
+      showStatusMsg('⚠ restore failed', 3000);
+    }
+  }
+  window.openGistHistory      = openGistHistory;
+  window.gistHistoryPreview   = gistHistoryPreview;
+  window.gistHistoryRestore   = gistHistoryRestore;
+  window.onGhDevFilter        = onGhDevFilter;
+  window.openJsonBinSettings  = openJsonBinSettings;
+  window.saveJsonBinSettings  = saveJsonBinSettings;
+  window.doCloudUpload        = doCloudUpload;
+  window.syncDownload         = syncDownload;
+  window.checkCloudOnStartup  = checkCloudOnStartup;
+  window.toggleAutoSync       = toggleAutoSync;
+  window.copySyncLink         = copySyncLink;
+  window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
+  loadTombstones(); loadKnownIds();
+  // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
+  ['saveLibrary','saveMaterials'].forEach(fn => {
+    const orig = window[fn];
+    if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
+  });
+  // PULL ON FOCUS — returning to the tab/window immediately downloads changes from another device
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && autosyncEnabled()) silentPull(); });
+  window.addEventListener('focus', () => { if (autosyncEnabled()) silentPull(); });
+  // PULL every 5 minutes (only when the tab is visible)
+  setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
+  // ── SYNC LINK: one-time device setup from the URL hash (#gid=…&tok=…&as=1) ──
+  // Must run BEFORE checkCloudOnStartup so the first cloud check already uses the new ID.
+  (function importSyncLink() {
+    if ((location.hash || '').indexOf('gid=') === -1) return;
+    const p = new URLSearchParams(location.hash.slice(1));
+    const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // delete the sensitive hash from the address and history
+    if (!gid) return;
+    try {
+      localStorage.setItem(GISTID, gid);
+      if (tok) localStorage.setItem(GHTOKEN, tok);
+      if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
+    } catch(e) {}
+    try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {}
+    showSyncTooltip(tok ? '🔗 sync set up from link' : '🔗 Gist ID set — enter the token via ⚙');
+  })();
+  updateAutoSyncBtn();
+  checkCloudOnStartup();
+})();
+</script>
+<footer style="text-align:center; padding: 8px;">
+  <a href="https://lordkrabaty.github.io/webapps/" title="home page — all apps" style="color:var(--muted);text-decoration:none;font-size:1.15rem;line-height:1">⌂</a>
+</footer>
+
+<!-- Gist history modal -->
+<div class="modal-bg" id="gistHistoryModal">
+  <div class="modal" style="max-width:460px;gap:.65rem">
+    <h2>Version history</h2>
+    <div class="modal-row" id="ghDevFilterRow" style="display:none;align-items:center;gap:.5rem">
+      <label style="font-size:.72rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase">Device</label>
+      <select id="ghDevFilter" onchange="onGhDevFilter()" style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.82rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none"></select>
+    </div>
+    <div class="modal-list" id="gistHistoryList"></div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn" onclick="closeModal('gistHistoryModal')">close</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
