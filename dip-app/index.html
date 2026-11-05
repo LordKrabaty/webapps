@@ -294,8 +294,9 @@ html.dark input[type="date"]{color-scheme:dark}
 .chip.on{background:var(--black);color:var(--w);border-color:var(--black)}
 @media(hover:hover){.chip:not(.on):hover{background:var(--off);border-color:var(--dark)}}
 .hg{display:grid;gap:calc(.6rem/var(--pzc,1)) calc(.8rem/var(--pzc,1));margin-bottom:calc(.65rem/var(--pzc,1))}
-.hg-sol{grid-template-columns:minmax(0,9rem) minmax(0,1fr)}
-.hg-var{grid-template-columns:repeat(4,minmax(0,1fr))}
+.hg-sol{grid-template-columns:minmax(0,9rem) minmax(0,1fr) minmax(0,8rem);grid-template-areas:"sname sdesc sstr"}
+.f-sname{grid-area:sname}.f-sdesc{grid-area:sdesc}.f-sstr{grid-area:sstr}
+.hg-var{grid-template-columns:repeat(3,minmax(0,1fr))}
 
 .rc{display:flex;flex-direction:column;margin-top:calc(.5rem/var(--pzc,1))}
 .rc-grid{display:grid;grid-template-columns:minmax(0,1fr) 3.9rem 4.9rem 3.9rem 3.9rem 3.9rem 3.6rem 3.4rem;grid-template-areas:"name conc m dip solid wet price act";column-gap:.35rem;align-items:center}
@@ -339,17 +340,32 @@ html.dark input[type="date"]{color-scheme:dark}
   .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
   .rc-head{grid-template-areas:"conc m dip solid wet price"}
   .rc-head .a-name,.rc-head .a-act{display:none}
+  .hg-sol{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"sname sstr" "sdesc sdesc"}
   .hg-var{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:620px){
   .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
   .rc-head{grid-template-areas:"conc m dip solid wet price"}
   .rc-head .a-name,.rc-head .a-act{display:none}
+  .hg-sol{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"sname sstr" "sdesc sdesc"}
   .hg-var{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
-.str-help{font-size:.78rem;color:var(--dark);margin-top:calc(.7rem/var(--pzc,1));line-height:1.6;border-left:2px solid var(--black);padding-left:calc(.6rem/var(--pzc,1))}
-.str-help b{font-family:'DM Mono',monospace;font-weight:500;color:var(--black)}
+/* lab weighing — the diluted lab dip computed from the W100 recipe */
+.lab-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:calc(.5rem/var(--pzc,1)) calc(1.2rem/var(--pzc,1))}
+.lab-rec{display:flex;align-items:center;gap:.35rem;font-size:.74rem;color:var(--muted)}
+.lab-rec:empty{display:none}
+.lab-list{margin-top:calc(.55rem/var(--pzc,1))}
+.lab-grid{display:grid;grid-template-columns:minmax(0,1fr) 3.9rem 5.6rem;column-gap:.35rem;align-items:baseline;padding:calc(.22rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light)}
+.lab-head{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid var(--black)}
+.lab-head .num{font-family:'DM Sans',sans-serif;font-size:.62rem;color:var(--muted)}
+.lab-n{min-width:0;font-size:.82rem;color:var(--black);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lab-sec{padding-top:calc(.6rem/var(--pzc,1));border-bottom-color:var(--mid)}
+.lab-sec .lab-n,.lab-sec .num{font-weight:600}
+.lab-g{font-size:.86rem}
+.lab-total{border-top:2px solid var(--black);border-bottom:none;margin-top:calc(.3rem/var(--pzc,1))}
+.lab-total .lab-n,.lab-total .num{font-weight:600}
+.lab-msg{font-size:.78rem;color:var(--dark);margin-top:calc(.55rem/var(--pzc,1));line-height:1.6;border-left:2px solid var(--black);padding-left:calc(.6rem/var(--pzc,1))}
 .tools{display:flex;flex-wrap:wrap;gap:calc(.5rem/var(--pzc,1)) calc(1.2rem/var(--pzc,1));margin-top:calc(.8rem/var(--pzc,1));align-items:center}
 .tool{display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:var(--dark)}
 .tool .rc-in{width:5.4rem}
@@ -612,19 +628,23 @@ html.dark input[type="date"]{color-scheme:dark}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 1;
+// 2 = strength moved off the variant: recipes are always W100, the lab strength is the dip's `labStr`
+//     (an older build would still offer a per-variant strength whose meaning changed → it must not push)
+const APP_SCHEMA = 2;
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'dip-app-v1-session';
 const LIBRARY_KEY = 'dip-app-v1-library';      // solutions (each with all its variants) — synced, LWW per solution
 const MATERIALS_KEY = 'dip-app-v1-materials';  // raw materials — synced, LWW per material
 const ACTVAR_KEY = 'dip-app-active-var';       // { solutionId: variantId } — local view state, NOT synced (see CLAUDE.md: view state must not stamp mt)
 const NOTES_TAB_KEY = 'dip-app-notes-tab';
+const LABVIEW_KEY = 'dip-app-lab-view';        // { solutionId: { str, batch } } — lab weighing override, local view state, NOT synced
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let library = [], activeLibId = null;
 let materials = [];
 let cur = null;              // live working copy of the open solution — a deep copy, never a reference into library[]
 let activeVarMap = {};
+let labView = {};
 let notesTab = 'vars';
 let undoStack = [], redoStack = [], savedSnapshot = null;
 const UNDO_MAX = 40;
@@ -690,6 +710,8 @@ function loadMaterials() {
 function saveMaterials() { try { localStorage.setItem(MATERIALS_KEY, JSON.stringify(materials)); } catch(e) {} }
 function loadActiveVarMap() { try { activeVarMap = JSON.parse(localStorage.getItem(ACTVAR_KEY) || '{}') || {}; } catch(e) { activeVarMap = {}; } }
 function saveActiveVarMap() { try { localStorage.setItem(ACTVAR_KEY, JSON.stringify(activeVarMap)); } catch(e) {} }
+function loadLabView() { try { labView = JSON.parse(localStorage.getItem(LABVIEW_KEY) || '{}') || {}; } catch(e) { labView = {}; } }
+function saveLabView() { try { localStorage.setItem(LABVIEW_KEY, JSON.stringify(labView)); } catch(e) {} }
 
 // ── SESSION ────────────────────────────────────────────────────────────────
 // The "session" is the open solution: every solution lives in library[] from the moment it is created,
@@ -784,6 +806,7 @@ async function deleteSolution(id) {
   if (id === activeLibId) { clearTimeout(saveT); activeLibId = null; cur = null; savedSnapshot = null; undoStack = []; redoStack = []; updateUndoBtn(); }
   library = library.filter(x => x.id !== id); saveLibrary();
   delete activeVarMap[id]; saveActiveVarMap();
+  if (labView[id]) { delete labView[id]; saveLabView(); }
   saveSession(); renderAll();
   showSave('✕ dip deleted');
 }
@@ -1183,8 +1206,8 @@ function doImport() {
 // Data model (all records keep unknown fields — normalizers spread the original first):
 //   material  { id, name, role, work (working conc. %, null = as delivered), note, alts:[alt], act (active alt id), mt }
 //   alt       { id, name, producer, conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
-//   solution  { id, name, desc, note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
-//   variant   { id, name, code, date, str (strength %), from (parent variant id), note, secs:[section], meas:{phRF, ph, solid} }
+//   solution  { id, name, desc, labStr (recommended lab strength %, null = W100), note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
+//   variant   { id, name, code, date, from (parent variant id), note, secs:[section], meas:{phRF, ph, solid} }   ← masses = the full-strength W100 dip
 //   section   { id, kind: 'rf'|'latex'|'add', name, note, rows:[row] }
 //   row       { id, mat, nm, role (name/role snapshots for a deleted material), conc (%chem), m (g) }
 // Material roles drive the maths: which rows count as RF resin, latex, ammonia, NaOH…
@@ -1235,23 +1258,44 @@ function normSection(s) {
   s = s || {};
   return { ...s, id: s.id ?? uid(), kind: s.kind || 'rf', name: String(s.name ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
 }
+// legacy (schema 1): a variant carried `str` and its masses were the DILUTED lab dip (W85 = 85).
+// Now a recipe is always the full-strength W100 dip → undilute it (inverse of the lab weighing, same batch mass):
+// all components except the first water ÷ k, the first water takes up the rest. Deterministic → two devices agree.
+function legacyStr(v) { const k = v ? numOrNull(v.str) : null; return k != null && k > 0 && k < 100 ? k : null; }
+function undiluteVariant(v, str) {
+  const w = firstWater(v), T = sumMass(v), k = str / 100;
+  if (!w || !(T > 0)) return;
+  if ((T - (+w.m || 0)) / k > T) return;   // could not have been diluted through the first water → keep the masses
+  v.secs.forEach(s => s.rows.forEach(r => { if (r !== w && r.m != null) r.m = round2(r.m / k); }));
+  w.m = round2((+w.m || 0) + T - sumMass(v));
+}
 function normVariant(v) {
   v = v || {};
-  return { ...v, id: v.id ?? uid(), name: String(v.name ?? ''), code: String(v.code ?? ''), date: String(v.date ?? ''),
-    str: numOrNull(v.str), from: v.from ?? null, note: String(v.note ?? ''),
+  const { str, ...rest } = v;   // `str` is legacy — dropped after the masses are converted to W100
+  const out = { ...rest, id: v.id ?? uid(), name: String(v.name ?? ''), code: String(v.code ?? ''), date: String(v.date ?? ''),
+    from: v.from ?? null, note: String(v.note ?? ''),
     secs: (Array.isArray(v.secs) ? v.secs : []).map(normSection), meas: { ...(v.meas || {}) } };
+  const k = legacyStr(v);
+  if (k != null) undiluteVariant(out, k);
+  return out;
 }
 function normSolution(s) {
   s = s || {};
-  const vars = (Array.isArray(s.vars) && s.vars.length ? s.vars : [defaultVariant()]).map(normVariant);
-  return { ...s, id: s.id ?? uid(), name: String(s.name ?? ''), desc: String(s.desc ?? ''), note: String(s.note ?? ''), vars, mt: +s.mt || 0 };
+  const raw = Array.isArray(s.vars) && s.vars.length ? s.vars : [defaultVariant()];
+  // the legacy per-variant strength becomes the dip's recommended lab strength (the last variant that had one)
+  const legacy = raw.map(legacyStr).filter(k => k != null);
+  let labStr = numOrNull(s.labStr);
+  if (labStr == null && legacy.length) labStr = legacy[legacy.length - 1];
+  if (labStr != null && !(labStr > 0)) labStr = null;
+  return { ...s, id: s.id ?? uid(), name: String(s.name ?? ''), desc: String(s.desc ?? ''), labStr, note: String(s.note ?? ''),
+    vars: raw.map(normVariant), mt: +s.mt || 0 };
 }
 // first run only: water with a fixed id (two fresh devices must not create two different "Water" records)
 function defaultMaterials() { return [normMaterial({ id: 1, name: 'Water', role: 'water', alts: [{ id: 2, name: 'Demineralized water' }], mt: 0 })]; }
 function defaultVariant() {
   const first = roles => { for (const r of roles) { const m = materials.filter(x => x.role === r).sort(byName)[0]; if (m) return m; } return null; };
   const row = roles => { const m = first(roles); return m ? { id: uid(), mat: m.id, nm: m.name, role: m.role, conc: matWork(m), m: null } : null; };
-  return { id: uid(), name: 'V1', code: '', date: todayIso(), str: null, from: null, note: '', meas: {},
+  return { id: uid(), name: 'V1', code: '', date: todayIso(), from: null, note: '', meas: {},
     secs: [
       { id: uid(), kind: 'rf', name: '1. RF resin', note: 'maturing min. 30 min', rows: [['water'], ['naoh'], ['resin'], ['formaldehyde']].map(row).filter(Boolean) },
       { id: uid(), kind: 'latex', name: '2. Latex', note: 'maturing min. 2 h', rows: [['water'], ['latex-vp', 'latex-sbr', 'latex-nr'], ['ammonia']].map(row).filter(Boolean) }
@@ -1330,8 +1374,6 @@ function calcVariant(v) {
   c.vpMonL = latex > 0 && c.vpDry > 0 && c.vpMonOk ? c.vpMon / latex * 100 : null;
   c.nh3InL = c.lDry > 0 && c.nh3 > 0 ? c.nh3 / c.lDry * 100 : null;
   c.priceSolid = c.tsc ? c.price / (c.tsc / 100) : null;
-  c.str = v && v.str != null && v.str > 0 && v.str < 100 ? v.str : null;
-  c.tsc100 = c.str && c.tsc != null ? c.tsc * 100 / c.str : null;
   return c;
 }
 function outOf(key, val) {
@@ -1347,7 +1389,6 @@ function varDiff(a, b) {
   num('PHR', ca.phr, cb.phr, 2);
   num('F/R', ca.fr, cb.fr, 2);
   num('L in solid', ca.lInSolid, cb.lInSolid, 2, '%');
-  if (fmtNum(a.str) !== fmtNum(b.str)) out.push('strength ' + (fmtNum(a.str) || '100') + ' → ' + (fmtNum(b.str) || '100') + '%');
   const rowsOf = v => { const m = new Map(); v.secs.forEach(s => s.rows.forEach(r => m.set(r.id, { r, s }))); return m; };
   const A = rowsOf(a), B = rowsOf(b);
   const label = (x, map) => {   // the same material in two sections (water) → add the section
@@ -1399,9 +1440,9 @@ function renderMain() {
     return;
   }
   box.innerHTML = chipsHtml(v) + headHtml(v) + recipeHtml(v)
-    + '<div class="str-help" id="strHelp"></div>'
     + toolsHtml()
     + '<div class="sub-title">Parameters</div><div class="par-grid" id="parGrid"></div>'
+    + labHtml()
     + '<div class="sub-title">Measured</div>' + measHtml(v);
   updateCalc();
 }
@@ -1412,14 +1453,14 @@ function chipsHtml(av) {
 }
 function headHtml(v) {
   return `<div class="hg hg-sol">
-      <div class="field"><label>dip</label><input type="text" id="fSolName" class="ed" value="${esc(cur.name)}" placeholder="R01" oninput="onSolField('name',this)" autocomplete="off"></div>
-      <div class="field"><label>description</label><input type="text" class="ed" value="${esc(cur.desc)}" placeholder="latex system, use…" oninput="onSolField('desc',this)" autocomplete="off"></div>
+      <div class="field f-sname"><label>dip</label><input type="text" id="fSolName" class="ed" value="${esc(cur.name)}" placeholder="R01" oninput="onSolField('name',this)" autocomplete="off"></div>
+      <div class="field f-sdesc"><label>description</label><input type="text" class="ed" value="${esc(cur.desc)}" placeholder="latex system, use…" oninput="onSolField('desc',this)" autocomplete="off"></div>
+      <div class="field f-sstr"><label>lab strength %</label><input type="text" inputmode="decimal" class="ed" value="${cur.labStr != null ? fmtNum(cur.labStr) : ''}" placeholder="100" oninput="onSolField('labStr',this)" title="recommended strength for lab testing — e.g. 85 = W85 (the lab line picks up more, so lab dips are diluted). The recipe and its price are always the full-strength W100 dip; change the strength for one weighing in Lab weighing." autocomplete="off"></div>
     </div>
     <div class="hg hg-var">
-      <div class="field"><label>variant</label><input type="text" id="fVarName" class="ed" value="${esc(v.name)}" placeholder="W85" oninput="onVarField('name',this)" autocomplete="off"></div>
+      <div class="field"><label>variant</label><input type="text" id="fVarName" class="ed" value="${esc(v.name)}" placeholder="V2" oninput="onVarField('name',this)" autocomplete="off"></div>
       <div class="field"><label>system code</label><input type="text" class="ed" value="${esc(v.code)}" placeholder="IR0000_01" oninput="onVarField('code',this)" autocomplete="off"></div>
       <div class="field"><label>date</label><input type="date" class="ed" value="${esc(v.date)}" onchange="onVarField('date',this)"></div>
-      <div class="field"><label>strength %</label><input type="text" inputmode="decimal" class="ed" value="${v.str ?? ''}" placeholder="100" oninput="onVarField('str',this)" title="dilution against the full-strength (100 %) dip — e.g. W85 = 85" autocomplete="off"></div>
     </div>`;
 }
 function matOptions(r) {
@@ -1490,13 +1531,82 @@ function measHtml(v) {
   const ms = v.meas || {};
   const f = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" inputmode="decimal" class="ed" value="${esc(ms[key] ?? '')}" placeholder="${ph}" oninput="onMeas('${key}',this)" autocomplete="off"></div>`;
   return '<div class="meas-grid">' + f('phRF', 'pH RF', '—') + f('ph', 'pH RFL', '—') + f('solid', 'solid measured %', '—')
-    + '<div class="field"><label>Δ solid vs calc.</label><div class="meas-d" id="measD">—</div></div></div>';
+    + '<div class="field"><label id="measDL">Δ solid vs calc.</label><div class="meas-d" id="measD">—</div></div></div>';
 }
-function parHtml(c) {
+// ── LAB WEIGHING ──────────────────────────────────────────────────────────
+// The recipe is the full-strength W100 dip: production runs it and the price is W100. The lab line (SEDU) picks up
+// more, so lab dips are diluted (typically W85). The strength is NOT part of the variant — the dip recommends one
+// (`labStr`), a different one can be typed here for a weighing (local view state, not synced) and the masses are computed.
+function labRec() { return cur && cur.labStr > 0 ? cur.labStr : 100; }
+function labState() {
+  const o = (cur && labView[cur.id]) || {}, rec = labRec();
+  const over = o.str > 0 && Math.abs(o.str - rec) > 1e-9;
+  return { str: over ? o.str : rec, batch: o.batch > 0 ? o.batch : null, over, rec };
+}
+function setLabView(key, val) {
+  if (!cur) return;
+  const o = { ...(labView[cur.id] || {}) };
+  if (val == null) delete o[key]; else o[key] = val;
+  if (Object.keys(o).length) labView[cur.id] = o; else delete labView[cur.id];
+  saveLabView();
+}
+function onLabStr(inp) { const n = numOrNull(inp.value); setLabView('str', n > 0 && Math.abs(n - labRec()) > 1e-9 ? n : null); updateCalc(); }
+function onLabBatch(inp) { const n = numOrNull(inp.value); setLabView('batch', n > 0 ? n : null); updateCalc(); }
+function labInBlur() { const i = el('labStrIn'); if (i) i.value = fmtNum(labState().str); }
+function resetLabStr() { setLabView('str', null); labInBlur(); updateCalc(); }
+// same rule as "set solid": the recipe scaled to the batch, all components except the first water × strength,
+// the first water takes up the rest of the batch (= k parts of the W100 dip + (1 − k) parts of water)
+function labCalc(v, str, batch) {
+  const T = sumMass(v), k = str / 100, w = firstWater(v), m = {};
+  if (!(T > 0)) return { err: 'The recipe has no mass yet.' };
+  if (!w && Math.abs(k - 1) > 1e-9) return { err: 'Diluting needs a water row in the recipe — the first water takes up the dilution.' };
+  const B = batch > 0 ? batch : T, f = B / T;
+  let others = 0;
+  v.secs.forEach(s => s.rows.forEach(r => { if (r === w) return; m[r.id] = round2((+r.m || 0) * f * k); others += m[r.id]; }));
+  if (w) {
+    const x = round2(B - others);
+    if (x < 0) {
+      const rest = T - (+w.m || 0);
+      return { err: 'Not possible: at W' + fmtNum(str) + ' the other components alone weigh ' + fmt(others, 1) + ' g — more than the batch (' + fmt(B, 1) + ' g).' + (rest > 0 ? ' The most is W' + fmt(100 * T / rest, 1) + '.' : '') };
+    }
+    m[w.id] = x;
+  }
+  return { m, B, k };
+}
+function labHtml() {
+  const st = labState();
+  return `<div class="sub-title">Lab weighing</div>
+    <div class="lab-ctl">
+      <span class="tool">strength W <input id="labStrIn" class="rc-in" inputmode="decimal" value="${fmtNum(st.str)}" placeholder="${fmtNum(st.rec)}" oninput="onLabStr(this)" onblur="labInBlur()" title="strength of the lab dip in % of the full-strength W100 recipe — only for this weighing; the dip's recommended value is in the header (lab strength %)" autocomplete="off"></span>
+      <span class="tool">batch <input id="labBatchIn" class="rc-in" inputmode="decimal" value="${st.batch != null ? fmtNum(st.batch) : ''}" oninput="onLabBatch(this)" title="lab batch mass (g) — empty = the recipe batch" autocomplete="off"> g</span>
+      <span class="lab-rec" id="labRec"></span>
+    </div>
+    <div class="lab-list" id="labList"></div>
+    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A strength typed here stays on this device only.</div>`;
+}
+function labListHtml(v, c, st) {
+  if (Math.abs(st.str - 100) < 1e-9 && !st.batch)
+    return '<div class="lab-msg">W100 at the recipe batch — weigh the recipe masses as they are.</div>';
+  const L = labCalc(v, st.str, st.batch);
+  if (L.err) return '<div class="lab-msg">' + esc(L.err) + '</div>';
+  let h = '<div class="lab-grid lab-head"><span>component</span><span class="num">%chem</span><span class="num">weigh (g)</span></div>', total = 0;
+  v.secs.forEach(s => {
+    const sum = s.rows.reduce((a, r) => a + (L.m[r.id] || 0), 0); total += sum;
+    h += `<div class="lab-grid lab-sec"><span class="lab-n">${esc(s.name || '—')}</span><span></span><span class="num">${fmt(sum, 1)}</span></div>`;
+    s.rows.forEach(r => {
+      const water = rowRole(r) === 'water';
+      h += `<div class="lab-grid"><span class="lab-n">${esc(rowName(r))}</span><span class="num${water ? ' num-dash' : ''}">${water ? '—' : (fmtNum(r.conc) || '?')}</span><span class="num lab-g">${fmt(L.m[r.id] || 0, 2)}</span></div>`;
+    });
+  });
+  h += `<div class="lab-grid lab-total"><span class="lab-n">W${fmtNum(st.str)} · solid ${pct(c.tsc != null ? c.tsc * L.k : null)}</span><span></span><span class="num">${fmt(total, 1)}</span></div>`;
+  return h;
+}
+function parHtml(c, labStr) {
   const P = (label, val, o = {}) => `<div class="par${o.out ? ' out' : ''}${o.key ? ' key' : ''}"${o.tip ? ` title="${esc(o.tip)}"` : ''}><span class="par-l">${label}${o.t ? ` <span class="par-t">${o.t}</span>` : ''}</span><span class="par-v">${val}</span></div>`;
   const ratio = p => { if (!p) return '—'; const s = p[0] + p[1]; if (!(s > 0)) return '—'; const a = Math.round(p[0] / s * 100); return a + ':' + (100 - a); };
   const out = [
-    P('solid', pct(c.tsc), { key: true, tip: 'TSC = Σ % in dip' }),
+    P('solid', pct(c.tsc), { key: true, tip: 'TSC = Σ % in dip — the full-strength W100 dip' }),
+    ...(Math.abs(labStr - 100) > 1e-9 ? [P('solid lab W' + fmtNum(labStr), pct(c.tsc != null ? c.tsc * labStr / 100 : null), { tip: 'solid of the diluted lab dip — see Lab weighing' })] : []),
     P('solid w/o NH₃', pct(c.tscNoNH3), { tip: 'TSC without the ammonia' }),
     P('RF resin / L (PHR)', fmt(c.phr), { key: true, t: '15–20', out: outOf('phr', c.phr), tip: 'dry RF (resin + formaldehyde) ÷ dry latex part (without ammonia) × 100' }),
     P('F / R (mol/mol)', fmt(c.fr), { key: true, t: '1.2–2', out: outOf('fr', c.fr), tip: 'F = resin solid × F share ÷ 30 + formaldehyde ÷ 30;  R = resin solid × R share ÷ 110' }),
@@ -1509,7 +1619,7 @@ function parHtml(c) {
     P('SBR : VP', ratio(c.sbrVp), { tip: 'dry SBR : dry VP latex' }),
     P('VP monomer in L', pct(c.vpMonL), { tip: 'needs the VP monomer % of every VP latex (⚗ materials)' }),
     P('NH₄OH in L', pct(c.nh3InL), { tip: 'NH₃ ÷ dry latex part' }),
-    P('price / kg dip', eur(c.price, c.priceOk), { key: true, tip: c.priceOk ? 'active alternatives, incl. the pre-dilution' : 'some components have no price — the sum is a lower bound' }),
+    P('price / kg dip', eur(c.price, c.priceOk), { key: true, tip: (c.priceOk ? 'active alternatives, incl. the pre-dilution' : 'some components have no price — the sum is a lower bound') + ' — the full-strength W100 dip, as production runs it' }),
     P('price / kg solid', eur(c.priceSolid, c.priceOk)),
     P('sum RF', fmt(c.sumRF, 1) + ' g'),
     P('sum L', fmt(c.sumL, 1) + ' g'),
@@ -1517,13 +1627,6 @@ function parHtml(c) {
   ];
   if (c.hasAdd) out.push(P('sum RFL+IK', fmt(c.total, 1) + ' g'));
   return out.join('');
-}
-function strHtml(c) {
-  if (!c.str || !(c.total > 0)) return '';
-  const T = c.total, w = T * (100 / c.str - 1), full = T * c.str / 100;
-  return 'strength <b>' + fmtNum(c.str) + '%</b> — the 100% dip has <b>' + pct(c.tsc100) + '</b> solid<br>'
-    + 'dilute: <b>' + fmt(T, 1) + ' g</b> of the 100% dip + <b>' + fmt(w, 1) + ' g</b> water = ' + fmt(T + w, 1) + ' g<br>'
-    + 'or for ' + fmt(T, 1) + ' g: <b>' + fmt(full, 1) + ' g</b> of the 100% dip + <b>' + fmt(T - full, 1) + ' g</b> water';
 }
 // computed cells only — inputs are never re-rendered while typing
 function updateCalc() {
@@ -1551,10 +1654,19 @@ function updateCalc() {
   setText('ts', c.dry > 0 ? '100%' : '—');
   setText('tw', c.total > 0 ? '100%' : '—');
   setText('tp', eur(c.price, c.priceOk, 3, ''));
-  const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c);
-  const sh = el('strHelp'); if (sh) { const h = strHtml(c); sh.innerHTML = h; sh.style.display = h ? '' : 'none'; }
-  const ms = numOrNull((v.meas || {}).solid);
-  setText('measD', ms != null && c.tsc != null ? (ms - c.tsc >= 0 ? '+' : '') + (ms - c.tsc).toFixed(2) + '%' : '—');
+  const st = labState(), diluted = Math.abs(st.str - 100) > 1e-9;
+  const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c, st.str);
+  const ll = el('labList'); if (ll) ll.innerHTML = labListHtml(v, c, st);
+  const lr = el('labRec');
+  if (lr) lr.innerHTML = st.over ? `<button class="btn-sm" onclick="resetLabStr()" title="back to the dip's recommended lab strength">↺ dip W${fmtNum(st.rec)}</button>`
+    : cur.labStr > 0 ? 'the dip’s lab strength' : '';
+  const si = el('labStrIn'); if (si && document.activeElement !== si) si.value = fmtNum(st.str);
+  if (si) si.placeholder = fmtNum(st.rec);
+  const bi = el('labBatchIn'); if (bi) bi.placeholder = fmt(c.total, 1);
+  // the measured solid is taken from the lab dip → compare with the solid at the lab strength
+  const ms = numOrNull((v.meas || {}).solid), calcS = c.tsc != null ? c.tsc * st.str / 100 : null;
+  setText('measDL', diluted ? 'Δ vs calc. W' + fmtNum(st.str) : 'Δ solid vs calc.');
+  setText('measD', ms != null && calcS != null ? (ms - calcS >= 0 ? '+' : '') + (ms - calcS).toFixed(2) + '%' : '—');
   updateVarMeta();
   updateHeaderSub();
 }
@@ -1620,18 +1732,21 @@ function growAll() { document.querySelectorAll('#panel-notes textarea').forEach(
 // ── EDIT HANDLERS ─────────────────────────────────────────────────────────
 function onSolField(key, inp) {
   if (!cur) return;
-  coalesceUndo(); cur[key] = inp.value;
+  coalesceUndo();
+  if (key === 'labStr') { const n = numOrNull(inp.value); cur.labStr = n > 0 ? n : null; }
+  else cur[key] = inp.value;
   if (key === 'name') setText('genName', cur.name || 'untitled');
-  updateHeaderSub(); schedSave();
+  if (key === 'labStr') updateCalc(); else updateHeaderSub();
+  schedSave();
 }
 function onVarField(key, inp) {
   const v = activeVar(); if (!v) return;
   coalesceUndo();
-  v[key] = key === 'str' ? numOrNull(inp.value) : inp.value;
+  v[key] = inp.value;
   if (key === 'name') { setText('chip-' + v.id, v.name || '—'); setText('vn-' + v.id, v.name || '—'); }
   if (key === 'code') setText('vc-' + v.id, v.code);
   if (key === 'date') setText('vt-' + v.id, v.date);
-  updateCalc();   // strength helper, header, diffs of child variants (they quote this name)
+  updateCalc();   // header, diffs of child variants (they quote this name)
   schedSave();
 }
 function onSecField(sid, key, val) {
@@ -1945,6 +2060,7 @@ function init() {
   loadMaterials();
   loadLibrary();
   loadActiveVarMap();
+  loadLabView();
   try { const t = localStorage.getItem(NOTES_TAB_KEY); if (t === 'vars' || t === 'gen') notesTab = t; } catch(e) {}
   const restored = loadSession();
   if (!restored) renderAll();
