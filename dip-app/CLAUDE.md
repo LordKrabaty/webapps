@@ -17,12 +17,12 @@ Repo je veřejné (GitHub Pages). **Ceny, spotřeby, kódy receptur, DPU ani sez
 | `library` (`dip-app-v1-library`) — roztoky | `id` | LWW po **celém roztoku včetně všech variant** (`ns lib`) |
 | `materials` (`dip-app-v1-materials`) — suroviny | `id` | LWW po surovině (`ns mat`) |
 | `dip-app-active-var` — zobrazená varianta per roztok | — | **nesynchronizuje se** (stav zobrazení nesmí razítkovat `mt`) |
-| `dip-app-lab-view` — přepsaná síla / dávka lab navážky per roztok `{ str, batch }` | — | **nesynchronizuje se** (pracovní nastavení navážky, ne data) |
+| `dip-app-lab-view` — přepisy na lab listu per roztok `{ str, batch, title, mat:{<secId>|all: text} }` | — | **nesynchronizuje se** (pracovní nastavení navážky, ne data) |
 
 ```
 solution { id, name, desc, labStr, note, vars:[variant], mt }   // labStr = doporučená síla pro lab (85 = W85), null = W100
-variant  { id, name, code, date, from, note, secs:[section], meas:{phRF, ph, solid} }   // hmotnosti = vždy W100
-section  { id, kind:'rf'|'latex'|'add', name, note, rows:[row] }
+variant  { id, name, code, date, from, mature, prep, note, secs:[section], meas:{phRF, ph, solid} }   // hmotnosti = vždy W100; mature = min. zrání celého namíchaného roztoku; prep = poznámky k přípravě (lab list)
+section  { id, kind:'rf'|'latex'|'add', name, mature, note, rows:[row] }   // mature = min. zrání téhle části (text, „30 min")
 row      { id, mat, nm, role, conc, m }        // nm/role = snapshot pro smazanou surovinu
 material { id, name, role, work, note, alts:[alt], act, mt }
 alt      { id, name, producer, conc, price, cons, fF, fR, vp, note }
@@ -41,6 +41,13 @@ Receptura varianty je **vždy plná síla W100** — tak jede provoz a z ní se 
 - `solution.labStr` = doporučená lab síla roztoku (pole „lab strength %" v hlavičce dipu, synchronizuje se).
 - Sekce **Lab weighing** (`labHtml` / `labCalc`): síla předvyplněná z `labStr`, jde přepsat (+ dávka v g); přepsaná hodnota je jen lokální view state (`dip-app-lab-view`), nerazítkuje `mt`. Navážka = stejné pravidlo jako „set solid": receptura přepočtená na dávku, vše kromě první vody × k, první voda dorovná dávku (= k dílů W100 + (1 − k) vody).
 - Parametr „solid lab W85" a „Δ vs calc." u naměřené sušiny se počítají při lab síle (sušina se měří na lab roztoku).
+- Lab list je i pracovní list pro laboranta: síla + dávka, pod nimi znovu název dipu (přepsatelný), u každé části a u celého roztoku min. zrání předvyplněné z receptury (přepsatelné). Přepis = jen lokální view state (`title`, `mat`), prázdné / shodné s předvolbou = bez přepisu; přepsané pole má čárkovaný rámeček. Tabulka je kompaktní (`<table>` na šířku obsahu, dlouhé názvy se zkrátí), čísla se přepisují přes `updateLab()` bez re-renderu inputů. Na konci **preparation notes** (`variant.prep` — jak míchat, teplota…): na rozdíl od ostatních polí listu jsou to **data varianty** (synchronizují se, undo, kopírují se do nové varianty), auto-grow textarea.
+
+## Zrání (maturing)
+
+- `section.mature` = min. zrání části (typicky RF pryskyřice 30 min), `variant.mature` = min. zrání celého namíchaného roztoku (RFL, typicky 2 h). Text, ne číslo („30 min", „2 h", „přes noc").
+- Latexová část sama obvykle nezraje — zrání patří celému RFL.
+- **Migrace z poznámek:** dřív bylo zrání volným textem v `section.note`. `normVariant` u sekce **bez pole `mature`** převede poznámku, která je **jen** frází zrání (`min. 30 min zrání`, `maturing min. 2 h`, `zrání min. 24 hod`…, `parseMatureNote`), na `mature` a poznámku vyprázdní; delší poznámka zůstane beze změny. Zrání z **latexové** sekce jde do `variant.mature` (celý roztok), ne do sekce. Aditivní pole → `APP_SCHEMA` beze změny.
 - **Migrace (schema 1 → 2):** dřív nesla varianta `str` a hmotnosti byly **naředěný** lab roztok. `normVariant` je převede na W100 se stejnou dávkou (vše kromě první vody ÷ k, první voda dorovná; zaokrouhlení 0,01 g), `str` zahodí a `normSolution` ho přenese do `labStr` (poslední varianta, co ho měla). Lab navážka při té síle vrátí původní hmotnosti. Běží v normalizéru → i na stažená/importovaná stará data, deterministicky. `APP_SCHEMA = 2`, aby starý build (pořád nabízí `str` na variantě) nepushoval.
 
 ## Vzorce (`calcVariant`)

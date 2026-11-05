@@ -334,7 +334,8 @@ html.dark input[type="date"]{color-scheme:dark}
 .rc-sum.total .num{font-size:.84rem}
 .btn-add-row{font-family:'DM Sans',sans-serif;font-size:.74rem;color:var(--muted);background:var(--w);border:1px dashed var(--mid);border-radius:var(--r);padding:.18rem .5rem;cursor:pointer;white-space:nowrap}
 @media(hover:hover){.btn-add-row:hover{color:var(--black);border-color:var(--black)}}
-.rc-under{display:flex;gap:.5rem;margin-top:calc(.45rem/var(--pzc,1))}
+.rc-under{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:calc(.5rem/var(--pzc,1)) calc(1rem/var(--pzc,1));margin-top:calc(.45rem/var(--pzc,1))}
+.whole-mat{font-style:italic}
 /* narrow recipe: every component takes two lines (name + buttons / numbers) — container query + viewport fallback */
 @container (max-width:620px){
   .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
@@ -355,16 +356,32 @@ html.dark input[type="date"]{color-scheme:dark}
 .lab-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:calc(.5rem/var(--pzc,1)) calc(1.2rem/var(--pzc,1))}
 .lab-rec{display:flex;align-items:center;gap:.35rem;font-size:.74rem;color:var(--muted)}
 .lab-rec:empty{display:none}
-.lab-list{margin-top:calc(.55rem/var(--pzc,1))}
-.lab-grid{display:grid;grid-template-columns:minmax(0,1fr) 3.9rem 5.6rem;column-gap:.35rem;align-items:baseline;padding:calc(.22rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light)}
-.lab-head{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;border-bottom:1.5px solid var(--black)}
-.lab-head .num{font-family:'DM Sans',sans-serif;font-size:.62rem;color:var(--muted)}
-.lab-n{min-width:0;font-size:.82rem;color:var(--black);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lab-sec{padding-top:calc(.6rem/var(--pzc,1));border-bottom-color:var(--mid)}
-.lab-sec .lab-n,.lab-sec .num{font-weight:600}
-.lab-g{font-size:.86rem}
-.lab-total{border-top:2px solid var(--black);border-bottom:none;margin-top:calc(.3rem/var(--pzc,1))}
-.lab-total .lab-n,.lab-total .num{font-weight:600}
+.lab-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2rem .6rem;margin-top:calc(.7rem/var(--pzc,1))}
+.lab-title{flex:0 1 22rem;min-width:8rem;font-family:'DM Sans',sans-serif;font-size:1.05rem;font-weight:600;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.15rem .35rem;margin-left:-.35rem;outline:none}
+.lab-title:focus{border-color:var(--black)}
+@media(hover:hover){.lab-title:not(:focus):hover{border-color:var(--light)}}
+.lab-title.diff{border:1.5px dashed var(--black)}
+.lab-var{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted)}
+/* compact: the table is only as wide as its content, long names are cut with an ellipsis */
+.lab-tbl{border-collapse:collapse;margin-top:calc(.55rem/var(--pzc,1));max-width:100%}
+.lab-tbl th{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:right;white-space:nowrap;padding:0 0 .3rem calc(1.1rem/var(--pzc,1));border-bottom:1.5px solid var(--black)}
+.lab-tbl th:first-child{text-align:left;padding-left:0}
+.lab-tbl td{font-size:.82rem;color:var(--black);padding:calc(.22rem/var(--pzc,1)) 0 calc(.22rem/var(--pzc,1)) calc(1.1rem/var(--pzc,1));border-bottom:1px solid var(--light);vertical-align:baseline}
+.lab-tbl td:first-child{padding-left:0}
+.lab-n{display:block;max-width:min(16rem,45vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lab-tbl td.n{font-family:'DM Mono',monospace;font-size:.8rem;text-align:right;white-space:nowrap}
+.lab-tbl td.lab-g{font-size:.88rem}
+.lab-tbl td.num-dash{color:var(--mid)}
+.lab-tbl .lab-sec td{font-weight:600;padding-top:calc(.65rem/var(--pzc,1));border-bottom-color:var(--mid)}
+.lab-tbl .lab-total td{font-weight:600;border-top:2px solid var(--black);border-bottom:none;padding-top:calc(.35rem/var(--pzc,1))}
+.lab-tbl .lab-total .lab-n{max-width:none}
+.lab-tbl .lab-mrow td{border-bottom:none;padding-top:calc(.3rem/var(--pzc,1));padding-bottom:calc(.1rem/var(--pzc,1))}
+.lab-m{display:inline-flex;align-items:center;gap:.35rem;font-size:.74rem;font-style:italic;color:var(--dark);white-space:nowrap}
+.lab-mat,.mat-in,.sec-mat{width:5.6rem;min-width:0;font-family:'DM Sans',sans-serif;font-size:.8rem;font-style:normal;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.18rem .35rem;outline:none}
+.lab-mat:focus,.mat-in:focus,.sec-mat:focus{outline:2px solid var(--black);outline-offset:0;border-color:var(--black)}
+.lab-mat.diff{border:1.5px dashed var(--black);font-weight:500}
+.sec-mat-w{display:flex;align-items:center;gap:.3rem;font-size:.72rem;font-style:italic;color:var(--muted);white-space:nowrap}
+.sec-mat{width:4.8rem;font-size:.76rem;padding:.12rem .3rem}
 .lab-msg{font-size:.78rem;color:var(--dark);margin-top:calc(.55rem/var(--pzc,1));line-height:1.6;border-left:2px solid var(--black);padding-left:calc(.6rem/var(--pzc,1))}
 .tools{display:flex;flex-wrap:wrap;gap:calc(.5rem/var(--pzc,1)) calc(1.2rem/var(--pzc,1));margin-top:calc(.8rem/var(--pzc,1));align-items:center}
 .tool{display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:var(--dark)}
@@ -403,6 +420,8 @@ html.dark input[type="date"]{color-scheme:dark}
 .var-stats:empty,.var-diff:empty{display:none}
 .var-note{flex:0 0 auto;min-height:2.8rem;resize:none;overflow:hidden;font-size:.84rem;padding:calc(.45rem/var(--pzc,1)) calc(.55rem/var(--pzc,1))}
 .sol-note{flex:0 0 auto;min-height:220px;resize:none;overflow:hidden}
+.lab-prep{margin-top:calc(.9rem/var(--pzc,1))}
+.prep-note{flex:0 0 auto;width:100%;min-height:4.2rem;resize:none;overflow:hidden;font-size:.84rem;padding:calc(.45rem/var(--pzc,1)) calc(.55rem/var(--pzc,1))}
 
 /* materials modal */
 .mat-modal{max-width:760px;width:94%;max-height:92vh;overflow-y:auto}
@@ -1207,8 +1226,8 @@ function doImport() {
 //   material  { id, name, role, work (working conc. %, null = as delivered), note, alts:[alt], act (active alt id), mt }
 //   alt       { id, name, producer, conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
 //   solution  { id, name, desc, labStr (recommended lab strength %, null = W100), note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
-//   variant   { id, name, code, date, from (parent variant id), note, secs:[section], meas:{phRF, ph, solid} }   ← masses = the full-strength W100 dip
-//   section   { id, kind: 'rf'|'latex'|'add', name, note, rows:[row] }
+//   variant   { id, name, code, date, from (parent variant id), mature (min. maturing of the whole mixed dip, text), prep (preparation notes for the lab sheet), note, secs:[section], meas:{phRF, ph, solid} }   ← masses = the full-strength W100 dip
+//   section   { id, kind: 'rf'|'latex'|'add', name, mature (min. maturing of this part, text — e.g. "30 min"), note, rows:[row] }
 //   row       { id, mat, nm, role (name/role snapshots for a deleted material), conc (%chem), m (g) }
 // Material roles drive the maths: which rows count as RF resin, latex, ammonia, NaOH…
 const ROLES = [
@@ -1256,7 +1275,17 @@ function normRow(r) {
 }
 function normSection(s) {
   s = s || {};
-  return { ...s, id: s.id ?? uid(), kind: s.kind || 'rf', name: String(s.name ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
+  return { ...s, id: s.id ?? uid(), kind: s.kind || 'rf', name: String(s.name ?? ''), mature: String(s.mature ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
+}
+// legacy (before the maturing fields): the minimum maturing was written in the section note —
+// "min. 30 min zrání", "maturing min. 2 h"… Only a note that is NOTHING BUT such a phrase is converted
+// (→ "30 min" / "2 h"); a longer note stays untouched.
+function parseMatureNote(note) {
+  const t = String(note || '').trim();
+  if (!/zr[aá]n|zr[aá]t|matur/i.test(t)) return null;
+  const m = t.match(/^(?:(?:maturing|zr[aá]n[ií])\s*)?(?:min(?:\.|imum|imálně|imalne)?\s*)?(\d+(?:[.,]\d+)?)\s*(min(?:ut[ay]?)?|h|hod(?:in[ay]?)?|hours?|hrs?)\.?\s*(?:zr[aá]n[ií]|maturing)?\.?$/i);
+  if (!m) return null;
+  return m[1].replace(',', '.') + ' ' + (/^m/i.test(m[2]) ? 'min' : 'h');
 }
 // legacy (schema 1): a variant carried `str` and its masses were the DILUTED lab dip (W85 = 85).
 // Now a recipe is always the full-strength W100 dip → undilute it (inverse of the lab weighing, same batch mass):
@@ -1273,10 +1302,20 @@ function normVariant(v) {
   v = v || {};
   const { str, ...rest } = v;   // `str` is legacy — dropped after the masses are converted to W100
   const out = { ...rest, id: v.id ?? uid(), name: String(v.name ?? ''), code: String(v.code ?? ''), date: String(v.date ?? ''),
-    from: v.from ?? null, note: String(v.note ?? ''),
+    from: v.from ?? null, mature: String(v.mature ?? ''), prep: String(v.prep ?? ''), note: String(v.note ?? ''),
     secs: (Array.isArray(v.secs) ? v.secs : []).map(normSection), meas: { ...(v.meas || {}) } };
   const k = legacyStr(v);
   if (k != null) undiluteVariant(out, k);
+  // maturing out of the legacy section notes (a section without the `mature` field). The latex part does not
+  // mature on its own — a time written there belongs to the whole mixed dip (RFL) → moved to the variant.
+  out.secs.forEach((s, i) => {
+    const raw = v.secs[i];
+    if (!raw || raw.mature != null) return;
+    const p = parseMatureNote(s.note); if (!p) return;
+    s.note = '';
+    if (s.kind === 'latex') { if (!out.mature) out.mature = p; }
+    else s.mature = p;
+  });
   return out;
 }
 function normSolution(s) {
@@ -1295,10 +1334,10 @@ function defaultMaterials() { return [normMaterial({ id: 1, name: 'Water', role:
 function defaultVariant() {
   const first = roles => { for (const r of roles) { const m = materials.filter(x => x.role === r).sort(byName)[0]; if (m) return m; } return null; };
   const row = roles => { const m = first(roles); return m ? { id: uid(), mat: m.id, nm: m.name, role: m.role, conc: matWork(m), m: null } : null; };
-  return { id: uid(), name: 'V1', code: '', date: todayIso(), from: null, note: '', meas: {},
+  return { id: uid(), name: 'V1', code: '', date: todayIso(), from: null, mature: '2 h', prep: '', note: '', meas: {},
     secs: [
-      { id: uid(), kind: 'rf', name: '1. RF resin', note: 'maturing min. 30 min', rows: [['water'], ['naoh'], ['resin'], ['formaldehyde']].map(row).filter(Boolean) },
-      { id: uid(), kind: 'latex', name: '2. Latex', note: 'maturing min. 2 h', rows: [['water'], ['latex-vp', 'latex-sbr', 'latex-nr'], ['ammonia']].map(row).filter(Boolean) }
+      { id: uid(), kind: 'rf', name: '1. RF resin', mature: '30 min', note: '', rows: [['water'], ['naoh'], ['resin'], ['formaldehyde']].map(row).filter(Boolean) },
+      { id: uid(), kind: 'latex', name: '2. Latex', mature: '', note: '', rows: [['water'], ['latex-vp', 'latex-sbr', 'latex-nr'], ['ammonia']].map(row).filter(Boolean) }
     ] };
 }
 
@@ -1389,6 +1428,9 @@ function varDiff(a, b) {
   num('PHR', ca.phr, cb.phr, 2);
   num('F/R', ca.fr, cb.fr, 2);
   num('L in solid', ca.lInSolid, cb.lInSolid, 2, '%');
+  const mtx = x => String(x || '').trim(), sa = new Map(a.secs.map(s => [s.id, s]));
+  if (mtx(a.mature) !== mtx(b.mature)) out.push('maturing ' + (mtx(a.mature) || '—') + ' → ' + (mtx(b.mature) || '—'));
+  b.secs.forEach(s => { const o = sa.get(s.id); if (o && mtx(o.mature) !== mtx(s.mature)) out.push('maturing ' + (SEC_SHORT[s.kind] || s.kind) + ' ' + (mtx(o.mature) || '—') + ' → ' + (mtx(s.mature) || '—')); });
   const rowsOf = v => { const m = new Map(); v.secs.forEach(s => s.rows.forEach(r => m.set(r.id, { r, s }))); return m; };
   const A = rowsOf(a), B = rowsOf(b);
   const label = (x, map) => {   // the same material in two sections (water) → add the section
@@ -1442,9 +1484,10 @@ function renderMain() {
   box.innerHTML = chipsHtml(v) + headHtml(v) + recipeHtml(v)
     + toolsHtml()
     + '<div class="sub-title">Parameters</div><div class="par-grid" id="parGrid"></div>'
-    + labHtml()
+    + labHtml(v)
     + '<div class="sub-title">Measured</div>' + measHtml(v);
   updateCalc();
+  autoGrow(el('labPrep'));
 }
 function chipsHtml(av) {
   return '<div class="var-chips"><span class="var-chips-label">variants</span>'
@@ -1502,7 +1545,8 @@ function secHtml(s, i, n) {
       <div class="sec-head">
         <input class="sec-name ed" value="${esc(s.name)}" placeholder="section" oninput="onSecField(${s.id},'name',this.value)" title="section name" autocomplete="off">
         <select class="sec-kind ed" onchange="onSecField(${s.id},'kind',this.value)" title="what this section counts as in the parameters">${SEC_KINDS.map(([k, l]) => `<option value="${k}"${s.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
-        <input class="sec-note ed" value="${esc(s.note)}" placeholder="note — e.g. maturing min. 30 min" oninput="onSecField(${s.id},'note',this.value)" autocomplete="off">
+        <label class="sec-mat-w" title="minimum maturing of this part before it is mixed on (e.g. RF resin 30 min) — empty = none; the whole dip's maturing is under the recipe">maturing min. <input class="sec-mat ed" value="${esc(s.mature)}" placeholder="—" oninput="onSecField(${s.id},'mature',this.value)" autocomplete="off"></label>
+        <input class="sec-note ed" value="${esc(s.note)}" placeholder="note" oninput="onSecField(${s.id},'note',this.value)" autocomplete="off">
         <span class="sec-btns"><button class="ib" onclick="moveSection(${s.id},-1)"${i === 0 ? ' disabled' : ''} title="move section up">↑</button><button class="ib" onclick="moveSection(${s.id},1)"${i === n - 1 ? ' disabled' : ''} title="move section down">↓</button><button class="ib" onclick="delSection(${s.id})" title="delete section">✕</button></span>
       </div>
       ${s.rows.map((r, j) => rowHtml(s, r, j)).join('')}
@@ -1518,7 +1562,8 @@ function recipeHtml(v) {
       ${v.secs.map((s, i) => secHtml(s, i, v.secs.length)).join('')}
       <div class="rc-grid rc-sum total"><div class="a-name"><span class="sum-l" id="totL">sum RFL</span></div><span class="num a-m" id="tm"></span><span class="num a-dip" id="td"></span><span class="num a-solid" id="ts"></span><span class="num a-wet" id="tw"></span><span class="num a-price" id="tp"></span></div>
     </div>
-    <div class="rc-under"><button class="btn-add-row" onclick="addSection()">+ section</button></div>`;
+    <div class="rc-under"><button class="btn-add-row" onclick="addSection()">+ section</button>
+      <label class="tool whole-mat" title="minimum maturing of the whole mixed dip (RFL) before use — e.g. 2 h">whole dip — maturing min. <input class="mat-in ed" value="${esc(v.mature)}" placeholder="—" oninput="onVarField('mature',this)" autocomplete="off"></label></div>`;
 }
 function toolsHtml() {
   return `<div class="tools">
@@ -1573,33 +1618,89 @@ function labCalc(v, str, batch) {
   }
   return { m, B, k };
 }
-function labHtml() {
-  const st = labState();
+// The lab sheet also repeats the dip name and the maturing times — prefilled from the dip / recipe, any of them can be
+// overwritten for this weighing (same local view state as the strength: labView[dip] = { str, batch, title, mat:{secId|'all'} }).
+// Empty or equal to the preset = no override.
+function labViewOf() { return (cur && labView[cur.id]) || {}; }
+function labTitleDef() { return cur ? (cur.name || '') : ''; }
+function labTitle() { const o = labViewOf(); return o.title != null ? o.title : labTitleDef(); }
+function labMatPreset(key) {
+  const v = activeVar(); if (!v) return '';
+  if (key === 'all') return v.mature || '';
+  const s = v.secs.find(x => String(x.id) === String(key));
+  return s ? (s.mature || '') : '';
+}
+function labMatOver(key) { const o = labViewOf().mat; return o && o[key] != null ? o[key] : null; }
+function labMat(key) { const o = labMatOver(key); return o != null ? o : labMatPreset(key); }
+function onLabTitle(inp) {
+  const t = inp.value.trim();
+  setLabView('title', t && t !== labTitleDef().trim() ? inp.value : null);
+  inp.classList.toggle('diff', labViewOf().title != null);
+}
+function labTitleBlur() { const i = el('labTitle'); if (i) i.value = labTitle(); }
+function onLabMature(key, inp) {
+  const t = inp.value.trim(), o = { ...(labViewOf().mat || {}) };
+  if (!t || t === labMatPreset(key).trim()) delete o[key]; else o[key] = t;
+  setLabView('mat', Object.keys(o).length ? o : null);
+  inp.classList.toggle('diff', o[key] != null);
+}
+function labMatBlur(key) { const i = el('lm-' + key); if (i) i.value = labMat(key); }
+function labMatHtml(key, label) {
+  const tip = key === 'all' ? 'minimum maturing of the whole mixed dip' : 'minimum maturing of this part';
+  return `<label class="lab-m">${label} <input class="lab-mat${labMatOver(key) != null ? ' diff' : ''}" id="lm-${key}" data-k="${key}" value="${esc(labMat(key))}" placeholder="—" oninput="onLabMature('${key}',this)" onblur="labMatBlur('${key}')" title="${tip} — prefilled from the recipe; a different value is for this weighing only (dashed = changed)" autocomplete="off"></label>`;
+}
+function labHtml(v) {
+  const st = labState(), o = labViewOf();
+  const body = v.secs.map(s => `<tr class="lab-sec"><td><span class="lab-n" id="lsn${s.id}">${esc(s.name || '—')}</span></td><td></td><td class="n" id="ls${s.id}"></td></tr>`
+    + s.rows.map(r => `<tr><td><span class="lab-n">${esc(rowName(r))}</span></td><td class="n${rowRole(r) === 'water' ? ' num-dash' : ''}" id="lc${r.id}"></td><td class="n lab-g" id="lw${r.id}"></td></tr>`).join('')
+    + `<tr class="lab-mrow"><td colspan="3">${labMatHtml(s.id, 'maturing min.')}</td></tr>`).join('');
   return `<div class="sub-title">Lab weighing</div>
     <div class="lab-ctl">
       <span class="tool">strength W <input id="labStrIn" class="rc-in" inputmode="decimal" value="${fmtNum(st.str)}" placeholder="${fmtNum(st.rec)}" oninput="onLabStr(this)" onblur="labInBlur()" title="strength of the lab dip in % of the full-strength W100 recipe — only for this weighing; the dip's recommended value is in the header (lab strength %)" autocomplete="off"></span>
       <span class="tool">batch <input id="labBatchIn" class="rc-in" inputmode="decimal" value="${st.batch != null ? fmtNum(st.batch) : ''}" oninput="onLabBatch(this)" title="lab batch mass (g) — empty = the recipe batch" autocomplete="off"> g</span>
       <span class="lab-rec" id="labRec"></span>
     </div>
-    <div class="lab-list" id="labList"></div>
-    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A strength typed here stays on this device only.</div>`;
+    <div class="lab-top">
+      <input id="labTitle" class="lab-title${o.title != null ? ' diff' : ''}" value="${esc(labTitle())}" placeholder="dip" oninput="onLabTitle(this)" onblur="labTitleBlur()" title="the dip name on this sheet — add or change anything for this weighing (dashed = changed); empty = the dip name" autocomplete="off">
+      <span class="lab-var" id="labVar"></span>
+    </div>
+    <div class="lab-msg" id="labMsg" style="display:none"></div>
+    <table class="lab-tbl">
+      <thead><tr><th>component</th><th>%chem</th><th>weigh (g)</th></tr></thead>
+      <tbody>${body}
+        <tr class="lab-total"><td><span class="lab-n" id="labTotL"></span></td><td></td><td class="n" id="labTot"></td></tr>
+        <tr class="lab-mrow"><td colspan="3">${labMatHtml('all', 'whole dip — maturing min.')}</td></tr>
+      </tbody>
+    </table>
+    <div class="field lab-prep"><label>preparation notes</label><textarea id="labPrep" class="prep-note ed" placeholder="How to mix — e.g. add the formaldehyde slowly while stirring, temperature, order, what to watch…" oninput="onVarField('prep',this);autoGrow(this)">${esc(v.prep)}</textarea></div>
+    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. Name, strength, batch and maturing changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.</div>`;
 }
-function labListHtml(v, c, st) {
-  if (Math.abs(st.str - 100) < 1e-9 && !st.batch)
-    return '<div class="lab-msg">W100 at the recipe batch — weigh the recipe masses as they are.</div>';
-  const L = labCalc(v, st.str, st.batch);
-  if (L.err) return '<div class="lab-msg">' + esc(L.err) + '</div>';
-  let h = '<div class="lab-grid lab-head"><span>component</span><span class="num">%chem</span><span class="num">weigh (g)</span></div>', total = 0;
+// numbers and prefilled values of the lab sheet — the inputs are never re-rendered while typing
+function updateLab(v, c, st) {
+  const L = labCalc(v, st.str, st.batch), ok = !L.err;
+  const msg = el('labMsg'); if (msg) { msg.textContent = L.err || ''; msg.style.display = ok ? 'none' : ''; }
+  let total = 0;
   v.secs.forEach(s => {
-    const sum = s.rows.reduce((a, r) => a + (L.m[r.id] || 0), 0); total += sum;
-    h += `<div class="lab-grid lab-sec"><span class="lab-n">${esc(s.name || '—')}</span><span></span><span class="num">${fmt(sum, 1)}</span></div>`;
+    let sum = 0;
     s.rows.forEach(r => {
-      const water = rowRole(r) === 'water';
-      h += `<div class="lab-grid"><span class="lab-n">${esc(rowName(r))}</span><span class="num${water ? ' num-dash' : ''}">${water ? '—' : (fmtNum(r.conc) || '?')}</span><span class="num lab-g">${fmt(L.m[r.id] || 0, 2)}</span></div>`;
+      const x = ok ? (L.m[r.id] || 0) : null; if (x != null) sum += x;
+      setText('lw' + r.id, x != null ? fmt(x, 2) : '—');
+      setText('lc' + r.id, rowRole(r) === 'water' ? '—' : (fmtNum(r.conc) || '?'));
     });
+    total += sum;
+    setText('ls' + s.id, ok ? fmt(sum, 1) : '—');
+    setText('lsn' + s.id, s.name || '—');
   });
-  h += `<div class="lab-grid lab-total"><span class="lab-n">W${fmtNum(st.str)} · solid ${pct(c.tsc != null ? c.tsc * L.k : null)}</span><span></span><span class="num">${fmt(total, 1)}</span></div>`;
-  return h;
+  setText('labTot', ok ? fmt(total, 1) : '—');
+  setText('labTotL', 'total W' + fmtNum(st.str) + ' · solid ' + pct(c.tsc != null ? c.tsc * st.str / 100 : null));
+  setText('labVar', [v.name, v.code].filter(Boolean).join(' · '));
+  const act = document.activeElement, o = labViewOf();
+  const ti = el('labTitle'); if (ti) { if (ti !== act) ti.value = labTitle(); ti.classList.toggle('diff', o.title != null); }
+  document.querySelectorAll('#mainBody .lab-mat').forEach(i => {
+    const k = i.dataset.k;
+    if (i !== act) i.value = labMat(k);
+    i.classList.toggle('diff', labMatOver(k) != null);
+  });
 }
 function parHtml(c, labStr) {
   const P = (label, val, o = {}) => `<div class="par${o.out ? ' out' : ''}${o.key ? ' key' : ''}"${o.tip ? ` title="${esc(o.tip)}"` : ''}><span class="par-l">${label}${o.t ? ` <span class="par-t">${o.t}</span>` : ''}</span><span class="par-v">${val}</span></div>`;
@@ -1656,7 +1757,7 @@ function updateCalc() {
   setText('tp', eur(c.price, c.priceOk, 3, ''));
   const st = labState(), diluted = Math.abs(st.str - 100) > 1e-9;
   const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c, st.str);
-  const ll = el('labList'); if (ll) ll.innerHTML = labListHtml(v, c, st);
+  updateLab(v, c, st);
   const lr = el('labRec');
   if (lr) lr.innerHTML = st.over ? `<button class="btn-sm" onclick="resetLabStr()" title="back to the dip's recommended lab strength">↺ dip W${fmtNum(st.rec)}</button>`
     : cur.labStr > 0 ? 'the dip’s lab strength' : '';
@@ -1727,7 +1828,7 @@ function autoGrow(ta) {
   if (h > max) { ta.style.height = max + 'px'; ta.style.overflowY = 'auto'; }
   else { ta.style.height = h + 'px'; ta.style.overflowY = 'hidden'; }
 }
-function growAll() { document.querySelectorAll('#panel-notes textarea').forEach(autoGrow); }
+function growAll() { document.querySelectorAll('#panel-notes textarea, #labPrep').forEach(autoGrow); }
 
 // ── EDIT HANDLERS ─────────────────────────────────────────────────────────
 function onSolField(key, inp) {
@@ -1736,7 +1837,7 @@ function onSolField(key, inp) {
   if (key === 'labStr') { const n = numOrNull(inp.value); cur.labStr = n > 0 ? n : null; }
   else cur[key] = inp.value;
   if (key === 'name') setText('genName', cur.name || 'untitled');
-  if (key === 'labStr') updateCalc(); else updateHeaderSub();
+  if (key === 'labStr' || key === 'name') updateCalc(); else updateHeaderSub();   // the lab sheet quotes the name
   schedSave();
 }
 function onVarField(key, inp) {
@@ -1753,6 +1854,7 @@ function onSecField(sid, key, val) {
   const s = findSec(sid); if (!s) return;
   coalesceUndo(); s[key] = val;
   if (key === 'kind') renderMain();
+  else if (key === 'name' || key === 'mature') updateCalc();   // the lab weighing quotes both
   schedSave();
 }
 function onRowNum(sid, rid, key, inp) {
@@ -1819,7 +1921,7 @@ function addSection() {
   const has = k => v.secs.some(s => s.kind === k);
   const kind = !has('rf') ? 'rf' : !has('latex') ? 'latex' : 'add';
   const label = SEC_KINDS.find(k => k[0] === kind)[1];
-  v.secs.push({ id: uid(), kind, name: (v.secs.length + 1) + '. ' + label, note: '', rows: [] });
+  v.secs.push({ id: uid(), kind, name: (v.secs.length + 1) + '. ' + label, mature: '', note: '', rows: [] });
   renderMain(); schedSave();
 }
 async function delSection(sid) {
