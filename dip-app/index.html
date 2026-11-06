@@ -471,6 +471,7 @@ html.dark input[type="date"]{color-scheme:dark}
 .alt.on .alt-radio::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--black)}
 .alt-name{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.84rem;font-weight:500;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .45rem;outline:none}
 .alt-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.6rem,1fr));gap:.35rem .5rem}
+.alt-fields .mf-wide{grid-column:span 2}
 .mf{display:flex;flex-direction:column;gap:.15rem;min-width:0}
 .mf label{font-size:.6rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mf input,.mf select{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .45rem;outline:none}
@@ -1264,7 +1265,7 @@ function doImport() {
 // ── DOMAIN ────────────────────────────────────────────────────────────────
 // Data model (all records keep unknown fields — normalizers spread the original first):
 //   material  { id, name, role, work (working conc. %, null = as delivered), note, alts:[alt], act (active alt id), mt }
-//   alt       { id, name, producer, conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
+//   alt       { id, name, producer, card (master card = item no. in the stock system), conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
 //   solution  { id, name, desc, labStr (recommended lab strength %, null = W100), note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
 //   variant   { id, name, code, date, from (parent variant id), mature (min. maturing of the whole mixed dip, text), prep (preparation notes for the lab sheet), note, secs:[section], meas:{phRF, ph, solid} }   ← masses = the full-strength W100 dip
 //   section   { id, kind: 'rf'|'latex'|'add'|'other', kname (own kind name, only for 'other'), name, mature (min. maturing of this part, text — e.g. "30 min"), note, rows:[row] }
@@ -1310,7 +1311,7 @@ function setCell(id, t) {
 // ── NORMALIZERS (preserve-unknown) ─────────────────────────────────────────
 function normAlt(a) {
   a = a || {};
-  return { ...a, id: a.id ?? uid(), name: String(a.name ?? ''), producer: String(a.producer ?? ''),
+  return { ...a, id: a.id ?? uid(), name: String(a.name ?? ''), producer: String(a.producer ?? ''), card: String(a.card ?? ''),
     conc: numOrNull(a.conc), price: numOrNull(a.price), cons: numOrNull(a.cons),
     fF: numOrNull(a.fF), fR: numOrNull(a.fR), vp: numOrNull(a.vp), note: String(a.note ?? '') };
 }
@@ -2448,6 +2449,7 @@ function matMetaText(m) {
   const a = actAlt(m), w = matWork(m), parts = [ROLE_NAME[m.role] || m.role];
   if (m.role !== 'water') parts.push(w != null ? fmtNum(w) + '%' : '? %');
   if (a && a.name && a.name !== m.name) parts.push(a.name);
+  if (a && a.card && a.card.trim()) parts.push('card ' + a.card.trim());
   if (m.alts.length > 1) parts.push(m.alts.length + ' alternatives');
   const p = workPrice(m, w);
   parts.push(p != null ? p.toFixed(3) + ' €/kg' : 'no price');
@@ -2464,7 +2466,7 @@ function matInfoHtml(m) {
 function renderMaterials() {
   const list = el('matList'); if (!list) return;
   const q = (el('matSearch').value || '').trim().toLowerCase();
-  const match = m => !q || (m.name + ' ' + m.note + ' ' + m.alts.map(a => a.name + ' ' + a.producer).join(' ')).toLowerCase().includes(q);
+  const match = m => !q || (m.name + ' ' + m.note + ' ' + m.alts.map(a => a.name + ' ' + a.producer + ' ' + a.card).join(' ')).toLowerCase().includes(q);
   let h = '';
   ROLES.forEach(([k, label]) => {
     const ms = materials.filter(m => roleKey(m.role) === k && match(m)).sort(byName);
@@ -2493,15 +2495,17 @@ function matHtml(m) {
   }
   return h + '</div>';
 }
+const ALT_TEXT = ['name', 'producer', 'card', 'note'];   // text fields of an alternative — the rest are numbers
 function altHtml(m, a) {
   const on = a.id === m.act, water = m.role === 'water';
-  const f = (key, label, ph, tip) => `<div class="mf"><label>${label}</label><input type="text"${key === 'producer' ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${m.id},${a.id},'${key}',this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off"></div>`;
+  const f = (key, label, ph, tip) => `<div class="mf${key === 'card' ? ' mf-wide' : ''}"><label>${label}</label><input type="text"${ALT_TEXT.includes(key) ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${m.id},${a.id},'${key}',this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off"></div>`;
   return `<div class="alt${on ? ' on' : ''}">
       <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${m.id},${a.id})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>
         <input class="alt-name" type="text" value="${esc(a.name)}" placeholder="product name" oninput="altField(${m.id},${a.id},'name',this.value)" autocomplete="off">
         <button class="ib" onclick="deleteAlt(${m.id},${a.id})" title="remove alternative"${m.alts.length < 2 ? ' disabled' : ''}>✕</button></div>
       <div class="alt-fields">
         ${f('producer', 'producer')}
+        ${f('card', 'master card', 'item no.', 'kmenová karta — the item number of this product in the company stock system')}
         ${water ? '' : f('conc', 'conc. %', 'as delivered', 'concentration as delivered')}
         ${f('price', '€ / kg', '', 'price per kg as delivered')}
         ${f('cons', 't / year', '', 'consumption')}
@@ -2531,7 +2535,7 @@ function matField(id, key, val) {
 function altField(mid, aid, key, val) {
   const m = matById(mid), a = m && m.alts.find(x => x.id === aid); if (!a) return;
   const before = JSON.stringify(m);
-  a[key] = key === 'name' || key === 'producer' || key === 'note' ? val : numOrNull(val);
+  a[key] = ALT_TEXT.includes(key) ? val : numOrNull(val);
   if (touchMaterial(m, before)) updateMatHead(m);
 }
 function setActAlt(mid, aid) {

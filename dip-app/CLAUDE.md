@@ -25,7 +25,7 @@ variant  { id, name, code, date, from, mature, prep, note, secs:[section], meas:
 section  { id, kind:'rf'|'latex'|'add'|'other', kname, name, mature, note, rows:[row] }   // kname = vlastní druh (jen u 'other')   // mature = min. zrání téhle části (text, „30 min")
 row      { id, mat, nm, role, conc, m }        // nm/role = snapshot pro smazanou surovinu
 material { id, name, role, work, note, alts:[alt], act, mt }
-alt      { id, name, producer, conc, price, cons, fF, fR, vp, note }
+alt      { id, name, producer, card, conc, price, cons, fF, fR, vp, note }   // card = kmenová karta (číslo položky), per alternativa
 ```
 
 - **Role suroviny** (`water`, `naoh`, `resin`, `formaldehyde`, `latex-vp|sbr|nr`, `ammonia`, `wax`, `defoamer`, `epoxy`, `isocyanate`, `other`) řídí výpočty. Neznámá role (novější build) se počítá jako `other`, ale ukládá se beze změny.
