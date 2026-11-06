@@ -296,8 +296,10 @@ html.dark input[type="date"]{color-scheme:dark}
 .chip.on{background:var(--black);color:var(--w);border-color:var(--black)}
 @media(hover:hover){.chip:not(.on):hover{background:var(--off);border-color:var(--dark)}}
 .hg{display:grid;gap:calc(.6rem/var(--pzc,1)) calc(.8rem/var(--pzc,1));margin-bottom:calc(.65rem/var(--pzc,1))}
-.hg-sol{grid-template-columns:minmax(0,9rem) minmax(0,1fr) minmax(0,8rem);grid-template-areas:"sname sdesc sstr"}
-.f-sname{grid-area:sname}.f-sdesc{grid-area:sdesc}.f-sstr{grid-area:sstr}
+.hg-sol{grid-template-columns:minmax(0,9rem) minmax(0,7.5rem) minmax(0,1fr) minmax(0,8rem);grid-template-areas:"sname stype sdesc sstr"}
+.f-sname{grid-area:sname}.f-stype{grid-area:stype}.f-sdesc{grid-area:sdesc}.f-sstr{grid-area:sstr}
+.dip-used{font-size:.72rem;color:var(--muted);line-height:1.45;margin:calc(-.2rem/var(--pzc,1)) 0 calc(.6rem/var(--pzc,1))}
+.dip-used b{color:var(--black);font-weight:600}
 .hg-var{grid-template-columns:repeat(3,minmax(0,1fr))}
 
 /* compact: the recipe is only as wide as it needs (the name column stops at 15rem), not stretched over a wide panel */
@@ -335,6 +337,12 @@ html.dark input[type="date"]{color-scheme:dark}
 .rc-sub{font-size:.66rem;color:var(--muted);margin-top:.02rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .rc-sub:empty{display:none}
 .rc-sub b{color:var(--black);font-weight:600}
+/* a nested dip as a component: its %chem is computed from its recipe (italic), the variant is picked under the name */
+.num-link{font-style:italic;padding-right:.35rem}
+.rc-sub.rc-sub-dip{cursor:default}
+.rc-dv{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--black);background:var(--w);border:1px solid var(--light);border-radius:3px;padding:0 .1rem;outline:none;cursor:pointer;max-width:8rem;vertical-align:baseline}
+.rc-dv:focus{outline:1.5px solid var(--black);outline-offset:0}
+.rc-open{font-family:'DM Sans',sans-serif;font-size:.66rem;color:var(--black);background:none;border:none;padding:0;cursor:pointer;text-decoration:underline dotted}
 .rc-act{display:flex;justify-content:flex-end;gap:.1rem}
 .ib{width:1.05rem;height:1.35rem;border:none;background:none;color:var(--muted);cursor:pointer;font-size:.78rem;line-height:1;padding:0;border-radius:3px;flex-shrink:0}
 @media(hover:hover){.ib:not(:disabled):hover{color:var(--black);background:var(--off)}}
@@ -362,7 +370,7 @@ html.dark input[type="date"]{color-scheme:dark}
   .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
   .rc-head{grid-template-areas:"conc m dip solid wet price"}
   .rc-head .a-name,.rc-head .a-act{display:none}
-  .hg-sol{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"sname sstr" "sdesc sdesc"}
+  .hg-sol{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"sname stype" "sdesc sstr"}
   .hg-var{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:620px){
@@ -370,7 +378,7 @@ html.dark input[type="date"]{color-scheme:dark}
   .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
   .rc-head{grid-template-areas:"conc m dip solid wet price"}
   .rc-head .a-name,.rc-head .a-act{display:none}
-  .hg-sol{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"sname sstr" "sdesc sdesc"}
+  .hg-sol{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"sname stype" "sdesc sstr"}
   .hg-var{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
@@ -807,14 +815,20 @@ function renderLibrary() {
   const box = el('libList'); if (!box) return;
   const q = (el('libSearch') ? el('libSearch').value : '').trim().toLowerCase();
   if (!library.length) { box.innerHTML = '<div class="lib-empty">No dips yet.</div>'; return; }
-  const hit = e => !q || (e.name + ' ' + e.desc).toLowerCase().includes(q) || e.vars.some(v => (v.name + ' ' + v.code).toLowerCase().includes(q));
+  const hit = e => !q || (e.name + ' ' + e.desc + ' ' + DIP_TYPE_NAME[dipType(e)]).toLowerCase().includes(q) || e.vars.some(v => (v.name + ' ' + v.code).toLowerCase().includes(q));
   const list = library.filter(hit).sort(byName);
   if (!list.length) { box.innerHTML = '<div class="lib-empty">Nothing matches.</div>'; return; }
-  box.innerHTML = list.map(e => `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" onclick="loadSolution(${e.id})">
+  // grouped by type once there is more than one
+  const types = DIP_TYPES.filter(([k]) => list.some(e => dipType(e) === k));
+  box.innerHTML = types.map(([k, label]) => (types.length > 1 ? `<div class="lib-cat-header">${esc(label)}</div>` : '')
+    + list.filter(e => dipType(e) === k).map(libItemHtml).join('')).join('');
+}
+function libItemHtml(e) {
+  return `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" onclick="loadSolution(${e.id})">
       <span class="lib-item-name"><b>${esc(e.name || 'untitled')}</b>${e.desc ? ' · ' + esc(e.desc) : ''}</span>
       <span class="lib-item-n" title="variants">${e.vars.length}</span>
       <button class="lib-item-del" onclick="event.stopPropagation();deleteSolution(${e.id})" title="delete dip"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
-    </div>`).join('');
+    </div>`;
 }
 function loadSolution(id, force) {
   if (id === activeLibId && cur && !force) return;
@@ -845,7 +859,9 @@ function duplicateSolution() {
 }
 async function deleteSolution(id) {
   const e = library.find(x => x.id === id); if (!e) return;
-  if (!await customConfirm('Delete dip “' + (e.name || 'untitled') + '” with all its ' + e.vars.length + ' variant(s)?', 'delete')) return;
+  const used = dipUsage(id);
+  if (!await customConfirm('Delete dip “' + (e.name || 'untitled') + '” with all its ' + e.vars.length + ' variant(s)?'
+    + (used.length ? ' It is a component of ' + used.join('; ') + ' — those rows keep its last stored solid, but lose the price.' : ''), 'delete')) return;
   if (id === activeLibId) { clearTimeout(saveT); activeLibId = null; cur = null; savedSnapshot = null; undoStack = []; redoStack = []; updateUndoBtn(); }
   library = library.filter(x => x.id !== id); saveLibrary();
   delete activeVarMap[id]; saveActiveVarMap();
@@ -1266,10 +1282,11 @@ function doImport() {
 // Data model (all records keep unknown fields — normalizers spread the original first):
 //   material  { id, name, role, work (working conc. %, null = as delivered), note, alts:[alt], act (active alt id), mt }
 //   alt       { id, name, producer, card (master card = item no. in the stock system), conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
-//   solution  { id, name, desc, labStr (recommended lab strength %, null = W100), note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
+//   solution  { id, name, desc, type ('rfl'|'predip'|'other'), labStr (recommended lab strength %, null = W100), note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
 //   variant   { id, name, code, date, from (parent variant id), mature (min. maturing of the whole mixed dip, text), prep (preparation notes for the lab sheet), note, secs:[section], meas:{phRF, ph, solid} }   ← masses = the full-strength W100 dip
 //   section   { id, kind: 'rf'|'latex'|'add'|'other', kname (own kind name, only for 'other'), name, mature (min. maturing of this part, text — e.g. "30 min"), note, rows:[row] }
 //   row       { id, mat, nm, role (name/role snapshots for a deleted material), conc (%chem), m (g) }
+//             or a nested dip: { id, dip (solution id), dv (its variant id), nm, role:'dip', conc (solid snapshot), m } — see NESTED DIPS
 // Material roles drive the maths: which rows count as RF resin, latex, ammonia, NaOH…
 const ROLES = [
   ['water', 'Water'], ['naoh', 'NaOH (caustic soda)'], ['resin', 'RF resin'], ['formaldehyde', 'Formaldehyde'],
@@ -1285,6 +1302,12 @@ const SEC_SHORT = { rf: 'RF', latex: 'L', add: 'IK', other: 'other' };
 // An unknown kind from a newer build counts as 'other' but is stored untouched.
 function secKind(s) { return s.kind === 'rf' || s.kind === 'latex' || s.kind === 'add' ? s.kind : 'other'; }
 function secShort(s) { const k = secKind(s); return k === 'other' ? (String(s.kname || '').trim() || 'other') : SEC_SHORT[k]; }
+// The dip type decides which parameters, ratio tools and measured fields are shown — the calculation itself is the same.
+// RFL = RF resin + latex (PHR, F/R…), pre-dip = epoxy + isocyanate (epoxy : IK), other = the basics only (solid, price).
+// A dip saved before the types existed is RFL; an unknown type from a newer build counts as 'other' but is stored untouched.
+const DIP_TYPES = [['rfl', 'RFL'], ['predip', 'Pre-dip'], ['other', 'Other']];
+const DIP_TYPE_NAME = Object.fromEntries(DIP_TYPES);
+function dipType(s) { const t = s ? s.type : null; return t == null || t === '' || t === 'rfl' ? 'rfl' : t === 'predip' ? 'predip' : 'other'; }
 const MW = { F: 30, R: 110, NaOH: 40 };              // g/mol
 const RESIN_F = 12, RESIN_R = 88;                    // default F / R share of the RF resin solid (%)
 const THEORY = { phr: [15, 20], fr: [1.2, 2], lInSolid: [70, null] };
@@ -1372,21 +1395,28 @@ function normVariant(v) {
 }
 function normSolution(s) {
   s = s || {};
-  const raw = Array.isArray(s.vars) && s.vars.length ? s.vars : [defaultVariant()];
+  const raw = Array.isArray(s.vars) && s.vars.length ? s.vars : [defaultVariant(dipType(s))];
   // the legacy per-variant strength becomes the dip's recommended lab strength (the last variant that had one)
   const legacy = raw.map(legacyStr).filter(k => k != null);
   let labStr = numOrNull(s.labStr);
   if (labStr == null && legacy.length) labStr = legacy[legacy.length - 1];
   if (labStr != null && !(labStr > 0)) labStr = null;
-  return { ...s, id: s.id ?? uid(), name: String(s.name ?? ''), desc: String(s.desc ?? ''), labStr, note: String(s.note ?? ''),
+  return { ...s, id: s.id ?? uid(), name: String(s.name ?? ''), desc: String(s.desc ?? ''),
+    type: s.type == null || s.type === '' ? 'rfl' : String(s.type), labStr, note: String(s.note ?? ''),
     vars: raw.map(normVariant), mt: +s.mt || 0 };
 }
 // first run only: water with a fixed id (two fresh devices must not create two different "Water" records)
 function defaultMaterials() { return [normMaterial({ id: 1, name: 'Water', role: 'water', alts: [{ id: 2, name: 'Demineralized water' }], mt: 0 })]; }
-function defaultVariant() {
+// the starting recipe of a new dip — per type
+function defaultVariant(type = 'rfl') {
   const first = roles => { for (const r of roles) { const m = materials.filter(x => x.role === r).sort(byName)[0]; if (m) return m; } return null; };
   const row = roles => { const m = first(roles); return m ? { id: uid(), mat: m.id, nm: m.name, role: m.role, conc: matWork(m), m: null } : null; };
-  return { id: uid(), name: 'V1', code: '', date: todayIso(), from: null, mature: '2 h', prep: '', note: '', meas: {},
+  const base = { id: uid(), name: 'V1', code: '', date: todayIso(), from: null, mature: '', prep: '', note: '', meas: {} };
+  if (type === 'predip') return { ...base,
+    secs: [{ id: uid(), kind: 'other', kname: '', name: '1. Pre-dip', mature: '', note: '', rows: [['water'], ['epoxy'], ['isocyanate'], ['ammonia']].map(row).filter(Boolean) }] };
+  if (type !== 'rfl') return { ...base,
+    secs: [{ id: uid(), kind: 'other', kname: '', name: '1. Dip', mature: '', note: '', rows: [['water']].map(row).filter(Boolean) }] };
+  return { ...base, mature: '2 h',
     secs: [
       { id: uid(), kind: 'rf', name: '1. RF resin', mature: '30 min', note: '', rows: [['water'], ['naoh'], ['resin'], ['formaldehyde']].map(row).filter(Boolean) },
       { id: uid(), kind: 'latex', name: '2. Latex', mature: '', note: '', rows: [['water'], ['latex-vp', 'latex-sbr', 'latex-nr'], ['ammonia']].map(row).filter(Boolean) }
@@ -1406,17 +1436,75 @@ function workPrice(m, conc) {
   const f = conc / a.conc;
   return a.price * f + waterPrice() * (1 - f);
 }
-function rowRole(r) { const m = matById(r.mat); return m ? m.role : (r.role || 'other'); }
-function rowName(r) { const m = matById(r.mat); return m ? (m.name || 'unnamed') : (r.nm || '—'); }
+function rowRole(r) { if (isDipRow(r)) return 'dip'; const m = matById(r.mat); return m ? m.role : (r.role || 'other'); }
+function rowName(r) {
+  if (isDipRow(r)) { const n = nestedOf(r); return n ? (n.sol.name || 'untitled') + ' · ' + (n.v.name || '—') : (r.nm || '—'); }
+  const m = matById(r.mat); return m ? (m.name || 'unnamed') : (r.nm || '—');
+}
 function concDiffers(r, m) { if (!m || m.role === 'water') return false; const d = matWork(m); return d != null && r.conc != null && Math.abs(d - r.conc) > 1e-9; }
+
+// ── NESTED DIPS (another dip as a component, e.g. an RFL inside a pre-dip) ─
+// A row with `dip` (solution id) + `dv` (its variant id) instead of `mat`. Its %chem is the solid of that variant
+// (W100) and its price that variant's price / kg — both live from its recipe, so editing that variant changes this
+// dip too. Its components count by their roles in proportion to the mass used (the ammonia inside counts for
+// "solid w/o NH₃", epoxy / isocyanate for epoxy : IK…). `nm` / `conc` are snapshots taken when the row is linked —
+// used only when the dip is missing (deleted, not synced yet) or would be circular. A dip can not contain itself,
+// not even through another one (the picker leaves those out, the calculation stops on a cycle).
+function isDipRow(r) { return !!r && r.dip != null; }
+function allDips() { return library.map(x => (cur && x.id === cur.id ? cur : x)); }   // the open dip with its unsaved edits
+function solById(id) { return id == null ? null : (cur && cur.id === id ? cur : (library.find(x => x.id === id) || null)); }
+function topStack() { return new Set(cur ? [cur.id] : []); }
+// { sol, v, exact } — the variant picked, or the newest one when it was deleted (exact = false)
+function nestedOf(r) {
+  const sol = solById(r.dip); if (!sol || !sol.vars.length) return null;
+  const v = sol.vars.find(x => x.id === r.dv) || sol.vars[sol.vars.length - 1];
+  return { sol, v, exact: v.id === r.dv };
+}
+// the calculation of a nested dip's recipe — null when it is missing or circular (stack = the dips being calculated)
+function nestedCalc(r, stack) {
+  const n = nestedOf(r); if (!n) return null;
+  stack = stack || topStack();
+  if (stack.has(n.sol.id)) return null;
+  return calcVariant(n.v, new Set([...stack, n.sol.id]));
+}
+function dipSolidSnap(r) { const nc = nestedCalc(r); return nc && nc.tsc != null ? +nc.tsc.toFixed(4) : null; }
+// %chem a row is calculated with — a nested dip's solid, otherwise the stored one
+function rowConc(r) { if (!isDipRow(r)) return r.conc; const nc = nestedCalc(r); return nc && nc.tsc != null ? nc.tsc : r.conc; }
+// does dip `sid` contain dip `target` — directly or through other dips (any variant)?
+function dipUses(sid, target, seen = new Set()) {
+  if (seen.has(sid)) return false;
+  seen.add(sid);
+  const s = solById(sid); if (!s) return false;
+  return s.vars.some(v => v.secs.some(sec => sec.rows.some(r => isDipRow(r) && (r.dip === target || dipUses(r.dip, target, seen)))));
+}
+// dips the open one can take as a component: not itself, not one that contains it
+function dipChoices() { return cur ? allDips().filter(d => d.id !== cur.id && !dipUses(d.id, cur.id)).sort(byName) : []; }
+// where dip `id` is a component → ["R02 (V5 ← V3)", …] = variant V5 of R02 uses its V3
+function dipUsage(id) {
+  const out = [];
+  allDips().forEach(s => {
+    if (s.id === id) return;
+    const uses = new Set();
+    s.vars.forEach(v => v.secs.forEach(sec => sec.rows.forEach(r => {
+      if (r.dip !== id) return;
+      const n = nestedOf(r); uses.add((v.name || '—') + ' ← ' + (n ? n.v.name || '—' : '?'));
+    })));
+    if (uses.size) out.push((s.name || 'untitled') + ' (' + [...uses].join(', ') + ')');
+  });
+  return out;
+}
 
 // ── CALCULATION ───────────────────────────────────────────────────────────
 // % in dip = m·%chem / Σm · solid (TSC) = Σ % in dip · % in solid = % in dip / TSC · % wet = m / Σm
 // PHR = dry RF (resin + formaldehyde) / dry latex part without ammonia × 100
 // F/R: F = resin solid × F share / 30 + formaldehyde / 30 · R = resin solid × R share / 110  (mol, shown per 100 g solid)
-function calcVariant(v) {
+// epoxy : IK = dry epoxy / dry isocyanate
+// A nested dip (row.dip): %chem = its solid, price = its price / kg, and its components count by their roles in
+// proportion f = m / its batch. `stack` = the dips being calculated (cycle guard) — the open one by default.
+function calcVariant(v, stack) {
+  stack = stack || topStack();
   const c = { rows: {}, secs: {}, total: 0, dry: 0, nh3: 0, rfDry: 0, lDry: 0, naoh: 0, nF: 0, nR: 0,
-              vpDry: 0, sbrDry: 0, nrDry: 0, vpMon: 0, vpMonOk: true, price: 0, priceOk: true,
+              vpDry: 0, sbrDry: 0, nrDry: 0, vpMon: 0, vpMonOk: true, epDry: 0, ikDry: 0, price: 0, priceOk: true,
               sumRF: 0, sumL: 0, sumAdd: 0, hasAdd: false };
   const secs = v ? v.secs : [], list = [], extra = new Set();
   let hasRFL = false;
@@ -1424,13 +1512,15 @@ function calcVariant(v) {
     const kind = secKind(s) === 'rf' || secKind(s) === 'latex' ? secKind(s) : 'add';   // additives + other kinds: the total only
     if (kind === 'add') { c.hasAdd = true; extra.add(secShort(s)); } else hasRFL = true;
     s.rows.forEach(r => {
-      const mat = matById(r.mat), role = mat ? mat.role : (r.role || 'other'), m = +r.m || 0;
-      const dry = role === 'water' ? 0 : m * (+r.conc || 0) / 100;
-      list.push({ s, kind, r, mat, role, m, dry });
+      const mat = matById(r.mat), role = rowRole(r), m = +r.m || 0;
+      const nc = role === 'dip' ? nestedCalc(r, stack) : null;
+      const conc = nc ? (nc.tsc || 0) : (+r.conc || 0);
+      const dry = role === 'water' ? 0 : m * conc / 100;
+      list.push({ s, kind, r, mat, role, m, dry, nc, conc });
       c.total += m; c.dry += dry;
     });
   });
-  list.forEach(({ s, kind, r, mat, role, m, dry }) => {
+  list.forEach(({ s, kind, r, mat, role, m, dry, nc, conc }) => {
     if (kind === 'rf') c.sumRF += m; else if (kind === 'latex') c.sumL += m; else c.sumAdd += m;
     if (role === 'resin') {
       const a = actAlt(mat), fF = a && a.fF != null ? a.fF : RESIN_F, fR = a && a.fR != null ? a.fR : RESIN_R;
@@ -1439,17 +1529,31 @@ function calcVariant(v) {
     if (role === 'formaldehyde') { c.rfDry += dry; c.nF += dry / MW.F; }
     if (role === 'naoh') c.naoh += dry;
     if (role === 'ammonia') c.nh3 += dry;
-    if (kind === 'latex' && role !== 'ammonia') c.lDry += dry;
+    if (role === 'epoxy') c.epDry += dry;
+    if (role === 'isocyanate') c.ikDry += dry;
+    if (nc && nc.total > 0) {
+      // the nested dip's contents, scaled to the mass used here. In a latex section the whole of it (without its
+      // ammonia) is the latex part — the same rule as for any component there; elsewhere only its own latex part is.
+      const f = m / nc.total;
+      c.rfDry += f * nc.rfDry; c.nF += f * nc.nF; c.nR += f * nc.nR; c.naoh += f * nc.naoh; c.nh3 += f * nc.nh3;
+      c.vpDry += f * nc.vpDry; c.sbrDry += f * nc.sbrDry; c.nrDry += f * nc.nrDry; c.vpMon += f * nc.vpMon;
+      if (!nc.vpMonOk && m > 0) c.vpMonOk = false;
+      c.epDry += f * nc.epDry; c.ikDry += f * nc.ikDry;
+      c.lDry += kind === 'latex' ? dry - f * nc.nh3 : f * nc.lDry;
+    } else if (kind === 'latex' && role !== 'ammonia') c.lDry += dry;
     if (role === 'latex-vp') { c.vpDry += dry; const a = actAlt(mat); if (a && a.vp != null) c.vpMon += dry * a.vp / 100; else if (dry > 0) c.vpMonOk = false; }
     if (role === 'latex-sbr') c.sbrDry += dry;
     if (role === 'latex-nr') c.nrDry += dry;
-    const p = mat ? workPrice(mat, role === 'water' ? null : r.conc) : null;
+    const p = role === 'dip' ? (nc ? nc.price : null) : mat ? workPrice(mat, role === 'water' ? null : r.conc) : null;
     const pr = p == null ? null : (c.total > 0 ? p * m / c.total : 0);
     const sc = c.secs[s.id] || (c.secs[s.id] = { m: 0, dry: 0, price: 0, priceOk: true });
     sc.m += m; sc.dry += dry;
     if (pr == null) { if (m > 0) { c.priceOk = false; sc.priceOk = false; } }
-    else { c.price += pr; sc.price += pr; }
-    c.rows[r.id] = { role, m, dry, price: pr, dip: c.total > 0 ? dry / c.total * 100 : null, wet: c.total > 0 ? m / c.total * 100 : null, solid: c.dry > 0 ? dry / c.dry * 100 : null };
+    else {
+      c.price += pr; sc.price += pr;
+      if (nc && !nc.priceOk && m > 0) { c.priceOk = false; sc.priceOk = false; }   // the nested price is a lower bound
+    }
+    c.rows[r.id] = { role, m, dry, conc, price: pr, dip: c.total > 0 ? dry / c.total * 100 : null, wet: c.total > 0 ? m / c.total * 100 : null, solid: c.dry > 0 ? dry / c.dry * 100 : null };
   });
   const T = c.total, D = c.dry, latex = c.vpDry + c.sbrDry + c.nrDry;
   c.tsc = T > 0 ? D / T * 100 : null;
@@ -1465,12 +1569,16 @@ function calcVariant(v) {
   c.sbrVp = c.sbrDry + c.vpDry > 0 ? [c.sbrDry, c.vpDry] : null;
   c.vpMonL = latex > 0 && c.vpDry > 0 && c.vpMonOk ? c.vpMon / latex * 100 : null;
   c.nh3InL = c.lDry > 0 && c.nh3 > 0 ? c.nh3 / c.lDry * 100 : null;
+  c.epIk = c.epDry > 0 && c.ikDry > 0 ? c.epDry / c.ikDry : null;
   c.priceSolid = c.tsc ? c.price / (c.tsc / 100) : null;
   // "sum RFL", "sum RFL+IK", "sum RFL+IK+Carbon black"…
   const tok = (hasRFL || !extra.size ? ['RFL'] : []).concat([...extra]);
   c.totLabel = 'sum ' + tok.join('+');
   return c;
 }
+// sum labels: an RFL dip names the parts by kind ("sum RF", "sum RFL+IK"), the other types just sum
+function secSumLabel(s) { return dipType(cur) === 'rfl' ? 'sum ' + secShort(s) : 'sum'; }
+function totLabelOf(c) { return dipType(cur) === 'rfl' ? c.totLabel : 'total'; }
 function outOf(key, val) {
   const t = THEORY[key]; if (!t || val == null || !isFinite(val)) return false;
   const x = +val.toFixed(2);
@@ -1480,26 +1588,33 @@ function outOf(key, val) {
 function varDiff(a, b) {
   const ca = calcVariant(a), cb = calcVariant(b), out = [];
   const num = (label, x, y, d, unit = '') => { const fx = fmt(x, d), fy = fmt(y, d); if (fx !== fy) out.push(label + ' ' + fx + ' → ' + fy + unit); };
+  const t = dipType(cur);
   num('solid', ca.tsc, cb.tsc, 2, '%');
-  num('PHR', ca.phr, cb.phr, 2);
-  num('F/R', ca.fr, cb.fr, 2);
-  num('L in solid', ca.lInSolid, cb.lInSolid, 2, '%');
+  if (t === 'rfl') {
+    num('PHR', ca.phr, cb.phr, 2);
+    num('F/R', ca.fr, cb.fr, 2);
+    num('L in solid', ca.lInSolid, cb.lInSolid, 2, '%');
+  }
+  if (t === 'predip') num('epoxy:IK', ca.epIk, cb.epIk, 2);
   const mtx = x => String(x || '').trim(), sa = new Map(a.secs.map(s => [s.id, s]));
   if (mtx(a.mature) !== mtx(b.mature)) out.push('maturing ' + (mtx(a.mature) || '—') + ' → ' + (mtx(b.mature) || '—'));
-  b.secs.forEach(s => { const o = sa.get(s.id); if (o && mtx(o.mature) !== mtx(s.mature)) out.push('maturing ' + secShort(s) + ' ' + (mtx(o.mature) || '—') + ' → ' + (mtx(s.mature) || '—')); });
+  const tag = s => t === 'rfl' ? secShort(s) : (s.name || 'part');   // the other types have no section kinds
+  b.secs.forEach(s => { const o = sa.get(s.id); if (o && mtx(o.mature) !== mtx(s.mature)) out.push('maturing ' + tag(s) + ' ' + (mtx(o.mature) || '—') + ' → ' + (mtx(s.mature) || '—')); });
   const rowsOf = v => { const m = new Map(); v.secs.forEach(s => s.rows.forEach(r => m.set(r.id, { r, s }))); return m; };
   const A = rowsOf(a), B = rowsOf(b);
   const label = (x, map) => {   // the same material in two sections (water) → add the section
     const n = rowName(x.r); let dup = 0;
     map.forEach(y => { if (rowName(y.r) === n) dup++; });
-    return dup > 1 ? n + ' (' + secShort(x.s) + ')' : n;
+    return dup > 1 ? n + ' (' + tag(x.s) + ')' : n;
   };
   B.forEach((x, id) => {
     const o = A.get(id);
     if (!o) { out.push('+ ' + label(x, B) + ' ' + fmt(+x.r.m || 0, 1) + ' g'); return; }
-    if (o.r.mat !== x.r.mat) out.push(label(o, A) + ' → ' + label(x, B));
+    const nested = isDipRow(o.r) || isDipRow(x.r);
+    if (o.r.mat !== x.r.mat || o.r.dip !== x.r.dip || (nested && o.r.dv !== x.r.dv)) out.push(label(o, A) + ' → ' + label(x, B));
     if (fmt(+o.r.m || 0, 1) !== fmt(+x.r.m || 0, 1)) out.push(label(x, B) + ' ' + fmt(+o.r.m || 0, 1) + ' → ' + fmt(+x.r.m || 0, 1) + ' g');
-    if (rowRole(x.r) !== 'water' && fmtNum(o.r.conc) !== fmtNum(x.r.conc)) out.push(label(x, B) + ' ' + (fmtNum(o.r.conc) || '?') + ' → ' + (fmtNum(x.r.conc) || '?') + '%');
+    // a nested dip's %chem is its live solid — not a stored value to compare
+    if (!nested && rowRole(x.r) !== 'water' && fmtNum(o.r.conc) !== fmtNum(x.r.conc)) out.push(label(x, B) + ' ' + (fmtNum(o.r.conc) || '?') + ' → ' + (fmtNum(x.r.conc) || '?') + '%');
   });
   A.forEach((x, id) => { if (!B.has(id)) out.push('− ' + label(x, A)); });
   return out;
@@ -1537,11 +1652,14 @@ function renderMain() {
     updateHeaderSub();
     return;
   }
+  const type = dipType(cur);
+  _dipChoices = dipChoices();   // the dips offered as a component — once per render, not per row
   box.innerHTML = chipsHtml(v) + headHtml(v) + recipeHtml(v)
-    + toolsHtml()
+    + toolsHtml(type)
     + '<div class="sub-title">Parameters</div><div class="par-grid" id="parGrid"></div>'
     + labHtml(v)
-    + '<div class="sub-title">Measured</div>' + measHtml(v);
+    + '<div class="sub-title">Measured</div>' + measHtml(v, type);
+  _dipChoices = null;
   updateCalc();
   autoGrow(el('labPrep'));
 }
@@ -1551,8 +1669,10 @@ function chipsHtml(av) {
     + '<button class="chip" onclick="newVariant()" title="new variant — a copy of the active one">+</button></div>';
 }
 function headHtml(v) {
+  const type = dipType(cur), used = dipUsage(cur.id);
   return `<div class="hg hg-sol">
       <div class="field f-sname"><label>dip</label><input type="text" id="fSolName" class="ed" value="${esc(cur.name)}" placeholder="R01" oninput="onSolField('name',this)" autocomplete="off"></div>
+      <div class="field f-stype"><label>type</label><select onchange="onSolType(this.value)" title="what kind of dip — decides the parameters and ratio tools: RFL (PHR, F/R…), pre-dip (epoxy : IK) or other (solid and price only). A dip with no masses yet also gets the starting recipe of the type.">${DIP_TYPES.map(([k, l]) => `<option value="${k}"${k === type ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
       <div class="field f-sdesc"><label>description</label><input type="text" class="ed" value="${esc(cur.desc)}" placeholder="latex system, use…" oninput="onSolField('desc',this)" autocomplete="off"></div>
       <div class="field f-sstr"><label>lab strength %</label><input type="text" inputmode="decimal" class="ed" value="${cur.labStr != null ? fmtNum(cur.labStr) : ''}" placeholder="100" oninput="onSolField('labStr',this)" title="recommended strength for lab testing — e.g. 85 = W85 (the lab line picks up more, so lab dips are diluted). The recipe and its price are always the full-strength W100 dip; change the strength for one weighing in Lab weighing." autocomplete="off"></div>
     </div>
@@ -1560,8 +1680,9 @@ function headHtml(v) {
       <div class="field"><label>variant</label><input type="text" id="fVarName" class="ed" value="${esc(v.name)}" placeholder="V2" oninput="onVarField('name',this)" autocomplete="off"></div>
       <div class="field"><label>system code</label><input type="text" class="ed" value="${esc(v.code)}" placeholder="IR0000_01" oninput="onVarField('code',this)" autocomplete="off"></div>
       <div class="field"><label>date</label><input type="date" class="ed" value="${esc(v.date)}" onchange="onVarField('date',this)"></div>
-    </div>`;
+    </div>${used.length ? `<div class="dip-used" title="those dips take their solid and price from the variant they use — editing it changes their numbers too">component of <b>${used.map(esc).join('</b>; <b>')}</b> — editing a variant used there changes those dips too</div>` : ''}`;
 }
+let _dipChoices = null;
 function matOptions(r) {
   let h = '<option value="">— choose material —</option>';
   ROLES.forEach(([k, label]) => {
@@ -1570,9 +1691,30 @@ function matOptions(r) {
     h += `<optgroup label="${esc(label)}">` + ms.map(m => `<option value="${m.id}"${m.id === r.mat ? ' selected' : ''}>${esc(m.name || 'unnamed')}</option>`).join('') + '</optgroup>';
   });
   if (r.mat != null && !matById(r.mat)) h += `<option value="${r.mat}" selected>${esc(r.nm || '?')} (deleted)</option>`;
+  // another dip as a component (an RFL inside a pre-dip…) — not itself and not one that contains it
+  const dips = _dipChoices || dipChoices();
+  if (dips.length) h += '<optgroup label="Dips (a whole recipe as a component)">'
+    + dips.map(d => `<option value="d:${d.id}"${d.id === r.dip ? ' selected' : ''}>${esc(d.name || 'untitled')} · ${esc(DIP_TYPE_NAME[dipType(d)])}</option>`).join('') + '</optgroup>';
+  if (isDipRow(r) && !dips.some(d => d.id === r.dip)) h += `<option value="d:${r.dip}" selected>${esc(r.nm || '?')} (${solById(r.dip) ? 'circular' : 'deleted'})</option>`;
   return h;
 }
-function rowSubHtml(r) {
+// the line under a nested dip: which variant, its type and price, a link to open it
+function dipSubHtml(s, r) {
+  const n = nestedOf(r);
+  if (!n) return '<b>dip deleted</b> · calculated with its last solid ' + (r.conc != null ? fmtNum(r.conc) + ' %' : '?') + ', no price';
+  if (n.sol === cur || dipUses(n.sol.id, cur.id)) return '<b>circular — ' + esc(n.sol.name || 'untitled') + ' contains this dip</b> · calculated with the stored solid, no price';
+  const last = n.sol.vars[n.sol.vars.length - 1], nc = nestedCalc(r), parts = [];
+  parts.push(`<select class="rc-dv ed" onchange="onRowDv(${s.id},${r.id},this.value)" title="the variant of ${esc(n.sol.name || 'untitled')} used here — the solid and price come from its recipe">`
+    + n.sol.vars.slice().reverse().map(x => `<option value="${x.id}"${x === n.v ? ' selected' : ''}>${esc(x.name || '—')}${x === last ? ' (newest)' : ''}</option>`).join('') + '</select>');
+  if (!n.exact && r.dv != null) parts.push('<b>variant deleted — the newest is used</b>');
+  parts.push(esc(DIP_TYPE_NAME[dipType(n.sol)]));
+  if (nc && !(nc.total > 0)) parts.push('<b>no mass yet</b>');
+  else if (nc) parts.push(eur(nc.price, nc.priceOk, 3, ' €/kg'));
+  parts.push(`<button class="rc-open" onclick="openNested(${n.sol.id},${n.v.id})" title="open ${esc(n.sol.name || 'untitled')} ${esc(n.v.name || '')}">open ↗</button>`);
+  return parts.join(' · ');
+}
+function rowSubHtml(s, r) {
+  if (isDipRow(r)) return dipSubHtml(s, r);
   const m = matById(r.mat), parts = [];
   if (m) {
     const a = actAlt(m);
@@ -1590,12 +1732,15 @@ function pctIn(s, r, kind, suf) {
   return `<input class="rc-pct ed a-${kind}" id="c${r.id}${suf}" inputmode="decimal" onfocus="pctFocus(this)" onkeydown="pctKey(event,this)" onchange="onRowPct(${s.id},${r.id},'${kind}',this)" title="${PCT_TIP[kind]} — type a value to recalculate the mass (Enter); the batch stays, the first water takes up the difference · Esc = back" autocomplete="off">`;
 }
 function rowHtml(s, r, i) {
-  const m = matById(r.mat), water = rowRole(r) === 'water', last = i === s.rows.length - 1;
+  const m = matById(r.mat), water = rowRole(r) === 'water', last = i === s.rows.length - 1, nested = isDipRow(r);
   const def = m ? matWork(m) : null;
   const conc = water ? '<span class="num num-dash">—</span>'
+    : nested ? `<span class="num num-link" id="k${r.id}" title="%chem = the solid of the nested dip (full-strength W100) — computed from its recipe"></span>`
     : `<input class="rc-in ed${concDiffers(r, m) ? ' diff' : ''}" inputmode="decimal" value="${r.conc ?? ''}" oninput="onRowNum(${s.id},${r.id},'conc',this)" title="%chem — concentration as mixed${def != null ? ' (material: ' + fmtNum(def) + ' %)' : ''}" autocomplete="off">`;
+  const subOpen = nested ? `<div class="rc-sub rc-sub-dip" id="sub${r.id}">`
+    : `<div class="rc-sub" id="sub${r.id}"${m ? ` onclick="openMaterials(${m.id})" title="edit the material"` : ''}>`;
   return `<div class="rc-grid rc-row" data-row="${r.id}">
-      <div class="a-name rc-name"><span class="rc-grip" title="drag to move — also into another part">${GRIP_SVG}</span><div class="rc-nm"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material">${matOptions(r)}</select><div class="rc-sub" id="sub${r.id}"${m ? ` onclick="openMaterials(${m.id})" title="edit the material"` : ''}>${rowSubHtml(r)}</div></div></div>
+      <div class="a-name rc-name"><span class="rc-grip" title="drag to move — also into another part">${GRIP_SVG}</span><div class="rc-nm"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material — or another dip as a whole (Dips at the end of the list)">${matOptions(r)}</select>${subOpen}${rowSubHtml(s, r)}</div></div></div>
       <div class="a-conc">${conc}</div>
       <div class="a-m"><input class="rc-in m-in ed" id="m${r.id}" inputmode="decimal" value="${r.m ?? ''}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
       ${water ? `<span class="num a-dip" id="c${r.id}d"></span><span class="num a-solid" id="c${r.id}s"></span>` : pctIn(s, r, 'dip', 'd') + pctIn(s, r, 'solid', 's')}${pctIn(s, r, 'wet', 'w')}<span class="num a-price" id="c${r.id}p"></span>
@@ -1633,14 +1778,14 @@ function secHtml(s, i, n) {
   return `<div class="sec" data-sec="${s.id}">
       <div class="sec-head">
         <input class="sec-name ed" value="${esc(s.name)}" placeholder="section" oninput="onSecField(${s.id},'name',this.value)" title="section name" autocomplete="off">
-        <select class="sec-kind ed" onchange="onSecKind(${s.id},this)" title="what this section counts as — RF resin and latex drive the parameters (PHR, L in solid…); additives, other and your own kinds count in the total only">${kindOptions(s)}</select>
+        ${dipType(cur) === 'rfl' ? `<select class="sec-kind ed" onchange="onSecKind(${s.id},this)" title="what this section counts as — RF resin and latex drive the parameters (PHR, L in solid…); additives, other and your own kinds count in the total only">${kindOptions(s)}</select>` : ''}
         <label class="sec-mat-w" title="minimum maturing of this part before it is mixed on (e.g. RF resin 30 min) — empty = none; the whole dip's maturing is under the recipe">maturing min. <input class="sec-mat ed" value="${esc(s.mature)}" placeholder="—" oninput="onSecField(${s.id},'mature',this.value)" autocomplete="off"></label>
         <input class="sec-note ed" value="${esc(s.note)}" placeholder="note" oninput="onSecField(${s.id},'note',this.value)" autocomplete="off">
         <span class="sec-btns"><button class="ib" onclick="moveSection(${s.id},-1)"${i === 0 ? ' disabled' : ''} title="move section up">↑</button><button class="ib" onclick="moveSection(${s.id},1)"${i === n - 1 ? ' disabled' : ''} title="move section down">↓</button><button class="ib" onclick="delSection(${s.id})" title="delete section">✕</button></span>
       </div>
       ${s.rows.map((r, j) => rowHtml(s, r, j)).join('')}
       <div class="rc-grid rc-sum">
-        <div class="a-name sec-foot"><button class="btn-add-row" onclick="addRow(${s.id})">+ component</button><span class="sum-l" id="sl${s.id}">sum ${esc(secShort(s))}</span></div>
+        <div class="a-name sec-foot"><button class="btn-add-row" onclick="addRow(${s.id})">+ component</button><span class="sum-l" id="sl${s.id}">${esc(secSumLabel(s))}</span></div>
         <span class="num a-m" id="s${s.id}m"></span><span class="num a-dip" id="s${s.id}d"></span><span class="num a-solid" id="s${s.id}s"></span><span class="num a-wet" id="s${s.id}w"></span><span class="num a-price" id="s${s.id}p"></span>
       </div>
     </div>`;
@@ -1654,11 +1799,20 @@ function recipeHtml(v) {
     <div class="rc-under"><button class="btn-add-row" onclick="addSection()">+ section</button>
       <label class="tool whole-mat" title="minimum maturing of the whole mixed dip (RFL) before use — e.g. 2 h">whole dip — maturing min. <input class="mat-in ed" value="${esc(v.mature)}" placeholder="—" oninput="onVarField('mature',this)" autocomplete="off"></label></div>`;
 }
-function toolsHtml() {
-  return `<div class="tools">
+// the ratio tools depend on the dip type: RFL → PHR, F/R, Syn:NR, SBR:VP · pre-dip → epoxy:IK · other → none
+function toolsHtml(type) {
+  const base = `<div class="tools">
       <span class="tool">scale batch to <input id="toolScale" class="rc-in" inputmode="decimal" placeholder="g" onkeydown="if(event.key==='Enter')toolScale()" autocomplete="off"><button class="btn-sm" onclick="toolScale()">scale</button></span>
       <span class="tool">set solid to <input id="toolSolid" class="rc-in" inputmode="decimal" placeholder="%" onkeydown="if(event.key==='Enter')toolSolid()" autocomplete="off"><button class="btn-sm" onclick="toolSolid()">apply</button></span>
+    </div>`;
+  const solidHint = 'Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference.';
+  const shareHint = 'The shares (% in dip, % in solid, % wet — dotted underline) can be typed over the same way: the component’s mass is recalculated, the batch stays and the first water takes up the difference; the first water’s own % wet moves water from / to the other parts (the solid stays) — only if they do not have enough, it asks before changing the solid. Tip: make a new variant first (+), then adjust it.';
+  if (type === 'predip') return base + `<div class="tools tools-ratio">
+      <span class="tool">epoxy:IK to <input id="toolEpIk" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('epIk')" title="dry epoxy ÷ dry isocyanate — e.g. 0.2, or 1:5" autocomplete="off"><button class="btn-sm" onclick="toolRatio('epIk')">apply</button></span>
     </div>
+    <div class="tool-hint">${solidHint} Epoxy:IK keeps the solid and the batch — it moves dry matter between the epoxy and the isocyanate (their dry sum stays); ammonia, nested dips and everything else stay, the first water evens out the batch. ${shareHint}</div>`;
+  if (type !== 'rfl') return base + `<div class="tool-hint">${solidHint} ${shareHint}</div>`;
+  return base + `
     <div class="tools tools-ratio">
       <span class="tool">PHR to <input id="toolPhr" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('phr')" title="RF resin / L (PHR) — the whole RF part (resin, formaldehyde, NaOH) against the latex part" autocomplete="off"><button class="btn-sm" onclick="toolRatio('phr')">apply</button></span>
       <span class="tool">F/R to <input id="toolFr" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('fr')" title="F / R (mol/mol) — formaldehyde against resin, the RF solid stays" autocomplete="off"><button class="btn-sm" onclick="toolRatio('fr')">apply</button></span>
@@ -1667,10 +1821,11 @@ function toolsHtml() {
     </div>
     <div class="tool-hint">Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference. PHR, F/R, Syn:NR and SBR:VP keep the solid and the batch — they move dry matter between components: PHR the whole RF part (incl. NaOH) against the latex part, F/R formaldehyde against resin, Syn:NR (VP + SBR) against NR, SBR:VP between those two; ammonia and everything else stay, the first water evens out the batch. The shares (% in dip, % in solid, % wet — dotted underline) can be typed over the same way: the component's mass is recalculated, the batch stays and the first water takes up the difference; the first water's own % wet moves water from / to the other parts (the solid stays) — only if they do not have enough, it asks before changing the solid. Tip: make a new variant first (+), then adjust it.</div>`;
 }
-function measHtml(v) {
+function measHtml(v, type) {
   const ms = v.meas || {};
   const f = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" inputmode="decimal" class="ed" value="${esc(ms[key] ?? '')}" placeholder="${ph}" oninput="onMeas('${key}',this)" autocomplete="off"></div>`;
-  return '<div class="meas-grid">' + f('phRF', 'pH RF', '—') + f('ph', 'pH RFL', '—') + f('solid', 'solid measured %', '—')
+  // pH RF only means something for an RFL — a stored value of another type stays in the data, just not shown
+  return '<div class="meas-grid">' + (type === 'rfl' ? f('phRF', 'pH RF', '—') + f('ph', 'pH RFL', '—') : f('ph', 'pH', '—')) + f('solid', 'solid measured %', '—')
     + '<div class="field"><label id="measDL">Δ solid vs calc.</label><div class="meas-d" id="measD">—</div></div></div>';
 }
 // ── LAB WEIGHING ──────────────────────────────────────────────────────────
@@ -1780,7 +1935,8 @@ function updateLab(v, c, st) {
     s.rows.forEach(r => {
       const x = ok ? (L.m[r.id] || 0) : null; if (x != null) sum += x;
       setText('lw' + r.id, x != null ? fmt(x, 2) : '—');
-      setText('lc' + r.id, rowRole(r) === 'water' ? '—' : (fmtNum(r.conc) || '?'));
+      const cr = c.rows[r.id];
+      setText('lc' + r.id, rowRole(r) === 'water' ? '—' : isDipRow(r) ? fmt(cr ? cr.conc : r.conc, 2) : (fmtNum(r.conc) || '?'));
     });
     total += sum;
     setText('ls' + s.id, ok ? fmt(sum, 1) : '—');
@@ -1797,13 +1953,26 @@ function updateLab(v, c, st) {
     i.classList.toggle('diff', labMatOver(k) != null);
   });
 }
-function parHtml(c, labStr) {
+function parHtml(c, labStr, type) {
   const P = (label, val, o = {}) => `<div class="par${o.out ? ' out' : ''}${o.key ? ' key' : ''}"${o.tip ? ` title="${esc(o.tip)}"` : ''}><span class="par-l">${label}${o.t ? ` <span class="par-t">${o.t}</span>` : ''}</span><span class="par-v">${val}</span></div>`;
   const ratio = ratioText;
-  const out = [
+  const solid = [
     P('solid', pct(c.tsc), { key: true, tip: 'TSC = Σ % in dip — the full-strength W100 dip' }),
     ...(Math.abs(labStr - 100) > 1e-9 ? [P('solid lab W' + fmtNum(labStr), pct(c.tsc != null ? c.tsc * labStr / 100 : null), { tip: 'solid of the diluted lab dip — see Lab weighing' })] : []),
-    P('solid w/o NH₃', pct(c.tscNoNH3), { tip: 'TSC without the ammonia' }),
+    P('solid w/o NH₃', pct(c.tscNoNH3), { tip: 'TSC without the ammonia — incl. the ammonia inside nested dips' })
+  ];
+  const price = [
+    P('price / kg dip', eur(c.price, c.priceOk), { key: true, tip: (c.priceOk ? 'active alternatives, incl. the pre-dilution' : 'some components have no price — the sum is a lower bound') + ' — the full-strength W100 dip, as production runs it' }),
+    P('price / kg solid', eur(c.priceSolid, c.priceOk))
+  ];
+  if (type !== 'rfl') return [
+    ...solid,
+    ...(type === 'predip' ? [P('epoxy : IK', fmt(c.epIk), { key: true, tip: 'dry epoxy ÷ dry isocyanate (IK) — incl. those inside nested dips' })] : []),
+    ...price,
+    P('total', fmt(c.total, 1) + ' g')
+  ].join('');
+  const out = [
+    ...solid,
     P('RF resin / L (PHR)', fmt(c.phr), { key: true, t: '15–20', out: outOf('phr', c.phr), tip: 'dry RF (resin + formaldehyde) ÷ dry latex part (without ammonia) × 100' }),
     P('F / R (mol/mol)', fmt(c.fr), { key: true, t: '1.2–2', out: outOf('fr', c.fr), tip: 'F = resin solid × F share ÷ 30 + formaldehyde ÷ 30;  R = resin solid × R share ÷ 110' }),
     P('F (mol)', fmt(c.fMol, 3), { tip: 'per 100 g of solid' }),
@@ -1815,8 +1984,7 @@ function parHtml(c, labStr) {
     P('SBR : VP', ratio(c.sbrVp), { tip: 'dry SBR : dry VP latex' }),
     P('VP monomer in L', pct(c.vpMonL), { tip: 'needs the VP monomer % of every VP latex (⚗ materials)' }),
     P('NH₄OH in L', pct(c.nh3InL), { tip: 'NH₃ ÷ dry latex part' }),
-    P('price / kg dip', eur(c.price, c.priceOk), { key: true, tip: (c.priceOk ? 'active alternatives, incl. the pre-dilution' : 'some components have no price — the sum is a lower bound') + ' — the full-strength W100 dip, as production runs it' }),
-    P('price / kg solid', eur(c.priceSolid, c.priceOk)),
+    ...price,
     P('sum RF', fmt(c.sumRF, 1) + ' g'),
     P('sum L', fmt(c.sumL, 1) + ' g'),
     P('sum RFL', fmt(c.sumRF + c.sumL, 1) + ' g')
@@ -1838,20 +2006,21 @@ function updateCalc() {
     s.rows.forEach(r => {
       const x = c.rows[r.id]; if (!x) return;
       const water = x.role === 'water';
+      if (x.role === 'dip') setText('k' + r.id, fmt(x.conc, 2));
       setCell('c' + r.id + 'd', water ? '' : pct(x.dip));
       setCell('c' + r.id + 's', water ? '' : pct(x.solid));
       setCell('c' + r.id + 'w', pct(x.wet));
       setText('c' + r.id + 'p', eur(x.price, true, 3, ''));
     });
   });
-  setText('totL', c.totLabel);
+  setText('totL', totLabelOf(c));
   setText('tm', fmt(c.total, 1));
   setText('td', pct(c.tsc));
   setText('ts', c.dry > 0 ? '100%' : '—');
   setText('tw', c.total > 0 ? '100%' : '—');
   setText('tp', eur(c.price, c.priceOk, 3, ''));
   const st = labState(), diluted = Math.abs(st.str - 100) > 1e-9;
-  const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c, st.str);
+  const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c, st.str, dipType(cur));
   updateLab(v, c, st);
   const lr = el('labRec');
   if (lr) lr.innerHTML = st.over ? `<button class="btn-sm" onclick="resetLabStr()" title="back to the dip's recommended lab strength">↺ dip W${fmtNum(st.rec)}</button>`
@@ -1860,7 +2029,7 @@ function updateCalc() {
   if (si) si.placeholder = fmtNum(st.rec);
   const bi = el('labBatchIn'); if (bi) bi.placeholder = fmt(c.total, 1);
   const ph = (id, t) => { const e = el(id); if (e && e.placeholder !== t) e.placeholder = t; };   // the ratio tools show the current value
-  ph('toolPhr', fmt(c.phr)); ph('toolFr', fmt(c.fr)); ph('toolSynNr', ratioText(c.synNr)); ph('toolSbrVp', ratioText(c.sbrVp));
+  ph('toolPhr', fmt(c.phr)); ph('toolFr', fmt(c.fr)); ph('toolSynNr', ratioText(c.synNr)); ph('toolSbrVp', ratioText(c.sbrVp)); ph('toolEpIk', fmt(c.epIk));
   // the measured solid is taken from the lab dip → compare with the solid at the lab strength
   const ms = numOrNull((v.meas || {}).solid), calcS = c.tsc != null ? c.tsc * st.str / 100 : null;
   setText('measDL', diluted ? 'Δ vs calc. W' + fmtNum(st.str) : 'Δ solid vs calc.');
@@ -1870,7 +2039,12 @@ function updateCalc() {
 }
 
 // ── NOTES PANEL: variants + solution note ─────────────────────────────────
-function varStats(c) { return [pct(c.tsc), 'PHR ' + fmt(c.phr), 'F/R ' + fmt(c.fr), eur(c.price, c.priceOk, 2) + '/kg', fmt(c.total, 1) + ' g'].join(' · '); }
+function varStats(c) {
+  const t = dipType(cur), out = [pct(c.tsc)];
+  if (t === 'rfl') out.push('PHR ' + fmt(c.phr), 'F/R ' + fmt(c.fr));
+  if (t === 'predip') out.push('epoxy:IK ' + fmt(c.epIk));
+  return out.concat(eur(c.price, c.priceOk, 2) + '/kg', fmt(c.total, 1) + ' g').join(' · ');
+}
 function varDiffText(v) {
   const p = v.from != null ? cur.vars.find(x => x.id === v.from) : null;
   if (!p) return '';
@@ -1937,6 +2111,22 @@ function onSolField(key, inp) {
   if (key === 'labStr' || key === 'name') updateCalc(); else updateHeaderSub();   // the lab sheet quotes the name
   schedSave();
 }
+// the type changes which parameters and tools are shown, the recipe stays — except a dip with no masses yet
+// (just created): that one gets the starting recipe of the new type (↩ undo brings the old one back)
+function isBlankDip(s) { return s.vars.length === 1 && s.vars[0].secs.every(x => x.rows.every(r => r.m == null)); }
+function onSolType(val) {
+  if (!cur || cur.type === val) return;
+  pushUndo();
+  cur.type = val;
+  let fresh = false;
+  if (isBlankDip(cur)) {
+    const d = defaultVariant(val), v = cur.vars[0];
+    v.secs = d.secs.map(normSection); v.mature = d.mature;
+    fresh = true;
+  }
+  renderAll(); schedSave();
+  showSave('type ' + DIP_TYPE_NAME[dipType(cur)] + (fresh ? ' — starting recipe' : ''));
+}
 function onVarField(key, inp) {
   const v = activeVar(); if (!v) return;
   coalesceUndo();
@@ -1958,17 +2148,42 @@ function onRowNum(sid, rid, key, inp) {
   const r = findRow(sid, rid); if (!r) return;
   coalesceUndo();
   r[key] = numOrNull(inp.value);
-  if (key === 'conc') { inp.classList.toggle('diff', concDiffers(r, matById(r.mat))); const sub = el('sub' + r.id); if (sub) sub.innerHTML = rowSubHtml(r); }
+  if (key === 'conc') { inp.classList.toggle('diff', concDiffers(r, matById(r.mat))); const sub = el('sub' + r.id); if (sub) sub.innerHTML = rowSubHtml(findSec(sid), r); }
   updateCalc(); schedSave();
 }
 function onRowMat(sid, rid, val) {
   const r = findRow(sid, rid); if (!r) return;
+  if (String(val).startsWith('d:')) {   // another dip as a component — its newest variant to start with
+    const d = solById(+String(val).slice(2));
+    if (!d || d === cur || dipUses(d.id, cur.id)) { renderMain(); return; }   // "(deleted)" / circular re-selected
+    coalesceUndo();
+    const v = d.vars[d.vars.length - 1];
+    r.mat = null; r.dip = d.id; r.dv = v ? v.id : null; r.nm = d.name; r.role = 'dip';
+    r.conc = dipSolidSnap(r);
+    renderMain(); schedSave();
+    return;
+  }
   const m = val === '' ? null : matById(+val);
   if (!m && val !== '') return;   // the "(deleted)" entry re-selected — nothing to change
   coalesceUndo();
+  delete r.dip; delete r.dv;
   r.mat = m ? m.id : null; r.nm = m ? m.name : ''; r.role = m ? m.role : 'other';
   r.conc = m ? matWork(m) : null;
   renderMain(); schedSave();
+}
+// the variant of a nested dip — the solid snapshot follows (it is used only if that dip goes missing)
+function onRowDv(sid, rid, val) {
+  const r = findRow(sid, rid); if (!r || !isDipRow(r)) return;
+  coalesceUndo();
+  r.dv = +val;
+  const k = dipSolidSnap(r); if (k != null) r.conc = k;
+  renderMain(); schedSave();
+}
+function openNested(id, vid) {
+  const d = library.find(x => x.id === id); if (!d) return;
+  if (d.vars.some(v => v.id === vid)) { activeVarMap[id] = vid; saveActiveVarMap(); }
+  loadSolution(id);
+  showSave('↗ ' + (d.name || 'untitled') + ' — the component dip');
 }
 function onVarNote(vid, ta) {
   const v = cur && cur.vars.find(x => x.id === vid); if (!v) return;
@@ -1991,7 +2206,8 @@ function onMeas(key, inp) {
 // A recipe without water keeps the other masses and the batch changes instead.
 // Returns { out: Map(row → new mass), confirm? } or { err }.
 function shareMasses(v, r, kind, p) {
-  const c = calcVariant(v), T = c.total, w = firstWater(v), m0 = +r.m || 0, conc = +r.conc || 0, out = new Map();
+  const c = calcVariant(v), T = c.total, w = firstWater(v), m0 = +r.m || 0, out = new Map();
+  const conc = +(c.rows[r.id] ? c.rows[r.id].conc : r.conc) || 0;   // a nested dip: its solid
   if (!(T > 0)) return { err: 'The recipe has no mass yet — enter the masses first.' };
   if (!(p >= 0 && p < 100)) return { err: 'Enter a share from 0 to under 100 %.' };
   if (r === w) {
@@ -2235,6 +2451,11 @@ function initRowDnd() {
 function addSection() {
   const v = activeVar(); if (!v) return;
   pushUndo();
+  if (dipType(cur) !== 'rfl') {   // section kinds only drive the RFL parameters — a plain part
+    v.secs.push({ id: uid(), kind: 'other', kname: '', name: (v.secs.length + 1) + '. Part', mature: '', note: '', rows: [] });
+    renderMain(); schedSave();
+    return;
+  }
   const has = k => v.secs.some(s => s.kind === k);
   const kind = !has('rf') ? 'rf' : !has('latex') ? 'latex' : 'add';
   const label = SEC_KINDS.find(k => k[0] === kind)[1];
@@ -2320,7 +2541,7 @@ function parseRatio(t) {
 // Dry matter moves between groups of components so that their total dry stays → with the batch kept by the first
 // water, the solid (TSC) stays too. Inside a group every row scales by the same factor (its own ratios stay);
 // a group with no mass yet gets it all in its first row with a %chem. Ammonia and everything else stay.
-function rowDry(r) { return rowRole(r) === 'water' ? 0 : (+r.m || 0) * (+r.conc || 0) / 100; }
+function rowDry(r) { return rowRole(r) === 'water' ? 0 : (+r.m || 0) * (+rowConc(r) || 0) / 100; }
 function sumDry(rows) { return rows.reduce((a, r) => a + rowDry(r), 0); }
 function setGroupDry(rows, dry, out, label) {
   const cur = sumDry(rows);
@@ -2347,7 +2568,7 @@ function ratioRecalc(v, kind, raw) {
     const P = numOrNull(raw);
     if (!(P > 0)) return { err: 'Enter the target PHR (e.g. 17).' };
     const rf = rowsOfVar(v, r => role(r) === 'resin' || role(r) === 'formaldehyde'), na = rowsOfVar(v, r => role(r) === 'naoh');
-    const lat = rowsOfVar(v, (r, s) => secKind(s) === 'latex' && !['ammonia', 'water', 'resin', 'formaldehyde', 'naoh'].includes(role(r)) && +r.conc > 0);
+    const lat = rowsOfVar(v, (r, s) => secKind(s) === 'latex' && !['ammonia', 'water', 'resin', 'formaldehyde', 'naoh', 'dip'].includes(role(r)) && +r.conc > 0);
     const RF = sumDry(rf), NA = sumDry(na), L = sumDry(lat);
     if (!(RF > 0)) return { err: 'The recipe has no RF resin / formaldehyde solid yet.' };
     if (!(L > 0)) return { err: 'The recipe has no latex part solid yet.' };
@@ -2374,6 +2595,19 @@ function ratioRecalc(v, kind, raw) {
     const e2 = setGroupDry(fo, Math.max(0, y), out, 'formaldehyde row'); if (e2) return { err: e2 };
     return withFirstWater(v, out);
   }
+  if (kind === 'epIk') {
+    // epoxy ↔ isocyanate at the same dry sum: E + I stays, E / I = t. Accepts 0.2 or 1:5 (= 1 part epoxy to 5 IK).
+    const s = String(raw || '').trim();
+    let t = numOrNull(s);
+    if (/[:\/]/.test(s)) { const sh = parseRatio(s); t = sh != null && sh < 1 ? sh / (1 - sh) : null; }
+    if (!(t > 0)) return { err: 'Enter the target epoxy : IK — e.g. 0.2, or 1:5.' };
+    const ep = rowsOfVar(v, r => role(r) === 'epoxy'), ik = rowsOfVar(v, r => role(r) === 'isocyanate');
+    const tot = sumDry(ep) + sumDry(ik);
+    if (!(tot > 0)) return { err: 'The recipe has no epoxy or isocyanate solid yet.' };
+    const e1 = setGroupDry(ep, tot * t / (1 + t), out, 'epoxy row'); if (e1) return { err: e1 };
+    const e2 = setGroupDry(ik, tot / (1 + t), out, 'isocyanate row'); if (e2) return { err: e2 };
+    return withFirstWater(v, out);
+  }
   // latex splits — both keep the dry total of the latexes involved
   const share = parseRatio(raw);
   if (share == null) return { err: 'Enter the ratio, e.g. 70:30 — or just 70 for the first part’s share in %.' };
@@ -2395,7 +2629,7 @@ function ratioRecalc(v, kind, raw) {
   }
   return { err: 'Unknown tool.' };
 }
-const RATIO_TOOL = { phr: ['toolPhr', 'PHR'], fr: ['toolFr', 'F/R'], synNr: ['toolSynNr', 'Syn:NR'], sbrVp: ['toolSbrVp', 'SBR:VP'] };
+const RATIO_TOOL = { phr: ['toolPhr', 'PHR'], fr: ['toolFr', 'F/R'], synNr: ['toolSynNr', 'Syn:NR'], sbrVp: ['toolSbrVp', 'SBR:VP'], epIk: ['toolEpIk', 'epoxy:IK'] };
 function toolRatio(kind) {
   const v = activeVar(), [id, label] = RATIO_TOOL[kind] || []; if (!v || !id) return;
   const raw = el(id).value;
@@ -2405,7 +2639,7 @@ function toolRatio(kind) {
   pushUndo();
   res.out.forEach((n, r) => { r.m = n; });
   renderMain(); schedSave();
-  const c = calcVariant(v), now = kind === 'phr' ? fmt(c.phr) : kind === 'fr' ? fmt(c.fr) : ratioText(kind === 'synNr' ? c.synNr : c.sbrVp);
+  const c = calcVariant(v), now = kind === 'phr' ? fmt(c.phr) : kind === 'fr' ? fmt(c.fr) : kind === 'epIk' ? fmt(c.epIk) : ratioText(kind === 'synNr' ? c.synNr : c.sbrVp);
   showSave(label + ' ' + now + ' — solid ' + pct(c.tsc) + (before != null && Math.abs(before - c.tsc) >= 0.005 ? ' (was ' + pct(before) + ')' : ''));
 }
 function toolSolid() {

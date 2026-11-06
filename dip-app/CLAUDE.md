@@ -1,6 +1,6 @@
 # dip-app — doplňky ke kořenovému CLAUDE.md
 
-Výpočet a evidence impregnačních roztoků (RFL a pre-dipy): laboratorní předpis, parametry, varianty s poznámkami, suroviny s alternativami.
+Výpočet a evidence impregnačních roztoků (RFL, pre-dipy a jiné): laboratorní předpis, parametry, varianty s poznámkami, suroviny s alternativami. Dip může obsahovat jiný dip jako složku (RFL v pre-dipu).
 
 ## Terminologie v UI
 
@@ -20,10 +20,11 @@ Repo je veřejné (GitHub Pages). **Ceny, spotřeby, kódy receptur, DPU ani sez
 | `dip-app-lab-view` — přepisy na lab listu per roztok `{ str, batch, title, mat:{<secId>|all: text} }` | — | **nesynchronizuje se** (pracovní nastavení navážky, ne data) |
 
 ```
-solution { id, name, desc, labStr, note, vars:[variant], mt }   // labStr = doporučená síla pro lab (85 = W85), null = W100
+solution { id, name, desc, type, labStr, note, vars:[variant], mt }   // type = 'rfl'|'predip'|'other'; labStr = doporučená síla pro lab (85 = W85), null = W100
 variant  { id, name, code, date, from, mature, prep, note, secs:[section], meas:{phRF, ph, solid} }   // hmotnosti = vždy W100; mature = min. zrání celého namíchaného roztoku; prep = poznámky k přípravě (lab list)
 section  { id, kind:'rf'|'latex'|'add'|'other', kname, name, mature, note, rows:[row] }   // kname = vlastní druh (jen u 'other')   // mature = min. zrání téhle části (text, „30 min")
 row      { id, mat, nm, role, conc, m }        // nm/role = snapshot pro smazanou surovinu
+row      { id, dip, dv, nm, role:'dip', conc, m }   // vnořený dip: dip = id roztoku, dv = id jeho varianty; nm/conc = snapshot (viz níže)
 material { id, name, role, work, note, alts:[alt], act, mt }
 alt      { id, name, producer, card, conc, price, cons, fF, fR, vp, note }   // card = kmenová karta (číslo položky), per alternativa
 ```
@@ -31,6 +32,34 @@ alt      { id, name, producer, card, conc, price, cons, fF, fR, vp, note }   // 
 - **Role suroviny** (`water`, `naoh`, `resin`, `formaldehyde`, `latex-vp|sbr|nr`, `ammonia`, `wax`, `defoamer`, `epoxy`, `isocyanate`, `other`) řídí výpočty. Neznámá role (novější build) se počítá jako `other`, ale ukládá se beze změny.
 - **Druh sekce** (`kind`) určuje součty `sum RF` / `sum L` / `sum IK` a co je „latexová část". `other` = ani RF, ani latex → počítá se jen do celku (jako aditiva). **Vlastní druhy** = `other` + `kname` („Carbon black"): v nabídce jsou všechny `kname` použité kdekoli v knihovně (`customKinds()`, nic navíc se neukládá ani nesynchronizuje), nový přes „+ new kind…" (`customPrompt`). Popisek součtu sekce = `secShort()`, celkový = `c.totLabel` („sum RFL+IK+Carbon black"). Neznámý `kind` z novějšího buildu se počítá jako `other`, uloží se beze změny.
 - `row.conc` (%chem) je uložené v receptu (historický záznam); když se liší od `matWork(material)`, UI to označí (čárkovaný rámeček + „≠ material x %").
+
+## Typ dipu (`solution.type`)
+
+Výběr „type" v hlavičce dipu: **RFL** · **Pre-dip** · **Other** (`DIP_TYPES`, `dipType()`). Výpočet (`calcVariant`) je pro všechny stejný — typ určuje jen, **co se zobrazí**:
+
+| | RFL | Pre-dip | Other |
+|---|---|---|---|
+| parametry | vše dosavadní (PHR, F/R, NaOH…, L in solid, Syn:NR…) | solid, solid lab, solid w/o NH₃, **epoxy : IK**, cena, total | solid, solid lab, solid w/o NH₃, cena, total |
+| poměrové nástroje | PHR, F/R, Syn:NR, SBR:VP | epoxy:IK | žádné (scale + set solid jen) |
+| druh sekce (select) | ano | skrytý (sekce = prostá část, `kind:'other'`) | skrytý |
+| součty | `sum RF` / `sum RFL+IK` | `sum` / `total` | `sum` / `total` |
+| měřené | pH RF, pH RFL, solid | pH, solid | pH, solid |
+
+- Starý záznam bez `type` = `rfl` (`normSolution` doplní). Neznámý typ z novějšího buildu se počítá jako `other`, uloží se beze změny. Aditivní pole → `APP_SCHEMA` beze změny.
+- Změna typu recepturu nemění — **kromě prázdného dipu** (jedna varianta, žádná hmotnost, `isBlankDip`): ten dostane startovní recepturu typu (`defaultVariant(type)`: pre-dip = voda, epoxid, izokyanát, čpavek; other = voda). ↩ undo vrátí.
+- Knihovna se seskupí podle typu (`lib-cat-header`), jakmile je v ní víc než jeden.
+- Skryté hodnoty (druhy sekcí, pH RF) zůstávají v datech — po návratu na RFL jsou zpět.
+
+## Vnořený dip (dip jako složka)
+
+V nabídce suroviny je na konci skupina **Dips** (`value="d:<id>"`): celý jiný dip jako jedna složka (typicky RFL v pre-dipu). Pod názvem se vybírá **varianta** (`row.dv`, výchozí = nejnovější v okamžiku připojení), „open ↗" otevře vnořený dip na té variantě.
+
+- **%chem = sušina té varianty (W100), cena = její €/kg — živě** z její receptury (`nestedCalc`), %chem není editovatelné (kurzíva). Úprava té varianty tedy změní i nadřazený dip — hlavička vnořeného dipu to říká („component of R02 (V5 ← V3)" = varianta V5 dipu R02 používá jeho V3, `dipUsage`).
+- **Obsah se započítá podle rolí** úměrně použité hmotnosti (`f = m / Σm vnořeného`): čpavek (→ solid w/o NH₃), epoxid / izokyanát (→ epoxy : IK), RF, NaOH, latexy… Latexová část: v sekci `latex` se jako L počítá celý vnořený dip bez čpavku (stejné pravidlo jako pro jinou složku), jinde jen jeho vlastní L. Pozn.: Excel uživatele odečítal u „solid no NH₄OH" jen přímý čpavek → appka vyjde o pár setin níž, pokud vnořený dip čpavek obsahuje.
+- Cena vnořeného dipu, který sám nemá všechny ceny → celková cena je dolní mez (`priceOk = false`).
+- **Snapshot** `nm` + `conc` (sušina) se bere jen při připojení / změně varianty — **nikdy automaticky** (razítkovalo by `mt` bez editace uživatele). Použije se jen, když vnořený dip chybí (smazaný, nestažený) nebo by byl cyklický. Smazaná varianta → použije se nejnovější + upozornění.
+- **Cykly:** dip nemůže obsahovat sám sebe ani přes jiný (`dipUses`) — nabídka je vynechá, výpočet se na cyklu zastaví (`stack` v `calcVariant`).
+- Poměrové nástroje vnořený dip **neškálují** (role `dip` není v žádné skupině); `% in dip / solid / wet` a set solid / scale ano (počítají s jeho sušinou). Smazání dipu, který je složkou jinde, se v potvrzení zmíní.
 - Nová varianta = kopie aktivní se **stejnými id řádků** → `varDiff()` páruje řádky podle id. Neměnit id řádků při kopii.
 - Normalizéry (`normSolution` … `normAlt`) jsou preserve-unknown (`{ ...x, …}`).
 
@@ -61,6 +90,7 @@ Receptura varianty je **vždy plná síla W100** — tak jede provoz a z ní se 
 - L in solid = L / Σdry (teorie > 70) · NH₄OH in L = NH₃ / L
 - Syn:NR, SBR:VP z rolí latexů; VP monomer in L = Σ(VP latex · vp %) / Σ latex (jen když mají všechny VP latexy `vp`)
 - cena řádku = cena za kg při `conc` (předředění vodou z dodané koncentrace aktivní alternativy) · m / Σm
+- epoxy : IK = Σ sušina epoxidů / Σ sušina izokyanátů (vč. vnořených dipů) — vzorec ručně přepočten proti pre-dip listu uživatele (epoxy : IK i sušina sedí)
 - lab síla k (W85 = 0,85): sušina lab roztoku = sušina W100 · k (viz „Síla" výše)
 
 Ověřeno proti laboratornímu listu uživatele (sušina, F/R, NaOH/RF, NaOH in RF, NH₄OH in L, strength sedí; PHR a L in solid ±0,01 kvůli skrytým desetinným místům v listu).
@@ -73,6 +103,7 @@ Ověřeno proti laboratornímu listu uživatele (sušina, F/R, NaOH/RF, NaOH in 
   - PHR: celá RF část (resin + formaldehyd + **NaOH**, aby NaOH/RF zůstal) × a, latexová část (sekce `latex` bez čpavku) × b; `(RF+NaOH)·a + L·b = RF+NaOH+L`, `RF·a = PHR/100·L·b` → F/R, Syn:NR, SBR:VP beze změny.
   - F/R: formaldehyd ↔ pryskyřice při stejné RF sušině (PHR zůstává): `x = (RF/30) / (t·fR/110 + (1 − fF)/30)`, fF/fR vážené přes řádky pryskyřice; minimum = pryskyřice bez formaldehydu.
   - Syn:NR: (VP + SBR) ↔ NR při stejné sušině latexů (PHR, SBR:VP zůstávají); SBR:VP: SBR ↔ VP. Zadání `70:30`, `70/30` nebo `70` (podíl první části v %).
+  - epoxy:IK (jen pre-dip): epoxid ↔ izokyanát při stejném součtu jejich sušiny; zadání `0.2` nebo `1:5`.
   - Nemožné (první voda pod nulu, chybí řádek) → `customAlert`, nic se nemění. Ověřeno simulací: cíl přesně, dávka i sušina beze změny, ostatní parametry ±0,001 (zaokrouhlení na 0,01 g).
 - **přepsání podílu v řádku** (`% in dip` / `% in solid` / `% wet` jsou inputy `.rc-pct`, `shareMasses()` + `onRowPct()`): přepočte `m` té složky tak, aby podíl seděl přesně; dávka zůstává, rozdíl bere **první voda** (stejné pravidlo). `% wet` první vody = **přesun vody mezi částmi**: ostatní vodní řádky rozdíl dají / vezmou poměrně ke své hmotnosti (zaokrouhlovací zbytek do největší) → dávka i sušina zůstávají. Když ostatní voda nestačí (nebo žádná není), `customConfirm` řekne, že se změní sušina (z → na), a po potvrzení se celý roztok naředí / zahustí jako set solid (ostatní × k). Bez vody v receptuře se drží ostatní hmotnosti a mění se dávka. Aplikuje se až na Enter / opuštění pole (`onchange`), Esc vrátí; nemožné (první voda pod nulu, chybí %chem) → `customAlert`, nic se nemění. Computed buňky se přepisují přes `setCell()`, které nesahá na právě editovaný input.
 
