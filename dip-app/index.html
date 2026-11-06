@@ -304,7 +304,18 @@ html.dark input[type="date"]{color-scheme:dark}
 .a-name{grid-area:name;min-width:0}.a-conc{grid-area:conc;min-width:0}.a-m{grid-area:m;min-width:0}.a-dip{grid-area:dip}.a-solid{grid-area:solid}.a-wet{grid-area:wet}.a-price{grid-area:price}.a-act{grid-area:act}
 .rc-head{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:.3rem;border-bottom:1.5px solid var(--black)}
 .rc-head span{text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rc-head .a-name{text-align:left}
+.rc-head .a-name{text-align:left;padding-left:22px}
+/* drag & drop: a grip left of the material, an indicator line where the component lands (no animation — e-ink) */
+.rc-name{display:flex;align-items:flex-start;gap:2px}
+.rc-nm{flex:1;min-width:0}
+.rc-grip{display:flex;align-items:center;justify-content:center;width:20px;height:1.7rem;flex-shrink:0;cursor:grab;opacity:.5;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.rc-grip:active{cursor:grabbing}
+@media(hover:hover){.rc-grip:hover{opacity:1}}
+@media(hover:none){.rc-grip{opacity:.65}}
+.rc-grip svg{width:8px;height:12px;fill:var(--mid);display:block}
+.rc-row.dragging{opacity:.45}
+.rc-row.drag-over-top,.sec-head.drag-over-top,.rc-sum.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.rc-row.drag-over-bottom,.sec-head.drag-over-bottom,.rc-sum.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
 .num{display:block;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .num-dash{color:var(--mid)}
 .rc-row{padding:calc(.2rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light)}
@@ -316,7 +327,7 @@ html.dark input[type="date"]{color-scheme:dark}
 .rc-in:focus{outline:2px solid var(--black);outline-offset:0;border-color:var(--black)}
 .rc-in.diff{border:1.5px dashed var(--black);font-weight:500}
 /* the material reads as a name, not a form box — the frame shows on hover / focus */
-.rc-mat{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:500;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.12rem .2rem;margin-left:-.2rem;outline:none;cursor:pointer}
+.rc-mat{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:500;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.12rem .2rem;outline:none;cursor:pointer}
 @media(hover:hover){.rc-mat:hover{border-color:var(--light)}}
 .rc-mat:focus{outline:2px solid var(--black);outline-offset:0}
 .rc-sub{font-size:.66rem;color:var(--muted);margin-top:.02rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
@@ -1544,6 +1555,7 @@ function rowSubHtml(r) {
 }
 // % in dip / % in solid / % wet are typeable too — applied on Enter or when the field is left (see onRowPct)
 const PCT_TIP = { dip: '% in dip', solid: '% in solid', wet: '% wet' };
+const GRIP_SVG = '<svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg>';
 function pctIn(s, r, kind, suf) {
   return `<input class="rc-pct ed a-${kind}" id="c${r.id}${suf}" inputmode="decimal" onfocus="pctFocus(this)" onkeydown="pctKey(event,this)" onchange="onRowPct(${s.id},${r.id},'${kind}',this)" title="${PCT_TIP[kind]} — type a value to recalculate the mass (Enter); the batch stays, the first water takes up the difference · Esc = back" autocomplete="off">`;
 }
@@ -1553,7 +1565,7 @@ function rowHtml(s, r, i) {
   const conc = water ? '<span class="num num-dash">—</span>'
     : `<input class="rc-in ed${concDiffers(r, m) ? ' diff' : ''}" inputmode="decimal" value="${r.conc ?? ''}" oninput="onRowNum(${s.id},${r.id},'conc',this)" title="%chem — concentration as mixed${def != null ? ' (material: ' + fmtNum(def) + ' %)' : ''}" autocomplete="off">`;
   return `<div class="rc-grid rc-row" data-row="${r.id}">
-      <div class="a-name"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material">${matOptions(r)}</select><div class="rc-sub" id="sub${r.id}"${m ? ` onclick="openMaterials(${m.id})" title="edit the material"` : ''}>${rowSubHtml(r)}</div></div>
+      <div class="a-name rc-name"><span class="rc-grip" title="drag to move — also into another part">${GRIP_SVG}</span><div class="rc-nm"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material">${matOptions(r)}</select><div class="rc-sub" id="sub${r.id}"${m ? ` onclick="openMaterials(${m.id})" title="edit the material"` : ''}>${rowSubHtml(r)}</div></div></div>
       <div class="a-conc">${conc}</div>
       <div class="a-m"><input class="rc-in m-in ed" id="m${r.id}" inputmode="decimal" value="${r.m ?? ''}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
       ${water ? `<span class="num a-dip" id="c${r.id}d"></span><span class="num a-solid" id="c${r.id}s"></span>` : pctIn(s, r, 'dip', 'd') + pctIn(s, r, 'solid', 's')}${pctIn(s, r, 'wet', 'w')}<span class="num a-price" id="c${r.id}p"></span>
@@ -1561,7 +1573,7 @@ function rowHtml(s, r, i) {
     </div>`;
 }
 function secHtml(s, i, n) {
-  return `<div class="sec">
+  return `<div class="sec" data-sec="${s.id}">
       <div class="sec-head">
         <input class="sec-name ed" value="${esc(s.name)}" placeholder="section" oninput="onSecField(${s.id},'name',this.value)" title="section name" autocomplete="off">
         <select class="sec-kind ed" onchange="onSecField(${s.id},'kind',this.value)" title="what this section counts as in the parameters">${SEC_KINDS.map(([k, l]) => `<option value="${k}"${s.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
@@ -2010,6 +2022,151 @@ function moveRow(sid, rid, dir) {
   [s.rows[i], s.rows[j]] = [s.rows[j], s.rows[i]];
   renderMain(); schedSave();
 }
+// drop of a dragged component: before row `beforeRid` of section `dstSid`, or at its end (null) — matched by id
+function moveRowTo(rid, dstSid, beforeRid) {
+  const v = activeVar(); if (!v) return;
+  const from = v.secs.find(s => s.rows.some(r => r.id === rid)), to = v.secs.find(s => s.id === dstSid);
+  if (!from || !to) return;
+  const i = from.rows.findIndex(r => r.id === rid);
+  let k = beforeRid == null ? to.rows.length : to.rows.findIndex(r => r.id === beforeRid);
+  if (k < 0) k = to.rows.length;
+  if (from === to && (k === i || k === i + 1)) return;   // dropped where it already is
+  pushUndo();
+  const [row] = from.rows.splice(i, 1);
+  if (from === to && k > i) k--;
+  to.rows.splice(k, 0, row);
+  renderMain(); schedSave();
+  showSave(from === to ? '⇅ moved' : '⇅ moved to ' + (to.name || 'another part'));
+}
+
+// ── DRAG & DROP of components (root CLAUDE.md pattern) ────────────────────
+// Pointer events from a dedicated grip (the row is full of fields); the DOM is not reshuffled while dragging —
+// only an indicator line shows the drop place, the data moves on release (one render). Auto-scroll at the edges,
+// the target is recomputed on every scrolled frame (touch sends no pointermove while the finger stands still),
+// wide drop zones (rows, section heads = start of the part, section sums = end of the part, so an empty part
+// takes a drop too) and the vertically nearest zone when the pointer is beside them.
+let _dndActive = false;
+document.addEventListener('touchmove', e => { if (_dndActive && e.cancelable) e.preventDefault(); }, { passive: false });
+function scrollParentOf(node) {
+  let e = node;
+  while (e && e !== document.documentElement) {
+    const ov = getComputedStyle(e).overflowY;
+    if ((ov === 'auto' || ov === 'scroll') && e.scrollHeight > e.clientHeight + 1) return e;
+    e = e.parentElement;
+  }
+  const d = document.scrollingElement || document.documentElement;
+  return (d && d.scrollHeight > d.clientHeight + 1) ? d : null;
+}
+const DND_EDGE = 52;    // px from the edge where scrolling kicks in
+const DND_SPEED = 16;   // px per frame
+function dndScroller(container, onStep) {
+  let raf = null, dir = 0;
+  const step = () => {
+    const s = scrollParentOf(container);
+    if (!s || !dir) { raf = null; return; }
+    const before = s.scrollTop;
+    s.scrollTop += dir * DND_SPEED;
+    if (s.scrollTop !== before && onStep) onStep();
+    raf = requestAnimationFrame(step);
+  };
+  return {
+    update(y) {
+      const s = scrollParentOf(container);
+      if (!s) { dir = 0; return; }
+      const r = (s === document.scrollingElement || s === document.documentElement) ? { top: 0, bottom: window.innerHeight } : s.getBoundingClientRect();
+      dir = y < r.top + DND_EDGE ? -1 : (y > r.bottom - DND_EDGE ? 1 : 0);
+      if (dir && !raf) raf = requestAnimationFrame(step);
+    },
+    stop() { dir = 0; if (raf) cancelAnimationFrame(raf); raf = null; }
+  };
+}
+function initRowDnd() {
+  const box = el('mainBody');   // stable container — the recipe inside is re-rendered with innerHTML
+  if (!box || box._dndInit) return;
+  box._dndInit = true;
+  box.addEventListener('dragstart', e => { if (e.target.closest && e.target.closest('.rc-grip')) e.preventDefault(); });
+  const ZONES = '.rc-row, .sec-head, .sec .rc-sum';
+  const MOUSE_THRESHOLD = 5;
+  let src = null, pointerId = null, dragging = false, startX = 0, startY = 0, lastX = 0, lastY = 0, tgt = null;
+  const auto = dndScroller(box, () => { if (dragging) mark(); });
+  const clear = () => box.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(x => x.classList.remove('drag-over-top', 'drag-over-bottom'));
+  const zoneAt = (x, y) => {
+    const t = document.elementFromPoint(x, y), z = t && t.closest(ZONES);
+    if (z && box.contains(z) && z.closest('.rc')) return z;
+    const rc = box.querySelector('.rc'); if (!rc) return null;
+    const rr = rc.getBoundingClientRect();
+    if (x < rr.left - 48 || x > rr.right + 48) return null;   // far beside the recipe → no drop
+    let best = null, bd = Infinity;
+    rc.querySelectorAll(ZONES).forEach(e => {
+      if (e === src) return;
+      const b = e.getBoundingClientRect(), d = y < b.top ? b.top - y : (y > b.bottom ? y - b.bottom : 0);
+      if (d < bd) { bd = d; best = e; }
+    });
+    return best;
+  };
+  // where a zone puts the component: { el, cls (indicator), sid, before (row id, null = end of the part) }
+  const targetOf = (z, y) => {
+    const sec = z.closest('.sec'); if (!sec) return null;
+    const sid = +sec.dataset.sec;
+    if (z.classList.contains('sec-head')) { const f = sec.querySelector('.rc-row'); return { el: z, cls: 'drag-over-bottom', sid, before: f ? +f.dataset.row : null }; }
+    if (z.classList.contains('rc-sum')) return { el: z, cls: 'drag-over-top', sid, before: null };
+    const b = z.getBoundingClientRect();
+    if (y < b.top + b.height / 2) return { el: z, cls: 'drag-over-top', sid, before: +z.dataset.row };
+    const nx = z.nextElementSibling && z.nextElementSibling.classList.contains('rc-row') ? z.nextElementSibling : null;
+    return { el: z, cls: 'drag-over-bottom', sid, before: nx ? +nx.dataset.row : null };
+  };
+  const mark = () => {
+    clear(); tgt = null;
+    const z = zoneAt(lastX, lastY); if (!z) return;
+    tgt = targetOf(z, lastY);
+    if (tgt) tgt.el.classList.add(tgt.cls);
+  };
+  const begin = () => {
+    if (dragging || !src) return;
+    dragging = true; _dndActive = true;
+    src.classList.add('dragging');
+    src.style.pointerEvents = 'none';   // elementFromPoint sees what is under the finger
+    document.body.style.userSelect = 'none';
+  };
+  const end = () => {
+    auto.stop(); clear();
+    if (src) { src.classList.remove('dragging'); src.style.pointerEvents = ''; }
+    document.body.style.userSelect = '';
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onCancel, true);
+    src = null; pointerId = null; dragging = false; _dndActive = false; tgt = null;
+  };
+  const onMove = e => {
+    if (e.pointerId !== pointerId) return;
+    if (!dragging) {
+      if (Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) > MOUSE_THRESHOLD) begin(); else return;
+    }
+    if (e.cancelable) e.preventDefault();
+    lastX = e.clientX; lastY = e.clientY;
+    auto.update(lastY);
+    mark();
+  };
+  const onUp = e => {
+    if (e.pointerId !== pointerId) return;
+    const t = dragging ? tgt : null, rid = src ? +src.dataset.row : null;
+    end();
+    if (t && rid != null && t.before !== rid) moveRowTo(rid, t.sid, t.before);
+  };
+  const onCancel = e => { if (e.pointerId === pointerId) end(); };
+  box.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;   // primary button / touch only
+    const g = e.target.closest('.rc-grip'); if (!g) return;
+    const row = g.closest('.rc-row'); if (!row || !box.contains(row)) return;
+    src = row; pointerId = e.pointerId; dragging = false;
+    startX = lastX = e.clientX; startY = lastY = e.clientY;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onCancel, true);
+    if (e.pointerType !== 'mouse') { begin(); mark(); }   // a dedicated grip → touch / pen drag at once
+    e.preventDefault();
+  });
+}
 function addSection() {
   const v = activeVar(); if (!v) return;
   pushUndo();
@@ -2258,6 +2415,7 @@ function init() {
   loadLibrary();
   loadActiveVarMap();
   loadLabView();
+  initRowDnd();
   try { const t = localStorage.getItem(NOTES_TAB_KEY); if (t === 'vars' || t === 'gen') notesTab = t; } catch(e) {}
   const restored = loadSession();
   if (!restored) renderAll();
