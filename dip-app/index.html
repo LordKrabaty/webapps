@@ -298,21 +298,28 @@ html.dark input[type="date"]{color-scheme:dark}
 .f-sname{grid-area:sname}.f-sdesc{grid-area:sdesc}.f-sstr{grid-area:sstr}
 .hg-var{grid-template-columns:repeat(3,minmax(0,1fr))}
 
-.rc{display:flex;flex-direction:column;margin-top:calc(.5rem/var(--pzc,1))}
-.rc-grid{display:grid;grid-template-columns:minmax(0,1fr) 3.9rem 4.9rem 3.9rem 3.9rem 3.9rem 3.6rem 3.4rem;grid-template-areas:"name conc m dip solid wet price act";column-gap:.35rem;align-items:center}
+/* compact: the recipe is only as wide as it needs (the name column stops at 15rem), not stretched over a wide panel */
+.rc{display:flex;flex-direction:column;margin-top:calc(.5rem/var(--pzc,1));width:fit-content;max-width:100%}
+.rc-grid{display:grid;grid-template-columns:minmax(0,15rem) 3.6rem 4.9rem 4.2rem 4.2rem 4.2rem 3.6rem 3.4rem;grid-template-areas:"name conc m dip solid wet price act";column-gap:.4rem;align-items:center}
 .a-name{grid-area:name;min-width:0}.a-conc{grid-area:conc;min-width:0}.a-m{grid-area:m;min-width:0}.a-dip{grid-area:dip}.a-solid{grid-area:solid}.a-wet{grid-area:wet}.a-price{grid-area:price}.a-act{grid-area:act}
 .rc-head{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:.3rem;border-bottom:1.5px solid var(--black)}
 .rc-head span{text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rc-head .a-name{text-align:left}
 .num{display:block;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .num-dash{color:var(--mid)}
-.rc-row{padding:calc(.26rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light)}
-.rc-in{width:100%;min-width:0;font-family:'DM Mono',monospace;font-size:.82rem;text-align:right;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .35rem;outline:none}
+.rc-row{padding:calc(.2rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light)}
+.rc-in{width:100%;min-width:0;font-family:'DM Mono',monospace;font-size:.82rem;text-align:right;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.2rem .35rem;outline:none}
+/* typeable computed shares: look like plain numbers, a dotted underline says they can be typed over */
+.rc-pct{display:block;width:100%;min-width:0;font-family:'DM Mono',monospace;font-size:.78rem;text-align:right;color:var(--black);background:transparent;border:1px solid transparent;border-bottom:1px dotted var(--mid);border-radius:0;padding:.18rem .1rem;outline:none;cursor:text}
+@media(hover:hover){.rc-pct:hover{border:1px solid var(--light);border-radius:var(--r)}}
+.rc-pct:focus{background:var(--w);border:1px solid var(--black);border-radius:var(--r);outline:1px solid var(--black);outline-offset:0}
 .rc-in:focus{outline:2px solid var(--black);outline-offset:0;border-color:var(--black)}
 .rc-in.diff{border:1.5px dashed var(--black);font-weight:500}
-.rc-mat{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.85rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.26rem .35rem;outline:none;cursor:pointer}
+/* the material reads as a name, not a form box — the frame shows on hover / focus */
+.rc-mat{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:500;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.12rem .2rem;margin-left:-.2rem;outline:none;cursor:pointer}
+@media(hover:hover){.rc-mat:hover{border-color:var(--light)}}
 .rc-mat:focus{outline:2px solid var(--black);outline-offset:0}
-.rc-sub{font-size:.66rem;color:var(--muted);margin-top:.12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.rc-sub{font-size:.66rem;color:var(--muted);margin-top:.02rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .rc-sub:empty{display:none}
 .rc-sub b{color:var(--black);font-weight:600}
 .rc-act{display:flex;justify-content:flex-end;gap:.1rem}
@@ -320,8 +327,8 @@ html.dark input[type="date"]{color-scheme:dark}
 @media(hover:hover){.ib:not(:disabled):hover{color:var(--black);background:var(--off)}}
 .ib:disabled{opacity:.25;cursor:default}
 .sec-head{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .5rem;padding:calc(.75rem/var(--pzc,1)) 0 calc(.3rem/var(--pzc,1))}
-.sec-name{flex:0 1 13rem;min-width:7rem;font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:600;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.2rem .35rem;outline:none}
-.sec-note{flex:1 1 10rem;min-width:6rem;font-family:'DM Sans',sans-serif;font-size:.78rem;font-style:italic;color:var(--dark);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.2rem .35rem;outline:none}
+.sec-name{flex:0 1 12rem;min-width:6rem;font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:600;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.2rem .35rem;outline:none}
+.sec-note{flex:1 1 5rem;min-width:4rem;font-family:'DM Sans',sans-serif;font-size:.78rem;font-style:italic;color:var(--dark);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.2rem .35rem;outline:none}
 .sec-name:focus,.sec-note:focus{border-color:var(--black)}
 @media(hover:hover){.sec-name:hover,.sec-note:hover{border-color:var(--light)}}
 .sec-kind{font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.15rem .3rem;outline:none;cursor:pointer}
@@ -338,6 +345,7 @@ html.dark input[type="date"]{color-scheme:dark}
 .whole-mat{font-style:italic}
 /* narrow recipe: every component takes two lines (name + buttons / numbers) — container query + viewport fallback */
 @container (max-width:620px){
+  .rc{width:auto}
   .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
   .rc-head{grid-template-areas:"conc m dip solid wet price"}
   .rc-head .a-name,.rc-head .a-act{display:none}
@@ -345,6 +353,7 @@ html.dark input[type="date"]{color-scheme:dark}
   .hg-var{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:620px){
+  .rc{width:auto}
   .rc-grid{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-areas:"name name name name name act" "conc m dip solid wet price";row-gap:.22rem}
   .rc-head{grid-template-areas:"conc m dip solid wet price"}
   .rc-head .a-name,.rc-head .a-act{display:none}
@@ -1255,6 +1264,12 @@ function round2(n) { return Math.round(n * 100) / 100; }
 function byName(a, b) { return (a.name || '').localeCompare(b.name || '', 'en', { numeric: true, sensitivity: 'base' }); }
 function todayIso() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function setText(id, t) { const e = el(id); if (e && e.textContent !== t) e.textContent = t; }
+// a computed cell that may be a typeable input — never overwrite the one being typed in
+function setCell(id, t) {
+  const e = el(id); if (!e) return;
+  if (e.tagName === 'INPUT') { if (e !== document.activeElement && e.value !== t) e.value = t; }
+  else if (e.textContent !== t) e.textContent = t;
+}
 
 // ── NORMALIZERS (preserve-unknown) ─────────────────────────────────────────
 function normAlt(a) {
@@ -1527,6 +1542,11 @@ function rowSubHtml(r) {
   } else if (r.mat != null) parts.push('material deleted');
   return parts.join(' · ');
 }
+// % in dip / % in solid / % wet are typeable too — applied on Enter or when the field is left (see onRowPct)
+const PCT_TIP = { dip: '% in dip', solid: '% in solid', wet: '% wet' };
+function pctIn(s, r, kind, suf) {
+  return `<input class="rc-pct ed a-${kind}" id="c${r.id}${suf}" inputmode="decimal" onfocus="pctFocus(this)" onkeydown="pctKey(event,this)" onchange="onRowPct(${s.id},${r.id},'${kind}',this)" title="${PCT_TIP[kind]} — type a value to recalculate the mass (Enter); the batch stays, the first water takes up the difference · Esc = back" autocomplete="off">`;
+}
 function rowHtml(s, r, i) {
   const m = matById(r.mat), water = rowRole(r) === 'water', last = i === s.rows.length - 1;
   const def = m ? matWork(m) : null;
@@ -1535,8 +1555,8 @@ function rowHtml(s, r, i) {
   return `<div class="rc-grid rc-row" data-row="${r.id}">
       <div class="a-name"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material">${matOptions(r)}</select><div class="rc-sub" id="sub${r.id}"${m ? ` onclick="openMaterials(${m.id})" title="edit the material"` : ''}>${rowSubHtml(r)}</div></div>
       <div class="a-conc">${conc}</div>
-      <div class="a-m"><input class="rc-in m-in ed" inputmode="decimal" value="${r.m ?? ''}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
-      <span class="num a-dip" id="c${r.id}d"></span><span class="num a-solid" id="c${r.id}s"></span><span class="num a-wet" id="c${r.id}w"></span><span class="num a-price" id="c${r.id}p"></span>
+      <div class="a-m"><input class="rc-in m-in ed" id="m${r.id}" inputmode="decimal" value="${r.m ?? ''}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
+      ${water ? `<span class="num a-dip" id="c${r.id}d"></span><span class="num a-solid" id="c${r.id}s"></span>` : pctIn(s, r, 'dip', 'd') + pctIn(s, r, 'solid', 's')}${pctIn(s, r, 'wet', 'w')}<span class="num a-price" id="c${r.id}p"></span>
       <div class="a-act rc-act"><button class="ib" onclick="moveRow(${s.id},${r.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="moveRow(${s.id},${r.id},1)"${last ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="delRow(${s.id},${r.id})" title="remove component">✕</button></div>
     </div>`;
 }
@@ -1570,7 +1590,7 @@ function toolsHtml() {
       <span class="tool">scale batch to <input id="toolScale" class="rc-in" inputmode="decimal" placeholder="g" onkeydown="if(event.key==='Enter')toolScale()" autocomplete="off"><button class="btn-sm" onclick="toolScale()">scale</button></span>
       <span class="tool">set solid to <input id="toolSolid" class="rc-in" inputmode="decimal" placeholder="%" onkeydown="if(event.key==='Enter')toolSolid()" autocomplete="off"><button class="btn-sm" onclick="toolSolid()">apply</button></span>
     </div>
-    <div class="tool-hint">Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference. Tip: make a new variant first (+), then adjust it.</div>`;
+    <div class="tool-hint">Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference. The shares (% in dip, % in solid, % wet — dotted underline) can be typed over the same way: the component's mass is recalculated, the batch stays and the first water takes up the difference; the first water's own % wet moves water from / to the other parts (the solid stays) — only if they do not have enough, it asks before changing the solid. Tip: make a new variant first (+), then adjust it.</div>`;
 }
 function measHtml(v) {
   const ms = v.meas || {};
@@ -1743,9 +1763,9 @@ function updateCalc() {
     s.rows.forEach(r => {
       const x = c.rows[r.id]; if (!x) return;
       const water = x.role === 'water';
-      setText('c' + r.id + 'd', water ? '' : pct(x.dip));
-      setText('c' + r.id + 's', water ? '' : pct(x.solid));
-      setText('c' + r.id + 'w', pct(x.wet));
+      setCell('c' + r.id + 'd', water ? '' : pct(x.dip));
+      setCell('c' + r.id + 's', water ? '' : pct(x.solid));
+      setCell('c' + r.id + 'w', pct(x.wet));
       setText('c' + r.id + 'p', eur(x.price, true, 3, ''));
     });
   });
@@ -1887,6 +1907,81 @@ function onMeas(key, inp) {
   schedSave();
 }
 // Enter in a mass field jumps to the next one — quick entry while weighing
+// typing a share instead of the mass — the same rules as the tools: the batch stays and the first water takes up
+// the difference. The first water's own % wet moves water between the parts instead (the other water rows give or
+// take it in proportion → batch AND solid stay); only when they do not have enough, the whole dip is diluted /
+// concentrated like "set solid" — the solid changes, so that asks first (`confirm`).
+// A recipe without water keeps the other masses and the batch changes instead.
+// Returns { out: Map(row → new mass), confirm? } or { err }.
+function shareMasses(v, r, kind, p) {
+  const c = calcVariant(v), T = c.total, w = firstWater(v), m0 = +r.m || 0, conc = +r.conc || 0, out = new Map();
+  if (!(T > 0)) return { err: 'The recipe has no mass yet — enter the masses first.' };
+  if (!(p >= 0 && p < 100)) return { err: 'Enter a share from 0 to under 100 %.' };
+  if (r === w) {
+    const target = round2(p / 100 * T), d = target - m0, others = [];
+    v.secs.forEach(s => s.rows.forEach(x => { if (x !== w && rowRole(x) === 'water') others.push(x); }));
+    const avail = others.reduce((a, x) => a + (+x.m || 0), 0);
+    if (others.length && (d <= 0 || avail >= d)) {   // 1) move the water between the parts
+      out.set(w, target);
+      if (avail > 0) {
+        const f = (avail - d) / avail; let sum = 0;
+        others.forEach(x => { const n = round2((+x.m || 0) * f); out.set(x, n); sum += n; });
+        const big = others.reduce((a, x) => (out.get(x) > out.get(a) ? x : a), others[0]);   // rounding remainder
+        out.set(big, round2(out.get(big) + (avail - d) - sum));
+      } else out.set(others[0], round2(-d));
+      return { out };
+    }
+    const R = T - m0;                                 // 2) dilute / concentrate the whole dip — the solid changes
+    if (!(R > 0)) return { err: 'There is nothing else in the recipe to scale.' };
+    const f = T * (1 - p / 100) / R; let rest = 0;
+    v.secs.forEach(s => s.rows.forEach(x => { if (x !== w && x.m != null) { const n = round2(x.m * f); out.set(x, n); rest += n; } }));
+    out.set(w, round2(T - rest));
+    const why = others.length
+      ? 'The water in the other parts (' + fmt(avail, 1) + ' g) is not enough to move ' + fmt(d, 1) + ' g into the first water.'
+      : 'There is no other water in the recipe to move it ' + (d > 0 ? 'from' : 'to') + '.';
+    return { out, confirm: why + ' Reaching ' + fmtNum(p) + ' % wet of the first water therefore means ' + (d > 0 ? 'diluting' : 'concentrating')
+      + ' the whole dip — all other components scale together and the solid changes from ' + pct(c.tsc) + ' to ' + pct(c.tsc != null ? c.tsc * f : null) + '. Continue?' };
+  }
+  if (kind !== 'wet' && !(conc > 0)) return { err: 'Set the %chem of this component first — without it, it has no solid.' };
+  let n;
+  if (kind === 'solid') {
+    const Do = c.dry - m0 * conc / 100;   // the solid of everything else — water does not change it
+    if (!(Do > 0)) return { err: 'Nothing else in the recipe has solid — this component is always 100 % of it.' };
+    n = p * Do / (100 - p) / (conc / 100);
+  } else if (w) n = kind === 'wet' ? p / 100 * T : p / 100 * T / (conc / 100);
+  else {
+    const R = T - m0;
+    if (kind === 'dip' && p >= conc) return { err: 'Not possible: % in dip can not reach the component’s own %chem (' + fmtNum(conc) + ' %).' };
+    n = kind === 'wet' ? p * R / (100 - p) : p * R / (conc - p);
+  }
+  n = round2(n);
+  out.set(r, n);
+  if (w) {
+    const wm = round2((+w.m || 0) - (n - m0));
+    if (wm < 0) return { err: 'Not possible: the first water (' + fmt(+w.m || 0, 1) + ' g) would have to go below zero to keep the batch of ' + fmt(T, 1) + ' g. Use a lower value, or scale the batch up first.' };
+    out.set(w, wm);
+  }
+  return { out };
+}
+async function onRowPct(sid, rid, kind, inp) {
+  const v = activeVar(), r = findRow(sid, rid); if (!v || !r) return;
+  const p = numOrNull(String(inp.value).replace('%', '').trim());
+  const show = () => { const x = calcVariant(v).rows[r.id]; inp.value = x ? pct(x[kind]) : ''; };
+  if (p == null) { show(); return; }   // emptied or not a number → just show the value again
+  const res = shareMasses(v, r, kind, p);
+  if (res.err) { show(); await customAlert(res.err); return; }
+  if (res.confirm) {
+    if (!await customConfirm(res.confirm, 'change solid')) { show(); return; }
+    pushUndo();   // the field lost focus during the dialog — a plain undo step
+  } else coalesceUndo();
+  res.out.forEach((n, x) => { x.m = n; const i = el('m' + x.id); if (i) i.value = n; });
+  updateCalc(); show(); schedSave();
+}
+function pctFocus(inp) { inp.dataset.v = inp.value; inp.select(); }
+function pctKey(e, inp) {
+  if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); inp.value = inp.dataset.v || ''; inp.blur(); }
+}
 function rcEnter(e, inp) {
   if (e.key !== 'Enter') return;
   e.preventDefault();

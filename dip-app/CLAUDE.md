@@ -69,6 +69,9 @@ Ověřeno proti laboratornímu listu uživatele (sušina, F/R, NaOH/RF, NaOH in 
 
 - **scale batch** — všechny m × k, zaokrouhlení na 0,01 g, zbytek do první vody
 - **set solid** — drží celkovou hmotnost: vše kromě první vody × (cílová/aktuální sušina), první voda dorovná; když by ostatní složky vážily víc než dávka → odmítne a řekne maximum
+- **přepsání podílu v řádku** (`% in dip` / `% in solid` / `% wet` jsou inputy `.rc-pct`, `shareMasses()` + `onRowPct()`): přepočte `m` té složky tak, aby podíl seděl přesně; dávka zůstává, rozdíl bere **první voda** (stejné pravidlo). `% wet` první vody = **přesun vody mezi částmi**: ostatní vodní řádky rozdíl dají / vezmou poměrně ke své hmotnosti (zaokrouhlovací zbytek do největší) → dávka i sušina zůstávají. Když ostatní voda nestačí (nebo žádná není), `customConfirm` řekne, že se změní sušina (z → na), a po potvrzení se celý roztok naředí / zahustí jako set solid (ostatní × k). Bez vody v receptuře se drží ostatní hmotnosti a mění se dávka. Aplikuje se až na Enter / opuštění pole (`onchange`), Esc vrátí; nemožné (první voda pod nulu, chybí %chem) → `customAlert`, nic se nemění. Computed buňky se přepisují přes `setCell()`, které nesahá na právě editovaný input.
+
+Receptura je kompaktní: `.rc` má `width:fit-content`, sloupec názvu max 15rem (na úzkém displeji zpět na plnou šířku), výběr suroviny bez rámečku (rámeček jen při hover/focus).
 
 ## Plánováno (zatím ne)
 
