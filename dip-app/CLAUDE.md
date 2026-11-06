@@ -69,6 +69,11 @@ Ověřeno proti laboratornímu listu uživatele (sušina, F/R, NaOH/RF, NaOH in 
 
 - **scale batch** — všechny m × k, zaokrouhlení na 0,01 g, zbytek do první vody
 - **set solid** — drží celkovou hmotnost: vše kromě první vody × (cílová/aktuální sušina), první voda dorovná; když by ostatní složky vážily víc než dávka → odmítne a řekne maximum
+- **PHR / F/R / Syn:NR / SBR:VP při stejné sušině** (`ratioRecalc()` + `toolRatio()`, druhý řádek nástrojů; placeholder = aktuální hodnota): přesouvá sušinu mezi skupinami složek tak, že jejich součet sušiny zůstane → s dávkou drženou první vodou zůstane i sušina roztoku. Uvnitř skupiny vše × stejný faktor (vnitřní poměry zůstávají); skupina bez hmotnosti dostane vše do prvního řádku s %chem. Čpavek a ostatní beze změny.
+  - PHR: celá RF část (resin + formaldehyd + **NaOH**, aby NaOH/RF zůstal) × a, latexová část (sekce `latex` bez čpavku) × b; `(RF+NaOH)·a + L·b = RF+NaOH+L`, `RF·a = PHR/100·L·b` → F/R, Syn:NR, SBR:VP beze změny.
+  - F/R: formaldehyd ↔ pryskyřice při stejné RF sušině (PHR zůstává): `x = (RF/30) / (t·fR/110 + (1 − fF)/30)`, fF/fR vážené přes řádky pryskyřice; minimum = pryskyřice bez formaldehydu.
+  - Syn:NR: (VP + SBR) ↔ NR při stejné sušině latexů (PHR, SBR:VP zůstávají); SBR:VP: SBR ↔ VP. Zadání `70:30`, `70/30` nebo `70` (podíl první části v %).
+  - Nemožné (první voda pod nulu, chybí řádek) → `customAlert`, nic se nemění. Ověřeno simulací: cíl přesně, dávka i sušina beze změny, ostatní parametry ±0,001 (zaokrouhlení na 0,01 g).
 - **přepsání podílu v řádku** (`% in dip` / `% in solid` / `% wet` jsou inputy `.rc-pct`, `shareMasses()` + `onRowPct()`): přepočte `m` té složky tak, aby podíl seděl přesně; dávka zůstává, rozdíl bere **první voda** (stejné pravidlo). `% wet` první vody = **přesun vody mezi částmi**: ostatní vodní řádky rozdíl dají / vezmou poměrně ke své hmotnosti (zaokrouhlovací zbytek do největší) → dávka i sušina zůstávají. Když ostatní voda nestačí (nebo žádná není), `customConfirm` řekne, že se změní sušina (z → na), a po potvrzení se celý roztok naředí / zahustí jako set solid (ostatní × k). Bez vody v receptuře se drží ostatní hmotnosti a mění se dávka. Aplikuje se až na Enter / opuštění pole (`onchange`), Esc vrátí; nemožné (první voda pod nulu, chybí %chem) → `customAlert`, nic se nemění. Computed buňky se přepisují přes `setCell()`, které nesahá na právě editovaný input.
 
 **Drag & drop složek** (`initRowDnd()` na stabilním `#mainBody` + `moveRowTo()`; vzor z kořenového CLAUDE.md): tah za grip `.rc-grip` vlevo od suroviny (dotyk startuje hned), indikátor čárou, přesun dat až při puštění podle id. Jde i **mezi části** — cílové zóny jsou řádky, hlavička sekce (= na začátek části) a součtový řádek sekce (= na konec, takže i do prázdné části); mimo zóny, ale u receptury → svisle nejbližší zóna. Auto-scroll u okrajů s přepočtem cíle (`dndScroller`). Šipky ↑/↓ zůstávají.
@@ -77,4 +82,4 @@ Receptura je kompaktní: `.rc` má `width:fit-content`, sloupec názvu max 15rem
 
 ## Plánováno (zatím ne)
 
-Provozní míchání, přepis na hmotnostní zlomky základních surovin (bez ředění), úpravy poměrů přes suchou váhu (PHR, latexy, F/R).
+Provozní míchání, přepis na hmotnostní zlomky základních surovin (bez ředění).

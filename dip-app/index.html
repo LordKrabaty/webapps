@@ -408,6 +408,7 @@ html.dark input[type="date"]{color-scheme:dark}
 .tools{display:flex;flex-wrap:wrap;gap:calc(.5rem/var(--pzc,1)) calc(1.2rem/var(--pzc,1));margin-top:calc(.8rem/var(--pzc,1));align-items:center}
 .tool{display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:var(--dark)}
 .tool .rc-in{width:5.4rem}
+.tools.tools-ratio{margin-top:calc(.45rem/var(--pzc,1))}
 .tool-hint{font-size:.7rem;color:var(--muted);margin-top:calc(.35rem/var(--pzc,1));line-height:1.45}
 .sub-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--black);margin:calc(1.1rem/var(--pzc,1)) 0 calc(.45rem/var(--pzc,1));padding-bottom:.3rem;border-bottom:1.5px solid var(--black)}
 .par-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));column-gap:calc(1.4rem/var(--pzc,1))}
@@ -1657,7 +1658,13 @@ function toolsHtml() {
       <span class="tool">scale batch to <input id="toolScale" class="rc-in" inputmode="decimal" placeholder="g" onkeydown="if(event.key==='Enter')toolScale()" autocomplete="off"><button class="btn-sm" onclick="toolScale()">scale</button></span>
       <span class="tool">set solid to <input id="toolSolid" class="rc-in" inputmode="decimal" placeholder="%" onkeydown="if(event.key==='Enter')toolSolid()" autocomplete="off"><button class="btn-sm" onclick="toolSolid()">apply</button></span>
     </div>
-    <div class="tool-hint">Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference. The shares (% in dip, % in solid, % wet — dotted underline) can be typed over the same way: the component's mass is recalculated, the batch stays and the first water takes up the difference; the first water's own % wet moves water from / to the other parts (the solid stays) — only if they do not have enough, it asks before changing the solid. Tip: make a new variant first (+), then adjust it.</div>`;
+    <div class="tools tools-ratio">
+      <span class="tool">PHR to <input id="toolPhr" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('phr')" title="RF resin / L (PHR) — the whole RF part (resin, formaldehyde, NaOH) against the latex part" autocomplete="off"><button class="btn-sm" onclick="toolRatio('phr')">apply</button></span>
+      <span class="tool">F/R to <input id="toolFr" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('fr')" title="F / R (mol/mol) — formaldehyde against resin, the RF solid stays" autocomplete="off"><button class="btn-sm" onclick="toolRatio('fr')">apply</button></span>
+      <span class="tool">Syn:NR to <input id="toolSynNr" class="rc-in" onkeydown="if(event.key==='Enter')toolRatio('synNr')" title="dry (VP + SBR) : NR — e.g. 70:30, or just 70 (the synthetic share in %)" autocomplete="off"><button class="btn-sm" onclick="toolRatio('synNr')">apply</button></span>
+      <span class="tool">SBR:VP to <input id="toolSbrVp" class="rc-in" onkeydown="if(event.key==='Enter')toolRatio('sbrVp')" title="dry SBR : VP — e.g. 40:60, or just 40 (the SBR share in %)" autocomplete="off"><button class="btn-sm" onclick="toolRatio('sbrVp')">apply</button></span>
+    </div>
+    <div class="tool-hint">Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference. PHR, F/R, Syn:NR and SBR:VP keep the solid and the batch — they move dry matter between components: PHR the whole RF part (incl. NaOH) against the latex part, F/R formaldehyde against resin, Syn:NR (VP + SBR) against NR, SBR:VP between those two; ammonia and everything else stay, the first water evens out the batch. The shares (% in dip, % in solid, % wet — dotted underline) can be typed over the same way: the component's mass is recalculated, the batch stays and the first water takes up the difference; the first water's own % wet moves water from / to the other parts (the solid stays) — only if they do not have enough, it asks before changing the solid. Tip: make a new variant first (+), then adjust it.</div>`;
 }
 function measHtml(v) {
   const ms = v.meas || {};
@@ -1791,7 +1798,7 @@ function updateLab(v, c, st) {
 }
 function parHtml(c, labStr) {
   const P = (label, val, o = {}) => `<div class="par${o.out ? ' out' : ''}${o.key ? ' key' : ''}"${o.tip ? ` title="${esc(o.tip)}"` : ''}><span class="par-l">${label}${o.t ? ` <span class="par-t">${o.t}</span>` : ''}</span><span class="par-v">${val}</span></div>`;
-  const ratio = p => { if (!p) return '—'; const s = p[0] + p[1]; if (!(s > 0)) return '—'; const a = Math.round(p[0] / s * 100); return a + ':' + (100 - a); };
+  const ratio = ratioText;
   const out = [
     P('solid', pct(c.tsc), { key: true, tip: 'TSC = Σ % in dip — the full-strength W100 dip' }),
     ...(Math.abs(labStr - 100) > 1e-9 ? [P('solid lab W' + fmtNum(labStr), pct(c.tsc != null ? c.tsc * labStr / 100 : null), { tip: 'solid of the diluted lab dip — see Lab weighing' })] : []),
@@ -1851,6 +1858,8 @@ function updateCalc() {
   const si = el('labStrIn'); if (si && document.activeElement !== si) si.value = fmtNum(st.str);
   if (si) si.placeholder = fmtNum(st.rec);
   const bi = el('labBatchIn'); if (bi) bi.placeholder = fmt(c.total, 1);
+  const ph = (id, t) => { const e = el(id); if (e && e.placeholder !== t) e.placeholder = t; };   // the ratio tools show the current value
+  ph('toolPhr', fmt(c.phr)); ph('toolFr', fmt(c.fr)); ph('toolSynNr', ratioText(c.synNr)); ph('toolSbrVp', ratioText(c.sbrVp));
   // the measured solid is taken from the lab dip → compare with the solid at the lab strength
   const ms = numOrNull((v.meas || {}).solid), calcS = c.tsc != null ? c.tsc * st.str / 100 : null;
   setText('measDL', diluted ? 'Δ vs calc. W' + fmtNum(st.str) : 'Δ solid vs calc.');
@@ -2295,6 +2304,108 @@ function toolScale() {
   const w = firstWater(v); if (w) w.m = round2((+w.m || 0) + target - sumMass(v));   // rounding remainder → first water
   renderMain(); schedSave();
   showSave('⇲ scaled to ' + fmt(target, 1) + ' g');
+}
+function ratioText(p) { if (!p) return '—'; const s = p[0] + p[1]; if (!(s > 0)) return '—'; const a = Math.round(p[0] / s * 100); return a + ':' + (100 - a); }
+// "70:30", "70/30" or the first part's share in % ("70") → that share as 0…1
+function parseRatio(t) {
+  const s = String(t || '').trim().replace(/,/g, '.');
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*[:\/]\s*(\d+(?:\.\d+)?)$/);
+  if (m) { const a = +m[1], b = +m[2]; return a + b > 0 ? a / (a + b) : null; }
+  const n = /^\d+(?:\.\d+)?$/.test(s) ? +s : NaN;
+  return n >= 0 && n <= 100 ? n / 100 : null;
+}
+
+// ── RATIO TOOLS: PHR, F/R, Syn:NR, SBR:VP at the same solid ──────────────
+// Dry matter moves between groups of components so that their total dry stays → with the batch kept by the first
+// water, the solid (TSC) stays too. Inside a group every row scales by the same factor (its own ratios stay);
+// a group with no mass yet gets it all in its first row with a %chem. Ammonia and everything else stay.
+function rowDry(r) { return rowRole(r) === 'water' ? 0 : (+r.m || 0) * (+r.conc || 0) / 100; }
+function sumDry(rows) { return rows.reduce((a, r) => a + rowDry(r), 0); }
+function setGroupDry(rows, dry, out, label) {
+  const cur = sumDry(rows);
+  if (cur > 0) { const k = dry / cur; rows.forEach(r => { if (r.m != null) out.set(r, round2(r.m * k)); }); return null; }
+  if (!(dry > 0)) return null;
+  const r0 = rows.find(r => +r.conc > 0);
+  if (!r0) return 'The recipe has no ' + label + (rows.length ? ' with a %chem' : '') + ' — add it first.';
+  out.set(r0, round2(dry / (r0.conc / 100)));
+  return null;
+}
+function withFirstWater(v, out) {
+  const w = firstWater(v);
+  if (!w) return { err: 'The recipe has no water row — the batch is evened out through the first water.' };
+  let diff = 0; out.forEach((n, r) => { diff += n - (+r.m || 0); });
+  const wm = round2((+w.m || 0) - diff);
+  if (wm < 0) return { err: 'Not possible: the first water (' + fmt(+w.m || 0, 1) + ' g) would have to go below zero — the new dry matter is in more dilute materials and does not fit into the batch. Raise the batch first (scale), or lower the solid.' };
+  out.set(w, wm);
+  return { out };
+}
+function rowsOfVar(v, test) { const a = []; v.secs.forEach(s => s.rows.forEach(r => { if (test(r, s)) a.push(r); })); return a; }
+function ratioRecalc(v, kind, raw) {
+  const out = new Map(), role = r => rowRole(r);
+  if (kind === 'phr') {
+    const P = numOrNull(raw);
+    if (!(P > 0)) return { err: 'Enter the target PHR (e.g. 17).' };
+    const rf = rowsOfVar(v, r => role(r) === 'resin' || role(r) === 'formaldehyde'), na = rowsOfVar(v, r => role(r) === 'naoh');
+    const lat = rowsOfVar(v, (r, s) => secKind(s) === 'latex' && !['ammonia', 'water', 'resin', 'formaldehyde', 'naoh'].includes(role(r)) && +r.conc > 0);
+    const RF = sumDry(rf), NA = sumDry(na), L = sumDry(lat);
+    if (!(RF > 0)) return { err: 'The recipe has no RF resin / formaldehyde solid yet.' };
+    if (!(L > 0)) return { err: 'The recipe has no latex part solid yet.' };
+    // RF part (resin + formaldehyde + NaOH, so NaOH/RF stays) × a, latex part × b: (RF+NA)·a + L·b = RF+NA+L and RF·a = P/100·L·b
+    const b = (RF + NA + L) / (L + (RF + NA) * (P / 100) * L / RF), a = (P / 100) * L * b / RF;
+    [...rf, ...na].forEach(r => { if (r.m != null) out.set(r, round2(r.m * a)); });
+    lat.forEach(r => { if (r.m != null) out.set(r, round2(r.m * b)); });
+    return withFirstWater(v, out);
+  }
+  if (kind === 'fr') {
+    const t = numOrNull(raw);
+    if (!(t > 0)) return { err: 'Enter the target F/R (e.g. 1.5).' };
+    const res = rowsOfVar(v, r => role(r) === 'resin'), fo = rowsOfVar(v, r => role(r) === 'formaldehyde');
+    const X = sumDry(res), RF = X + sumDry(fo);
+    if (!(X > 0)) return { err: 'The recipe has no RF resin solid yet.' };
+    // the F / R shares of the resin solid, weighted over the resin rows (they scale together)
+    let fF = 0, fR = 0;
+    res.forEach(r => { const a = actAlt(matById(r.mat)), d = rowDry(r); fF += d * (a && a.fF != null ? a.fF : RESIN_F) / 100; fR += d * (a && a.fR != null ? a.fR : RESIN_R) / 100; });
+    fF /= X; fR /= X;
+    // x·fF/30 + (RF − x)/30 = t·x·fR/110  →  x = (RF/30) / (t·fR/110 + (1 − fF)/30)
+    const x = (RF / MW.F) / (t * fR / MW.R + (1 - fF) / MW.F), y = RF - x;
+    if (y < -1e-9) return { err: 'Not possible: even without any formaldehyde the resin alone gives F/R ' + fmt(fF / MW.F / (fR / MW.R)) + ' — that is the lowest.' };
+    const e1 = setGroupDry(res, x, out, 'RF resin'); if (e1) return { err: e1 };
+    const e2 = setGroupDry(fo, Math.max(0, y), out, 'formaldehyde row'); if (e2) return { err: e2 };
+    return withFirstWater(v, out);
+  }
+  // latex splits — both keep the dry total of the latexes involved
+  const share = parseRatio(raw);
+  if (share == null) return { err: 'Enter the ratio, e.g. 70:30 — or just 70 for the first part’s share in %.' };
+  const vp = rowsOfVar(v, r => role(r) === 'latex-vp'), sbr = rowsOfVar(v, r => role(r) === 'latex-sbr'), nr = rowsOfVar(v, r => role(r) === 'latex-nr');
+  if (kind === 'synNr') {
+    const syn = [...vp, ...sbr], S = sumDry(syn), N = sumDry(nr), tot = S + N;
+    if (!(tot > 0)) return { err: 'The recipe has no latex solid yet.' };
+    if (share > 0 && !(S > 0)) return { err: 'There is no synthetic latex (VP / SBR) with a mass in the recipe — enter some first, the split between VP and SBR is taken from it.' };
+    const e1 = setGroupDry(syn, tot * share, out, 'synthetic latex'); if (e1) return { err: e1 };
+    const e2 = setGroupDry(nr, tot * (1 - share), out, 'NR latex row'); if (e2) return { err: e2 };
+    return withFirstWater(v, out);
+  }
+  if (kind === 'sbrVp') {
+    const S = sumDry(sbr), V = sumDry(vp), tot = S + V;
+    if (!(tot > 0)) return { err: 'The recipe has no SBR or VP latex solid yet.' };
+    const e1 = setGroupDry(sbr, tot * share, out, 'SBR latex row'); if (e1) return { err: e1 };
+    const e2 = setGroupDry(vp, tot * (1 - share), out, 'VP latex row'); if (e2) return { err: e2 };
+    return withFirstWater(v, out);
+  }
+  return { err: 'Unknown tool.' };
+}
+const RATIO_TOOL = { phr: ['toolPhr', 'PHR'], fr: ['toolFr', 'F/R'], synNr: ['toolSynNr', 'Syn:NR'], sbrVp: ['toolSbrVp', 'SBR:VP'] };
+function toolRatio(kind) {
+  const v = activeVar(), [id, label] = RATIO_TOOL[kind] || []; if (!v || !id) return;
+  const raw = el(id).value;
+  if (!String(raw).trim()) { customAlert('Enter the target ' + label + '.'); return; }
+  const before = calcVariant(v).tsc, res = ratioRecalc(v, kind, raw);
+  if (res.err) { customAlert(res.err); return; }
+  pushUndo();
+  res.out.forEach((n, r) => { r.m = n; });
+  renderMain(); schedSave();
+  const c = calcVariant(v), now = kind === 'phr' ? fmt(c.phr) : kind === 'fr' ? fmt(c.fr) : ratioText(kind === 'synNr' ? c.synNr : c.sbrVp);
+  showSave(label + ' ' + now + ' — solid ' + pct(c.tsc) + (before != null && Math.abs(before - c.tsc) >= 0.005 ? ' (was ' + pct(before) + ')' : ''));
 }
 function toolSolid() {
   const v = activeVar(); if (!v) return;
