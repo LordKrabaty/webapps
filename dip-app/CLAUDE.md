@@ -22,14 +22,14 @@ Repo je veřejné (GitHub Pages). **Ceny, spotřeby, kódy receptur, DPU ani sez
 ```
 solution { id, name, desc, labStr, note, vars:[variant], mt }   // labStr = doporučená síla pro lab (85 = W85), null = W100
 variant  { id, name, code, date, from, mature, prep, note, secs:[section], meas:{phRF, ph, solid} }   // hmotnosti = vždy W100; mature = min. zrání celého namíchaného roztoku; prep = poznámky k přípravě (lab list)
-section  { id, kind:'rf'|'latex'|'add', name, mature, note, rows:[row] }   // mature = min. zrání téhle části (text, „30 min")
+section  { id, kind:'rf'|'latex'|'add'|'other', kname, name, mature, note, rows:[row] }   // kname = vlastní druh (jen u 'other')   // mature = min. zrání téhle části (text, „30 min")
 row      { id, mat, nm, role, conc, m }        // nm/role = snapshot pro smazanou surovinu
 material { id, name, role, work, note, alts:[alt], act, mt }
 alt      { id, name, producer, conc, price, cons, fF, fR, vp, note }
 ```
 
 - **Role suroviny** (`water`, `naoh`, `resin`, `formaldehyde`, `latex-vp|sbr|nr`, `ammonia`, `wax`, `defoamer`, `epoxy`, `isocyanate`, `other`) řídí výpočty. Neznámá role (novější build) se počítá jako `other`, ale ukládá se beze změny.
-- **Druh sekce** (`kind`) určuje součty `sum RF` / `sum L` / `sum IK` a co je „latexová část".
+- **Druh sekce** (`kind`) určuje součty `sum RF` / `sum L` / `sum IK` a co je „latexová část". `other` = ani RF, ani latex → počítá se jen do celku (jako aditiva). **Vlastní druhy** = `other` + `kname` („Carbon black"): v nabídce jsou všechny `kname` použité kdekoli v knihovně (`customKinds()`, nic navíc se neukládá ani nesynchronizuje), nový přes „+ new kind…" (`customPrompt`). Popisek součtu sekce = `secShort()`, celkový = `c.totLabel` („sum RFL+IK+Carbon black"). Neznámý `kind` z novějšího buildu se počítá jako `other`, uloží se beze změny.
 - `row.conc` (%chem) je uložené v receptu (historický záznam); když se liší od `matWork(material)`, UI to označí (čárkovaný rámeček + „≠ material x %").
 - Nová varianta = kopie aktivní se **stejnými id řádků** → `varDiff()` páruje řádky podle id. Neměnit id řádků při kopii.
 - Normalizéry (`normSolution` … `normAlt`) jsou preserve-unknown (`{ ...x, …}`).

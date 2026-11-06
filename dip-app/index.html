@@ -50,6 +50,8 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 .jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
 .jb-field input{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none}
 .jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
+.jb-field input.prompt-in{font-family:'DM Sans',sans-serif;font-size:.9rem}
+.prompt-msg{font-size:.9rem;line-height:1.55;color:var(--black)}
 #importModal.from-cloud .jb-import-hide{display:none!important}
 
 /* export/import buttons */
@@ -342,11 +344,11 @@ html.dark input[type="date"]{color-scheme:dark}
 .sec-note{flex:1 1 5rem;min-width:4rem;font-family:'DM Sans',sans-serif;font-size:.78rem;font-style:italic;color:var(--dark);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.2rem .35rem;outline:none}
 .sec-name:focus,.sec-note:focus{border-color:var(--black)}
 @media(hover:hover){.sec-name:hover,.sec-note:hover{border-color:var(--light)}}
-.sec-kind{font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.15rem .3rem;outline:none;cursor:pointer}
+.sec-kind{max-width:10rem;font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--muted);background:var(--w);border:var(--b);border-radius:var(--r);padding:.15rem .3rem;outline:none;cursor:pointer}
 .sec-btns{display:flex;gap:.1rem;margin-left:auto}
 .rc-sum{padding:calc(.3rem/var(--pzc,1)) 0}
 .rc-sum .num{font-weight:600}
-.sum-l{font-size:.74rem;font-weight:600;color:var(--black);letter-spacing:.03em;white-space:nowrap}
+.sum-l{min-width:0;font-size:.74rem;font-weight:600;color:var(--black);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sec-foot{display:flex;align-items:center;justify-content:space-between;gap:.4rem}
 .rc-sum.total{border-top:2px solid var(--black);margin-top:calc(.5rem/var(--pzc,1))}
 .rc-sum.total .num{font-size:.84rem}
@@ -1046,6 +1048,23 @@ function customAlert(msg, okLabel='ok') {
   });
 }
 
+// text input in the same style — resolves to the text, or null when cancelled (never the native prompt())
+let _promptResolve = null;
+function customPrompt(msg, placeholder = '', value = '') {
+  return new Promise(resolve => {
+    if (_promptResolve) { const old = _promptResolve; _promptResolve = null; old(null); }
+    el('promptMsg').textContent = msg;
+    const i = el('promptInput'); i.value = value; i.placeholder = placeholder;
+    el('promptModal').classList.add('open');
+    _promptResolve = val => { el('promptModal').classList.remove('open'); _promptResolve = null; resolve(val); };
+    setTimeout(() => { i.focus(); i.select(); }, 0);
+  });
+}
+function promptKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); _promptResolve && _promptResolve(el('promptInput').value); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _promptResolve && _promptResolve(null); }
+}
+
 // ── MODALS ────────────────────────────────────────────────────────────────
 function closeModal(id) { el(id).classList.remove('open'); }
 document.addEventListener('click', e => {
@@ -1247,7 +1266,7 @@ function doImport() {
 //   alt       { id, name, producer, conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
 //   solution  { id, name, desc, labStr (recommended lab strength %, null = W100), note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
 //   variant   { id, name, code, date, from (parent variant id), mature (min. maturing of the whole mixed dip, text), prep (preparation notes for the lab sheet), note, secs:[section], meas:{phRF, ph, solid} }   ← masses = the full-strength W100 dip
-//   section   { id, kind: 'rf'|'latex'|'add', name, mature (min. maturing of this part, text — e.g. "30 min"), note, rows:[row] }
+//   section   { id, kind: 'rf'|'latex'|'add'|'other', kname (own kind name, only for 'other'), name, mature (min. maturing of this part, text — e.g. "30 min"), note, rows:[row] }
 //   row       { id, mat, nm, role (name/role snapshots for a deleted material), conc (%chem), m (g) }
 // Material roles drive the maths: which rows count as RF resin, latex, ammonia, NaOH…
 const ROLES = [
@@ -1257,8 +1276,13 @@ const ROLES = [
 ];
 const ROLE_NAME = Object.fromEntries(ROLES);
 function roleKey(r) { return ROLE_NAME[r] ? r : 'other'; }   // a role from a newer build counts as "other" but is stored untouched
-const SEC_KINDS = [['rf', 'RF resin'], ['latex', 'Latex'], ['add', 'Additives / IK']];
-const SEC_SHORT = { rf: 'RF', latex: 'L', add: 'IK' };
+const SEC_KINDS = [['rf', 'RF resin'], ['latex', 'Latex'], ['add', 'Additives / IK'], ['other', 'Other']];
+const SEC_SHORT = { rf: 'RF', latex: 'L', add: 'IK', other: 'other' };
+// 'other' = neither RF nor latex: counts in the total only (like additives). With `kname` it is the user's own
+// kind ("Carbon black", "Wax"…) — kinds in use anywhere in the library are offered for other sections too.
+// An unknown kind from a newer build counts as 'other' but is stored untouched.
+function secKind(s) { return s.kind === 'rf' || s.kind === 'latex' || s.kind === 'add' ? s.kind : 'other'; }
+function secShort(s) { const k = secKind(s); return k === 'other' ? (String(s.kname || '').trim() || 'other') : SEC_SHORT[k]; }
 const MW = { F: 30, R: 110, NaOH: 40 };              // g/mol
 const RESIN_F = 12, RESIN_R = 88;                    // default F / R share of the RF resin solid (%)
 const THEORY = { phr: [15, 20], fr: [1.2, 2], lInSolid: [70, null] };
@@ -1301,7 +1325,7 @@ function normRow(r) {
 }
 function normSection(s) {
   s = s || {};
-  return { ...s, id: s.id ?? uid(), kind: s.kind || 'rf', name: String(s.name ?? ''), mature: String(s.mature ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
+  return { ...s, id: s.id ?? uid(), kind: s.kind || 'rf', kname: String(s.kname ?? ''), name: String(s.name ?? ''), mature: String(s.mature ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
 }
 // legacy (before the maturing fields): the minimum maturing was written in the section note —
 // "min. 30 min zrání", "maturing min. 2 h"… Only a note that is NOTHING BUT such a phrase is converted
@@ -1392,10 +1416,11 @@ function calcVariant(v) {
   const c = { rows: {}, secs: {}, total: 0, dry: 0, nh3: 0, rfDry: 0, lDry: 0, naoh: 0, nF: 0, nR: 0,
               vpDry: 0, sbrDry: 0, nrDry: 0, vpMon: 0, vpMonOk: true, price: 0, priceOk: true,
               sumRF: 0, sumL: 0, sumAdd: 0, hasAdd: false };
-  const secs = v ? v.secs : [], list = [];
+  const secs = v ? v.secs : [], list = [], extra = new Set();
+  let hasRFL = false;
   secs.forEach(s => {
-    const kind = s.kind === 'rf' || s.kind === 'latex' ? s.kind : 'add';
-    if (kind === 'add') c.hasAdd = true;
+    const kind = secKind(s) === 'rf' || secKind(s) === 'latex' ? secKind(s) : 'add';   // additives + other kinds: the total only
+    if (kind === 'add') { c.hasAdd = true; extra.add(secShort(s)); } else hasRFL = true;
     s.rows.forEach(r => {
       const mat = matById(r.mat), role = mat ? mat.role : (r.role || 'other'), m = +r.m || 0;
       const dry = role === 'water' ? 0 : m * (+r.conc || 0) / 100;
@@ -1439,6 +1464,9 @@ function calcVariant(v) {
   c.vpMonL = latex > 0 && c.vpDry > 0 && c.vpMonOk ? c.vpMon / latex * 100 : null;
   c.nh3InL = c.lDry > 0 && c.nh3 > 0 ? c.nh3 / c.lDry * 100 : null;
   c.priceSolid = c.tsc ? c.price / (c.tsc / 100) : null;
+  // "sum RFL", "sum RFL+IK", "sum RFL+IK+Carbon black"…
+  const tok = (hasRFL || !extra.size ? ['RFL'] : []).concat([...extra]);
+  c.totLabel = 'sum ' + tok.join('+');
   return c;
 }
 function outOf(key, val) {
@@ -1456,13 +1484,13 @@ function varDiff(a, b) {
   num('L in solid', ca.lInSolid, cb.lInSolid, 2, '%');
   const mtx = x => String(x || '').trim(), sa = new Map(a.secs.map(s => [s.id, s]));
   if (mtx(a.mature) !== mtx(b.mature)) out.push('maturing ' + (mtx(a.mature) || '—') + ' → ' + (mtx(b.mature) || '—'));
-  b.secs.forEach(s => { const o = sa.get(s.id); if (o && mtx(o.mature) !== mtx(s.mature)) out.push('maturing ' + (SEC_SHORT[s.kind] || s.kind) + ' ' + (mtx(o.mature) || '—') + ' → ' + (mtx(s.mature) || '—')); });
+  b.secs.forEach(s => { const o = sa.get(s.id); if (o && mtx(o.mature) !== mtx(s.mature)) out.push('maturing ' + secShort(s) + ' ' + (mtx(o.mature) || '—') + ' → ' + (mtx(s.mature) || '—')); });
   const rowsOf = v => { const m = new Map(); v.secs.forEach(s => s.rows.forEach(r => m.set(r.id, { r, s }))); return m; };
   const A = rowsOf(a), B = rowsOf(b);
   const label = (x, map) => {   // the same material in two sections (water) → add the section
     const n = rowName(x.r); let dup = 0;
     map.forEach(y => { if (rowName(y.r) === n) dup++; });
-    return dup > 1 ? n + ' (' + (SEC_SHORT[x.s.kind] || x.s.kind) + ')' : n;
+    return dup > 1 ? n + ' (' + secShort(x.s) + ')' : n;
   };
   B.forEach((x, id) => {
     const o = A.get(id);
@@ -1572,18 +1600,45 @@ function rowHtml(s, r, i) {
       <div class="a-act rc-act"><button class="ib" onclick="moveRow(${s.id},${r.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="moveRow(${s.id},${r.id},1)"${last ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="delRow(${s.id},${r.id})" title="remove component">✕</button></div>
     </div>`;
 }
+// own section kinds = every `kname` in use anywhere in the library (+ the open dip) — nothing extra to store or sync
+function customKinds() {
+  const set = new Set();
+  const scan = sol => { if (sol) sol.vars.forEach(v => v.secs.forEach(s => { const n = String(s.kname || '').trim(); if (secKind(s) === 'other' && n) set.add(n); })); };
+  library.forEach(scan); scan(cur);
+  return [...set].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base', numeric: true }));
+}
+function kindOptions(s) {
+  const k = secKind(s), own = String(s.kname || '').trim(), sel = k === 'other' && own ? 'c:' + own : k;
+  const opt = (val, label) => `<option value="${esc(val)}"${val === sel ? ' selected' : ''}>${esc(label)}</option>`;
+  const ck = customKinds();
+  return SEC_KINDS.map(([v, l]) => opt(v, l)).join('')
+    + (ck.length ? '<optgroup label="your kinds">' + ck.map(n => opt('c:' + n, n)).join('') + '</optgroup>' : '')
+    + '<option value="+new">+ new kind…</option>';
+}
+async function onSecKind(sid, sel) {
+  let val = sel.value;
+  if (val === '+new') {
+    const n = String((await customPrompt('Name of the new section kind — e.g. Carbon black, Wax. It counts in the total like additives and is offered for the other sections too.', 'kind name')) || '').trim();
+    if (!n) { renderMain(); return; }   // cancelled → the select shows the old kind again
+    val = 'c:' + n;
+  }
+  const s = findSec(sid); if (!s) return;   // looked up after the dialog — the recipe may have been re-rendered
+  pushUndo();
+  if (val.startsWith('c:')) { s.kind = 'other'; s.kname = val.slice(2); } else { s.kind = val; s.kname = ''; }
+  renderMain(); schedSave();
+}
 function secHtml(s, i, n) {
   return `<div class="sec" data-sec="${s.id}">
       <div class="sec-head">
         <input class="sec-name ed" value="${esc(s.name)}" placeholder="section" oninput="onSecField(${s.id},'name',this.value)" title="section name" autocomplete="off">
-        <select class="sec-kind ed" onchange="onSecField(${s.id},'kind',this.value)" title="what this section counts as in the parameters">${SEC_KINDS.map(([k, l]) => `<option value="${k}"${s.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <select class="sec-kind ed" onchange="onSecKind(${s.id},this)" title="what this section counts as — RF resin and latex drive the parameters (PHR, L in solid…); additives, other and your own kinds count in the total only">${kindOptions(s)}</select>
         <label class="sec-mat-w" title="minimum maturing of this part before it is mixed on (e.g. RF resin 30 min) — empty = none; the whole dip's maturing is under the recipe">maturing min. <input class="sec-mat ed" value="${esc(s.mature)}" placeholder="—" oninput="onSecField(${s.id},'mature',this.value)" autocomplete="off"></label>
         <input class="sec-note ed" value="${esc(s.note)}" placeholder="note" oninput="onSecField(${s.id},'note',this.value)" autocomplete="off">
         <span class="sec-btns"><button class="ib" onclick="moveSection(${s.id},-1)"${i === 0 ? ' disabled' : ''} title="move section up">↑</button><button class="ib" onclick="moveSection(${s.id},1)"${i === n - 1 ? ' disabled' : ''} title="move section down">↓</button><button class="ib" onclick="delSection(${s.id})" title="delete section">✕</button></span>
       </div>
       ${s.rows.map((r, j) => rowHtml(s, r, j)).join('')}
       <div class="rc-grid rc-sum">
-        <div class="a-name sec-foot"><button class="btn-add-row" onclick="addRow(${s.id})">+ component</button><span class="sum-l">sum ${SEC_SHORT[s.kind] || 'IK'}</span></div>
+        <div class="a-name sec-foot"><button class="btn-add-row" onclick="addRow(${s.id})">+ component</button><span class="sum-l" id="sl${s.id}">sum ${esc(secShort(s))}</span></div>
         <span class="num a-m" id="s${s.id}m"></span><span class="num a-dip" id="s${s.id}d"></span><span class="num a-solid" id="s${s.id}s"></span><span class="num a-wet" id="s${s.id}w"></span><span class="num a-price" id="s${s.id}p"></span>
       </div>
     </div>`;
@@ -1758,7 +1813,7 @@ function parHtml(c, labStr) {
     P('sum L', fmt(c.sumL, 1) + ' g'),
     P('sum RFL', fmt(c.sumRF + c.sumL, 1) + ' g')
   ];
-  if (c.hasAdd) out.push(P('sum RFL+IK', fmt(c.total, 1) + ' g'));
+  if (c.hasAdd) out.push(P(esc(c.totLabel), fmt(c.total, 1) + ' g'));
   return out.join('');
 }
 // computed cells only — inputs are never re-rendered while typing
@@ -1781,7 +1836,7 @@ function updateCalc() {
       setText('c' + r.id + 'p', eur(x.price, true, 3, ''));
     });
   });
-  setText('totL', c.hasAdd ? 'sum RFL+IK' : 'sum RFL');
+  setText('totL', c.totLabel);
   setText('tm', fmt(c.total, 1));
   setText('td', pct(c.tsc));
   setText('ts', c.dry > 0 ? '100%' : '—');
@@ -2471,6 +2526,16 @@ document.addEventListener('keydown', e => {
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
       <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="promptModal">
+  <div class="modal" style="max-width:340px">
+    <p id="promptMsg" class="prompt-msg"></p>
+    <div class="jb-field"><input type="text" id="promptInput" class="prompt-in" onkeydown="promptKey(event)" spellcheck="false" autocomplete="off"></div>
+    <div class="modal-row" style="margin-top:.25rem">
+      <button class="modal-btn" onclick="_promptResolve(null)">cancel</button>
+      <button class="modal-btn primary" onclick="_promptResolve(el('promptInput').value)">ok</button>
     </div>
   </div>
 </div>
