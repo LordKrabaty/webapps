@@ -419,6 +419,20 @@ html.dark input[type="date"]{color-scheme:dark}
 .lab-tbl .lab-total .lab-n{max-width:none}
 .lab-tbl .lab-mrow td{border-bottom:none;padding-top:calc(.3rem/var(--pzc,1));padding-bottom:calc(.1rem/var(--pzc,1))}
 .lab-m{display:inline-flex;align-items:center;gap:.35rem;font-size:.74rem;font-style:italic;color:var(--dark);white-space:nowrap}
+.lab-nest{display:flex;align-items:baseline;gap:.45rem;min-width:0}
+.lab-nest .lab-m{flex-shrink:0;gap:0;font-family:'DM Mono',monospace;font-size:.8rem;font-style:normal;color:var(--dark)}
+/* a strength typed inline — reads as one token "W85": no box, dotted underline, a frame only on hover / focus */
+.lab-nw{width:2.4rem;min-width:0;font-family:'DM Mono',monospace;font-size:.8rem;color:var(--black);background:transparent;border:1px solid transparent;border-bottom:1px dotted var(--mid);border-radius:0;padding:0 .1rem;outline:none}
+@media(hover:hover){.lab-nw:hover{border:1px solid var(--light);border-radius:var(--r)}}
+.lab-nw:focus{background:var(--w);border:1px solid var(--black);border-radius:var(--r)}
+.lab-nw.diff{border:1px dashed var(--black);border-radius:var(--r)}
+.lab-nw.lab-dh{width:3.8rem;text-align:right}
+.lab-dil{margin-top:calc(.9rem/var(--pzc,1));font-size:.8rem;color:var(--black)}
+.lab-dil-t{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:calc(.3rem/var(--pzc,1));border-bottom:1.5px solid var(--black)}
+.lab-dil-r{display:flex;flex-wrap:wrap;align-items:baseline;gap:.1rem .35rem;margin-top:calc(.35rem/var(--pzc,1))}
+.lab-dil-r .lab-m{gap:0;font-family:'DM Mono',monospace;font-size:.8rem;font-style:normal;color:var(--black)}
+.lab-dil .dn{font-family:'DM Mono',monospace;font-weight:600;white-space:nowrap}
+.lab-dil-msg{color:var(--dark);font-style:italic}
 .lab-mat,.mat-in,.sec-mat{width:5.6rem;min-width:0;font-family:'DM Sans',sans-serif;font-size:.8rem;font-style:normal;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.18rem .35rem;outline:none}
 .lab-mat:focus,.mat-in:focus,.sec-mat:focus{outline:2px solid var(--black);outline-offset:0;border-color:var(--black)}
 .lab-mat.diff{border:1.5px dashed var(--black);font-weight:500}
@@ -1899,22 +1913,77 @@ function labInBlur() { const i = el('labStrIn'); if (i) i.value = fmtNum(labStat
 function resetLabStr() { setLabView('str', null); labInBlur(); updateCalc(); }
 // same rule as "set solid": the recipe scaled to the batch, all components except the first water × strength,
 // the first water takes up the rest of the batch (= k parts of the W100 dip + (1 − k) parts of water)
-function labCalc(v, str, batch) {
+// nest(r) = the strength (W) a nested dip goes in with — already diluted (W85) it weighs ÷ 0.85, because 1 g of it
+// is 0.85 g of the full-strength dip + 0.15 g of water; that water comes off the first water
+function labCalc(v, str, batch, nest) {
   const T = sumMass(v), k = str / 100, w = firstWater(v), m = {};
+  const q = r => (nest && isDipRow(r) ? nest(r) / 100 : 1);
   if (!(T > 0)) return { err: 'The recipe has no mass yet.' };
+  const dil = v.secs.some(s => s.rows.some(r => r.m > 0 && q(r) < 1));
   if (!w && Math.abs(k - 1) > 1e-9) return { err: 'Diluting needs a water row in the recipe — the first water takes up the dilution.' };
+  if (!w && dil) return { err: 'A diluted dip brings its own water — the recipe needs a water row to take it up. Or set that dip to W100.' };
   const B = batch > 0 ? batch : T, f = B / T;
-  let others = 0;
-  v.secs.forEach(s => s.rows.forEach(r => { if (r === w) return; m[r.id] = roundM((+r.m || 0) * f * k); others += m[r.id]; }));
+  let others = 0, rest = 0;   // rest = the other components as weighed at W100 (÷ their own strength) — for the most possible W
+  v.secs.forEach(s => s.rows.forEach(r => { if (r === w) return; const p = q(r); m[r.id] = roundM((+r.m || 0) * f * k / p); others += m[r.id]; rest += (+r.m || 0) / p; }));
   if (w) {
     const x = roundM(B - others);
     if (x < 0) {
-      const rest = T - (+w.m || 0);
-      return { err: 'Not possible: at W' + fmtNum(str) + ' the other components alone weigh ' + fmt(others, 1) + ' g — more than the batch (' + fmt(B, 1) + ' g).' + (rest > 0 ? ' The most is W' + fmt(100 * T / rest, 1) + '.' : '') };
+      return { err: 'Not possible: at W' + fmtNum(str) + ' the other components alone weigh ' + fmt(others, 1) + ' g — more than the batch (' + fmt(B, 1) + ' g).'
+        + (dil ? ' The diluted dips bring their own water — setting them to W100 leaves more room.' : '') + (rest > 0 ? ' The most is W' + fmt(100 * T / rest, 1) + '.' : '') };
     }
     m[w.id] = x;
   }
   return { m, B, k };
+}
+// A dip used as a component goes into the lab dip with its own strength: prefilled from that dip's lab strength
+// (R95 recommends W85 → "R95 W85"), overwritable per weighing — W100 = the full-strength dip. Local view state like
+// the rest of the sheet: labView[dip].nest = { <row id>: W }, only when it differs from the preset.
+function nestRec(r) { const n = nestedOf(r); return n && n.sol.labStr > 0 ? n.sol.labStr : 100; }
+function nestOver(r) { const o = labViewOf().nest, x = o ? numOrNull(o[r.id]) : null; return x > 0 && x <= 100 ? x : null; }
+function nestStr(r) { if (!isDipRow(r)) return 100; const o = nestOver(r); return o != null ? o : nestRec(r); }
+function labRowById(rid) { const v = activeVar(); if (v) for (const s of v.secs) for (const r of s.rows) if (r.id === rid) return r; return null; }
+function onLabNest(rid, inp) {
+  const r = labRowById(rid); if (!r) return;
+  const n = numOrNull(inp.value), o = { ...(labViewOf().nest || {}) };
+  if (n > 0 && n <= 100 && Math.abs(n - nestRec(r)) > 1e-9) o[rid] = n; else delete o[rid];
+  setLabView('nest', Object.keys(o).length ? o : null);
+  updateCalc();
+}
+// Diluting a finished dip with water to the sheet's strength b — from W100 or stepwise from a weaker one a (W90 → W85).
+// 1 g of Wa = a/100 g of the full-strength dip + the rest water, so: B g of Wb = B·b/a g of Wa + the rest water,
+// and H g of Wa + H·(a/b − 1) g water = H·a/b g of Wb. Same composition as weighing it from the recipe.
+// Local view state like the rest of the sheet: dfrom (only when ≠ 100), dhave (empty = 1000 g).
+function labDilFrom() { const x = numOrNull(labViewOf().dfrom); return x > 0 ? x : 100; }
+function labDilHave() { const x = numOrNull(labViewOf().dhave); return x > 0 ? x : null; }
+function onLabDil(key, inp) {
+  const n = numOrNull(inp.value);
+  setLabView(key, n > 0 && !(key === 'dfrom' && Math.abs(n - 100) < 1e-9) ? n : null);
+  updateCalc();
+}
+function labDilBlur() { const i = el('labDilFrom'); if (i) i.value = fmtNum(labDilFrom()); }
+function updateLabDil(v, st) {
+  if (!el('ldR1')) return;
+  const a = labDilFrom(), b = st.str, B = st.batch > 0 ? st.batch : sumMass(v), H = labDilHave() || 1000;
+  const wa = 'W' + fmtNum(a), wb = 'W' + fmtNum(b), go = a > b + 1e-9;
+  setText('ldTo', wb); setText('ldFrom2', wa); setText('ldTo2', wb);
+  const fi = el('labDilFrom'); if (fi) fi.classList.toggle('diff', a !== 100);
+  const r1 = el('ldR1'), r2 = el('ldR2'), msg = el('ldMsg');
+  if (go && B > 0) {   // only numbers go into the markup
+    const S = roundM(B * b / a);
+    r1.innerHTML = 'for <b class="dn">' + fmt(B, 1) + '</b> g of ' + wb + ': <b class="dn">' + fmt(S, 1) + '</b> g of ' + wa + ' + <b class="dn">' + fmt(roundM(B - S), 1) + '</b> g water';
+  }
+  r1.style.display = go && B > 0 ? '' : 'none';
+  r2.style.display = go ? '' : 'none';
+  if (go) { setText('ldAdd', fmt(roundM(H * (a / b - 1)), 1)); setText('ldGet', fmt(roundM(H * a / b), 1)); }
+  msg.textContent = go ? '' : Math.abs(a - b) < 1e-9
+    ? (b === 100 ? 'The sheet is W100 (full strength) — set a lower strength above to see how to dilute.' : 'It already is ' + wb + ' — nothing to dilute.')
+    : 'Water only dilutes — ' + wa + ' does not give ' + wb + '. Weigh it from the recipe above, or start from a stronger dip.';
+  msg.style.display = go ? 'none' : '';
+}
+function labNestBlur(rid) { const i = el('ln-' + rid), r = labRowById(rid); if (i && r) i.value = fmtNum(nestStr(r)); }
+function labNameHtml(r) {
+  if (!isDipRow(r)) return `<span class="lab-n">${esc(rowName(r))}</span>`;
+  return `<span class="lab-nest"><span class="lab-n">${esc(rowName(r))}</span><label class="lab-m">W<input class="lab-nw${nestOver(r) != null ? ' diff' : ''}" id="ln-${r.id}" data-r="${r.id}" inputmode="decimal" value="${fmtNum(nestStr(r))}" oninput="onLabNest(${r.id},this)" onblur="labNestBlur(${r.id})" title="this dip goes in already diluted to this strength (W85 = 85 parts of it at full strength + 15 parts water) — it weighs more and the first water less. Prefilled from its own lab strength; 100 = full strength. For this weighing only (dashed = changed)." autocomplete="off"></label></span>`;
 }
 // The lab sheet also repeats the dip name and the maturing times — prefilled from the dip / recipe, any of them can be
 // overwritten for this weighing (same local view state as the strength: labView[dip] = { str, batch, title, mat:{secId|'all'} }).
@@ -1953,7 +2022,7 @@ function labMatHtml(key, label) {
 function labHtml(v) {
   const st = labState(), o = labViewOf();
   const body = v.secs.map(s => `<tr class="lab-sec"><td><span class="lab-n" id="lsn${s.id}">${esc(s.name || '—')}</span></td><td></td><td class="n" id="ls${s.id}"></td></tr>`
-    + s.rows.map(r => `<tr><td><span class="lab-n">${esc(rowName(r))}</span></td><td class="n${rowRole(r) === 'water' ? ' num-dash' : ''}" id="lc${r.id}"></td><td class="n lab-g" id="lw${r.id}"></td></tr>`).join('')
+    + s.rows.map(r => `<tr><td>${labNameHtml(r)}</td><td class="n${rowRole(r) === 'water' ? ' num-dash' : ''}" id="lc${r.id}"></td><td class="n lab-g" id="lw${r.id}"></td></tr>`).join('')
     + `<tr class="lab-mrow"><td colspan="3">${labMatHtml(s.id, 'maturing min.')}</td></tr>`).join('');
   return `<div class="sub-title">Lab weighing</div>
     <div class="lab-ctl">
@@ -1974,12 +2043,19 @@ function labHtml(v) {
         <tr class="lab-mrow"><td colspan="3">${labMatHtml('all', 'whole dip — maturing min.')}</td></tr>
       </tbody>
     </table>
+    <div class="lab-dil">
+      <div class="lab-dil-t">or dilute a finished dip with water</div>
+      <div class="lab-dil-r"><label class="lab-m">from W<input id="labDilFrom" class="lab-nw${labDilFrom() !== 100 ? ' diff' : ''}" inputmode="decimal" value="${fmtNum(labDilFrom())}" oninput="onLabDil('dfrom',this)" onblur="labDilBlur()" title="the strength you dilute from — 100 = the full-strength dip; for stepwise dilution the one you already have (e.g. 90). For this weighing only (dashed = changed)." autocomplete="off"></label> to <b class="dn" id="ldTo"></b></div>
+      <div class="lab-dil-r" id="ldR1"></div>
+      <div class="lab-dil-r" id="ldR2">to <input id="labDilHave" class="lab-nw lab-dh" inputmode="decimal" value="${labDilHave() != null ? fmtNum(labDilHave()) : ''}" placeholder="1000" oninput="onLabDil('dhave',this)" title="how much of the stronger dip you have (g) — empty = 1000 g" autocomplete="off"> g of <span id="ldFrom2"></span> add <b class="dn" id="ldAdd"></b> g water → <b class="dn" id="ldGet"></b> g of <span id="ldTo2"></span></div>
+      <div class="lab-dil-r lab-dil-msg" id="ldMsg" style="display:none"></div>
+    </div>
     <div class="field lab-prep"><label>preparation notes</label><textarea id="labPrep" class="prep-note ed" placeholder="How to mix — e.g. add the formaldehyde slowly while stirring, temperature, order, what to watch…" oninput="onVarField('prep',this);autoGrow(this)">${esc(v.prep)}</textarea></div>
-    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. Name, strength, batch and maturing changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.</div>`;
+    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. Name, strengths, batch and maturing changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.</div>`;
 }
 // numbers and prefilled values of the lab sheet — the inputs are never re-rendered while typing
 function updateLab(v, c, st) {
-  const L = labCalc(v, st.str, st.batch), ok = !L.err;
+  const L = labCalc(v, st.str, st.batch, nestStr), ok = !L.err;
   const msg = el('labMsg'); if (msg) { msg.textContent = L.err || ''; msg.style.display = ok ? 'none' : ''; }
   let total = 0;
   v.secs.forEach(s => {
@@ -1988,7 +2064,8 @@ function updateLab(v, c, st) {
       const x = ok ? (L.m[r.id] || 0) : null; if (x != null) sum += x;
       setText('lw' + r.id, x != null ? fmt(x, 1) : '—');
       const cr = c.rows[r.id];
-      setText('lc' + r.id, rowRole(r) === 'water' ? '—' : isDipRow(r) ? fmt(cr ? cr.conc : r.conc, 2) : (fmtNum(r.conc) || '?'));
+      // a nested dip: its solid at the strength it goes in with
+      setText('lc' + r.id, rowRole(r) === 'water' ? '—' : isDipRow(r) ? fmt((cr ? cr.conc : r.conc) * nestStr(r) / 100, 2) : (fmtNum(r.conc) || '?'));
     });
     total += sum;
     setText('ls' + s.id, ok ? fmt(sum, 1) : '—');
@@ -2004,6 +2081,12 @@ function updateLab(v, c, st) {
     const k = i.dataset.k;
     if (i !== act) i.value = labMat(k);
     i.classList.toggle('diff', labMatOver(k) != null);
+  });
+  updateLabDil(v, st);
+  document.querySelectorAll('#mainBody .lab-nw[data-r]').forEach(i => {   // the preset follows the nested dip's lab strength
+    const r = labRowById(+i.dataset.r); if (!r) return;
+    if (i !== act) i.value = fmtNum(nestStr(r));
+    i.classList.toggle('diff', nestOver(r) != null);
   });
 }
 function parHtml(c, labStr, type) {
