@@ -60,7 +60,7 @@ Když si nejsi jistý, upozorni radši zbytečně. Drobné úpravy výpočtů / 
 | `dip-app-lab-view` — přepisy na lab listu per roztok `{ str, batch, title, mat:{<secId>|all: text} }` | — | **nesynchronizuje se** (pracovní nastavení navážky, ne data) |
 
 ```
-solution { id, name, desc, type, labStr, note, vars:[variant], mt }   // type = 'rfl'|'predip'|'other'; labStr = doporučená síla pro lab (85 = W85), null = W100
+solution { id, name, desc, type, labStr, note, vars:[variant], used?, mt }   // type = 'rfl'|'predip'|'other'; labStr = doporučená síla pro lab (85 = W85), null = W100; used = id varianty ★ in use (jen když je nastavená)
 variant  { id, name, code, date, from, mature, prep, note, secs:[section], meas:{phRF, ph, solid} }   // hmotnosti = vždy W100; mature = min. zrání celého namíchaného roztoku; prep = poznámky k přípravě (lab list)
 section  { id, kind:'rf'|'latex'|'add'|'other', kname, name, mature, note, rows:[row] }   // kname = vlastní druh (jen u 'other')   // mature = min. zrání téhle části (text, „30 min")
 row      { id, mat, nm, role, conc, m }        // nm/role = snapshot pro smazanou surovinu
@@ -72,6 +72,13 @@ alt      { id, name, producer, card, conc, price, cons, fF, fR, vp, note }   // 
 - **Role suroviny** (`water`, `naoh`, `resin`, `formaldehyde`, `latex-vp|sbr|nr`, `ammonia`, `wax`, `defoamer`, `epoxy`, `isocyanate`, `other`) řídí výpočty. Neznámá role (novější build) se počítá jako `other`, ale ukládá se beze změny.
 - **Druh sekce** (`kind`) určuje součty `sum RF` / `sum L` / `sum IK` a co je „latexová část". `other` = ani RF, ani latex → počítá se jen do celku (jako aditiva). **Vlastní druhy** = `other` + `kname` („Carbon black"): v nabídce jsou všechny `kname` použité kdekoli v knihovně (`customKinds()`, nic navíc se neukládá ani nesynchronizuje), nový přes „+ new kind…" (`customPrompt`). Popisek součtu sekce = `secShort()`, celkový = `c.totLabel` („sum RFL+IK+Carbon black"). Neznámý `kind` z novějšího buildu se počítá jako `other`, uloží se beze změny.
 - `row.conc` (%chem) je uložené v receptu (historický záznam); když se liší od `matWork(material)`, UI to označí (čárkovaný rámeček + „≠ material x %").
+- **Hmotnosti se zobrazují na 0,1 g** (`fmtG` v poli M (g), lab navážka) — váží se na desetiny, podíly (% in dip…) stačí na 2 desetinná místa. **Data** drží, co se zadalo / spočítalo (nástroje dál zaokrouhlují na 0,01 g, aby cíl seděl přesně) → součet sloupce se může od zobrazeného součtu lišit o 0,1. Lab navážka se počítá rovnou na 0,1 g (`roundM`), aby sloupec dal přesně dávku. Migrace schema 1 → 2 zůstává na 0,01 g (deterministická napříč buildy — neměnit).
+
+## Varianty — pořadí a ★ in use
+
+- **Pořadí** = pořadí v `solution.vars` (součást dipu: synchronizuje se, undo). Seznam v záložce Variants ho ukazuje **obráceně** (nová varianta se pushne → nahoře), čipy nad recepturou v pořadí pole. Přeskládání: drag & drop za grip v hlavičce karty (`initVarDnd()` na stabilním `#varsBody` + `moveVarTo()`, stejný vzor jako složky: dotyk startuje hned, indikátor čárou, přesun při puštění podle id, auto-scroll seznamu, nejbližší karta) nebo šipky ↑/↓ (`moveVar`). Puštění tahu nesmí „kliknout" na kartu (capture `click` 400 ms po dropu).
+- **★ in use** (`solution.used`, `toggleUsedVar`): jedna varianta na dip, klik na označenou ji odznačí (`delete used` → stejný tvar jako dip, který ji nikdy neměl; `normSolution` pole nepřidává). Smazání varianty ★ zruší. Zobrazí se ★ v seznamu, v čipu a v knihovně (`★ V5` za názvem dipu).
+- **Výchozí varianta** = `defVarOf(sol)`: ★ in use, jinak horní v seznamu (poslední v poli). Platí pro otevření dipu bez uložené zobrazené varianty (`activeVar`), připojení dipu jako složky a náhradu smazané varianty u vnořeného dipu. „Nejnovější" se už nikde neříká — po přeskládání by to nebyla pravda.
 
 ## Typ dipu (`solution.type`)
 
@@ -92,12 +99,12 @@ Výběr „type" v hlavičce dipu: **RFL** · **Pre-dip** · **Other** (`DIP_TYP
 
 ## Vnořený dip (dip jako složka)
 
-V nabídce suroviny je na konci skupina **Dips** (`value="d:<id>"`): celý jiný dip jako jedna složka (typicky RFL v pre-dipu). Pod názvem se vybírá **varianta** (`row.dv`, výchozí = nejnovější v okamžiku připojení), „open ↗" otevře vnořený dip na té variantě.
+V nabídce suroviny je na konci skupina **Dips** (`value="d:<id>"`): celý jiný dip jako jedna složka (typicky RFL v pre-dipu). Pod názvem se vybírá **varianta** (`row.dv`, výchozí = varianta ★ in use, jinak horní v seznamu — v okamžiku připojení; v nabídce stejné pořadí jako seznam variant, ★ označená), „open ↗" otevře vnořený dip na té variantě.
 
 - **%chem = sušina té varianty (W100), cena = její €/kg — živě** z její receptury (`nestedCalc`), %chem není editovatelné (kurzíva). Úprava té varianty tedy změní i nadřazený dip — hlavička vnořeného dipu to říká („component of R02 (V5 ← V3)" = varianta V5 dipu R02 používá jeho V3, `dipUsage`).
 - **Obsah se započítá podle rolí** úměrně použité hmotnosti (`f = m / Σm vnořeného`): čpavek (→ solid w/o NH₃), epoxid / izokyanát (→ epoxy : IK), RF, NaOH, latexy… Latexová část: v sekci `latex` se jako L počítá celý vnořený dip bez čpavku (stejné pravidlo jako pro jinou složku), jinde jen jeho vlastní L. Pozn.: Excel uživatele odečítal u „solid no NH₄OH" jen přímý čpavek → appka vyjde o pár setin níž, pokud vnořený dip čpavek obsahuje.
 - Cena vnořeného dipu, který sám nemá všechny ceny → celková cena je dolní mez (`priceOk = false`).
-- **Snapshot** `nm` + `conc` (sušina) se bere jen při připojení / změně varianty — **nikdy automaticky** (razítkovalo by `mt` bez editace uživatele). Použije se jen, když vnořený dip chybí (smazaný, nestažený) nebo by byl cyklický. Smazaná varianta → použije se nejnovější + upozornění.
+- **Snapshot** `nm` + `conc` (sušina) se bere jen při připojení / změně varianty — **nikdy automaticky** (razítkovalo by `mt` bez editace uživatele). Použije se jen, když vnořený dip chybí (smazaný, nestažený) nebo by byl cyklický. Smazaná varianta → použije se výchozí (`defVarOf`: ★, jinak horní) + upozornění.
 - **Cykly:** dip nemůže obsahovat sám sebe ani přes jiný (`dipUses`) — nabídka je vynechá, výpočet se na cyklu zastaví (`stack` v `calcVariant`).
 - Poměrové nástroje vnořený dip **neškálují** (role `dip` není v žádné skupině); `% in dip / solid / wet` a set solid / scale ano (počítají s jeho sušinou). Smazání dipu, který je složkou jinde, se v potvrzení zmíní.
 - Nová varianta = kopie aktivní se **stejnými id řádků** → `varDiff()` páruje řádky podle id. Neměnit id řádků při kopii.
@@ -110,7 +117,7 @@ Receptura varianty je **vždy plná síla W100** — tak jede provoz a z ní se 
 - `solution.labStr` = doporučená lab síla roztoku (pole „lab strength %" v hlavičce dipu, synchronizuje se).
 - Sekce **Lab weighing** (`labHtml` / `labCalc`): síla předvyplněná z `labStr`, jde přepsat (+ dávka v g); přepsaná hodnota je jen lokální view state (`dip-app-lab-view`), nerazítkuje `mt`. Navážka = stejné pravidlo jako „set solid": receptura přepočtená na dávku, vše kromě první vody × k, první voda dorovná dávku (= k dílů W100 + (1 − k) vody).
 - Parametr „solid lab W85" a „Δ vs calc." u naměřené sušiny se počítají při lab síle (sušina se měří na lab roztoku).
-- Lab list je i pracovní list pro laboranta: síla + dávka, pod nimi znovu název dipu (přepsatelný), u každé části a u celého roztoku min. zrání předvyplněné z receptury (přepsatelné). Přepis = jen lokální view state (`title`, `mat`), prázdné / shodné s předvolbou = bez přepisu; přepsané pole má čárkovaný rámeček. Tabulka je kompaktní (`<table>` na šířku obsahu, dlouhé názvy se zkrátí), čísla se přepisují přes `updateLab()` bez re-renderu inputů. Na konci **preparation notes** (`variant.prep` — jak míchat, teplota…): na rozdíl od ostatních polí listu jsou to **data varianty** (synchronizují se, undo, kopírují se do nové varianty), auto-grow textarea.
+- Lab list je i pracovní list pro laboranta: síla + dávka, pod nimi znovu název dipu (přepsatelný) a hned za ním síla jako součást popisku („R26 **W85**", `#labStrTag`, živě z pole strength; pole názvu je široké podle textu — `field-sizing:content`, jinak atribut `size` z `labTitleSize`), u každé části a u celého roztoku min. zrání předvyplněné z receptury (přepsatelné). Přepis = jen lokální view state (`title`, `mat`), prázdné / shodné s předvolbou = bez přepisu; přepsané pole má čárkovaný rámeček. Tabulka je kompaktní (`<table>` na šířku obsahu, dlouhé názvy se zkrátí), čísla se přepisují přes `updateLab()` bez re-renderu inputů. Na konci **preparation notes** (`variant.prep` — jak míchat, teplota…): na rozdíl od ostatních polí listu jsou to **data varianty** (synchronizují se, undo, kopírují se do nové varianty), auto-grow textarea.
 
 ## Zrání (maturing)
 
@@ -137,7 +144,7 @@ Ověřeno proti laboratornímu listu uživatele (sušina, F/R, NaOH/RF, NaOH in 
 
 ## Přepočty (nástroje pod receptem)
 
-- **scale batch** — všechny m × k, zaokrouhlení na 0,01 g, zbytek do první vody
+- **scale batch** — všechny m × k, zaokrouhlení na 0,01 g (zobrazení 0,1 g — viz „Datový model"), zbytek do první vody
 - **set solid** — drží celkovou hmotnost: vše kromě první vody × (cílová/aktuální sušina), první voda dorovná; když by ostatní složky vážily víc než dávka → odmítne a řekne maximum
 - **PHR / F/R / Syn:NR / SBR:VP při stejné sušině** (`ratioRecalc()` + `toolRatio()`, druhý řádek nástrojů; placeholder = aktuální hodnota): přesouvá sušinu mezi skupinami složek tak, že jejich součet sušiny zůstane → s dávkou drženou první vodou zůstane i sušina roztoku. Uvnitř skupiny vše × stejný faktor (vnitřní poměry zůstávají); skupina bez hmotnosti dostane vše do prvního řádku s %chem. Čpavek a ostatní beze změny.
   - PHR: celá RF část (resin + formaldehyd + **NaOH**, aby NaOH/RF zůstal) × a, latexová část (sekce `latex` bez čpavku) × b; `(RF+NaOH)·a + L·b = RF+NaOH+L`, `RF·a = PHR/100·L·b` → F/R, Syn:NR, SBR:VP beze změny.

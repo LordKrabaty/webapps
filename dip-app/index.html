@@ -397,10 +397,12 @@ html.dark input[type="date"]{color-scheme:dark}
 .lab-rec{display:flex;align-items:center;gap:.35rem;font-size:.74rem;color:var(--muted)}
 .lab-rec:empty{display:none}
 .lab-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2rem .6rem;margin-top:calc(.7rem/var(--pzc,1))}
-.lab-title{flex:0 1 22rem;min-width:8rem;font-family:'DM Sans',sans-serif;font-size:1.05rem;font-weight:600;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.15rem .35rem;margin-left:-.35rem;outline:none}
+.lab-title{flex:0 1 auto;max-width:100%;min-width:3rem;font-family:'DM Sans',sans-serif;font-size:1.05rem;font-weight:600;color:var(--black);background:var(--w);border:1.5px solid transparent;border-radius:var(--r);padding:.15rem .35rem;margin-left:-.35rem;outline:none}
 .lab-title:focus{border-color:var(--black)}
 @media(hover:hover){.lab-title:not(:focus):hover{border-color:var(--light)}}
 .lab-title.diff{border:1.5px dashed var(--black)}
+@supports (field-sizing:content){.lab-title{field-sizing:content}}
+.lab-str{font-family:'DM Sans',sans-serif;font-size:1.05rem;font-weight:600;color:var(--black);white-space:nowrap;margin-left:-.45rem}
 .lab-var{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted)}
 /* compact: the table is only as wide as its content, long names are cut with an ellipsis */
 .lab-tbl{border-collapse:collapse;margin-top:calc(.55rem/var(--pzc,1));max-width:100%}
@@ -455,6 +457,20 @@ html.dark input[type="date"]{color-scheme:dark}
 .var-code,.var-date{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);white-space:nowrap}
 .var-item.active .var-code,.var-item.active .var-date,.var-item.active .ib{color:var(--mid)}
 .var-btns{margin-left:auto;display:flex;gap:.1rem;flex-shrink:0}
+.var-grip{display:flex;align-items:center;justify-content:center;align-self:center;width:18px;height:1.5rem;margin:0 -.3rem 0 -.25rem;flex-shrink:0;cursor:grab;opacity:.5;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.var-grip:active{cursor:grabbing}
+@media(hover:hover){.var-grip:hover{opacity:1}}
+@media(hover:none){.var-grip{opacity:.65}}
+.var-grip svg{width:8px;height:12px;fill:var(--mid);display:block}
+.var-star{flex-shrink:0;background:none;border:none;padding:0 .15rem;font-size:1rem;line-height:1;color:var(--mid);cursor:pointer}
+.var-star.on{color:var(--black)}
+.var-item.active .var-star{color:var(--mid)}
+.var-item.active .var-star.on{color:var(--w)}
+@media(hover:hover){.var-star:hover{color:var(--black)}.var-item.active .var-star:hover{color:var(--w)}}
+.var-item.dragging{opacity:.45}
+.var-item.drag-over-top{box-shadow:0 -3px 0 var(--black)}
+.var-item.drag-over-bottom{box-shadow:0 3px 0 var(--black)}
+.lib-used{font-family:'DM Mono',monospace;font-size:.85em;white-space:nowrap}
 .var-body{padding:calc(.4rem/var(--pzc,1)) calc(.55rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));display:flex;flex-direction:column;gap:calc(.35rem/var(--pzc,1))}
 .var-stats{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dark)}
 .var-diff{font-size:.7rem;color:var(--muted);line-height:1.45}
@@ -836,8 +852,9 @@ function renderLibrary() {
     + list.filter(e => dipType(e) === k).map(libItemHtml).join('')).join('');
 }
 function libItemHtml(e) {
+  const u = usedVarOf(e);
   return `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" onclick="loadSolution(${e.id})">
-      <span class="lib-item-name"><b>${esc(e.name || 'untitled')}</b>${e.desc ? ' · ' + esc(e.desc) : ''}</span>
+      <span class="lib-item-name"><b>${esc(e.name || 'untitled')}</b>${u ? ` <span class="lib-used" title="the variant in use">★ ${esc(u.name || '—')}</span>` : ''}${e.desc ? ' · ' + esc(e.desc) : ''}</span>
       <span class="lib-item-n" title="variants">${e.vars.length}</span>
       <button class="lib-item-del" onclick="event.stopPropagation();deleteSolution(${e.id})" title="delete dip"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
     </div>`;
@@ -1337,6 +1354,10 @@ function pct(n, d = 2) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(
 function fmtNum(n) { return (n == null || !isFinite(n)) ? '' : String(+(+n).toFixed(4)); }
 function eur(n, ok = true, d = 3, unit = ' €') { return (n == null || !isFinite(n)) ? '—' : (ok ? '' : '≥ ') + n.toFixed(d) + unit; }
 function round2(n) { return Math.round(n * 100) / 100; }
+// masses are weighed to 0.1 g: shown with one decimal (the data keeps what was typed / calculated, so the tools still
+// hit their target exactly), the lab sheet is calculated at 0.1 g so that its column adds up to the batch
+function roundM(n) { return Math.round(n * 10) / 10; }
+function fmtG(n) { return (n == null || n === '' || !isFinite(n)) ? '' : (+n).toFixed(1); }
 function byName(a, b) { return (a.name || '').localeCompare(b.name || '', 'en', { numeric: true, sensitivity: 'base' }); }
 function todayIso() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function setText(id, t) { const e = el(id); if (e && e.textContent !== t) e.textContent = t; }
@@ -1420,9 +1441,12 @@ function normSolution(s) {
   let labStr = numOrNull(s.labStr);
   if (labStr == null && legacy.length) labStr = legacy[legacy.length - 1];
   if (labStr != null && !(labStr > 0)) labStr = null;
-  return { ...s, id: numId(s.id), name: String(s.name ?? ''), desc: String(s.desc ?? ''),
+  const out = { ...s, id: numId(s.id), name: String(s.name ?? ''), desc: String(s.desc ?? ''),
     type: s.type == null || s.type === '' ? 'rfl' : String(s.type), labStr, note: String(s.note ?? ''),
     vars: raw.map(normVariant), mt: +s.mt || 0 };
+  // `used` = id of the variant marked ★ in use — only when set (a dip that never had one keeps its stored shape)
+  if (out.used != null) { out.used = refId(out.used); if (out.used == null) delete out.used; } else delete out.used;
+  return out;
 }
 // first run only: water with a fixed id (two fresh devices must not create two different "Water" records)
 function defaultMaterials() { return [normMaterial({ id: 1, name: 'Water', role: 'water', alts: [{ id: 2, name: 'Demineralized water' }], mt: 0 })]; }
@@ -1473,10 +1497,10 @@ function isDipRow(r) { return !!r && r.dip != null; }
 function allDips() { return library.map(x => (cur && x.id === cur.id ? cur : x)); }   // the open dip with its unsaved edits
 function solById(id) { return id == null ? null : (cur && cur.id === id ? cur : (library.find(x => x.id === id) || null)); }
 function topStack() { return new Set(cur ? [cur.id] : []); }
-// { sol, v, exact } — the variant picked, or the newest one when it was deleted (exact = false)
+// { sol, v, exact } — the variant picked, or the default one (★ in use / top of the list) when it was deleted (exact = false)
 function nestedOf(r) {
   const sol = solById(r.dip); if (!sol || !sol.vars.length) return null;
-  const v = sol.vars.find(x => x.id === r.dv) || sol.vars[sol.vars.length - 1];
+  const v = sol.vars.find(x => x.id === r.dv) || defVarOf(sol);
   return { sol, v, exact: v.id === r.dv };
 }
 // the calculation of a nested dip's recipe — null when it is missing or circular (stack = the dips being calculated)
@@ -1640,10 +1664,14 @@ function varDiff(a, b) {
 }
 
 // ── ACTIVE SOLUTION / VARIANT ─────────────────────────────────────────────
+// the variant marked ★ in use (solution.used — synced with the dip); null when none or it was deleted
+function usedVarOf(sol) { return sol && sol.used != null ? (sol.vars.find(v => v.id === sol.used) || null) : null; }
+// the default variant of a dip: the one in use, else the top of the list (= the last in the array, new variants go there)
+function defVarOf(sol) { return sol && sol.vars.length ? (usedVarOf(sol) || sol.vars[sol.vars.length - 1]) : null; }
 function activeVar() {
   if (!cur || !cur.vars.length) return null;
   const id = activeVarMap[cur.id];
-  return cur.vars.find(v => v.id === id) || cur.vars[cur.vars.length - 1];
+  return cur.vars.find(v => v.id === id) || defVarOf(cur);
 }
 function findSec(sid) { const v = activeVar(); return v ? (v.secs.find(s => s.id === sid) || null) : null; }
 function findRow(sid, rid) { const s = findSec(sid); return s ? (s.rows.find(r => r.id === rid) || null) : null; }
@@ -1683,8 +1711,9 @@ function renderMain() {
   autoGrow(el('labPrep'));
 }
 function chipsHtml(av) {
+  const used = usedVarOf(cur);
   return '<div class="var-chips"><span class="var-chips-label">variants</span>'
-    + cur.vars.map(v => `<button class="chip${v === av ? ' on' : ''}" id="chip-${v.id}" onclick="selectVariant(${v.id})">${esc(v.name || '—')}</button>`).join('')
+    + cur.vars.map(v => `<button class="chip${v === av ? ' on' : ''}" onclick="selectVariant(${v.id})"${v === used ? ' title="★ the variant in use"' : ''}>${v === used ? '★ ' : ''}<span id="chip-${v.id}">${esc(v.name || '—')}</span></button>`).join('')
     + '<button class="chip" onclick="newVariant()" title="new variant — a copy of the active one">+</button></div>';
 }
 function headHtml(v) {
@@ -1722,10 +1751,10 @@ function dipSubHtml(s, r) {
   const n = nestedOf(r);
   if (!n) return '<b>dip deleted</b> · calculated with its last solid ' + (r.conc != null ? fmtNum(r.conc) + ' %' : '?') + ', no price';
   if (n.sol === cur || dipUses(n.sol.id, cur.id)) return '<b>circular — ' + esc(n.sol.name || 'untitled') + ' contains this dip</b> · calculated with the stored solid, no price';
-  const last = n.sol.vars[n.sol.vars.length - 1], nc = nestedCalc(r), parts = [];
-  parts.push(`<select class="rc-dv ed" onchange="onRowDv(${s.id},${r.id},this.value)" title="the variant of ${esc(n.sol.name || 'untitled')} used here — the solid and price come from its recipe">`
-    + n.sol.vars.slice().reverse().map(x => `<option value="${x.id}"${x === n.v ? ' selected' : ''}>${esc(x.name || '—')}${x === last ? ' (newest)' : ''}</option>`).join('') + '</select>');
-  if (!n.exact && r.dv != null) parts.push('<b>variant deleted — the newest is used</b>');
+  const used = usedVarOf(n.sol), nc = nestedCalc(r), parts = [];
+  parts.push(`<select class="rc-dv ed" onchange="onRowDv(${s.id},${r.id},this.value)" title="the variant of ${esc(n.sol.name || 'untitled')} used here — the solid and price come from its recipe (★ = the variant marked in use there)">`
+    + n.sol.vars.slice().reverse().map(x => `<option value="${x.id}"${x === n.v ? ' selected' : ''}>${x === used ? '★ ' : ''}${esc(x.name || '—')}</option>`).join('') + '</select>');
+  if (!n.exact && r.dv != null) parts.push('<b>variant deleted — ' + (n.v === used ? 'the one in use' : 'the top one') + ' is used</b>');
   parts.push(esc(DIP_TYPE_NAME[dipType(n.sol)]));
   if (nc && !(nc.total > 0)) parts.push('<b>no mass yet</b>');
   else if (nc) parts.push(eur(nc.price, nc.priceOk, 3, ' €/kg'));
@@ -1761,7 +1790,7 @@ function rowHtml(s, r, i) {
   return `<div class="rc-grid rc-row" data-row="${r.id}">
       <div class="a-name rc-name"><span class="rc-grip" title="drag to move — also into another part">${GRIP_SVG}</span><div class="rc-nm"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material — or another dip as a whole (Dips at the end of the list)">${matOptions(r)}</select>${subOpen}${rowSubHtml(s, r)}</div></div></div>
       <div class="a-conc">${conc}</div>
-      <div class="a-m"><input class="rc-in m-in ed" id="m${r.id}" inputmode="decimal" value="${r.m ?? ''}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
+      <div class="a-m"><input class="rc-in m-in ed" id="m${r.id}" inputmode="decimal" value="${fmtG(r.m)}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
       ${water ? `<span class="num a-dip" id="c${r.id}d"></span><span class="num a-solid" id="c${r.id}s"></span>` : pctIn(s, r, 'dip', 'd') + pctIn(s, r, 'solid', 's')}${pctIn(s, r, 'wet', 'w')}<span class="num a-price" id="c${r.id}p"></span>
       <div class="a-act rc-act"><button class="ib" onclick="moveRow(${s.id},${r.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="moveRow(${s.id},${r.id},1)"${last ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="delRow(${s.id},${r.id})" title="remove component">✕</button></div>
     </div>`;
@@ -1876,9 +1905,9 @@ function labCalc(v, str, batch) {
   if (!w && Math.abs(k - 1) > 1e-9) return { err: 'Diluting needs a water row in the recipe — the first water takes up the dilution.' };
   const B = batch > 0 ? batch : T, f = B / T;
   let others = 0;
-  v.secs.forEach(s => s.rows.forEach(r => { if (r === w) return; m[r.id] = round2((+r.m || 0) * f * k); others += m[r.id]; }));
+  v.secs.forEach(s => s.rows.forEach(r => { if (r === w) return; m[r.id] = roundM((+r.m || 0) * f * k); others += m[r.id]; }));
   if (w) {
-    const x = round2(B - others);
+    const x = roundM(B - others);
     if (x < 0) {
       const rest = T - (+w.m || 0);
       return { err: 'Not possible: at W' + fmtNum(str) + ' the other components alone weigh ' + fmt(others, 1) + ' g — more than the batch (' + fmt(B, 1) + ' g).' + (rest > 0 ? ' The most is W' + fmt(100 * T / rest, 1) + '.' : '') };
@@ -1901,12 +1930,15 @@ function labMatPreset(key) {
 }
 function labMatOver(key) { const o = labViewOf().mat; return o && o[key] != null ? o[key] : null; }
 function labMat(key) { const o = labMatOver(key); return o != null ? o : labMatPreset(key); }
+// the name field is as wide as its text, so the strength right after it reads as one label ("R26 W85")
+function labTitleSize(t) { return Math.max(4, String(t || '').length + 1); }
 function onLabTitle(inp) {
   const t = inp.value.trim();
   setLabView('title', t && t !== labTitleDef().trim() ? inp.value : null);
   inp.classList.toggle('diff', labViewOf().title != null);
+  inp.size = labTitleSize(inp.value);
 }
-function labTitleBlur() { const i = el('labTitle'); if (i) i.value = labTitle(); }
+function labTitleBlur() { const i = el('labTitle'); if (i) { i.value = labTitle(); i.size = labTitleSize(i.value); } }
 function onLabMature(key, inp) {
   const t = inp.value.trim(), o = { ...(labViewOf().mat || {}) };
   if (!t || t === labMatPreset(key).trim()) delete o[key]; else o[key] = t;
@@ -1930,7 +1962,8 @@ function labHtml(v) {
       <span class="lab-rec" id="labRec"></span>
     </div>
     <div class="lab-top">
-      <input id="labTitle" class="lab-title${o.title != null ? ' diff' : ''}" value="${esc(labTitle())}" placeholder="dip" oninput="onLabTitle(this)" onblur="labTitleBlur()" title="the dip name on this sheet — add or change anything for this weighing (dashed = changed); empty = the dip name" autocomplete="off">
+      <input id="labTitle" class="lab-title${o.title != null ? ' diff' : ''}" value="${esc(labTitle())}" size="${labTitleSize(labTitle())}" placeholder="dip" oninput="onLabTitle(this)" onblur="labTitleBlur()" title="the dip name on this sheet — add or change anything for this weighing (dashed = changed); empty = the dip name" autocomplete="off">
+      <span class="lab-str" id="labStrTag" title="the strength of this lab dip — set above (strength W)"></span>
       <span class="lab-var" id="labVar"></span>
     </div>
     <div class="lab-msg" id="labMsg" style="display:none"></div>
@@ -1953,7 +1986,7 @@ function updateLab(v, c, st) {
     let sum = 0;
     s.rows.forEach(r => {
       const x = ok ? (L.m[r.id] || 0) : null; if (x != null) sum += x;
-      setText('lw' + r.id, x != null ? fmt(x, 2) : '—');
+      setText('lw' + r.id, x != null ? fmt(x, 1) : '—');
       const cr = c.rows[r.id];
       setText('lc' + r.id, rowRole(r) === 'water' ? '—' : isDipRow(r) ? fmt(cr ? cr.conc : r.conc, 2) : (fmtNum(r.conc) || '?'));
     });
@@ -1963,9 +1996,10 @@ function updateLab(v, c, st) {
   });
   setText('labTot', ok ? fmt(total, 1) : '—');
   setText('labTotL', 'total W' + fmtNum(st.str) + ' · solid ' + pct(c.tsc != null ? c.tsc * st.str / 100 : null));
+  setText('labStrTag', 'W' + fmtNum(st.str));
   setText('labVar', [v.name, v.code].filter(Boolean).join(' · '));
   const act = document.activeElement, o = labViewOf();
-  const ti = el('labTitle'); if (ti) { if (ti !== act) ti.value = labTitle(); ti.classList.toggle('diff', o.title != null); }
+  const ti = el('labTitle'); if (ti) { if (ti !== act) { ti.value = labTitle(); ti.size = labTitleSize(ti.value); } ti.classList.toggle('diff', o.title != null); }
   document.querySelectorAll('#mainBody .lab-mat').forEach(i => {
     const k = i.dataset.k;
     if (i !== act) i.value = labMat(k);
@@ -2077,15 +2111,17 @@ function updateVarMeta() {
 function renderVariants() {
   const box = el('varsBody'); if (!box) return;
   if (!cur) { box.innerHTML = '<div class="lib-empty">No dip open.</div>'; return; }
-  const av = activeVar();
-  box.innerHTML = `<div class="var-tools"><button class="btn-sm" onclick="newVariant()" title="a copy of the active variant — change it and note what and why">+ new variant</button><span class="var-count">${cur.vars.length} variant${cur.vars.length === 1 ? '' : 's'}</span></div>`
-    + '<div class="var-list">' + cur.vars.slice().reverse().map(v => `
-      <div class="var-item${v === av ? ' active' : ''}">
+  const av = activeVar(), used = usedVarOf(cur), list = varListOrder(), n = list.length;
+  box.innerHTML = `<div class="var-tools"><button class="btn-sm" onclick="newVariant()" title="a copy of the active variant — change it and note what and why">+ new variant</button><span class="var-count">${n} variant${n === 1 ? '' : 's'}</span></div>`
+    + '<div class="var-list">' + list.map((v, i) => `
+      <div class="var-item${v === av ? ' active' : ''}" data-vid="${v.id}">
         <div class="var-head" onclick="selectVariant(${v.id})" title="show this variant">
+          <span class="var-grip" title="drag to change the order">${GRIP_SVG}</span>
+          <button class="var-star${v === used ? ' on' : ''}" onclick="event.stopPropagation();toggleUsedVar(${v.id})" title="${v === used ? '★ the variant in use — click to unmark' : 'mark as the variant in use (one per dip)'}">${v === used ? '★' : '☆'}</button>
           <span class="var-name" id="vn-${v.id}">${esc(v.name || '—')}</span>
           <span class="var-code" id="vc-${v.id}">${esc(v.code)}</span>
           <span class="var-date" id="vt-${v.id}">${esc(v.date)}</span>
-          <span class="var-btns"><button class="ib" onclick="event.stopPropagation();newVariant(${v.id})" title="new variant from this one">⧉</button><button class="ib" onclick="event.stopPropagation();deleteVariant(${v.id})" title="delete variant">✕</button></span>
+          <span class="var-btns"><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},1)"${i === n - 1 ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="event.stopPropagation();newVariant(${v.id})" title="new variant from this one">⧉</button><button class="ib" onclick="event.stopPropagation();deleteVariant(${v.id})" title="delete variant">✕</button></span>
         </div>
         <div class="var-body">
           <div class="var-stats" id="vs-${v.id}"></div>
@@ -2172,11 +2208,11 @@ function onRowNum(sid, rid, key, inp) {
 }
 function onRowMat(sid, rid, val) {
   const r = findRow(sid, rid); if (!r) return;
-  if (String(val).startsWith('d:')) {   // another dip as a component — its newest variant to start with
+  if (String(val).startsWith('d:')) {   // another dip as a component — its variant in use (★) or the top one to start with
     const d = solById(+String(val).slice(2));
     if (!d || d === cur || dipUses(d.id, cur.id)) { renderMain(); return; }   // "(deleted)" / circular re-selected
     coalesceUndo();
-    const v = d.vars[d.vars.length - 1];
+    const v = defVarOf(d);
     r.mat = null; r.dip = d.id; r.dv = v ? v.id : null; r.nm = d.name; r.role = 'dip';
     r.conc = dipSolidSnap(r);
     renderMain(); schedSave();
@@ -2286,7 +2322,7 @@ async function onRowPct(sid, rid, kind, inp) {
     if (!await customConfirm(res.confirm, 'change solid')) { show(); return; }
     pushUndo();   // the field lost focus during the dialog — a plain undo step
   } else coalesceUndo();
-  res.out.forEach((n, x) => { x.m = n; const i = el('m' + x.id); if (i) i.value = n; });
+  res.out.forEach((n, x) => { x.m = n; const i = el('m' + x.id); if (i) i.value = fmtG(n); });
   updateCalc(); show(); schedSave();
 }
 function pctFocus(inp) { inp.dataset.v = inp.value; inp.select(); }
@@ -2467,6 +2503,89 @@ function initRowDnd() {
     e.preventDefault();
   });
 }
+// drag & drop of variants in the list — the same pattern: grip in the card head (the card holds a note), indicator
+// line, the order changes on release, auto-scroll of the list, the vertically nearest card beside them
+function initVarDnd() {
+  const box = el('varsBody');   // stable container — the list inside is re-rendered with innerHTML
+  if (!box || box._dndInit) return;
+  box._dndInit = true;
+  const MOUSE_THRESHOLD = 5;
+  let src = null, pointerId = null, dragging = false, startX = 0, startY = 0, lastX = 0, lastY = 0, tgt = null, dropTs = 0, auto = null;
+  box.addEventListener('dragstart', e => { if (e.target.closest && e.target.closest('.var-grip')) e.preventDefault(); });
+  // the release of a drag must not also "click" the card under it (= select that variant)
+  box.addEventListener('click', e => { if (Date.now() - dropTs < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
+  const clear = () => box.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(x => x.classList.remove('drag-over-top', 'drag-over-bottom'));
+  const itemAt = (x, y) => {
+    const t = document.elementFromPoint(x, y), it = t && t.closest('.var-item');
+    if (it && box.contains(it)) return it;
+    const list = box.querySelector('.var-list'); if (!list) return null;
+    const lr = list.getBoundingClientRect();
+    if (x < lr.left - 48 || x > lr.right + 48) return null;   // far beside the list → no drop
+    let best = null, bd = Infinity;
+    list.querySelectorAll('.var-item').forEach(e => {
+      if (e === src) return;
+      const b = e.getBoundingClientRect(), d = y < b.top ? b.top - y : (y > b.bottom ? y - b.bottom : 0);
+      if (d < bd) { bd = d; best = e; }
+    });
+    return best;
+  };
+  const mark = () => {
+    clear(); tgt = null;
+    const it = itemAt(lastX, lastY); if (!it) return;
+    const b = it.getBoundingClientRect();
+    if (lastY < b.top + b.height / 2) tgt = { el: it, cls: 'drag-over-top', before: +it.dataset.vid };
+    else { const nx = it.nextElementSibling; tgt = { el: it, cls: 'drag-over-bottom', before: nx && nx.dataset.vid ? +nx.dataset.vid : null }; }
+    tgt.el.classList.add(tgt.cls);
+  };
+  const begin = () => {
+    if (dragging || !src) return;
+    dragging = true; _dndActive = true;
+    src.classList.add('dragging');
+    src.style.pointerEvents = 'none';   // elementFromPoint sees what is under the finger
+    document.body.style.userSelect = 'none';
+    auto = dndScroller(src.parentElement || box, () => { if (dragging) mark(); });   // the list scrolls (or the page on mobile)
+  };
+  const end = () => {
+    if (auto) auto.stop();
+    auto = null; clear();
+    if (src) { src.classList.remove('dragging'); src.style.pointerEvents = ''; }
+    document.body.style.userSelect = '';
+    document.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerup', onUp, true);
+    document.removeEventListener('pointercancel', onCancel, true);
+    src = null; pointerId = null; dragging = false; _dndActive = false; tgt = null;
+  };
+  const onMove = e => {
+    if (e.pointerId !== pointerId) return;
+    if (!dragging) {
+      if (Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) > MOUSE_THRESHOLD) begin(); else return;
+    }
+    if (e.cancelable) e.preventDefault();
+    lastX = e.clientX; lastY = e.clientY;
+    if (auto) auto.update(lastY);
+    mark();
+  };
+  const onUp = e => {
+    if (e.pointerId !== pointerId) return;
+    const wasDrag = dragging, t = dragging ? tgt : null, vid = src ? +src.dataset.vid : null;
+    end();
+    if (wasDrag) dropTs = Date.now();
+    if (t && vid != null && t.before !== vid) moveVarTo(vid, t.before);
+  };
+  const onCancel = e => { if (e.pointerId === pointerId) end(); };
+  box.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;   // primary button / touch only
+    const g = e.target.closest('.var-grip'); if (!g) return;
+    const it = g.closest('.var-item'); if (!it || !box.contains(it)) return;
+    src = it; pointerId = e.pointerId; dragging = false;
+    startX = lastX = e.clientX; startY = lastY = e.clientY;
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onCancel, true);
+    if (e.pointerType !== 'mouse') { begin(); mark(); }   // a dedicated grip → touch / pen drag at once
+    e.preventDefault();
+  });
+}
 function addSection() {
   const v = activeVar(); if (!v) return;
   pushUndo();
@@ -2527,8 +2646,45 @@ async function deleteVariant(vid) {
   if (!await customConfirm('Delete variant “' + (v.name || '—') + '”? (↩ undo brings it back)', 'delete')) return;
   pushUndo();
   cur.vars = cur.vars.filter(x => x.id !== vid);
+  if (cur.used === vid) delete cur.used;
   if (activeVarMap[cur.id] === vid) { delete activeVarMap[cur.id]; saveActiveVarMap(); }
   renderMain(); renderVariants(); schedSave();
+}
+// ★ the variant in use — one per dip, data of the dip (synced, undo); a click on the marked one unmarks it
+function toggleUsedVar(vid) {
+  if (!cur || !cur.vars.some(v => v.id === vid)) return;
+  pushUndo();
+  if (cur.used === vid) delete cur.used; else cur.used = vid;
+  renderMain(); renderVariants(); schedSave();
+  const u = usedVarOf(cur);
+  showSave(u ? '★ ' + (u.name || '—') + ' in use' : '☆ no variant marked in use');
+}
+// The list shows the array reversed (new variants are pushed → on top). The order is part of the dip
+// (synced, undo); moving in the list = moving in that reversed order. The chips in the recipe show the array order.
+function varListOrder() { return cur ? cur.vars.slice().reverse() : []; }
+function moveVar(vid, dir) {
+  if (!cur) return;
+  const list = varListOrder(), i = list.findIndex(v => v.id === vid), j = i + dir;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  pushUndo();
+  [list[i], list[j]] = [list[j], list[i]];
+  cur.vars = list.reverse();
+  renderMain(); renderVariants(); schedSave();
+}
+// drop of a dragged variant: before `beforeVid` in the list, or at its end (null) — matched by id
+function moveVarTo(vid, beforeVid) {
+  if (!cur) return;
+  const list = varListOrder(), i = list.findIndex(v => v.id === vid); if (i < 0) return;
+  let k = beforeVid == null ? list.length : list.findIndex(v => v.id === beforeVid);
+  if (k < 0) k = list.length;
+  if (k === i || k === i + 1) return;   // dropped where it already is
+  pushUndo();
+  const [v] = list.splice(i, 1);
+  if (k > i) k--;
+  list.splice(k, 0, v);
+  cur.vars = list.reverse();
+  renderMain(); renderVariants(); schedSave();
+  showSave('⇅ ' + (v.name || '—') + ' moved');
 }
 
 // ── TOOLS (recalculation rules: keep the batch mass; solid changes go through the first water) ──
@@ -2839,6 +2995,7 @@ function init() {
   loadActiveVarMap();
   loadLabView();
   initRowDnd();
+  initVarDnd();
   try { const t = localStorage.getItem(NOTES_TAB_KEY); if (t === 'vars' || t === 'gen') notesTab = t; } catch(e) {}
   const restored = loadSession();
   if (!restored) renderAll();
