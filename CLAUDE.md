@@ -237,6 +237,10 @@ Data jedou v jednom **privátním GitHub gistu** (soubor `APP_NAME-sync.json`, o
 
 API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH = přepis souboru; POST = nový gist) je hotový v `gistGet` / `gistRecord` / `gistWriteInit`.
 
+**End-to-end šifrování (citlivá data):** „secret" gist **není šifrovaný** — kdo zná jeho ID, přečte ho bez přihlášení, a GitHub drží všechny revize navždy. Appka s citlivými (firemními) daty proto do gistu posílá jen šifrovanou obálku: AES-256-GCM přes Web Crypto, náhodný datový klíč zabalený heslem (PBKDF2) i záchranným klíčem (obnova zapomenutého hesla bez serveru), hlavička ověřená jako GCM additional data, každá změna hesla = nový datový klíč, heslo se neukládá, na zařízení jen ne-exportovatelný klíč v IndexedDB, nešifrovaný obsah gistu se nepřijme. Hotové **jen v `dip-app`** (`sealPayload` / `openContent` / `setPassphrase`, popis v `dip-app/CLAUDE.md`) — do `_template` a dalších appek portovat na pokyn. Šifrovaný obsah je při každém uploadu jiný (nové `iv`), takže push beze změny dat by přidal revizi → nutné přeskočení přes `syncedSig`.
+
+**⚠ Sdílený origin = sdílené riziko.** Všechny appky běží na `lordkrabaty.github.io` → sdílejí localStorage, IndexedDB (i šifrovací klíč `dip-app`) a GitHub tokeny. Cizí skript (CDN knihovna) nebo XSS (data v HTML bez `esc()`, nečíselná ID v inline handlerech) v **kterékoli** appce tak ohrozí i firemní data v `dip-app`. Před přidáním `<script src>` z CDN nebo podobného zásahu v jakékoli appce **upozorni uživatele** (pravidla v `dip-app/CLAUDE.md` → „Bezpečnost šifrování“).
+
 ---
 
 ## Auto-sync (tichý obousměrný LWW) — jak to chci obecně

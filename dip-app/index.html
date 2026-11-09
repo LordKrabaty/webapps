@@ -52,6 +52,16 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 .jb-field input:focus{outline:2.5px solid var(--black);outline-offset:1px}
 .jb-field input.prompt-in{font-family:'DM Sans',sans-serif;font-size:.9rem}
 .prompt-msg{font-size:.9rem;line-height:1.55;color:var(--black)}
+.jb-note{font-size:.75rem;line-height:1.45;color:var(--muted)}
+.modal-btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+/* the recovery key breaks only after a dash (<wbr>), into balanced lines — never inside a group */
+.rk-code{font-family:'DM Mono',monospace;font-size:1rem;letter-spacing:.04em;line-height:1.6;text-align:center;overflow-wrap:anywhere;text-wrap:balance;user-select:all;color:var(--black);background:var(--off);border:var(--bh);border-radius:var(--r);padding:calc(.6rem / var(--pzc, 1)) calc(.7rem / var(--pzc, 1))}
+/* long modals stay reachable on a phone */
+#jsonbinModal .modal,#recoveryModal .modal{max-height:92vh;overflow-y:auto}
+#recoveryModal .modal{max-width:440px}
+/* confirm / alert / prompt open on top of another modal (e.g. the ⚙ settings) — same z-index would hide them behind it */
+#confirmModal,#promptModal{z-index:110}
+#confirmMsg,.prompt-msg{white-space:pre-line}
 #importModal.from-cloud .jb-import-hide{display:none!important}
 
 /* export/import buttons */
@@ -681,7 +691,9 @@ html.dark input[type="date"]{color-scheme:dark}
 // ({ ...it, …known }) so it never strips unknown/newer fields.
 // 2 = strength moved off the variant: recipes are always W100, the lab strength is the dip's `labStr`
 //     (an older build would still offer a per-variant strength whose meaning changed → it must not push)
-const APP_SCHEMA = 2;
+// 3 = the gist content is end-to-end encrypted (sealed envelope, see ENCRYPTION in the sync script); the envelope
+//     keeps `schema` readable, so a build without encryption sees 3 > 2 and never overwrites it with plain data
+const APP_SCHEMA = 3;
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'dip-app-v1-session';
 const LIBRARY_KEY = 'dip-app-v1-library';      // solutions (each with all its variants) — synced, LWW per solution
@@ -1068,13 +1080,13 @@ function customAlert(msg, okLabel='ok') {
 
 // text input in the same style — resolves to the text, or null when cancelled (never the native prompt())
 let _promptResolve = null;
-function customPrompt(msg, placeholder = '', value = '') {
+function customPrompt(msg, placeholder = '', value = '', type = 'text') {   // type 'password' → masked input
   return new Promise(resolve => {
     if (_promptResolve) { const old = _promptResolve; _promptResolve = null; old(null); }
     el('promptMsg').textContent = msg;
-    const i = el('promptInput'); i.value = value; i.placeholder = placeholder;
+    const i = el('promptInput'); i.type = type; i.value = value; i.placeholder = placeholder;
     el('promptModal').classList.add('open');
-    _promptResolve = val => { el('promptModal').classList.remove('open'); _promptResolve = null; resolve(val); };
+    _promptResolve = val => { el('promptModal').classList.remove('open'); i.value = ''; _promptResolve = null; resolve(val); };   // never leave a typed secret in the DOM
     setTimeout(() => { i.focus(); i.select(); }, 0);
   });
 }
@@ -1315,6 +1327,10 @@ const THEORY = { phr: [15, 20], fr: [1.2, 2], lInSolid: [70, null] };
 let _uidLast = 0;
 function uid() { let t = Date.now(); if (t <= _uidLast) t = _uidLast + 1; _uidLast = t; return t; }
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
+// ids are always numbers (uid()) and end up UNQUOTED in inline handlers (onclick="fn(${id})") → anything else
+// (a crafted import file, foreign data) is replaced, otherwise it would run as script (XSS → token, data and key)
+function numId(v) { return typeof v === 'number' && isFinite(v) ? v : uid(); }
+function refId(v) { return typeof v === 'number' && isFinite(v) ? v : null; }   // a reference to another record's id
 function numOrNull(v) { if (v == null || v === '') return null; const n = typeof v === 'number' ? v : parseNum(v); return isFinite(n) ? n : null; }
 function fmt(n, d = 2) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(d); }
 function pct(n, d = 2) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(d) + '%'; }
@@ -1334,23 +1350,26 @@ function setCell(id, t) {
 // ── NORMALIZERS (preserve-unknown) ─────────────────────────────────────────
 function normAlt(a) {
   a = a || {};
-  return { ...a, id: a.id ?? uid(), name: String(a.name ?? ''), producer: String(a.producer ?? ''), card: String(a.card ?? ''),
+  return { ...a, id: numId(a.id), name: String(a.name ?? ''), producer: String(a.producer ?? ''), card: String(a.card ?? ''),
     conc: numOrNull(a.conc), price: numOrNull(a.price), cons: numOrNull(a.cons),
     fF: numOrNull(a.fF), fR: numOrNull(a.fR), vp: numOrNull(a.vp), note: String(a.note ?? '') };
 }
 function normMaterial(m) {
   m = m || {};
   const alts = (Array.isArray(m.alts) && m.alts.length ? m.alts : [{}]).map(normAlt);
-  return { ...m, id: m.id ?? uid(), name: String(m.name ?? ''), role: m.role || 'other', work: numOrNull(m.work),
+  return { ...m, id: numId(m.id), name: String(m.name ?? ''), role: m.role || 'other', work: numOrNull(m.work),
     note: String(m.note ?? ''), alts, act: alts.some(a => a.id === m.act) ? m.act : alts[0].id, mt: +m.mt || 0 };
 }
 function normRow(r) {
   r = r || {};
-  return { ...r, id: r.id ?? uid(), mat: r.mat ?? null, nm: String(r.nm ?? ''), role: r.role || 'other', conc: numOrNull(r.conc), m: numOrNull(r.m) };
+  const out = { ...r, id: numId(r.id), mat: refId(r.mat), nm: String(r.nm ?? ''), role: r.role || 'other', conc: numOrNull(r.conc), m: numOrNull(r.m) };
+  if ('dip' in r) out.dip = refId(r.dip);   // nested dip: solution id + its variant id
+  if ('dv' in r) out.dv = refId(r.dv);
+  return out;
 }
 function normSection(s) {
   s = s || {};
-  return { ...s, id: s.id ?? uid(), kind: s.kind || 'rf', kname: String(s.kname ?? ''), name: String(s.name ?? ''), mature: String(s.mature ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
+  return { ...s, id: numId(s.id), kind: s.kind || 'rf', kname: String(s.kname ?? ''), name: String(s.name ?? ''), mature: String(s.mature ?? ''), note: String(s.note ?? ''), rows: (Array.isArray(s.rows) ? s.rows : []).map(normRow) };
 }
 // legacy (before the maturing fields): the minimum maturing was written in the section note —
 // "min. 30 min zrání", "maturing min. 2 h"… Only a note that is NOTHING BUT such a phrase is converted
@@ -1376,8 +1395,8 @@ function undiluteVariant(v, str) {
 function normVariant(v) {
   v = v || {};
   const { str, ...rest } = v;   // `str` is legacy — dropped after the masses are converted to W100
-  const out = { ...rest, id: v.id ?? uid(), name: String(v.name ?? ''), code: String(v.code ?? ''), date: String(v.date ?? ''),
-    from: v.from ?? null, mature: String(v.mature ?? ''), prep: String(v.prep ?? ''), note: String(v.note ?? ''),
+  const out = { ...rest, id: numId(v.id), name: String(v.name ?? ''), code: String(v.code ?? ''), date: String(v.date ?? ''),
+    from: refId(v.from), mature: String(v.mature ?? ''), prep: String(v.prep ?? ''), note: String(v.note ?? ''),
     secs: (Array.isArray(v.secs) ? v.secs : []).map(normSection), meas: { ...(v.meas || {}) } };
   const k = legacyStr(v);
   if (k != null) undiluteVariant(out, k);
@@ -1401,7 +1420,7 @@ function normSolution(s) {
   let labStr = numOrNull(s.labStr);
   if (labStr == null && legacy.length) labStr = legacy[legacy.length - 1];
   if (labStr != null && !(labStr > 0)) labStr = null;
-  return { ...s, id: s.id ?? uid(), name: String(s.name ?? ''), desc: String(s.desc ?? ''),
+  return { ...s, id: numId(s.id), name: String(s.name ?? ''), desc: String(s.desc ?? ''),
     type: s.type == null || s.type === '' ? 'rfl' : String(s.type), labStr, note: String(s.note ?? ''),
     vars: raw.map(normVariant), mt: +s.mt || 0 };
 }
@@ -2893,7 +2912,7 @@ document.addEventListener('keydown', e => {
 <div class="modal-bg" id="jsonbinModal">
   <div class="modal" style="max-width:400px;gap:.65rem">
     <h2>Gist sync settings</h2>
-    <p>Enter your GitHub token and Gist ID. Data is stored only in this browser.</p>
+    <p>Data is encrypted in this browser before upload (AES-256-GCM) — GitHub stores only unreadable ciphertext. The token, Gist ID and key stay on this device.</p>
     <p style="font-size:.78rem;color:var(--muted)">Create a token at <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). You can find your gists at <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
     <div class="jb-field">
       <label>GitHub Token</label>
@@ -2902,6 +2921,23 @@ document.addEventListener('keydown', e => {
     <div class="jb-field">
       <label>Gist ID</label>
       <input type="text" id="jbIdInput" placeholder="abc123def456… (empty = will be created)" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="jb-field">
+      <label id="jbPassLabel">Encryption passphrase</label>
+      <input type="password" id="jbPassInput" placeholder="passphrase" spellcheck="false" autocomplete="new-password">
+      <input type="password" id="jbPass2Input" placeholder="repeat the passphrase" spellcheck="false" autocomplete="new-password">
+      <p class="jb-note" id="jbKeyState"></p>
+    </div>
+    <div class="jb-field" id="jbRkField" style="display:none">
+      <label>Recovery key</label>
+      <input type="text" id="jbRkInput" placeholder="XXXX-XXXX-XXXX-…" spellcheck="false" autocomplete="off">
+    </div>
+    <div class="modal-row" id="jbRkToggleRow">
+      <button class="btn-io" onclick="toggleRkField()" title="unlock the synced data with the recovery key and set a new passphrase">forgot the passphrase? use the recovery key</button>
+    </div>
+    <div class="modal-row" id="jbKeyRow" style="display:none">
+      <button class="btn-io" onclick="regenRecoveryKey()" title="creates a new recovery key — the old one stops working">new recovery key</button>
+      <button class="btn-io" onclick="forgetPassphrase()" title="removes the key from this browser — syncing stops here until you unlock it again">forget the key on this device</button>
     </div>
     <div class="jb-field">
       <label>Device name</label>
@@ -2914,8 +2950,26 @@ document.addEventListener('keydown', e => {
       <button class="btn-io" id="syncLinkBtn" onclick="copySyncLink()" title="generates a link with the Gist ID — opening it on a new device sets up sync automatically">🔗 link for a new device</button>
     </div>
     <div class="modal-row" style="margin-top:.1rem">
-      <button class="modal-btn primary" onclick="saveJsonBinSettings()">save</button>
+      <button class="modal-btn primary" id="jbSaveBtn" onclick="saveJsonBinSettings()">save</button>
       <button class="modal-btn" onclick="closeModal('jsonbinModal')">cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recovery key modal — shown once after the first passphrase setup / "new recovery key"; cannot be dismissed by a click outside -->
+<div class="modal-bg" id="recoveryModal">
+  <div class="modal">
+    <h2>Recovery key</h2>
+    <p>If you forget the passphrase, this key unlocks the synced data and lets you set a new passphrase. It is shown <b>only now</b> — save it outside this app: a password manager, a printout, or e-mail it to yourself. It stays valid until you change the passphrase without it or create a new one.</p>
+    <div class="rk-code" id="rkCode"></div>
+    <div class="modal-row">
+      <button class="btn-io" id="rkCopyBtn" onclick="copyRecoveryKey()">📋 copy</button>
+      <button class="btn-io" onclick="mailRecoveryKey()">✉ e-mail to myself</button>
+    </div>
+    <p class="jb-note">Anyone with this key and the Gist ID can read the data — do not keep it together with the sync link. A copy may stay in the clipboard history (Win+V, phone keyboard).</p>
+    <label class="modal-item"><input type="checkbox" id="rkSaved" onchange="onRkSaved(this)"><span>I have saved the recovery key</span></label>
+    <div class="modal-row">
+      <button class="modal-btn primary" id="rkDoneBtn" onclick="closeRecoveryModal()" disabled>done</button>
     </div>
   </div>
 </div>
@@ -2923,7 +2977,8 @@ document.addEventListener('keydown', e => {
 <script>
 /* ── GITHUB GIST SYNC + AUTO-SYNC (silent two-way LWW) ───
    Rules and pitfalls: see CLAUDE.md → "Auto-sync (silent two-way LWW)".
-   Data lives in a single private gist (file dip-app-sync.json).
+   Data lives in a single private gist (file dip-app-sync.json), END-TO-END ENCRYPTED (see ENCRYPTION below) —
+   every upload goes through sealPayload(), every read through openContent(); plain data is never uploaded.
    Collections: library = solutions (LWW by id, one record incl. all variants) + materials (LWW by id).
    No append-only collections. A new collection needs: currentKeySet, sigOf, buildAutoPayload,
    autoImportSilent (lwwMerge), doCloudUpload and the list of wrapped save functions at the bottom. */
@@ -2976,20 +3031,248 @@ document.addEventListener('keydown', e => {
     return h;
   }
   function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
-  // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private
-  function gistWriteInit(token, creating, payload) {
-    const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
+  // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private.
+  // `content` is the SEALED string from sealPayload() / sealWith() — never plain data.
+  function gistWriteInit(token, creating, content) {
+    const files = {}; files[GIST_FILE] = { content };
     const body = creating ? { description: 'dip-app-sync', public: false, files } : { files };
     return { method: creating ? 'POST' : 'PATCH', mode:'cors', credentials:'omit', headers: ghHeaders(token, true), body: JSON.stringify(body) };
+  }
+
+  /* ── ENCRYPTION (end-to-end) ─────────────────────────────────────
+     The gist only ever holds a sealed envelope:
+       { v:2, schema, enc:'AES-256-GCM', kdf:'PBKDF2-SHA256', kid, slots:{ pass, rec }, iv, ct }
+     - data: AES-256-GCM with a random DATA KEY (fresh iv per upload); `kid` = public id of that key.
+       The header (v, schema, enc, kdf, kid, slots) is the GCM additional data → a token holder cannot swap it.
+     - slots: the data key wrapped twice — by a key from the PASSPHRASE (PBKDF2-SHA256, 600k iterations) and by one
+       from the RECOVERY KEY (160 random bits, shown once). Slot = { salt, iter, iv, wk }. Either secret unlocks it.
+     - ANY change of the passphrase or the recovery key = a NEW data key (rekey): the gist keeps every old revision
+       forever, so re-wrapping the same key would let an old passphrase (from history) read all new data.
+       Devices with the old key lock (kid mismatch) until the new passphrase is entered there.
+     - this device keeps { dek (NON-extractable), kid, slots } in IndexedDB (memory only when IndexedDB fails);
+       the raw key bytes exist only briefly inside newKeys(); passphrase / recovery key are never stored.
+     - no key here → nothing is uploaded (sealPayload throws); unencrypted, foreign-key or unreadable gist content
+       → cloudLock: nothing is merged, uploads pause until it is resolved via ⚙
+     - `schema` stays readable → a build without encryption (schema ≤ 2) pauses its push (checkCloudSchema)
+     SECURITY RULES for changes in this app: see dip-app/CLAUDE.md → "Bezpečnost šifrování". */
+  const ENC_ALG = 'AES-256-GCM', KDF_NAME = 'PBKDF2-SHA256', ENV_V = 2;
+  const KDF_ITER = 600000;   // passphrase slot — a human secret, slow on purpose
+  const REC_ITER = 100000;   // recovery-key slot — 160 random bits, stretching barely matters (faster on the phone)
+  const PASS_MIN = 12;
+  const RK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 32 symbols (no 0/O/1/I) → 5 bits each, 32 symbols = 160 bits
+  const KEY_DB = 'dip-app-crypto', KEY_STORE = 'keys', KEY_ID = 'sync';
+  const hasCrypto = !!(window.isSecureContext && window.crypto && crypto.subtle && window.TextEncoder);
+  let syncKey = null, syncKeyLoaded = false;   // { dek: CryptoKey (non-extractable), kid, slots:{pass,rec} } | null
+  let cloudLock = '';        // '' | 'nokey' | 'badkey' | 'plain' | 'format' — the gist cannot be opened here → nothing merged, uploads pause
+  let cloudReadTs = 0;       // when the gist was last READ (and opened) in this page session; 0 = not yet
+  const PUSH_PULL_MAX_AGE = 10 * 1000;   // a push re-reads the gist first when the last read is older (read before overwrite)
+  let syncedSig = null;      // localSig() known to equal the cloud (after a pull / push) → an identical push is skipped
+  let lockAlertShown = false;
+  let pendingRk = '';        // a recovery key created by the settings save → shown once the settings modal closes
+
+  function toB64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+  function fromB64(b) { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+  function randomB64(n) { return toB64(crypto.getRandomValues(new Uint8Array(n))); }
+  function newRecoveryKey() {
+    const b = crypto.getRandomValues(new Uint8Array(32));
+    let s = ''; for (let i = 0; i < 32; i++) s += RK_ALPHABET[b[i] & 31];   // 256 is a multiple of 32 → uniform
+    return s.match(/.{4}/g).join('-');
+  }
+  // what the user typed → the exact secret strings (dashes / spaces / case of the recovery key do not matter;
+  // the passphrase is trimmed + NFC — a phone keyboard may add a trailing space or compose diacritics differently)
+  function normRk(s) { return String(s || '').toUpperCase().replace(/[\s-]+/g, ''); }
+  function normPass(s) { return String(s || '').trim().normalize('NFC'); }
+  // a crude guard against obviously guessable passphrases — whoever gets the gist can try ~10⁴ guesses / s per GPU offline
+  function passWeakness(p) {
+    if (p.length < PASS_MIN) return 'Use a passphrase of at least ' + PASS_MIN + ' characters — e.g. four random words.';
+    if (new Set(p.toLowerCase()).size < 6) return 'This passphrase is too repetitive — use e.g. four random words.';
+    const core = p.toLowerCase()
+      .replace(/password|passw|heslo|qwert[yz]?|asdf|yxcv|zxcv|abcdef|abcd|dipapp|admin|letmein|welcome/g, '')
+      .replace(/[\s\d\W_]+/g, '');
+    if (core.length < 8) return 'This passphrase is too easy to guess (common words, numbers) — use e.g. four random words.';
+    return '';
+  }
+  // one IndexedDB request in its own transaction → resolves with the request result
+  function idbReq(mode, fn) {
+    return new Promise((resolve, reject) => {
+      const open = indexedDB.open(KEY_DB, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore(KEY_STORE);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        try {
+          const tx = db.transaction(KEY_STORE, mode);
+          const r = fn(tx.objectStore(KEY_STORE));
+          tx.oncomplete = () => { db.close(); resolve(r && r.result); };
+          tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
+        } catch(e) { db.close(); reject(e); }
+      };
+    });
+  }
+  function keyRecOk(k) { return !!(k && k.dek && typeof k.kid === 'string' && k.slots && slotOk(k.slots.pass) && slotOk(k.slots.rec)); }
+  const syncKeyReady = (async () => {
+    try {
+      const k = hasCrypto ? await idbReq('readonly', s => s.get(KEY_ID)) : null;
+      syncKey = keyRecOk(k) ? k : null;
+    } catch(e) { syncKey = null; }
+    syncKeyLoaded = true;
+    updateAutoSyncBtn();
+  })();
+  async function getSyncKey() { await syncKeyReady; return syncKey; }
+  // → true when the key is kept in IndexedDB, false when only in memory (lost on reload)
+  async function storeSyncKey(k) {
+    syncKey = k;
+    let kept = true;
+    try { await idbReq('readwrite', s => s.put(k, KEY_ID)); } catch(e) { kept = false; }
+    cloudLock = ''; cloudReadTs = 0; syncedSig = null; lockAlertShown = false;
+    updateAutoSyncBtn();
+    return kept;
+  }
+  // key-encryption key from a secret (passphrase or recovery key) — only wraps / unwraps the data key
+  async function kekFrom(secret, salt, iter) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name:'PBKDF2', hash:'SHA-256', salt: fromB64(salt), iterations: iter },
+      base, { name:'AES-GCM', length:256 }, false, ['encrypt', 'decrypt']);
+  }
+  async function makeSlot(raw, secret, iter) {
+    const salt = randomB64(16), iv = crypto.getRandomValues(new Uint8Array(12));
+    const kek = await kekFrom(secret, salt, iter);
+    return { salt, iter, iv: toB64(iv), wk: toB64(new Uint8Array(await crypto.subtle.encrypt({ name:'AES-GCM', iv }, kek, raw))) };
+  }
+  // unwrap the data key from a slot → a NON-extractable key; throws when the secret does not match
+  async function openSlot(slot, secret) {
+    const kek = await kekFrom(secret, slot.salt, +slot.iter);
+    const raw = new Uint8Array(await crypto.subtle.decrypt({ name:'AES-GCM', iv: fromB64(slot.iv) }, kek, fromB64(slot.wk)));
+    try { return await crypto.subtle.importKey('raw', raw, { name:'AES-GCM' }, false, ['encrypt', 'decrypt']); }
+    finally { raw.fill(0); }
+  }
+  // a NEW data key wrapped by the passphrase and the recovery key → { dek, kid, slots }; the raw bytes never leave here
+  async function newKeys(pass, rk) {
+    const raw = crypto.getRandomValues(new Uint8Array(32));
+    try {
+      const slots = { pass: await makeSlot(raw, pass, KDF_ITER), rec: await makeSlot(raw, normRk(rk), REC_ITER) };
+      const dek = await crypto.subtle.importKey('raw', raw, { name:'AES-GCM' }, false, ['encrypt', 'decrypt']);
+      return { dek, kid: randomB64(12), slots };
+    } finally { raw.fill(0); }
+  }
+  function slotOk(s) {
+    return !!(s && typeof s.salt === 'string' && typeof s.iv === 'string' && typeof s.wk === 'string' && +s.iter >= 100000 && +s.iter <= 10000000);
+  }
+  function isSealed(o) { return !!(o && typeof o === 'object' && o.enc && typeof o.ct === 'string'); }
+  function sealFormatOk(env) {
+    return env.v === ENV_V && env.enc === ENC_ALG && env.kdf === KDF_NAME && typeof env.kid === 'string'
+      && typeof env.iv === 'string' && !!env.slots && slotOk(env.slots.pass) && slotOk(env.slots.rec);
+  }
+  // the header bound to the ciphertext as GCM additional data — any change of it makes decryption fail
+  function aadOf(env) {
+    const p = env.slots.pass, r = env.slots.rec;
+    return new TextEncoder().encode(JSON.stringify([env.v, env.schema, env.enc, env.kdf, env.kid,
+      p.salt, p.iter, p.iv, p.wk, r.salt, r.iter, r.iv, r.wk]));
+  }
+  async function sealWith(k, payload) {
+    const head = { v: ENV_V, schema: APP_SCHEMA, enc: ENC_ALG, kdf: KDF_NAME, kid: k.kid, slots: k.slots };
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv, additionalData: aadOf(head) }, k.dek, new TextEncoder().encode(JSON.stringify(payload)));
+    return JSON.stringify(Object.assign(head, { iv: toB64(iv), ct: toB64(new Uint8Array(ct)) }));
+  }
+  async function unsealWith(dek, env) {
+    const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv: fromB64(env.iv), additionalData: aadOf(env) }, dek, fromB64(env.ct));
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+  // gist content for an upload, sealed with this device's key — throws (e.locked = 'nokey') without one
+  async function sealPayload(payload) {
+    const k = hasCrypto ? await getSyncKey() : null;
+    if (!k) { const e = new Error('no encryption key on this device'); e.locked = 'nokey'; throw e; }
+    return sealWith(k, payload);
+  }
+  // stored gist content (parsed JSON) → { rec, locked, schema } — no side effects (version history uses it too).
+  // Unencrypted content is NEVER accepted: it carries no proof of origin (anyone with the token could plant it).
+  async function openContent(parsed) {
+    if (!parsed) return { rec: null, locked: '' };                     // unreadable (e.g. a failed fetch) — nothing merged
+    if (typeof parsed !== 'object') return { rec: null, locked: 'format' };
+    if (!isSealed(parsed)) return { rec: null, locked: 'plain' };
+    if ((+parsed.schema || 0) > APP_SCHEMA) return { rec: null, locked: 'newer', schema: +parsed.schema };
+    if (!hasCrypto || !sealFormatOk(parsed)) return { rec: null, locked: 'format' };
+    const k = await getSyncKey();
+    if (!k) return { rec: null, locked: 'nokey' };
+    if (k.kid !== parsed.kid) return { rec: null, locked: 'badkey' };   // sealed with another data key
+    try {
+      const rec = await unsealWith(k.dek, parsed);
+      return (rec && typeof rec === 'object') ? { rec, locked: '' } : { rec: null, locked: 'format' };
+    } catch(e) { return { rec: null, locked: 'badkey' }; }               // wrong key or a tampered envelope
+  }
+  function lockMsg(reason) {
+    reason = reason || cloudLock || 'nokey';
+    return reason === 'badkey' ? '🔒 the gist has a different key (passphrase changed elsewhere?) — enter the current passphrase via ⚙'
+         : reason === 'plain'  ? '⚠ the gist holds UNENCRYPTED data — not accepted; use a new gist (clear the Gist ID in ⚙)'
+         : reason === 'format' ? '⚠ the gist content cannot be read by this version — reload the page'
+         : '🔒 sync paused — enter the encryption passphrase via ⚙';
+  }
+  // startup: status + a one-time explanation of why nothing is uploaded
+  function notifyLock() {
+    showStatusMsg(lockMsg(), 6000);
+    if (lockAlertShown) return;
+    lockAlertShown = true;
+    const msg = cloudLock === 'badkey'
+      ? 'The synced data has a different key than this device — the passphrase was probably changed on another device.\n\nEnter the current passphrase via ⚙. Until then this device uploads nothing (local data stays as it is).'
+      : cloudLock === 'plain'
+      ? 'The gist contains UNENCRYPTED data. This app does not accept it — it could have been planted by someone with access to the gist.\n\nUse a new gist: open ⚙, clear the Gist ID and save. Until then this device uploads nothing.'
+      : cloudLock === 'format'
+      ? 'The synced data cannot be read by this version of the app. Reload the page (Ctrl+Shift+R). Until then this device uploads nothing.'
+      : 'The synced data is encrypted. Enter the encryption passphrase via ⚙ — the same one as on your other devices (or use the recovery key). Until then this device uploads nothing.';
+    try { customAlert(msg); } catch(e) {}
+  }
+
+  function rkFieldOpen() { const f = el('jbRkField'); return !!f && f.style.display !== 'none'; }
+  function renderKeyState() {
+    const st = el('jbKeyState'), kr = el('jbKeyRow'), pi = el('jbPassInput'), rt = el('jbRkToggleRow'), lb = el('jbPassLabel');
+    if (!st || !kr || !pi || !rt || !lb) return;
+    if (!hasCrypto) {
+      st.textContent = '⚠ This browser cannot encrypt here (the page must be opened via https) — sync is disabled.';
+      kr.style.display = 'none'; rt.style.display = 'none'; return;
+    }
+    const k = syncKeyLoaded ? syncKey : null, rk = rkFieldOpen();
+    lb.textContent = rk ? 'New passphrase' : 'Encryption passphrase';
+    st.textContent = rk
+      ? 'Type a NEW passphrase here (twice) and your recovery key below — the recovery key stays valid.'
+      : k ? '🔒 A key is saved on this device — leave the fields empty to keep it. A new passphrase typed here replaces it (all data gets a new key, you get a new recovery key, other devices ask for the new passphrase once).'
+          : 'No key on this device — nothing is uploaded until you set one. Use the same passphrase on every device (min. ' + PASS_MIN + ' characters, e.g. four random words). The first setup also gives you a recovery key for a forgotten passphrase.';
+    pi.placeholder = rk ? 'new passphrase' : k ? '(unchanged)' : 'passphrase';
+    kr.style.display = (k && !rk) ? 'flex' : 'none';
+    rt.style.display = rk ? 'none' : 'flex';
+  }
+  function toggleRkField() {
+    const f = el('jbRkField');
+    f.style.display = rkFieldOpen() ? 'none' : '';
+    renderKeyState();
+    if (rkFieldOpen()) el('jbRkInput').focus();
   }
   function openJsonBinSettings() {
     try { el('jbKeyInput').value = localStorage.getItem(GHTOKEN)||''; el('jbIdInput').value = localStorage.getItem(GISTID)||''; } catch(e) {}
     try { el('jbDeviceInput').value = getDeviceName(); } catch(e) {}
     try { const r = el('gistHistoryRow'); if (r) r.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
     try { const sl = el('syncLinkRow'); if (sl) sl.style.display = localStorage.getItem(GISTID) ? 'flex' : 'none'; } catch(e) {}
+    el('jbPassInput').value = ''; el('jbPass2Input').value = ''; el('jbRkInput').value = '';
+    el('jbRkField').style.display = 'none';
+    renderKeyState(); getSyncKey().then(renderKeyState);
     el('jsonbinModal').classList.add('open');
   }
-  function saveJsonBinSettings() {
+  let settingsBusy = false;
+  async function saveJsonBinSettings() {
+    if (settingsBusy) return;
+    const pass = normPass(el('jbPassInput').value), pass2 = normPass(el('jbPass2Input').value);
+    const rk = rkFieldOpen() ? normRk(el('jbRkInput').value) : '';
+    if (rkFieldOpen() && !rk && (pass || pass2)) { await customAlert('Enter the recovery key too — or close it with "cancel" and use the passphrase only.'); return; }
+    if (rk) {
+      if (rk.length !== 32 || [...rk].some(c => RK_ALPHABET.indexOf(c) < 0)) { await customAlert('A recovery key has 32 letters and digits (no 0, 1, I or O; dashes and spaces do not matter) — check it.'); return; }
+      if (!pass) { await customAlert('With the recovery key, also type a NEW passphrase (twice).'); return; }
+    }
+    if (pass || pass2) {
+      if (!hasCrypto) { await customAlert('This browser cannot encrypt here — open the app via https.'); return; }
+      if (pass !== pass2) { await customAlert('The two passphrases do not match.'); return; }
+      const weak = passWeakness(pass);
+      if (weak) { await customAlert(weak); return; }
+    }
     let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
@@ -2999,11 +3282,174 @@ document.addEventListener('keydown', e => {
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
     } catch(e) {}
-    if (idChanged) {   // newly entered ID → download the cloud right away (otherwise only after reload)
+    if (idChanged) { cloudReadTs = 0; cloudLock = ''; syncedSig = null; }
+    if (pass) {
+      settingsBusy = true;
+      const btn = el('jbSaveBtn'), lbl = btn.textContent;
+      btn.disabled = true; btn.textContent = 'checking…';
+      let ok = false;
+      try { ok = await setPassphrase(pass, rk); }
+      catch(e) { console.warn('[crypto]', e && e.name); await customAlert('Setting the passphrase failed: ' + ((e && e.message) || e)); }
+      finally { settingsBusy = false; btn.disabled = false; btn.textContent = lbl; }
+      if (!ok) { updateAutoSyncBtn(); renderKeyState(); return; }   // the modal stays open — token / ID / device name are saved already
+      el('jbPassInput').value = ''; el('jbPass2Input').value = ''; el('jbRkInput').value = '';
+    }
+    if (idChanged || pass) {   // new ID or key → read the cloud right away (pull → merge → push), otherwise only after reload
       try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {}
       try { checkCloudOnStartup(); } catch(e) {}
     }
+    updateAutoSyncBtn();
     closeModal('jsonbinModal');
+    if (pendingRk) { const r = pendingRk; pendingRk = ''; openRecoveryModal(r); }
+  }
+  // the sealed content of the main gist for a key operation → { env } (null = nothing of ours there yet), or { fail } after telling the user
+  async function fetchSealed(gistId, token) {
+    if (!gistId) return { env: null };
+    let res;
+    try { res = await gistGet(gistId, token); }
+    catch(e) { await customAlert('Cannot reach GitHub to check the key against the synced data. Try again when online.'); return { fail: true }; }
+    if (!res.ok) {
+      if (res.status === 404) return { env: null };
+      await customAlert('GitHub refused the request (HTTP ' + res.status + ') — check the token and Gist ID, then try again.');
+      return { fail: true };
+    }
+    let json = null; try { json = await res.json(); } catch(e) {}
+    const file = json && json.files && json.files[GIST_FILE];
+    if (json && !(file && file.content)) return { env: null };          // the gist has no data of ours yet
+    const parsed = await fileContent(json);
+    if (!parsed) { await customAlert('The gist content could not be read — try again in a moment.'); return { fail: true }; }
+    if (!isSealed(parsed)) { await customAlert('The gist contains UNENCRYPTED data — this app does not use it (it could have been planted). Clear the Gist ID to start a new gist.'); return { fail: true }; }
+    if ((+parsed.schema || 0) > APP_SCHEMA || !sealFormatOk(parsed)) { await customAlert('The gist was written by a newer version of the app — reload this page (Ctrl+Shift+R) first.'); return { fail: true }; }
+    return { env: parsed };
+  }
+  function holdSync() {   // key changes hold uploads (a push in between would use a half-switched key)
+    if (pushing || pulling) return false;
+    pushing = true; return true;
+  }
+  function releaseSync() { pushing = false; if (pushAgain) { pushAgain = false; scheduleAutoPush(); } }
+  // a new data key for `pass` + `rk` (no rk → a NEW recovery key); the current cloud content `rec` is re-sealed with it.
+  // Old passphrases / recovery keys — also those kept in old gist revisions — cannot open anything written after this.
+  // → the new recovery key ('' when `rk` was kept), or null when it failed (nothing changed)
+  async function rekey(gistId, token, rec, pass, rk) {
+    const newRk = rk ? '' : newRecoveryKey();
+    const k = await newKeys(pass, rk || newRk);
+    if (gistId && rec) {
+      const content = await sealWith(k, rec);
+      let r; try { r = await fetch(gistUrl(gistId), gistWriteInit(token, false, content)); } catch(e) { r = null; }
+      if (!r || !r.ok) { await customAlert('Saving the new key to the gist failed' + (r ? ' (HTTP ' + r.status + ')' : '') + ' — nothing was changed.'); return null; }
+    }
+    await storeSyncKey(k);
+    return newRk;
+  }
+  // unlock / first setup / change / reset with the recovery key. true = done (the key is kept on this device)
+  async function setPassphrase(pass, rk) {
+    if (!holdSync()) { await customAlert('Sync is busy right now — try again in a moment.'); return false; }
+    try { return await setPassphraseHeld(pass, rk); }
+    finally { releaseSync(); }
+  }
+  async function setPassphraseHeld(pass, rk) {
+    const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(GISTID);
+    const old = await getSyncKey();
+    const f = await fetchSealed(gistId, token);
+    if (f.fail) return false;
+    const env = f.env;
+    showStatusMsg('🔑 deriving the key…', 4000);
+    const opened = async dek => { try { return await unsealWith(dek, env); } catch(e) { return null; } };
+    if (env) {
+      if (rk) {        // forgotten passphrase: the recovery key opens the data, then everything gets a new key for the new passphrase
+        let dek; try { dek = await openSlot(env.slots.rec, rk); }
+        catch(e) { await customAlert('This recovery key does not match the synced data — check it.'); return false; }
+        const rec = await opened(dek);
+        if (!rec) { await customAlert('The synced data could not be decrypted (damaged or tampered with) — nothing was changed.'); return false; }
+        if (await rekey(gistId, token, rec, pass, rk) === null) return false;
+        showStatusMsg('🔓 new passphrase set with the recovery key (it stays valid) — other devices ask for the new passphrase once', 7000);
+        return true;
+      }
+      let dek = null; try { dek = await openSlot(env.slots.pass, pass); } catch(e) {}
+      if (dek) {       // the same passphrase as on the other devices → unlock
+        if (!await opened(dek)) { await customAlert('The synced data could not be decrypted (damaged or tampered with) — nothing was changed.'); return false; }
+        const kept = await storeSyncKey({ dek, kid: env.kid, slots: env.slots });
+        showStatusMsg('🔒 unlocked — sync is end-to-end encrypted' + (kept ? '' : ' (this browser cannot keep the key — enter it again after reload)'), 6000);
+        return true;
+      }
+      // it does not open the gist, but this device holds its data key → the user is changing the passphrase
+      if (!(old && old.kid === env.kid)) {
+        await customAlert('This passphrase cannot unlock the data in the gist — it must be the same one as on your other devices.\n\nForgotten it? Use "forgot the passphrase? use the recovery key" — or, on a device where sync still works, simply type a new passphrase there.');
+        return false;
+      }
+      if (!await customConfirm('Change the encryption passphrase?\n\nAll data gets a new key: the old passphrase and the old recovery key stop working and you get a NEW recovery key. Your other devices ask for the new passphrase once.\n\n(To keep your recovery key, cancel and use "forgot the passphrase? use the recovery key" with it instead.)', 'change')) return false;
+      const rec = await opened(old.dek);
+      if (!rec) { await customAlert('The synced data could not be decrypted (damaged or tampered with) — nothing was changed.'); return false; }
+      const r = await rekey(gistId, token, rec, pass, '');
+      if (r === null) return false;
+      pendingRk = r;
+      showStatusMsg('🔒 passphrase changed — all data has a new key', 6000);
+      return true;
+    }
+    if (rk) { await customAlert('There is no encrypted data in the gist to unlock — set a passphrase without the recovery key.'); return false; }
+    // first setup (nothing of ours in the gist yet): a new data key + a new recovery key; the first push uploads it
+    const r = await rekey(null, token, null, pass, '');
+    pendingRk = r;
+    showStatusMsg('🔒 key saved — sync is end-to-end encrypted', 6000);
+    return true;
+  }
+  // a new recovery key = a new data key too (an old recovery key kept in the gist history must not open new data)
+  async function regenRecoveryKey() {
+    const k = await getSyncKey();
+    if (!k) return;
+    const pass = normPass(await customPrompt('A new recovery key also gives all data a new key: the old recovery key stops working and your other devices ask for the passphrase once.\n\nEnter your current passphrase:', 'current passphrase', '', 'password'));
+    if (!pass) return;
+    if (!holdSync()) { await customAlert('Sync is busy right now — try again in a moment.'); return; }
+    let newRk = null;
+    try {
+      const token = localStorage.getItem(GHTOKEN), gistId = localStorage.getItem(GISTID);
+      const f = await fetchSealed(gistId, token);
+      if (f.fail) return;
+      const env = f.env;
+      if (env && env.kid !== k.kid) { await customAlert('The gist has a different key than this device — unlock it with the current passphrase first.'); return; }
+      showStatusMsg('🔑 checking the passphrase…', 3000);
+      try { await openSlot((env || k).slots.pass, pass); }
+      catch(e) { await customAlert('That is not the current passphrase.'); return; }
+      let rec = null;
+      if (env) { try { rec = await unsealWith(k.dek, env); } catch(e) { await customAlert('The synced data could not be decrypted — nothing was changed.'); return; } }
+      newRk = await rekey(gistId, token, rec, pass, '');
+    } finally { releaseSync(); }
+    if (newRk) { closeModal('jsonbinModal'); openRecoveryModal(newRk); }
+  }
+  async function forgetPassphrase() {
+    if (!await customConfirm('Remove the encryption key from this device? Syncing stops here until you unlock it again with the passphrase or the recovery key. Local data stays; the cloud copy is not touched.', 'remove')) return;
+    syncKey = null; cloudReadTs = 0; syncedSig = null;
+    try { await idbReq('readwrite', s => s.delete(KEY_ID)); } catch(e) {}
+    updateAutoSyncBtn(); renderKeyState();
+    showStatusMsg('key removed from this device', 3000);
+  }
+  // ── recovery key modal (the key lives only in the DOM while it is open) ──
+  function openRecoveryModal(rk) {
+    const box = el('rkCode'), groups = rk.split('-');
+    box.textContent = '';   // textContent stays exactly the key (copy / e-mail read it); <wbr> = line break only after a dash
+    groups.forEach((g, i) => { box.append(g + (i < groups.length - 1 ? '-' : '')); if (i < groups.length - 1) box.append(document.createElement('wbr')); });
+    el('rkSaved').checked = false; el('rkDoneBtn').disabled = true;
+    el('recoveryModal').classList.add('open');
+  }
+  function onRkSaved(cb) { el('rkDoneBtn').disabled = !cb.checked; }
+  function closeRecoveryModal() { el('rkCode').textContent = ''; closeModal('recoveryModal'); }
+  async function copyRecoveryKey() {
+    const txt = el('rkCode').textContent;
+    const done = () => flashBtn('rkCopyBtn', '✓ copied');
+    try { await navigator.clipboard.writeText(txt); done(); }
+    catch(e) {   // no clipboard API → select the code and use execCommand
+      try { const r = document.createRange(); r.selectNodeContents(el('rkCode')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); if (document.execCommand('copy')) done(); } catch(e2) {}
+    }
+  }
+  // opens a pre-filled e-mail draft in the user's mail app (no recipient — the user picks their own address; nothing goes through a server)
+  function mailRecoveryKey() {
+    const rk = el('rkCode').textContent;
+    const body = 'dip-app recovery key (created ' + new Date().toLocaleDateString('cs-CZ') + '):\n\n' + rk
+      + '\n\nIf you forget the sync passphrase: dip-app → ⚙ → "forgot the passphrase? use the recovery key", type this key and a new passphrase.'
+      + '\nKeep it away from the sync link / Gist ID.';
+    const a = document.createElement('a');
+    a.href = 'mailto:?subject=' + encodeURIComponent('dip-app recovery key') + '&body=' + encodeURIComponent(body);
+    document.body.appendChild(a); a.click(); a.remove();
   }
   function showSyncTooltip(msg) { showStatusMsg(msg, 3500); }
   // link for a new device: Gist ID (optionally token + autosync) in the URL hash —
@@ -3013,7 +3459,7 @@ document.addEventListener('keydown', e => {
     if (!gistId) { showSyncTooltip('⚠ save a Gist ID first'); return; }
     const token = localStorage.getItem(GHTOKEN) || '';
     let withTok = false;
-    if (token) withTok = await customConfirm('Include the GitHub token in the link too? The link will then expose all data — only send it between your own devices. Without the token you will enter it manually on the new device.', 'include token');
+    if (token) withTok = await customConfirm('Include the GitHub token in the link too? Anyone with the link could then read and overwrite all your gists (the dip data itself stays encrypted) — only send it between your own devices. Without the token you will enter it manually on the new device.\n\nThe encryption passphrase is never part of the link — enter it on the new device via ⚙.', 'include token');
     const p = new URLSearchParams();
     p.set('gid', gistId);
     if (withTok) p.set('tok', token);
@@ -3037,9 +3483,8 @@ document.addEventListener('keydown', e => {
   async function gistGet(gistId, token) {
     return fetch(gistUrl(gistId), { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
   }
-  // extracts the stored data (GIST_FILE content) from the GET response as an object; null = cannot read
-  async function gistRecord(res) {
-    let json; try { json = await res.json(); } catch(e) { return null; }
+  // parsed JSON of the GIST_FILE content of a gist (or revision) JSON; null = cannot read
+  async function fileContent(json) {
     const file = json && json.files && json.files[GIST_FILE];
     if (!file) return null;
     let content = file.content;
@@ -3048,6 +3493,46 @@ document.addEventListener('keydown', e => {
     }
     if (!content) return null;
     try { return JSON.parse(content); } catch(e) { return null; }
+  }
+  async function gistContent(res) { let json; try { json = await res.json(); } catch(e) { return null; } return fileContent(json); }
+  // set by gistRecord: the last read gist has no data file of ours (new / foreign gist) — nothing to protect, safe to write
+  let cloudEmpty = false;
+  // the stored data of the MAIN gist from a GET response, opened; null = nothing there / unreadable / cannot open here.
+  // Tracks cloudLock (unencrypted / foreign key / unknown format / no key → nothing merged, uploads pause),
+  // cloudReadTs and cloudEmpty.
+  async function gistRecord(res) {
+    let json; try { json = await res.json(); } catch(e) { json = null; }
+    const file = json && json.files && json.files[GIST_FILE];
+    cloudEmpty = !!json && !(file && file.content);
+    if (cloudEmpty) { cloudReadTs = Date.now(); if (cloudLock) { cloudLock = ''; updateAutoSyncBtn(); } return null; }
+    const o = await openContent(await fileContent(json));
+    if (o.locked === 'newer') { cloudReadTs = 0; checkCloudSchema({ schema: o.schema }); return null; }   // newer build → its own warning
+    if (o.locked) { cloudReadTs = 0; if (cloudLock !== o.locked) { cloudLock = o.locked; updateAutoSyncBtn(); } return null; }
+    if (!o.rec) return null;   // unreadable right now (e.g. a failed fetch) — nothing merged, no push
+    if (cloudLock) { cloudLock = ''; updateAutoSyncBtn(); }
+    cloudReadTs = Date.now();
+    return o.rec;
+  }
+  // after a merge: remember that the cloud already equals the local state (→ no identical re-upload)
+  function noteSynced(record) {
+    if (localSig() === cloudSig(record)) { syncedSig = localSig(); return true; }
+    return false;
+  }
+  // read the main gist, open it and merge it into the local state (no UI).
+  // true = read OK (or the gist / our file in it does not exist) → it is safe to overwrite it
+  async function pullAndMerge(gistId, token) {
+    const res = await gistGet(gistId, token);
+    if (!res.ok) {
+      if (res.status === 404) { cloudReadTs = Date.now(); cloudLock = ''; return true; }
+      if (res.status === 403 || res.status === 429) pushCooldownUntil = Date.now() + rateLimitWait(res);   // the push behind this read backs off too
+      return false;
+    }
+    const record = await gistRecord(res);
+    if (!record) return cloudEmpty;
+    checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
+    if (localSig() !== cloudSig(record)) autoImportSilent(record);
+    noteSynced(record);
+    return true;
   }
   function autosyncEnabled() { try { return !!localStorage.getItem(ASKEY); } catch(e) { return false; } }
   function hasToken() { try { return !!localStorage.getItem(GHTOKEN); } catch(e) { return false; } }   // a token is enough → sync creates the gist itself
@@ -3108,9 +3593,13 @@ document.addEventListener('keydown', e => {
       b.title = 'this app version is outdated — reload the page; uploads are paused so you cannot overwrite newer data';
       return;
     }
-    if (!b.classList.contains('syncing')) b.textContent = '☁';
-    b.title = on ? 'automatic sync enabled — click to disable'
-                 : 'enable automatic sync (Gist)';
+    // autosync on, but this device has no key / cannot open the gist → nothing is uploaded; make it visible
+    const locked = on && (cloudLock || (syncKeyLoaded && !syncKey));
+    if (!b.classList.contains('syncing')) b.textContent = locked ? '🔒' : '☁';
+    b.title = locked ? (cloudLock === 'badkey' ? 'automatic sync paused — the gist is encrypted with a different passphrase; enter the current one via ⚙'
+                                               : 'automatic sync paused — enter the encryption passphrase via ⚙')
+            : on ? 'automatic sync enabled (end-to-end encrypted) — click to disable'
+                 : 'enable automatic sync (Gist, end-to-end encrypted)';
   }
   function setSyncState(state) {
     const b = el('autoSyncBtn'); if (!b) return;
@@ -3128,6 +3617,8 @@ document.addEventListener('keydown', e => {
     if (on && !hasToken()) { showStatusMsg('⚠ set a GitHub token via ⚙ first (the gist will be created automatically)', 4500); return; }
     if (on) {
       reconcileTombstones();   // tombstone baseline
+      // no key yet → wait: saving the passphrase in ⚙ runs the same pull → merge → push
+      if (syncKeyLoaded && !syncKey) { showStatusMsg('⚠ set the encryption passphrase via ⚙ first — nothing is uploaded without it', 5000); return; }
       // PULL → merge → push (via checkCloudOnStartup): a direct push on a new device would
       // overwrite the gist with an empty local state before the cloud data is downloaded
       try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {}
@@ -3138,6 +3629,16 @@ document.addEventListener('keydown', e => {
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
     return { v:1, schema: APP_SCHEMA, items: library, materials: materials, tombstones: tombstones, device: getDeviceName() };
+  }
+  // how long to back off after a 403/429 from GitHub: Retry-After / X-RateLimit-Reset, else a minute (10 s – 1 h)
+  function rateLimitWait(res) {
+    const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+    const reset = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
+    const remaining = res.headers.get('x-ratelimit-remaining');
+    const ms = retryAfter ? retryAfter * 1000
+             : (remaining === '0' && reset) ? (reset * 1000 - Date.now())
+             : 60000;                              // secondary limit, no hint → wait a minute
+    return Math.min(Math.max(ms || 0, 10000), 3600000);
   }
   function scheduleAutoPush() {
     if (!autosyncEnabled() || !hasToken()) return;
@@ -3150,30 +3651,42 @@ document.addEventListener('keydown', e => {
     if (cloudSchemaAhead) { setSyncState('err'); showStatusMsg('⚠ sync paused — a newer app version is in the cloud. Reload to update.', 5000); return; }   // never let an older build overwrite newer data
     if (pushing) { pushAgain = true; return; }
     if (Date.now() < pushCooldownUntil) { scheduleAutoPush(); return; }   // rate-limit cooldown still active → defer
+    if (cloudLock) { setSyncState('err'); showStatusMsg(lockMsg(), 5000); return; }   // never overwrite a gist this device cannot open
     const token = localStorage.getItem(GHTOKEN);
     if (!token) return;
     let gistId = localStorage.getItem(GISTID);
     let creating = !gistId;        // the gist does not exist yet → autosync creates it (POST)
     pushing = true; setSyncState('syncing');
     try {
-      const payload = buildAutoPayload();
-      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      // read before overwrite: a gist not read in this page session (reload, new key, failed startup pull) or read
+      // more than PUSH_PULL_MAX_AGE ago is pulled + merged first — a PATCH replaces the whole file, so a stale key
+      // or a snapshot without the other device's newer edits must never overwrite it
+      if (!creating && Date.now() - cloudReadTs > PUSH_PULL_MAX_AGE) {
+        const ok = await pullAndMerge(gistId, token);
+        if (!ok || cloudSchemaAhead) {
+          setSyncState('err');
+          const limited = Date.now() < pushCooldownUntil;
+          showStatusMsg(cloudLock ? lockMsg() : cloudSchemaAhead ? '⚠ sync paused — a newer app version is in the cloud. Reload to update.'
+                      : limited ? '⚠ sync paused (GitHub rate limit) — auto-retry in ' + Math.ceil((pushCooldownUntil - Date.now()) / 1000) + ' s'
+                      : '⚠ sync: could not read the gist — will retry', 5000);
+          if (limited) scheduleAutoPush();   // one retry after the cooldown (scheduleAutoPush waits for it)
+          return;
+        }
+      }
+      if (!creating && localSig() === syncedSig) { setSyncState('idle'); return; }   // the cloud already has exactly this (a sealed re-upload would only add a revision)
+      const sig = localSig();
+      const content = await sealPayload(buildAutoPayload());   // throws without a key → nothing plain ever leaves the device
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, content));
       if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
         creating = true; gistId = '';
-        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, content));
       }
       if (!res.ok) {
         let body = null;
         try { body = await res.json(); } catch(_) {}
         const detail = (body && body.message) ? ' — ' + body.message : '';
         if (res.status === 403 || res.status === 429) {   // rate limited → back off instead of hammering (a secondary limit only clears if we stop)
-          const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
-          const reset = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
-          const remaining = res.headers.get('x-ratelimit-remaining');
-          let waitMs = retryAfter ? retryAfter * 1000
-                     : (remaining === '0' && reset) ? (reset * 1000 - Date.now())
-                     : 60000;                              // secondary limit, no hint → wait a minute
-          waitMs = Math.min(Math.max(waitMs || 0, 10000), 3600000);
+          const waitMs = rateLimitWait(res);
           pushCooldownUntil = Date.now() + waitMs;
           console.warn('[autosync] rate-limited, pausing ' + Math.ceil(waitMs/1000) + 's' + detail);
           showStatusMsg('⚠ sync paused (GitHub rate limit) — auto-retry in ' + Math.ceil(waitMs/1000) + ' s', 6000);
@@ -3190,9 +3703,11 @@ document.addEventListener('keydown', e => {
         const newId = json && json.id;
         if (newId) { try { localStorage.setItem(GISTID, newId); } catch(e) {} }
       }
+      syncedSig = sig;   // (not a read: cloudReadTs stays — a stale device must re-read within PUSH_PULL_MAX_AGE, so it cannot overwrite a rekey)
       lastPushTs = Date.now(); setSyncState('ok');
     } catch(e) {
-      console.warn('[autosync] push failed:', (e && e.message) ? e.message : e);
+      if (e && e.locked) showStatusMsg(lockMsg(e.locked), 5000);
+      else console.warn('[autosync] push failed:', (e && e.message) ? e.message : e);
       setSyncState('err');
     } finally {
       pushing = false;
@@ -3292,16 +3807,10 @@ document.addEventListener('keydown', e => {
     if (sBtn) { sBtn.disabled = true; sBtn.classList.add('syncing'); }
     let changed = false;
     try {
-      const res = await gistGet(gistId, token); if (!res.ok) return;
-      const record = await gistRecord(res);
-      if (typeof record !== 'object' || record === null) return;
-      checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
-      if (localSig() !== cloudSig(record)) {
-        const before = localSig();
-        autoImportSilent(record);
-        changed = localSig() !== before;
-      }
-      if (autosyncEnabled()) scheduleAutoPush();
+      const before = localSig();
+      if (!await pullAndMerge(gistId, token)) { if (cloudLock) showStatusMsg(lockMsg(), 5000); return; }
+      changed = localSig() !== before;
+      if (autosyncEnabled()) scheduleAutoPush();   // skipped inside when the cloud already matches (syncedSig)
     } catch(e) { console.warn('[silentPull] failed:', (e && e.message) ? e.message : e); }
     finally {
       pulling = false;
@@ -3321,21 +3830,25 @@ document.addEventListener('keydown', e => {
     const items = library.filter(e => exportSelected.has(e.id));
     const mats  = materials.filter(e => exportMatSelected.has(e.id));
     if (!items.length && !mats.length) { customAlert('Nothing is selected.'); return; }
-    const payload = {v:1, schema: APP_SCHEMA, items, materials: mats};
+    if (cloudLock) { showStatusMsg(lockMsg(), 6000); return; }   // would lock the other devices out of the gist
+    const payload = {v:1, schema: APP_SCHEMA, items, materials: mats, device: getDeviceName()};
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
+      const content = await sealPayload(payload);   // throws without a key
       let creating = !gistId;
-      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, payload));
+      let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, content));
       if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
         creating = true; gistId = '';
-        res = await fetch(gistUrl(''), gistWriteInit(token, true, payload));
+        res = await fetch(gistUrl(''), gistWriteInit(token, true, content));
       }
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
       if (creating) { const json = await res.json().catch(() => null); const newId = json && json.id; if (newId) localStorage.setItem(GISTID, newId); }
+      syncedSig = null;   // the gist now holds only the selection, not the full state
       const t = new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'});
-      showSyncTooltip('↑ uploaded '+t+' ('+items.length+' dips, '+mats.length+' materials)');
+      showSyncTooltip('↑ uploaded encrypted '+t+' ('+items.length+' dips, '+mats.length+' materials)');
     } catch(e) {
+      if (e && e.locked) { showStatusMsg(lockMsg(e.locked), 6000); return; }
       showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
     }
   }
@@ -3350,6 +3863,8 @@ document.addEventListener('keydown', e => {
       const res = await gistGet(gistId, token);
       if (!res.ok) { const e = await res.text(); throw new Error('HTTP '+res.status+': '+e.slice(0,120)); }
       const record = await gistRecord(res);
+      if (!record && cloudLock) { showStatusMsg(lockMsg(), 6000); return; }
+      if (!record && cloudEmpty) throw new Error('The gist contains no data');
       if (typeof record !== 'object' || record === null) throw new Error('Invalid data in the gist');
       if (!record.items && !record.materials) throw new Error('The gist contains no data');
       openImportModal();
@@ -3373,15 +3888,25 @@ document.addEventListener('keydown', e => {
     sessionStorage.setItem('dip-app-cloud-checked','1');
     const btn = el('syncDownBtn'); const origTitle = btn.title;
     btn.disabled = true; btn.title = 'checking cloud…';
+    // a failed read must not mark the cloud as checked — the next load retries it
+    const unchecked = () => { try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {} };
     try {
       const token = localStorage.getItem(GHTOKEN);
-      const res = await gistGet(gistId, token); if (!res.ok) return;
+      const res = await gistGet(gistId, token);
+      if (!res.ok) { if (res.status === 404) { cloudReadTs = Date.now(); cloudLock = ''; } else unchecked(); return; }
       const record = await gistRecord(res);
-      if (typeof record !== 'object' || record === null) return;
+      if (typeof record !== 'object' || record === null) {
+        if (cloudEmpty) {   // the gist holds no data of ours yet → nothing to merge; with autosync fill it right away
+          if (autosyncEnabled() && hasToken() && (library.length || materials.some(m => m.mt))) scheduleAutoPush();
+          return;
+        }
+        unchecked(); if (cloudLock) notifyLock(); return;
+      }
       checkCloudSchema(record);   // newer cloud schema → pause our push (still safe to read/merge below)
       // AUTOSYNC: silent two-way merge (incl. deletions and edits)
       if (autosyncEnabled()) {
-        if (localSig() !== cloudSig(record)) { autoImportSilent(record); scheduleAutoPush(); }
+        if (localSig() !== cloudSig(record)) autoImportSilent(record);
+        if (!noteSynced(record)) scheduleAutoPush();   // differs (or is unencrypted) → upload the merged state
         return;
       }
       // otherwise (autosync off): offer a manual import if the data differs
@@ -3394,7 +3919,7 @@ document.addEventListener('keydown', e => {
       el('importModal').querySelector('h2').textContent = 'Import from Gist';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('☁ cloud has different data — check the selection');
-    } catch(e) {} finally { btn.disabled = false; btn.title = origTitle; }
+    } catch(e) { unchecked(); } finally { btn.disabled = false; btn.title = origTitle; }
   }
 
   /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
@@ -3447,12 +3972,14 @@ document.addEventListener('keydown', e => {
         const rev = gistRevs[i]; if (!rev || !rev.version) continue;
         const cached = rev.version in gistRevCache;
         try {
-          const rec = await fetchGistRevision(rev.version);
+          const r = await fetchGistRevision(rev.version), rec = r.rec;
           if (rec && rec.device) {
             rev._device = rec.device;
             const row = el('ghRev' + i); if (row) row.dataset.device = rec.device;
             const span = el('ghDev' + i); if (span) span.textContent = '· ' + rec.device;
             updateDeviceFilter(); if (ghFilterDev) applyGhFilter();
+          } else if (r.locked) {   // sealed with another (older) passphrase, or no key here
+            const span = el('ghDev' + i); if (span) span.textContent = '· 🔒';
           }
         } catch(_) { /* rate limit / error → historyRateLimited stops the loop */ }
         if (!cached) await sleep(150);   // space network requests so we don't trip the secondary rate limit
@@ -3478,23 +4005,30 @@ document.addEventListener('keydown', e => {
       row.style.display = (!ghFilterDev || dev === ghFilterDev) ? '' : 'none';
     });
   }
-  // downloads the content of a specific revision → record (object) or null (cached per version)
+  // downloads + decrypts a specific revision → { rec, locked } (rec = record object or null).
+  // Cached per version — except locked ones, so they open once the right passphrase is entered.
   async function fetchGistRevision(version) {
     if (version in gistRevCache) return gistRevCache[version];
     const token = localStorage.getItem(GHTOKEN), gistId = historyGistId();
     const res = await fetch(gistUrl(gistId) + '/' + version, { mode:'cors', credentials:'omit', headers: ghHeaders(token, false) });
     if (res.status === 403 || res.status === 429) { historyRateLimited = true; throw new Error('HTTP ' + res.status); }
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    const file = json && json.files && json.files[GIST_FILE];
-    const rec = (!file || !file.content) ? null : JSON.parse(file.content);
-    gistRevCache[version] = rec;
-    return rec;
+    const o = await openContent(await fileContent(await res.json()));
+    const r = { rec: (o.rec && typeof o.rec === 'object') ? o.rec : null, locked: o.locked };
+    if (!o.locked) gistRevCache[version] = r;
+    return r;
+  }
+  function revLockMsg(locked) {
+    return locked === 'nokey' ? lockMsg('nokey')
+         : locked === 'badkey' ? '🔒 this version has a different key (from before a passphrase change)'
+         : locked === 'plain' ? '⚠ this version is not encrypted — not used'
+         : '⚠ this version cannot be read by this app version';
   }
   async function gistHistoryPreview(i) {
     const rev = gistRevs[i]; if (!rev) return;
     try {
-      const record = await fetchGistRevision(rev.version);
+      const r = await fetchGistRevision(rev.version), record = r.rec;
+      if (!record && r.locked) { showStatusMsg(revLockMsg(r.locked), 5000); return; }
       if (!record) throw new Error('empty revision');
       openImportModal();
       el('importModal').classList.add('from-cloud');
@@ -3511,7 +4045,8 @@ document.addEventListener('keydown', e => {
     if (!await customConfirm('Restore the version from ' + d + '? Current data stays — the older version will be merged via the standard merge.', 'restore')) return;
     const winAtStart = (typeof activeWin !== 'undefined') ? activeWin : null;
     try {
-      const record = await fetchGistRevision(rev.version);
+      const r = await fetchGistRevision(rev.version), record = r.rec;
+      if (!record && r.locked) { showStatusMsg(revLockMsg(r.locked), 5000); return; }
       if (!record) throw new Error('empty revision');
       if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // the window switched → the data belongs to another window
       autoImportSilent(record);
@@ -3528,6 +4063,13 @@ document.addEventListener('keydown', e => {
   window.onGhDevFilter        = onGhDevFilter;
   window.openJsonBinSettings  = openJsonBinSettings;
   window.saveJsonBinSettings  = saveJsonBinSettings;
+  window.forgetPassphrase     = forgetPassphrase;
+  window.regenRecoveryKey     = regenRecoveryKey;
+  window.toggleRkField        = toggleRkField;
+  window.onRkSaved            = onRkSaved;
+  window.closeRecoveryModal   = closeRecoveryModal;
+  window.copyRecoveryKey      = copyRecoveryKey;
+  window.mailRecoveryKey      = mailRecoveryKey;
   window.doCloudUpload        = doCloudUpload;
   window.syncDownload         = syncDownload;
   window.checkCloudOnStartup  = checkCloudOnStartup;
@@ -3547,22 +4089,31 @@ document.addEventListener('keydown', e => {
   setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
   // ── SYNC LINK: one-time device setup from the URL hash (#gid=…&tok=…&as=1) ──
   // Must run BEFORE checkCloudOnStartup so the first cloud check already uses the new ID.
-  (function importSyncLink() {
+  async function importSyncLink() {
     if ((location.hash || '').indexOf('gid=') === -1) return;
     const p = new URLSearchParams(location.hash.slice(1));
     const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
     try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // delete the sensitive hash from the address and history
     if (!gid) return;
+    // a link must not silently re-point a set-up device: a link from someone else could make it upload to THEIR gist
+    let curGid = '', curTok = '';
+    try { curGid = localStorage.getItem(GISTID) || ''; curTok = localStorage.getItem(GHTOKEN) || ''; } catch(e) {}
+    if ((curGid && curGid !== gid) || (tok && curTok && curTok !== tok)) {
+      if (!await customConfirm('This link switches sync on this device to a DIFFERENT gist or GitHub token.\n\nOnly continue if you created the link yourself — a link from someone else could make this device upload to their gist.', 'switch')) {
+        showStatusMsg('sync link ignored — nothing changed', 4000);
+        return;
+      }
+    }
     try {
       localStorage.setItem(GISTID, gid);
       if (tok) localStorage.setItem(GHTOKEN, tok);
       if (p.get('as') === '1') localStorage.setItem(ASKEY, '1');
     } catch(e) {}
     try { sessionStorage.removeItem('dip-app-cloud-checked'); } catch(e) {}
-    showSyncTooltip(tok ? '🔗 sync set up from link' : '🔗 Gist ID set — enter the token via ⚙');
-  })();
+    showStatusMsg(tok ? '🔗 sync set up from link — now enter the encryption passphrase via ⚙' : '🔗 Gist ID set — enter the token and the encryption passphrase via ⚙', 6000);
+  }
   updateAutoSyncBtn();
-  checkCloudOnStartup();
+  importSyncLink().catch(() => {}).then(() => checkCloudOnStartup());
 })();
 </script>
 <footer style="text-align:center; padding: 8px;">

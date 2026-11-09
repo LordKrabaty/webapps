@@ -8,7 +8,47 @@ Roztok = **dip** (`Dips`, `+ new dip`, `dip note`…), **nikdy „solution“** 
 
 ## ⚠ Žádná firemní data v repu
 
-Repo je veřejné (GitHub Pages). **Ceny, spotřeby, kódy receptur, DPU ani seznam surovin z `_inbox-webapps/` nikdy nehardcoduj do `index.html`.** Appka startuje jen s vodou (`id: 1`); suroviny a receptury se do ní dostanou importem JSON (⇩) nebo ručně a dál jedou privátním gistem.
+Repo je veřejné (GitHub Pages). **Ceny, spotřeby, kódy receptur, DPU ani seznam surovin z `_inbox-webapps/` nikdy nehardcoduj do `index.html`.** Appka startuje jen s vodou (`id: 1`); suroviny a receptury se do ní dostanou importem JSON (⇩) nebo ručně a dál jedou **end-to-end šifrovaně** přes gist (viz „Šifrovaný sync" níže).
+
+## Šifrovaný sync (E2E) — data jsou firemní a citlivá
+
+V gistu je **jen šifrovaná obálka**, nikdy čitelná data. „Secret" gist není šifrovaný (kdo zná ID, přečte ho bez přihlášení) a GitHub drží všechny revize navždy → nešifrovaný push = trvalý únik.
+
+- **Obálka** v `dip-app-sync.json`: `{ v:2, schema, enc:'AES-256-GCM', kdf:'PBKDF2-SHA256', kid, slots:{ pass, rec }, iv, ct }`. Data šifruje náhodný **datový klíč** (AES-256-GCM přes Web Crypto, žádná knihovna, nové `iv` při každém uploadu); `kid` = veřejné id toho klíče. **Hlavička (`v, schema, enc, kdf, kid, slots`) je GCM additional data** (`aadOf`) → kdo má token, nemůže ji nepozorovaně změnit (dešifrování selže). Datový klíč je v obálce **zabalený dvakrát** (slot = `{ salt, iter, iv, wk }`): klíčem z **hesla** (PBKDF2-SHA256, 600 000 iterací) a klíčem ze **záchranného klíče** (160 náhodných bitů, 100 000 iterací stačí). Název zařízení je uvnitř `ct`.
+- **Každá změna hesla nebo záchranného klíče = NOVÝ datový klíč** (`rekey` → `newKeys`), nikdy jen přebalení slotu. Gist drží staré revize navždy — se stejným datovým klíčem by staré heslo / záchranný klíč ze staré revize otevřel i všechna nová data. Zařízení se starým klíčem se zamknou (`badkey`), dokud na nich nezadáš nové heslo; staré revize v historii verzí pak ukazují 🔒.
+- **Na zařízení** je jen `{ dek, kid, slots }` v IndexedDB (`dip-app-crypto` / `keys` / `sync`), při selhání IndexedDB jen v paměti. `dek` je **ne-exportovatelný** — surové bajty klíče existují jen chvíli uvnitř `newKeys()` / `openSlot()`. **Heslo ani záchranný klíč se nikam neukládají**, do 🔗 odkazu nejdou.
+- **Heslo:** 2×, `trim()` + `normalize('NFC')` (`normPass`, mobilní klávesnice), `passWeakness()`: min. 12 znaků, ≥ 6 různých znaků, po odečtení běžných slov / čísel (password, heslo, qwerty, dipapp, …) ≥ 8 písmen. Je to hrubé síto — doporučení v UI jsou „4 náhodná slova“.
+- **Záchranný klíč** (`newRecoveryKey`): 32 znaků z abecedy bez 0/O/1/I ve skupinách po 4. Zobrazí se **jednou** (`recoveryModal`: nejde zavřít kliknutím vedle, „done“ až po „I have saved…“; 📋 copy a ✉ `mailto:` koncept bez adresáta — nic nejde přes server). Zadání je tolerantní (`normRk`: velikost písmen, mezery, pomlčky).
+- **Operace s klíčem** (`setPassphrase` / `regenRecoveryKey`, drží `pushing` přes `holdSync`, gist čtou přes `fetchSealed`, které nešifrovaný obsah odmítne):
+  - v gistu nic našeho → **první nastavení**: nový datový + záchranný klíč (ukáže se po zavření ⚙, `pendingRk`)
+  - heslo otevře slot `pass` → **odemčení** (nové zařízení) — bez rekey
+  - heslo slot neotevře, ale zařízení má stejný `kid` → **změna hesla** (po potvrzení): rekey + **nový** záchranný klíč. Je to i cesta pro **zapomenuté heslo na zařízení, kde sync ještě běží**.
+  - záchranný klíč + nové heslo („forgot the passphrase?“) → otevře slot `rec` → rekey se **stejným** záchranným klíčem (zůstává platný)
+  - „new recovery key“ → vyžádá **aktuální heslo** (`customPrompt` typu password) → rekey + nový záchranný klíč
+  - nic nesedí → odmítne. Offline s existujícím Gist ID nic z toho **nejde** (není proti čemu ověřit).
+- **Jediné místo zápisu dat:** `sealPayload()` / `sealWith()` → `gistWriteInit(token, creating, content)` bere **už zapečetěný string**. Bez klíče `sealPayload` vyhodí `e.locked = 'nokey'`.
+- **Čtení:** `openContent()` (bez vedlejších efektů, i pro historii verzí) → `{ rec, locked }`. **Nešifrovaný obsah se nikdy nepoužije** (`locked: 'plain'`) — nenese žádný důkaz původu, kdokoli s tokenem by mohl podstrčit data s vysokým `mt`. `gistRecord()` hlídá `cloudLock` (`nokey` / `badkey` / `plain` / `format`) — gist, který zařízení neotevře, se **neslučuje ani nepřepisuje** (push i ruční upload stojí, ☁ ukáže 🔒, při startu jednorázový `customAlert`).
+- **Read-before-overwrite:** `doAutoPush` nejdřív `pullAndMerge`, když poslední **čtení** (ne vlastní push) je starší než `PUSH_PULL_MAX_AGE` (10 s) — zastaralé zařízení tak nepřepíše gist po rekey ani nové změny z druhého zařízení. Gist bez našeho souboru (`cloudEmpty`) se smí zapsat. 403/429 při tom čtení → `pushCooldownUntil` (`rateLimitWait`).
+- **🔗 odkaz** na zařízení, které už má jiné Gist ID / token, se **zeptá** (`importSyncLink`) — cizí odkaz by jinak přesměroval upload do cizího gistu.
+- **Žádné prázdné revize:** šifrovaný obsah je při každém uploadu jiný → `syncedSig` přeskočí push, když se `localSig()` rovná cloudu.
+- **`APP_SCHEMA = 3`**, `schema` je v obálce čitelně → build bez šifrování (schema 2) nepushuje plain data přes šifrovaný gist.
+- **Ztracené / ukradené zařízení:** zrušit GitHub token (github.com/settings/tokens) a na zbývajícím zařízení změnit heslo (= nový datový klíč; ztracené zařízení nová data nepřečte). Úplné vyčištění historie: smazat gist na gist.github.com a v ⚙ smazat Gist ID (vznikne nový).
+- **Lokální export (⇩ download JSON) šifrovaný není** — soubor pro firemní úložiště.
+- **Ověřeno** (2026-11-09) end-to-end: falešný Gist API server v Pythonu + profily headless Chrome jako zařízení; 94 kontrol (nastavení, slabá hesla, připojení telefonu, změna hesla + zamčení starých zařízení, reset záchranným klíčem, nový záchranný klíč, podvržená hlavička, podstrčený nešifrovaný gist, cizí 🔗 odkaz, XSS přes import, starý build, „útočník“ s vlastní implementací formátu: staré heslo z historie nové data neotevře). Při opakování: tab zavírat přes DevTools `/json/close` a až pak proces ukončit — `taskkill /F` ztratí rate-limitované zápisy localStorage (viz paměť `browser-probe-technique`).
+
+## ⚠ Bezpečnost šifrování — POVINNĚ upozornit uživatele
+
+Uživatel chce být **upozorněn předem**, když by nějaká změna v téhle appce mohla oslabit šifrování nebo usnadnit únik dat. Před implementací takové změny to **řekni a navrhni bezpečnější variantu** — i když o to výslovně nežádá. Týká se to hlavně:
+
+- **cizího JS / CDN knihoven** (jakýkoli `<script src>` — i v jiné appce na `lordkrabaty.github.io`: všechny appky sdílejí origin, tj. localStorage, IndexedDB s klíčem i GitHub token)
+- **vkládání dat do HTML bez `esc()`**, nových inline handlerů s daty, ID, která nejsou čísla (`numId` / `refId` v normalizérech nesmí zmizet) — XSS = token + data + možnost dešifrovat
+- **posílání dat kamkoli dalšího** (jiné API, analytika, error reporting, AI služby, sdílecí odkazy s daty, data v URL, `console.log` dešifrovaných dat nebo klíčů)
+- **ukládání hesla / záchranného klíče** (localStorage, IndexedDB, cookies, „zapamatovat heslo“), exportovatelného klíče, zmírnění `passWeakness` / `PASS_MIN` / iterací PBKDF2
+- **přijímání nešifrovaných nebo neověřených dat z gistu**, změny obálky mimo `aadOf`, přebalení slotu bez nového datového klíče, nového zápisu do gistu mimo `sealPayload` / `sealWith`
+- **nových kanálů pro data** (další soubory v gistu, jiný cloud, šifrovaný export souboru se slabším klíčem, service worker / cache s daty)
+- čehokoli, co by do veřejného repa dostalo firemní data (viz výše).
+
+Když si nejsi jistý, upozorni radši zbytečně. Drobné úpravy výpočtů / UI, které na tohle nesahají, hlásit netřeba.
 
 ## Datový model
 
@@ -77,7 +117,7 @@ Receptura varianty je **vždy plná síla W100** — tak jede provoz a z ní se 
 - `section.mature` = min. zrání části (typicky RF pryskyřice 30 min), `variant.mature` = min. zrání celého namíchaného roztoku (RFL, typicky 2 h). Text, ne číslo („30 min", „2 h", „přes noc").
 - Latexová část sama obvykle nezraje — zrání patří celému RFL.
 - **Migrace z poznámek:** dřív bylo zrání volným textem v `section.note`. `normVariant` u sekce **bez pole `mature`** převede poznámku, která je **jen** frází zrání (`min. 30 min zrání`, `maturing min. 2 h`, `zrání min. 24 hod`…, `parseMatureNote`), na `mature` a poznámku vyprázdní; delší poznámka zůstane beze změny. Zrání z **latexové** sekce jde do `variant.mature` (celý roztok), ne do sekce. Aditivní pole → `APP_SCHEMA` beze změny.
-- **Migrace (schema 1 → 2):** dřív nesla varianta `str` a hmotnosti byly **naředěný** lab roztok. `normVariant` je převede na W100 se stejnou dávkou (vše kromě první vody ÷ k, první voda dorovná; zaokrouhlení 0,01 g), `str` zahodí a `normSolution` ho přenese do `labStr` (poslední varianta, co ho měla). Lab navážka při té síle vrátí původní hmotnosti. Běží v normalizéru → i na stažená/importovaná stará data, deterministicky. `APP_SCHEMA = 2`, aby starý build (pořád nabízí `str` na variantě) nepushoval.
+- **Migrace (schema 1 → 2):** dřív nesla varianta `str` a hmotnosti byly **naředěný** lab roztok. `normVariant` je převede na W100 se stejnou dávkou (vše kromě první vody ÷ k, první voda dorovná; zaokrouhlení 0,01 g), `str` zahodí a `normSolution` ho přenese do `labStr` (poslední varianta, co ho měla). Lab navážka při té síle vrátí původní hmotnosti. Běží v normalizéru → i na stažená/importovaná stará data, deterministicky. `APP_SCHEMA = 2`, aby starý build (pořád nabízí `str` na variantě) nepushoval. (Dnes `APP_SCHEMA = 3` kvůli šifrování — viz „Šifrovaný sync".)
 
 ## Vzorce (`calcVariant`)
 
