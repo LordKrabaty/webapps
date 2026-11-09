@@ -485,6 +485,14 @@ html.dark input[type="date"]{color-scheme:dark}
 .var-item.drag-over-top{box-shadow:0 -3px 0 var(--black)}
 .var-item.drag-over-bottom{box-shadow:0 3px 0 var(--black)}
 .lib-used{font-family:'DM Mono',monospace;font-size:.85em;white-space:nowrap}
+.lib-grip{display:flex;align-items:center;justify-content:center;width:14px;height:1.4rem;margin:0 -.2rem 0 -.35rem;flex-shrink:0;cursor:grab;opacity:.45;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.lib-grip:active{cursor:grabbing}
+@media(hover:hover){.lib-grip:hover{opacity:1}}
+@media(hover:none){.lib-grip{opacity:.6}}
+.lib-grip svg{width:8px;height:12px;fill:var(--mid);display:block}
+.lib-item.dragging{opacity:.45}
+.lib-item.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.lib-item.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
 .var-body{padding:calc(.4rem/var(--pzc,1)) calc(.55rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));display:flex;flex-direction:column;gap:calc(.35rem/var(--pzc,1))}
 .var-stats{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dark)}
 .var-diff{font-size:.7rem;color:var(--muted);line-height:1.45}
@@ -730,6 +738,7 @@ const LIBRARY_KEY = 'dip-app-v1-library';      // solutions (each with all its v
 const MATERIALS_KEY = 'dip-app-v1-materials';  // raw materials — synced, LWW per material
 const ACTVAR_KEY = 'dip-app-active-var';       // { solutionId: variantId } — local view state, NOT synced (see CLAUDE.md: view state must not stamp mt)
 const NOTES_TAB_KEY = 'dip-app-notes-tab';
+const LIBORDER_KEY = 'dip-app-lib-order';    // { list:[dip ids], mt } — order of the dips in the library, synced as ONE record (LWW of the whole list)
 const LABVIEW_KEY = 'dip-app-lab-view';        // { solutionId: { str, batch } } — lab weighing override, local view state, NOT synced
 
 // ── STATE ──────────────────────────────────────────────────────────────────
@@ -794,6 +803,32 @@ function schedSave() {
 // ── LIBRARY / MATERIALS ───────────────────────────────────────────────────
 function loadLibrary() { try { library = (JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]') || []).map(normSolution); } catch(e) { library = []; } }
 function saveLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch(e) {} }
+// The order of the dips is its own record, not part of the dips: a drag must not stamp the mt of a dip (LWW of the
+// whole dip could then beat a real edit from another device). Never dragged = mt 0 = alphabetical, not in the payload.
+let libOrder = { list: [], mt: 0 };
+function normLibOrder(o) {
+  o = o && typeof o === 'object' ? o : {};
+  const list = [...new Set((Array.isArray(o.list) ? o.list : []).filter(x => typeof x === 'number' && isFinite(x)))];
+  return { ...o, list, mt: +o.mt || 0 };
+}
+function loadLibOrder() { try { libOrder = normLibOrder(JSON.parse(localStorage.getItem(LIBORDER_KEY) || 'null')); } catch(e) { libOrder = normLibOrder(null); } }
+function saveLibOrder() { try { localStorage.setItem(LIBORDER_KEY, JSON.stringify(libOrder)); } catch(e) {} }   // wrapped → autosync
+// dragged dips in their order, the rest (new, from another device) after them by name
+function libCmp() {
+  const rank = new Map(); libOrder.list.forEach((id, i) => rank.set(id, i));
+  const r = e => (rank.has(e.id) ? rank.get(e.id) : 1e9);
+  return (a, b) => r(a) - r(b) || byName(a, b);
+}
+// drop of a dragged dip before / after dip `refId` (drops stay inside the type group) — the whole order is stored
+function moveDipTo(id, refId, after) {
+  const ids = library.slice().sort(libCmp()).map(e => e.id);
+  const next = movedCopy(ids, ids.indexOf(id), ids.indexOf(refId), after);
+  if (!next) return;
+  libOrder = { ...libOrder, list: next, mt: Date.now() };
+  saveLibOrder(); renderLibrary();
+  const d = library.find(e => e.id === id);
+  showSave('⇅ ' + ((d && d.name) || 'untitled') + ' moved');
+}
 function loadMaterials() {
   let raw = null;
   try { raw = localStorage.getItem(MATERIALS_KEY); } catch(e) {}
@@ -858,7 +893,7 @@ function renderLibrary() {
   const q = (el('libSearch') ? el('libSearch').value : '').trim().toLowerCase();
   if (!library.length) { box.innerHTML = '<div class="lib-empty">No dips yet.</div>'; return; }
   const hit = e => !q || (e.name + ' ' + e.desc + ' ' + DIP_TYPE_NAME[dipType(e)]).toLowerCase().includes(q) || e.vars.some(v => (v.name + ' ' + v.code).toLowerCase().includes(q));
-  const list = library.filter(hit).sort(byName);
+  const list = library.filter(hit).sort(libCmp());
   if (!list.length) { box.innerHTML = '<div class="lib-empty">Nothing matches.</div>'; return; }
   // grouped by type once there is more than one
   const types = DIP_TYPES.filter(([k]) => list.some(e => dipType(e) === k));
@@ -867,7 +902,8 @@ function renderLibrary() {
 }
 function libItemHtml(e) {
   const u = usedVarOf(e);
-  return `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" onclick="loadSolution(${e.id})">
+  return `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" data-dnd="${e.id}" data-grp="${esc(dipType(e))}" onclick="loadSolution(${e.id})">
+      <span class="lib-grip" title="drag to change the order (within its type)">${GRIP_SVG}</span>
       <span class="lib-item-name"><b>${esc(e.name || 'untitled')}</b>${u ? ` <span class="lib-used" title="the variant in use">★ ${esc(u.name || '—')}</span>` : ''}${e.desc ? ' · ' + esc(e.desc) : ''}</span>
       <span class="lib-item-n" title="variants">${e.vars.length}</span>
       <button class="lib-item-del" onclick="event.stopPropagation();deleteSolution(${e.id})" title="delete dip"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
@@ -1727,7 +1763,7 @@ function renderMain() {
 function chipsHtml(av) {
   const used = usedVarOf(cur);
   return '<div class="var-chips"><span class="var-chips-label">variants</span>'
-    + cur.vars.map(v => `<button class="chip${v === av ? ' on' : ''}" onclick="selectVariant(${v.id})"${v === used ? ' title="★ the variant in use"' : ''}>${v === used ? '★ ' : ''}<span id="chip-${v.id}">${esc(v.name || '—')}</span></button>`).join('')
+    + varListOrder().map(v => `<button class="chip${v === av ? ' on' : ''}" onclick="selectVariant(${v.id})"${v === used ? ' title="★ the variant in use"' : ''}>${v === used ? '★ ' : ''}<span id="chip-${v.id}">${esc(v.name || '—')}</span></button>`).join('')
     + '<button class="chip" onclick="newVariant()" title="new variant — a copy of the active one">+</button></div>';
 }
 function headHtml(v) {
@@ -2197,7 +2233,7 @@ function renderVariants() {
   const av = activeVar(), used = usedVarOf(cur), list = varListOrder(), n = list.length;
   box.innerHTML = `<div class="var-tools"><button class="btn-sm" onclick="newVariant()" title="a copy of the active variant — change it and note what and why">+ new variant</button><span class="var-count">${n} variant${n === 1 ? '' : 's'}</span></div>`
     + '<div class="var-list">' + list.map((v, i) => `
-      <div class="var-item${v === av ? ' active' : ''}" data-vid="${v.id}">
+      <div class="var-item${v === av ? ' active' : ''}" data-dnd="${v.id}">
         <div class="var-head" onclick="selectVariant(${v.id})" title="show this variant">
           <span class="var-grip" title="drag to change the order">${GRIP_SVG}</span>
           <button class="var-star${v === used ? ' on' : ''}" onclick="event.stopPropagation();toggleUsedVar(${v.id})" title="${v === used ? '★ the variant in use — click to unmark' : 'mark as the variant in use (one per dip)'}">${v === used ? '★' : '☆'}</button>
@@ -2586,27 +2622,28 @@ function initRowDnd() {
     e.preventDefault();
   });
 }
-// drag & drop of variants in the list — the same pattern: grip in the card head (the card holds a note), indicator
-// line, the order changes on release, auto-scroll of the list, the vertically nearest card beside them
-function initVarDnd() {
-  const box = el('varsBody');   // stable container — the list inside is re-rendered with innerHTML
+/// drag & drop of a simple list by a grip — variants (the card holds a note) and dips in the library. The same pattern
+// as the components: touch starts at once, an indicator line, the order changes on release (matched by id), auto-scroll,
+// the vertically nearest item beside them. Items carry data-dnd="<id>"; o = { grip, item, group?(el) → only within
+// the same group, onDrop(id, refId, after) }. The container is stable — the list inside is re-rendered with innerHTML.
+function initListDnd(box, o) {
   if (!box || box._dndInit) return;
   box._dndInit = true;
   const MOUSE_THRESHOLD = 5;
   let src = null, pointerId = null, dragging = false, startX = 0, startY = 0, lastX = 0, lastY = 0, tgt = null, dropTs = 0, auto = null;
-  box.addEventListener('dragstart', e => { if (e.target.closest && e.target.closest('.var-grip')) e.preventDefault(); });
-  // the release of a drag must not also "click" the card under it (= select that variant)
+  const same = e => !o.group || o.group(e) === o.group(src);
+  box.addEventListener('dragstart', e => { if (e.target.closest && e.target.closest(o.grip)) e.preventDefault(); });
+  // the release of a drag must not also "click" the item under it (= open / select it)
   box.addEventListener('click', e => { if (Date.now() - dropTs < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
   const clear = () => box.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(x => x.classList.remove('drag-over-top', 'drag-over-bottom'));
   const itemAt = (x, y) => {
-    const t = document.elementFromPoint(x, y), it = t && t.closest('.var-item');
-    if (it && box.contains(it)) return it;
-    const list = box.querySelector('.var-list'); if (!list) return null;
-    const lr = list.getBoundingClientRect();
-    if (x < lr.left - 48 || x > lr.right + 48) return null;   // far beside the list → no drop
+    const t = document.elementFromPoint(x, y), it = t && t.closest(o.item);
+    if (it && box.contains(it) && it !== src && same(it)) return it;
+    const br = box.getBoundingClientRect();
+    if (x < br.left - 48 || x > br.right + 48) return null;   // far beside the list → no drop
     let best = null, bd = Infinity;
-    list.querySelectorAll('.var-item').forEach(e => {
-      if (e === src) return;
+    box.querySelectorAll(o.item).forEach(e => {
+      if (e === src || !same(e)) return;
       const b = e.getBoundingClientRect(), d = y < b.top ? b.top - y : (y > b.bottom ? y - b.bottom : 0);
       if (d < bd) { bd = d; best = e; }
     });
@@ -2615,10 +2652,9 @@ function initVarDnd() {
   const mark = () => {
     clear(); tgt = null;
     const it = itemAt(lastX, lastY); if (!it) return;
-    const b = it.getBoundingClientRect();
-    if (lastY < b.top + b.height / 2) tgt = { el: it, cls: 'drag-over-top', before: +it.dataset.vid };
-    else { const nx = it.nextElementSibling; tgt = { el: it, cls: 'drag-over-bottom', before: nx && nx.dataset.vid ? +nx.dataset.vid : null }; }
-    tgt.el.classList.add(tgt.cls);
+    const b = it.getBoundingClientRect(), after = lastY >= b.top + b.height / 2;
+    tgt = { id: +it.dataset.dnd, after };
+    it.classList.add(after ? 'drag-over-bottom' : 'drag-over-top');
   };
   const begin = () => {
     if (dragging || !src) return;
@@ -2650,16 +2686,16 @@ function initVarDnd() {
   };
   const onUp = e => {
     if (e.pointerId !== pointerId) return;
-    const wasDrag = dragging, t = dragging ? tgt : null, vid = src ? +src.dataset.vid : null;
+    const wasDrag = dragging, t = dragging ? tgt : null, id = src ? +src.dataset.dnd : null;
     end();
     if (wasDrag) dropTs = Date.now();
-    if (t && vid != null && t.before !== vid) moveVarTo(vid, t.before);
+    if (t && id != null && t.id !== id) o.onDrop(id, t.id, t.after);
   };
   const onCancel = e => { if (e.pointerId === pointerId) end(); };
   box.addEventListener('pointerdown', e => {
     if (e.button > 0) return;   // primary button / touch only
-    const g = e.target.closest('.var-grip'); if (!g) return;
-    const it = g.closest('.var-item'); if (!it || !box.contains(it)) return;
+    const g = e.target.closest(o.grip); if (!g) return;
+    const it = g.closest(o.item); if (!it || !box.contains(it)) return;
     src = it; pointerId = e.pointerId; dragging = false;
     startX = lastX = e.clientX; startY = lastY = e.clientY;
     document.addEventListener('pointermove', onMove, true);
@@ -2668,6 +2704,15 @@ function initVarDnd() {
     if (e.pointerType !== 'mouse') { begin(); mark(); }   // a dedicated grip → touch / pen drag at once
     e.preventDefault();
   });
+}
+// a copy of arr with item i moved before (after = false) / after item j — null when it would stay where it is
+function movedCopy(arr, i, j, after) {
+  let k = j + (after ? 1 : 0);
+  if (i < 0 || j < 0 || k === i || k === i + 1) return null;
+  const a = arr.slice(), [x] = a.splice(i, 1);
+  if (k > i) k--;
+  a.splice(k, 0, x);
+  return a;
 }
 function addSection() {
   const v = activeVar(); if (!v) return;
@@ -2743,7 +2788,7 @@ function toggleUsedVar(vid) {
   showSave(u ? '★ ' + (u.name || '—') + ' in use' : '☆ no variant marked in use');
 }
 // The list shows the array reversed (new variants are pushed → on top). The order is part of the dip
-// (synced, undo); moving in the list = moving in that reversed order. The chips in the recipe show the array order.
+// (synced, undo); moving in the list = moving in that reversed order. The chips in the recipe show the same order.
 function varListOrder() { return cur ? cur.vars.slice().reverse() : []; }
 function moveVar(vid, dir) {
   if (!cur) return;
@@ -2754,20 +2799,17 @@ function moveVar(vid, dir) {
   cur.vars = list.reverse();
   renderMain(); renderVariants(); schedSave();
 }
-// drop of a dragged variant: before `beforeVid` in the list, or at its end (null) — matched by id
-function moveVarTo(vid, beforeVid) {
+// drop of a dragged variant before / after variant `refId` in the list — matched by id
+function moveVarTo(vid, refId, after) {
   if (!cur) return;
-  const list = varListOrder(), i = list.findIndex(v => v.id === vid); if (i < 0) return;
-  let k = beforeVid == null ? list.length : list.findIndex(v => v.id === beforeVid);
-  if (k < 0) k = list.length;
-  if (k === i || k === i + 1) return;   // dropped where it already is
+  const list = varListOrder();
+  const next = movedCopy(list, list.findIndex(v => v.id === vid), list.findIndex(v => v.id === refId), after);
+  if (!next) return;   // dropped where it already is
   pushUndo();
-  const [v] = list.splice(i, 1);
-  if (k > i) k--;
-  list.splice(k, 0, v);
-  cur.vars = list.reverse();
+  cur.vars = next.reverse();
   renderMain(); renderVariants(); schedSave();
-  showSave('⇅ ' + (v.name || '—') + ' moved');
+  const v = cur.vars.find(x => x.id === vid);
+  showSave('⇅ ' + ((v && v.name) || '—') + ' moved');
 }
 
 // ── TOOLS (recalculation rules: keep the batch mass; solid changes go through the first water) ──
@@ -3075,10 +3117,12 @@ function init() {
   loadPanelFs();
   loadMaterials();
   loadLibrary();
+  loadLibOrder();
   loadActiveVarMap();
   loadLabView();
   initRowDnd();
-  initVarDnd();
+  initListDnd(el('varsBody'), { grip: '.var-grip', item: '.var-item', onDrop: moveVarTo });
+  initListDnd(el('libList'), { grip: '.lib-grip', item: '.lib-item', group: e => e.dataset.grp, onDrop: moveDipTo });
   try { const t = localStorage.getItem(NOTES_TAB_KEY); if (t === 'vars' || t === 'gen') notesTab = t; } catch(e) {}
   const restored = loadSession();
   if (!restored) renderAll();
@@ -3815,13 +3859,13 @@ document.addEventListener('keydown', e => {
   // locally delete append-only collections that have a tombstone — this app has none (solutions + materials are LWW → lwwMerge)
   function applyTombstones() { return 0; }
   // summary signature of the state (incl. mt and tombstones) to detect a cloud↔local difference
-  function sigOf(items, mats, tomb) {
+  function sigOf(items, mats, tomb, order) {
     const idS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const tS  = o => Object.keys(o || {}).sort().join(',');
-    return [idS(items), idS(mats), tS(tomb)].join('||');
+    return [idS(items), idS(mats), tS(tomb), 'order@' + ((order && +order.mt) || 0)].join('||');
   }
-  function localSig() { return sigOf(library, materials, tombstones); }
-  function cloudSig(r) { return sigOf(r.items || [], r.materials || [], r.tombstones || {}); }
+  function localSig() { return sigOf(library, materials, tombstones, libOrder); }
+  function cloudSig(r) { return sigOf(r.items || [], r.materials || [], r.tombstones || {}, r.libOrder); }
 
   // the toolbar button is also a status indicator
   function updateAutoSyncBtn() {
@@ -3868,7 +3912,8 @@ document.addEventListener('keydown', e => {
 
   // autosync uploads the whole state + tombstones (not a selection like doCloudUpload)
   function buildAutoPayload() {
-    return { v:1, schema: APP_SCHEMA, items: library, materials: materials, tombstones: tombstones, device: getDeviceName() };
+    return { v:1, schema: APP_SCHEMA, items: library, materials: materials, tombstones: tombstones,
+      ...(libOrder.mt > 0 ? { libOrder } : {}), device: getDeviceName() };   // the dip order only once it was dragged
   }
   // how long to back off after a 403/429 from GitHub: Retry-After / X-RateLimit-Reset, else a minute (10 s – 1 h)
   function rateLimitWait(res) {
@@ -3995,6 +4040,11 @@ document.addEventListener('keydown', e => {
     // materials — LWW by id
     const matR = lwwMerge(materials, (record.materials || []), 'mat', x => x.id, normMaterial);
     materials = matR.arr; added += matR.added; updated += matR.updated; removed += matR.removed;
+    // order of the dips — LWW of the whole list (one mt, no tombstones: a deleted dip just has no item to sort)
+    const lo = record.libOrder;
+    const orderChanged = !!(lo && typeof lo === 'object' && (+lo.mt || 0) > (+libOrder.mt || 0));
+    if (orderChanged) { libOrder = normLibOrder(lo); saveLibOrder(); }
+    if (orderChanged && !(added || updated || removed)) { renderLibrary(); showStatusMsg('☁ dip order updated from sync', 3000); }
 
     if (added || updated || removed) {
       saveLibrary(); saveMaterials();
@@ -4318,7 +4368,7 @@ document.addEventListener('keydown', e => {
   window.autoSyncOnSave       = autoSyncOnSave;   // hook after a synced collection changes (the wrapped save functions call it themselves)
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions also trigger reconcile (tombstone) + push
-  ['saveLibrary','saveMaterials'].forEach(fn => {
+  ['saveLibrary','saveMaterials','saveLibOrder'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });

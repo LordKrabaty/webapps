@@ -56,6 +56,7 @@ Když si nejsi jistý, upozorni radši zbytečně. Drobné úpravy výpočtů / 
 |---|---|---|
 | `library` (`dip-app-v1-library`) — roztoky | `id` | LWW po **celém roztoku včetně všech variant** (`ns lib`) |
 | `materials` (`dip-app-v1-materials`) — suroviny | `id` | LWW po surovině (`ns mat`) |
+| `dip-app-lib-order` — pořadí dipů v knihovně `{ list:[id], mt }` | — | **LWW celého seznamu** (jeden `mt`, bez tombstonů; v payloadu `libOrder` až po prvním přetažení, `mt > 0`; `mt` je v `sigOf`) |
 | `dip-app-active-var` — zobrazená varianta per roztok | — | **nesynchronizuje se** (stav zobrazení nesmí razítkovat `mt`) |
 | `dip-app-lab-view` — přepisy na lab listu per roztok `{ str, batch, title, mat:{<secId>|all: text}, nest:{<rowId>: W}, dfrom, dhave }` | — | **nesynchronizuje se** (pracovní nastavení navážky, ne data) |
 
@@ -76,7 +77,14 @@ alt      { id, name, producer, card, conc, price, cons, fF, fR, vp, note }   // 
 
 ## Varianty — pořadí a ★ in use
 
-- **Pořadí** = pořadí v `solution.vars` (součást dipu: synchronizuje se, undo). Seznam v záložce Variants ho ukazuje **obráceně** (nová varianta se pushne → nahoře), čipy nad recepturou v pořadí pole. Přeskládání: drag & drop za grip v hlavičce karty (`initVarDnd()` na stabilním `#varsBody` + `moveVarTo()`, stejný vzor jako složky: dotyk startuje hned, indikátor čárou, přesun při puštění podle id, auto-scroll seznamu, nejbližší karta) nebo šipky ↑/↓ (`moveVar`). Puštění tahu nesmí „kliknout" na kartu (capture `click` 400 ms po dropu).
+- **Pořadí** = pořadí v `solution.vars` (součást dipu: synchronizuje se, undo). Seznam v záložce Variants i čipy nad recepturou ho ukazují **obráceně** (`varListOrder()`; nová varianta se pushne → nahoře / vlevo). Přeskládání: drag & drop za grip v hlavičce karty (`moveVarTo`) nebo šipky ↑/↓ (`moveVar`).
+- **Sdílený drag & drop seznamů** `initListDnd(box, { grip, item, group?, onDrop(id, refId, after) })` — varianty (`#varsBody`) i dipy v knihovně (`#libList`); položky nesou `data-dnd="<id>"`. Stejný vzor jako složky (dotyk startuje hned z gripu, indikátor čárou, přesun až při puštění podle id, auto-scroll, nejbližší položka); puštění tahu nesmí „kliknout" na položku (capture `click` 400 ms po dropu). `movedCopy(arr, i, j, after)` = kopie s přesunutou položkou, `null` když by zůstala na místě. Složky receptury mají vlastní `initRowDnd` (zóny sekcí).
+
+## Pořadí dipů v knihovně
+
+- Grip `.lib-grip` vlevo u dipu; tah jen **uvnitř skupiny typu** (`data-grp`, `group` v `initListDnd`) — typ se tažením nemění.
+- Uloží se celé zobrazené pořadí všech dipů (`moveDipTo` → `libOrder = { list, mt: now }`); dip, který v seznamu není (nový, z jiného zařízení), jde za ně podle názvu (`libCmp`). Nikdy nepřetahováno = abecedně jako dřív.
+- **Pořadí NENÍ v záznamu dipu** — razítkovalo by `mt` dipu a LWW celého dipu by mohlo přebít skutečnou editaci z jiného zařízení. Je to samostatný záznam (LWW celého seznamu), synchronizuje se jen autosyncem (v zapečetěném payloadu jako vše ostatní); ruční upload / export JSON ho nenesou. Starý build ho při pushi vynechá → nový ho při dalším pullu/pushi vrátí (`localSig ≠ cloudSig`).
 - **★ in use** (`solution.used`, `toggleUsedVar`): jedna varianta na dip, klik na označenou ji odznačí (`delete used` → stejný tvar jako dip, který ji nikdy neměl; `normSolution` pole nepřidává). Smazání varianty ★ zruší. Zobrazí se ★ v seznamu, v čipu a v knihovně (`★ V5` za názvem dipu).
 - **Výchozí varianta** = `defVarOf(sol)`: ★ in use, jinak horní v seznamu (poslední v poli). Platí pro otevření dipu bez uložené zobrazené varianty (`activeVar`), připojení dipu jako složky a náhradu smazané varianty u vnořeného dipu. „Nejnovější" se už nikde neříká — po přeskládání by to nebyla pravda.
 
