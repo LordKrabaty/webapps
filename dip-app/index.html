@@ -1374,8 +1374,8 @@ const ROLES = [
 ];
 const ROLE_NAME = Object.fromEntries(ROLES);
 function roleKey(r) { return ROLE_NAME[r] ? r : 'other'; }   // a role from a newer build counts as "other" but is stored untouched
-const SEC_KINDS = [['rf', 'RF resin'], ['latex', 'Latex'], ['add', 'Additives / IK'], ['other', 'Other']];
-const SEC_SHORT = { rf: 'RF', latex: 'L', add: 'IK', other: 'other' };
+const SEC_KINDS = [['rf', 'RF resin'], ['latex', 'Latex'], ['add', 'Additives'], ['other', 'Other']];
+const SEC_SHORT = { rf: 'RF', latex: 'L', add: 'additives', other: 'other' };   // additives = IK, wax, defoamer… — not only isocyanate
 // 'other' = neither RF nor latex: counts in the total only (like additives). With `kname` it is the user's own
 // kind ("Carbon black", "Wax"…) — kinds in use anywhere in the library are offered for other sections too.
 // An unknown kind from a newer build counts as 'other' but is stored untouched.
@@ -1597,7 +1597,7 @@ function dipUsage(id) {
 function calcVariant(v, stack) {
   stack = stack || topStack();
   const c = { rows: {}, secs: {}, total: 0, dry: 0, nh3: 0, rfDry: 0, lDry: 0, naoh: 0, nF: 0, nR: 0,
-              vpDry: 0, sbrDry: 0, nrDry: 0, vpMon: 0, vpMonOk: true, epDry: 0, ikDry: 0, price: 0, priceOk: true,
+              vpDry: 0, sbrDry: 0, nrDry: 0, vpMon: 0, vpMonOk: true, epDry: 0, ikDry: 0, waxDry: 0, price: 0, priceOk: true,
               sumRF: 0, sumL: 0, sumAdd: 0, hasAdd: false };
   const secs = v ? v.secs : [], list = [], extra = new Set();
   let hasRFL = false;
@@ -1624,16 +1624,17 @@ function calcVariant(v, stack) {
     if (role === 'ammonia') c.nh3 += dry;
     if (role === 'epoxy') c.epDry += dry;
     if (role === 'isocyanate') c.ikDry += dry;
+    if (role === 'wax') c.waxDry += dry;
     if (nc && nc.total > 0) {
       // the nested dip's contents, scaled to the mass used here. In a latex section the whole of it (without its
-      // ammonia) is the latex part — the same rule as for any component there; elsewhere only its own latex part is.
+      // ammonia and wax) is the latex part — the same rule as for any component there; elsewhere only its own latex part is.
       const f = m / nc.total;
       c.rfDry += f * nc.rfDry; c.nF += f * nc.nF; c.nR += f * nc.nR; c.naoh += f * nc.naoh; c.nh3 += f * nc.nh3;
       c.vpDry += f * nc.vpDry; c.sbrDry += f * nc.sbrDry; c.nrDry += f * nc.nrDry; c.vpMon += f * nc.vpMon;
       if (!nc.vpMonOk && m > 0) c.vpMonOk = false;
-      c.epDry += f * nc.epDry; c.ikDry += f * nc.ikDry;
-      c.lDry += kind === 'latex' ? dry - f * nc.nh3 : f * nc.lDry;
-    } else if (kind === 'latex' && role !== 'ammonia') c.lDry += dry;
+      c.epDry += f * nc.epDry; c.ikDry += f * nc.ikDry; c.waxDry += f * nc.waxDry;
+      c.lDry += kind === 'latex' ? dry - f * (nc.nh3 + nc.waxDry) : f * nc.lDry;
+    } else if (kind === 'latex' && role !== 'ammonia' && role !== 'wax') c.lDry += dry;   // L = rubber: wax is never latex (phr = per hundred rubber)
     if (role === 'latex-vp') { c.vpDry += dry; const a = actAlt(mat); if (a && a.vp != null) c.vpMon += dry * a.vp / 100; else if (dry > 0) c.vpMonOk = false; }
     if (role === 'latex-sbr') c.sbrDry += dry;
     if (role === 'latex-nr') c.nrDry += dry;
@@ -1652,6 +1653,7 @@ function calcVariant(v, stack) {
   c.tsc = T > 0 ? D / T * 100 : null;
   c.tscNoNH3 = T > 0 ? (D - c.nh3) / T * 100 : null;
   c.phr = c.rfDry > 0 && c.lDry > 0 ? c.rfDry / c.lDry * 100 : null;
+  c.waxPhr = c.waxDry > 0 && c.lDry > 0 ? c.waxDry / c.lDry * 100 : null;   // parts of wax per hundred rubber, like PHR
   c.fMol = D > 0 && c.nF > 0 ? c.nF / D * 100 : null;
   c.rMol = D > 0 && c.nR > 0 ? c.nR / D * 100 : null;
   c.fr = c.nR > 0 ? c.nF / c.nR : null;
@@ -1664,12 +1666,12 @@ function calcVariant(v, stack) {
   c.nh3InL = c.lDry > 0 && c.nh3 > 0 ? c.nh3 / c.lDry * 100 : null;
   c.epIk = c.epDry > 0 && c.ikDry > 0 ? c.epDry / c.ikDry : null;
   c.priceSolid = c.tsc ? c.price / (c.tsc / 100) : null;
-  // "sum RFL", "sum RFL+IK", "sum RFL+IK+Carbon black"…
+  // "sum RFL", "sum RFL+additives", "sum RFL+additives+Carbon black"…
   const tok = (hasRFL || !extra.size ? ['RFL'] : []).concat([...extra]);
   c.totLabel = 'sum ' + tok.join('+');
   return c;
 }
-// sum labels: an RFL dip names the parts by kind ("sum RF", "sum RFL+IK"), the other types just sum
+// sum labels: an RFL dip names the parts by kind ("sum RF", "sum RFL+additives"), the other types just sum
 function secSumLabel(s) { return dipType(cur) === 'rfl' ? 'sum ' + secShort(s) : 'sum'; }
 function totLabelOf(c) { return dipType(cur) === 'rfl' ? c.totLabel : 'total'; }
 function outOf(key, val) {
@@ -1685,6 +1687,7 @@ function varDiff(a, b) {
   num('solid', ca.tsc, cb.tsc, 2, '%');
   if (t === 'rfl') {
     num('PHR', ca.phr, cb.phr, 2);
+    if (ca.waxDry > 0 || cb.waxDry > 0) num('wax phr', ca.waxPhr, cb.waxPhr, 2);
     num('F/R', ca.fr, cb.fr, 2);
     num('L in solid', ca.lInSolid, cb.lInSolid, 2, '%');
   }
@@ -2145,17 +2148,18 @@ function parHtml(c, labStr, type) {
   ].join('');
   const out = [
     ...solid,
-    P('RF resin / L (PHR)', fmt(c.phr), { key: true, t: '15–20', out: outOf('phr', c.phr), tip: 'dry RF (resin + formaldehyde) ÷ dry latex part (without ammonia) × 100' }),
+    P('RF resin / L (PHR)', fmt(c.phr), { key: true, t: '15–20', out: outOf('phr', c.phr), tip: 'dry RF (resin + formaldehyde) ÷ dry latex part (rubber — without ammonia and wax) × 100' }),
+    ...(c.waxDry > 0 ? [P('wax / L (phr)', fmt(c.waxPhr), { key: true, tip: 'dry wax ÷ dry latex part (rubber) × 100 — parts per hundred rubber, like PHR; wax is never counted into L, wherever it is in the recipe' })] : []),
     P('F / R (mol/mol)', fmt(c.fr), { key: true, t: '1.2–2', out: outOf('fr', c.fr), tip: 'F = resin solid × F share ÷ 30 + formaldehyde ÷ 30;  R = resin solid × R share ÷ 110' }),
     P('F (mol)', fmt(c.fMol, 3), { tip: 'per 100 g of solid' }),
     P('R (mol)', fmt(c.rMol, 3), { tip: 'per 100 g of solid' }),
     P('NaOH / RF (mol/mol)', fmt(c.naohRf, 3), { tip: 'n(NaOH) ÷ (n(F) + n(R))' }),
     P('NaOH in RF', pct(c.naohInRf), { tip: 'dry NaOH ÷ (dry RF + dry NaOH)' }),
-    P('L in solid', pct(c.lInSolid), { key: true, t: '>70', out: outOf('lInSolid', c.lInSolid), tip: 'dry latex part (without ammonia) ÷ total solid' }),
+    P('L in solid', pct(c.lInSolid), { key: true, t: '>70', out: outOf('lInSolid', c.lInSolid), tip: 'dry latex part (rubber — without ammonia and wax) ÷ total solid' }),
     P('Syn : NR', ratio(c.synNr), { tip: 'dry (VP + SBR) : dry NR latex' }),
     P('SBR : VP', ratio(c.sbrVp), { tip: 'dry SBR : dry VP latex' }),
     P('VP monomer in L', pct(c.vpMonL), { tip: 'needs the VP monomer % of every VP latex (⚗ materials)' }),
-    P('NH₄OH in L', pct(c.nh3InL), { tip: 'NH₃ ÷ dry latex part' }),
+    P('NH₄OH in L', pct(c.nh3InL), { tip: 'NH₃ ÷ dry latex part (rubber)' }),
     ...price,
     P('sum RF', fmt(c.sumRF, 1) + ' g'),
     P('sum L', fmt(c.sumL, 1) + ' g'),
@@ -2868,14 +2872,16 @@ function ratioRecalc(v, kind, raw) {
     const P = numOrNull(raw);
     if (!(P > 0)) return { err: 'Enter the target PHR (e.g. 17).' };
     const rf = rowsOfVar(v, r => role(r) === 'resin' || role(r) === 'formaldehyde'), na = rowsOfVar(v, r => role(r) === 'naoh');
-    const lat = rowsOfVar(v, (r, s) => secKind(s) === 'latex' && !['ammonia', 'water', 'resin', 'formaldehyde', 'naoh', 'dip'].includes(role(r)) && +r.conc > 0);
-    const RF = sumDry(rf), NA = sumDry(na), L = sumDry(lat);
+    const lat = rowsOfVar(v, (r, s) => secKind(s) === 'latex' && !['ammonia', 'water', 'resin', 'formaldehyde', 'naoh', 'dip', 'wax'].includes(role(r)) && +r.conc > 0);
+    const wax = rowsOfVar(v, r => role(r) === 'wax');   // wherever it is — it goes with the latex, so wax phr stays
+    const RF = sumDry(rf), NA = sumDry(na), L = sumDry(lat), W = sumDry(wax);
     if (!(RF > 0)) return { err: 'The recipe has no RF resin / formaldehyde solid yet.' };
     if (!(L > 0)) return { err: 'The recipe has no latex part solid yet.' };
-    // RF part (resin + formaldehyde + NaOH, so NaOH/RF stays) × a, latex part × b: (RF+NA)·a + L·b = RF+NA+L and RF·a = P/100·L·b
-    const b = (RF + NA + L) / (L + (RF + NA) * (P / 100) * L / RF), a = (P / 100) * L * b / RF;
+    // RF part (resin + formaldehyde + NaOH, so NaOH/RF stays) × a, latex part + wax × b (so wax phr stays):
+    // (RF+NA)·a + (L+W)·b = RF+NA+L+W and RF·a = P/100·L·b
+    const b = (RF + NA + L + W) / (L + W + (RF + NA) * (P / 100) * L / RF), a = (P / 100) * L * b / RF;
     [...rf, ...na].forEach(r => { if (r.m != null) out.set(r, round2(r.m * a)); });
-    lat.forEach(r => { if (r.m != null) out.set(r, round2(r.m * b)); });
+    [...lat, ...wax].forEach(r => { if (r.m != null) out.set(r, round2(r.m * b)); });
     return withFirstWater(v, out);
   }
   if (kind === 'fr') {

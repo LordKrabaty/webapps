@@ -71,7 +71,7 @@ alt      { id, name, producer, card, conc, price, cons, fF, fR, vp, note }   // 
 ```
 
 - **Role suroviny** (`water`, `naoh`, `resin`, `formaldehyde`, `latex-vp|sbr|nr`, `ammonia`, `wax`, `defoamer`, `epoxy`, `isocyanate`, `other`) řídí výpočty. Neznámá role (novější build) se počítá jako `other`, ale ukládá se beze změny.
-- **Druh sekce** (`kind`) určuje součty `sum RF` / `sum L` / `sum IK` a co je „latexová část". `other` = ani RF, ani latex → počítá se jen do celku (jako aditiva). **Vlastní druhy** = `other` + `kname` („Carbon black"): v nabídce jsou všechny `kname` použité kdekoli v knihovně (`customKinds()`, nic navíc se neukládá ani nesynchronizuje), nový přes „+ new kind…" (`customPrompt`). Popisek součtu sekce = `secShort()`, celkový = `c.totLabel` („sum RFL+IK+Carbon black"). Neznámý `kind` z novějšího buildu se počítá jako `other`, uloží se beze změny.
+- **Druh sekce** (`kind`) určuje součty `sum RF` / `sum L` / `sum additives` (druh `add` = „Additives“ — IK, vosk, odpěňovač…, ne jen izokyanát) a co je „latexová část". `other` = ani RF, ani latex → počítá se jen do celku (jako aditiva). **Vlastní druhy** = `other` + `kname` („Carbon black"): v nabídce jsou všechny `kname` použité kdekoli v knihovně (`customKinds()`, nic navíc se neukládá ani nesynchronizuje), nový přes „+ new kind…" (`customPrompt`). Popisek součtu sekce = `secShort()`, celkový = `c.totLabel` („sum RFL+additives+Carbon black"). Neznámý `kind` z novějšího buildu se počítá jako `other`, uloží se beze změny.
 - `row.conc` (%chem) je uložené v receptu (historický záznam); když se liší od `matWork(material)`, UI to označí (čárkovaný rámeček + „≠ material x %").
 - **Hmotnosti se zobrazují na 0,1 g** (`fmtG` v poli M (g), lab navážka) — váží se na desetiny, podíly (% in dip…) stačí na 2 desetinná místa. **Data** drží, co se zadalo / spočítalo (nástroje dál zaokrouhlují na 0,01 g, aby cíl seděl přesně) → součet sloupce se může od zobrazeného součtu lišit o 0,1. Lab navážka se počítá rovnou na 0,1 g (`roundM`), aby sloupec dal přesně dávku. Migrace schema 1 → 2 zůstává na 0,01 g (deterministická napříč buildy — neměnit).
 
@@ -97,7 +97,7 @@ Výběr „type" v hlavičce dipu: **RFL** · **Pre-dip** · **Other** (`DIP_TYP
 | parametry | vše dosavadní (PHR, F/R, NaOH…, L in solid, Syn:NR…) | solid, solid lab, solid w/o NH₃, **epoxy : IK**, cena, total | solid, solid lab, solid w/o NH₃, cena, total |
 | poměrové nástroje | PHR, F/R, Syn:NR, SBR:VP | epoxy:IK | žádné (scale + set solid jen) |
 | druh sekce (select) | ano | skrytý (sekce = prostá část, `kind:'other'`) | skrytý |
-| součty | `sum RF` / `sum RFL+IK` | `sum` / `total` | `sum` / `total` |
+| součty | `sum RF` / `sum RFL+additives` | `sum` / `total` | `sum` / `total` |
 | měřené | pH RF, pH RFL, solid | pH, solid | pH, solid |
 
 - Starý záznam bez `type` = `rfl` (`normSolution` doplní). Neznámý typ z novějšího buildu se počítá jako `other`, uloží se beze změny. Aditivní pole → `APP_SCHEMA` beze změny.
@@ -140,7 +140,8 @@ Receptura varianty je **vždy plná síla W100** — tak jede provoz a z ní se 
 
 - `dry = m · conc / 100` (voda 0) · `% in dip = dry / Σm` · `% in solid = dry / Σdry` · `% wet = m / Σm`
 - sušina = Σ dry / Σm; bez čpavku = (Σdry − NH₃) / Σm
-- RF sušina = resin + formaldehyd; L sušina = řádky v sekcích `latex` bez čpavku
+- RF sušina = resin + formaldehyd; L sušina = řádky v sekcích `latex` bez čpavku a **bez vosku** (L = kaučuk: phr = parts per hundred rubber; vosk se do L nepočítá nikdy, ani v latexové sekci — rozhodnutí uživatele 2026-11-09, odpovídá literatuře/patentům k RFL). Vnořený dip v latexové sekci = celý bez čpavku a vosku.
+- **wax phr** = sušina vosku (role `wax`, kdekoli v receptuře, vč. vnořených dipů) / L × 100 — parametr „wax / L (phr)“ jen u RFL a jen když receptura vosk má; ve `varDiff` taky
 - PHR = RF / L × 100 (teorie 15–20)
 - n(F) = resin·fF/30 + formaldehyd/30, n(R) = resin·fR/110 (fF/fR default 12/88 % sušiny pryskyřice); F/R = n(F)/n(R) (teorie 1,2–2); F, R (mol) zobrazené na 100 g sušiny
 - NaOH/RF = n(NaOH)/(n(F)+n(R)), M(NaOH) = 40 · NaOH in RF = NaOH / (RF + NaOH)
@@ -157,7 +158,7 @@ Ověřeno proti laboratornímu listu uživatele (sušina, F/R, NaOH/RF, NaOH in 
 - **scale batch** — všechny m × k, zaokrouhlení na 0,01 g (zobrazení 0,1 g — viz „Datový model"), zbytek do první vody
 - **set solid** — drží celkovou hmotnost: vše kromě první vody × (cílová/aktuální sušina), první voda dorovná; když by ostatní složky vážily víc než dávka → odmítne a řekne maximum
 - **PHR / F/R / Syn:NR / SBR:VP při stejné sušině** (`ratioRecalc()` + `toolRatio()`, druhý řádek nástrojů; placeholder = aktuální hodnota): přesouvá sušinu mezi skupinami složek tak, že jejich součet sušiny zůstane → s dávkou drženou první vodou zůstane i sušina roztoku. Uvnitř skupiny vše × stejný faktor (vnitřní poměry zůstávají); skupina bez hmotnosti dostane vše do prvního řádku s %chem. Čpavek a ostatní beze změny.
-  - PHR: celá RF část (resin + formaldehyd + **NaOH**, aby NaOH/RF zůstal) × a, latexová část (sekce `latex` bez čpavku) × b; `(RF+NaOH)·a + L·b = RF+NaOH+L`, `RF·a = PHR/100·L·b` → F/R, Syn:NR, SBR:VP beze změny.
+  - PHR: celá RF část (resin + formaldehyd + **NaOH**, aby NaOH/RF zůstal) × a, latexová část (sekce `latex` bez čpavku a vosku) **+ vosk (kdekoli)** × b; `(RF+NaOH)·a + (L+W)·b = RF+NaOH+L+W`, `RF·a = PHR/100·L·b` → F/R, Syn:NR, SBR:VP i wax phr beze změny.
   - F/R: formaldehyd ↔ pryskyřice při stejné RF sušině (PHR zůstává): `x = (RF/30) / (t·fR/110 + (1 − fF)/30)`, fF/fR vážené přes řádky pryskyřice; minimum = pryskyřice bez formaldehydu.
   - Syn:NR: (VP + SBR) ↔ NR při stejné sušině latexů (PHR, SBR:VP zůstávají); SBR:VP: SBR ↔ VP. Zadání `70:30`, `70/30` nebo `70` (podíl první části v %).
   - epoxy:IK (jen pre-dip): epoxid ↔ izokyanát při stejném součtu jejich sušiny; zadání `0.2` nebo `1:5`.
