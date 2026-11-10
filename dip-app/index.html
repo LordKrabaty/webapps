@@ -687,6 +687,7 @@ html.dark input[type="date"]{color-scheme:dark}
     <p class="jb-import-hide" style="font-size:.76rem;color:var(--muted);margin:.5rem 0 .2rem">or paste JSON content:</p>
     <textarea id="importPaste" class="jb-import-hide" placeholder='{"v":1,"items":[...],"materials":[...]}' style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:70px;background:var(--off);border:var(--b);resize:vertical;width:100%;padding:.45rem .5rem;outline:none;border-radius:var(--r);color:var(--black)" oninput="previewImportPaste()"></textarea>
     <p id="importErr" style="display:none;color:var(--muted);font-size:.82rem"></p>
+    <p class="jb-note" id="importHint" style="display:none"></p>
     <div id="importItemSection" style="display:none">
       <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Dips</p>
       <div class="modal-list" id="importList"></div>
@@ -697,7 +698,7 @@ html.dark input[type="date"]{color-scheme:dark}
     </div>
     <div class="modal-row" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
-      <button class="modal-btn primary" onclick="doImport()">import selected</button>
+      <button class="modal-btn primary" id="importApplyBtn" onclick="doImport()">import selected</button>
     </div>
     <div class="modal-row" id="importCancel">
       <button class="modal-btn" onclick="closeModal('importModal')">close</button>
@@ -1283,6 +1284,11 @@ function copyExportText() {
 
 // ── IMPORT ────────────────────────────────────────────────────────────────
 let importData = [], importSelected = new Set(), importMatData = [], importMatSelected = new Set();
+// Version history → "restore" opens this modal in RESTORE mode (title, hint, button, messages). The overwrite itself
+// is what an import here always does (doImport: replace by id + mt = now), so the mode only changes the wording.
+// openImportModal() always switches it off — gistHistoryRestore() sets it AFTER that call, so that a later
+// preview / plain import never inherits it.
+let importForceRestore = false, importRestoreLabel = '';
 function resetImportLists() {
   importData = []; importSelected = new Set(); importMatData = []; importMatSelected = new Set();
   el('importList').innerHTML = ''; el('importItemSection').style.display = 'none';
@@ -1292,6 +1298,9 @@ function resetImportLists() {
   el('importCancel').style.display = 'flex';
 }
 function openImportModal() {
+  importForceRestore = false; importRestoreLabel = '';
+  el('importApplyBtn').textContent = 'import selected';
+  el('importHint').style.display = 'none'; el('importHint').textContent = '';
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
   el('importFile').value = ''; el('importPaste').value = '';
@@ -1309,16 +1318,23 @@ function parseImportJson(text) {
     if (!items.length && !mats.length) throw new Error('no dips or materials in the file');
     importData = items; importSelected = new Set(items.map(x => x.id));
     importMatData = mats; importMatSelected = new Set(mats.map(x => x.id));
-    const tag = (arr, x) => arr.some(e => e.id === x.id) ? ' <span style="color:var(--muted)">(replaces the local one)</span>' : '';
+    // what applying it would do to the local record with the same id (fixed texts only — nothing from the file)
+    const tag = (arr, x, normalize) => {
+      const loc = arr.find(e => e.id === x.id);
+      let t = '';
+      if (!loc) t = importForceRestore ? 'not in the current data — comes back' : '';
+      else { let same = false; try { same = sameRec(normalize(clone(x)), loc); } catch(e) {} t = same ? 'same as the local one' : 'replaces the local one'; }
+      return t ? ' <span style="color:var(--muted)">(' + t + ')</span>' : '';
+    };
     el('importList').innerHTML = items.map(x => `
       <label class="modal-item sel" id="ii-${x.id}">
         <input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />
-        <span>${esc(x.name||'untitled')}${x.desc ? ' · ' + esc(x.desc) : ''}${tag(library, x)}</span>
+        <span>${esc(x.name||'untitled')}${x.desc ? ' · ' + esc(x.desc) : ''}${tag(library, x, normSolution)}</span>
       </label>`).join('');
     el('importMatList').innerHTML = mats.map(x => `
       <label class="modal-item sel" id="imi-${x.id}">
         <input type="checkbox" checked onchange="toggleImportMatSel(${x.id},this.checked)" />
-        <span>${esc(x.name||'unnamed')}${tag(materials, x)}</span>
+        <span>${esc(x.name||'unnamed')}${tag(materials, x, normMaterial)}</span>
       </label>`).join('');
     el('importItemSection').style.display = items.length ? 'block' : 'none';
     el('importMatSection').style.display = mats.length ? 'block' : 'none';
@@ -1342,19 +1358,32 @@ function doImport() {
   const matsToAdd = importMatData.filter(x => importMatSelected.has(x.id));
   if (!toAdd.length && !matsToAdd.length) { customAlert('Nothing is selected.'); return; }
   flushActiveEdit();
-  // dedup by id — update an existing record in place, do not duplicate; mt = now (import wins on sync)
+  // By id: an existing record is replaced in place (never duplicated), a missing one is added (a deleted one comes
+  // back — the save hook drops its tombstone). Both get mt = now, so the import / restore wins on every device,
+  // also over a newer edit. A record IDENTICAL to the local one is left alone: stamping it would let unchanged
+  // data overwrite a newer edit made on another device (mt only on a real change of content).
   const now = Date.now();
-  const put = (arr, rec) => { const i = arr.findIndex(e => e.id === rec.id); if (i >= 0) { arr[i] = rec; return 1; } arr.push(rec); return 0; };
-  let updated = 0;
-  toAdd.forEach(t => { updated += put(library, normSolution({ ...clone(t), mt: now })); });
-  matsToAdd.forEach(t => { updated += put(materials, normMaterial({ ...clone(t), mt: now })); });
-  if (toAdd.length) saveLibrary();
-  if (matsToAdd.length) saveMaterials();
+  let added = 0, replaced = 0, same = 0;
+  const put = (arr, rec) => {
+    const i = arr.findIndex(e => e.id === rec.id);
+    if (i < 0) { arr.push(rec); added++; return true; }
+    if (sameRec(arr[i], rec)) { same++; return false; }
+    arr[i] = rec; replaced++; return true;
+  };
+  let libChanged = false, matChanged = false;
+  toAdd.forEach(t => { if (put(library, normSolution({ ...clone(t), mt: now }))) libChanged = true; });
+  matsToAdd.forEach(t => { if (put(materials, normMaterial({ ...clone(t), mt: now }))) matChanged = true; });
+  if (libChanged) saveLibrary();
+  if (matChanged) saveMaterials();
+  const restore = importForceRestore, label = importRestoreLabel;
   closeModal('importModal');
   refreshActiveFromLibrary();
   renderAll();
   if (el('matModal').classList.contains('open')) renderMaterials();
-  showSave('↓ imported: ' + toAdd.length + ' dips, ' + matsToAdd.length + ' materials' + (updated ? ' (' + updated + ' replaced)' : ''));
+  const detail = [added ? added + ' added' : '', replaced ? replaced + ' replaced' : '', same ? same + ' unchanged' : ''].filter(Boolean).join(', ');
+  const what = toAdd.length + ' dips, ' + matsToAdd.length + ' materials' + (detail ? ' (' + detail + ')' : '');
+  if (restore) showStatusMsg('↩ restored from ' + label + ': ' + what, 4500);
+  else showSave('↓ imported: ' + what);
 }
 
 // ── DOMAIN ────────────────────────────────────────────────────────────────
@@ -1394,6 +1423,13 @@ const THEORY = { phr: [15, 20], fr: [1.2, 2], lInSolid: [70, null] };
 let _uidLast = 0;
 function uid() { let t = Date.now(); if (t <= _uidLast) t = _uidLast + 1; _uidLast = t; return t; }
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
+// the same content, `mt` aside (the order of keys does not matter)
+function sameRec(a, b) {
+  const canon = o => Array.isArray(o) ? o.map(canon)
+    : (o && typeof o === 'object') ? Object.keys(o).sort().reduce((r, k) => { if (k !== 'mt') r[k] = canon(o[k]); return r; }, {})
+    : o;
+  return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+}
 // ids are always numbers (uid()) and end up UNQUOTED in inline handlers (onclick="fn(${id})") → anything else
 // (a crafted import file, foreign data) is replaced, otherwise it would run as script (XSS → token, data and key)
 function numId(v) { return typeof v === 'number' && isFinite(v) ? v : uid(); }
@@ -3362,9 +3398,7 @@ document.addEventListener('keydown', e => {
   const hasCrypto = !!(window.isSecureContext && window.crypto && crypto.subtle && window.TextEncoder);
   let syncKey = null, syncKeyLoaded = false;   // { dek: CryptoKey (non-extractable), kid, slots:{pass,rec} } | null
   let cloudLock = '';        // '' | 'nokey' | 'badkey' | 'plain' | 'format' — the gist cannot be opened here → nothing merged, uploads pause
-  let cloudReadTs = 0;       // when the gist was last READ (and opened) in this page session; 0 = not yet
-  const PUSH_PULL_MAX_AGE = 10 * 1000;   // a push re-reads the gist first when the last read is older (read before overwrite)
-  let syncedSig = null;      // localSig() known to equal the cloud (after a pull / push) → an identical push is skipped
+  let syncedSig = null;      // localSig() known to equal the cloud (after a pull / push; null = not known) → an identical push is skipped
   let lockAlertShown = false;
   let pendingRk = '';        // a recovery key created by the settings save → shown once the settings modal closes
 
@@ -3422,7 +3456,7 @@ document.addEventListener('keydown', e => {
     syncKey = k;
     let kept = true;
     try { await idbReq('readwrite', s => s.put(k, KEY_ID)); } catch(e) { kept = false; }
-    cloudLock = ''; cloudReadTs = 0; syncedSig = null; lockAlertShown = false;
+    cloudLock = ''; syncedSig = null; lockAlertShown = false;
     updateAutoSyncBtn();
     return kept;
   }
@@ -3584,7 +3618,7 @@ document.addEventListener('keydown', e => {
       if (token) localStorage.setItem(GHTOKEN, token); else localStorage.removeItem(GHTOKEN);
       if (id)    localStorage.setItem(GISTID, id);  else localStorage.removeItem(GISTID);
     } catch(e) {}
-    if (idChanged) { cloudReadTs = 0; cloudLock = ''; syncedSig = null; }
+    if (idChanged) { cloudLock = ''; syncedSig = null; }
     if (pass) {
       settingsBusy = true;
       const btn = el('jbSaveBtn'), lbl = btn.textContent;
@@ -3720,7 +3754,7 @@ document.addEventListener('keydown', e => {
   }
   async function forgetPassphrase() {
     if (!await customConfirm('Remove the encryption key from this device? Syncing stops here until you unlock it again with the passphrase or the recovery key. Local data stays; the cloud copy is not touched.', 'remove')) return;
-    syncKey = null; cloudReadTs = 0; syncedSig = null;
+    syncKey = null; syncedSig = null;
     try { await idbReq('readwrite', s => s.delete(KEY_ID)); } catch(e) {}
     updateAutoSyncBtn(); renderKeyState();
     showStatusMsg('key removed from this device', 3000);
@@ -3800,32 +3834,33 @@ document.addEventListener('keydown', e => {
   // set by gistRecord: the last read gist has no data file of ours (new / foreign gist) — nothing to protect, safe to write
   let cloudEmpty = false;
   // the stored data of the MAIN gist from a GET response, opened; null = nothing there / unreadable / cannot open here.
-  // Tracks cloudLock (unencrypted / foreign key / unknown format / no key → nothing merged, uploads pause),
-  // cloudReadTs and cloudEmpty.
+  // Tracks cloudLock (unencrypted / foreign key / unknown format / no key → nothing merged, uploads pause)
+  // and cloudEmpty.
   async function gistRecord(res) {
     let json; try { json = await res.json(); } catch(e) { json = null; }
     const file = json && json.files && json.files[GIST_FILE];
     cloudEmpty = !!json && !(file && file.content);
-    if (cloudEmpty) { cloudReadTs = Date.now(); if (cloudLock) { cloudLock = ''; updateAutoSyncBtn(); } return null; }
+    if (cloudEmpty) { syncedSig = null; if (cloudLock) { cloudLock = ''; updateAutoSyncBtn(); } return null; }   // (the cloud does not hold our state)
     const o = await openContent(await fileContent(json));
-    if (o.locked === 'newer') { cloudReadTs = 0; checkCloudSchema({ schema: o.schema }); return null; }   // newer build → its own warning
-    if (o.locked) { cloudReadTs = 0; if (cloudLock !== o.locked) { cloudLock = o.locked; updateAutoSyncBtn(); } return null; }
+    if (o.locked === 'newer') { checkCloudSchema({ schema: o.schema }); return null; }   // newer build → its own warning
+    if (o.locked) { if (cloudLock !== o.locked) { cloudLock = o.locked; updateAutoSyncBtn(); } return null; }
     if (!o.rec) return null;   // unreadable right now (e.g. a failed fetch) — nothing merged, no push
     if (cloudLock) { cloudLock = ''; updateAutoSyncBtn(); }
-    cloudReadTs = Date.now();
     return o.rec;
   }
-  // after a merge: remember that the cloud already equals the local state (→ no identical re-upload)
+  // after a merge: is the cloud now KNOWN to equal the local state? Then an identical re-upload is skipped.
+  // Not equal → null, never the old value: a cloud that was replaced by something smaller (a manual upload of a
+  // selection, an older revision) while the local state stayed the same must be uploaded again.
   function noteSynced(record) {
-    if (localSig() === cloudSig(record)) { syncedSig = localSig(); return true; }
-    return false;
+    syncedSig = (localSig() === cloudSig(record)) ? localSig() : null;
+    return syncedSig !== null;
   }
   // read the main gist, open it and merge it into the local state (no UI).
   // true = read OK (or the gist / our file in it does not exist) → it is safe to overwrite it
   async function pullAndMerge(gistId, token) {
     const res = await gistGet(gistId, token);
     if (!res.ok) {
-      if (res.status === 404) { cloudReadTs = Date.now(); cloudLock = ''; return true; }
+      if (res.status === 404) { cloudLock = ''; syncedSig = null; return true; }   // the gist is gone → the push re-creates it
       if (res.status === 403 || res.status === 429) pushCooldownUntil = Date.now() + rateLimitWait(res);   // the push behind this read backs off too
       return false;
     }
@@ -3961,10 +3996,15 @@ document.addEventListener('keydown', e => {
     let creating = !gistId;        // the gist does not exist yet → autosync creates it (POST)
     pushing = true; setSyncState('syncing');
     try {
-      // read before overwrite: a gist not read in this page session (reload, new key, failed startup pull) or read
-      // more than PUSH_PULL_MAX_AGE ago is pulled + merged first — a PATCH replaces the whole file, so a stale key
-      // or a snapshot without the other device's newer edits must never overwrite it
-      if (!creating && Date.now() - cloudReadTs > PUSH_PULL_MAX_AGE) {
+      // nothing changed since the cloud was last known to equal the local state → nothing to upload (a sealed
+      // re-upload would only add a revision), so the gist is not even read
+      if (!creating && localSig() === syncedSig) { setSyncState('idle'); return; }
+      // READ BEFORE EVERY OVERWRITE: a PATCH replaces the whole file and the Gist API has no conditional write, so
+      // the gist is pulled + merged right before EACH upload — never on the strength of an earlier read, however
+      // recent. A device still holding an old key then locks (kid mismatch) instead of overwriting a gist that was
+      // re-keyed elsewhere, and a snapshot without the other device's newer edits is never written. All that is
+      // left is the moment between this read and the PATCH below.
+      if (!creating) {
         const ok = await pullAndMerge(gistId, token);
         if (!ok || cloudSchemaAhead) {
           setSyncState('err');
@@ -3975,8 +4015,8 @@ document.addEventListener('keydown', e => {
           if (limited) scheduleAutoPush();   // one retry after the cooldown (scheduleAutoPush waits for it)
           return;
         }
+        if (localSig() === syncedSig) { setSyncState('idle'); return; }   // the merge left both sides equal → nothing to upload
       }
-      if (!creating && localSig() === syncedSig) { setSyncState('idle'); return; }   // the cloud already has exactly this (a sealed re-upload would only add a revision)
       const sig = localSig();
       const content = await sealPayload(buildAutoPayload());   // throws without a key → nothing plain ever leaves the device
       let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, content));
@@ -4006,7 +4046,7 @@ document.addEventListener('keydown', e => {
         const newId = json && json.id;
         if (newId) { try { localStorage.setItem(GISTID, newId); } catch(e) {} }
       }
-      syncedSig = sig;   // (not a read: cloudReadTs stays — a stale device must re-read within PUSH_PULL_MAX_AGE, so it cannot overwrite a rekey)
+      syncedSig = sig;   // the cloud now holds exactly this state (the next upload still re-reads the gist first)
       lastPushTs = Date.now(); setSyncState('ok');
     } catch(e) {
       if (e && e.locked) showStatusMsg(lockMsg(e.locked), 5000);
@@ -4151,7 +4191,7 @@ document.addEventListener('keydown', e => {
     let res;
     try { res = await gistGet(gistId, token); }
     catch(e) { return e && e.badId ? BAD_ID_MSG : '⚠ cannot reach GitHub to check the gist first — nothing was uploaded'; }
-    if (res.status === 404) { cloudReadTs = Date.now(); cloudLock = ''; return ''; }   // deleted gist → the upload creates a new one
+    if (res.status === 404) { cloudLock = ''; return ''; }   // deleted gist → the upload creates a new one
     if (!res.ok) {
       if (res.status === 403 || res.status === 429) pushCooldownUntil = Date.now() + rateLimitWait(res);   // autosync backs off too
       return '⚠ the gist could not be checked first (HTTP ' + res.status + ') — nothing was uploaded';
@@ -4248,7 +4288,7 @@ document.addEventListener('keydown', e => {
     try {
       const token = localStorage.getItem(GHTOKEN);
       const res = await gistGet(gistId, token);
-      if (!res.ok) { if (res.status === 404) { cloudReadTs = Date.now(); cloudLock = ''; } else unchecked(); return; }
+      if (!res.ok) { if (res.status === 404) { cloudLock = ''; syncedSig = null; } else unchecked(); return; }
       const record = await gistRecord(res);
       if (typeof record !== 'object' || record === null) {
         if (cloudEmpty) {   // the gist holds no data of ours yet → nothing to merge; with autosync fill it right away
@@ -4394,22 +4434,30 @@ document.addEventListener('keydown', e => {
       el('gistHistoryList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Failed to load history</p>';
     }
   }
+  // RESTORE = the import modal in restore mode: the dips / materials ticked there are put back as they were in that
+  // revision — they REPLACE the current ones even when those are newer, and a deleted one comes back (doImport
+  // stamps them mt = now, so the rollback wins on every device, and the save hook drops their tombstones).
+  // A plain LWW merge (autoImportSilent) can never do that: the newer local record and the tombstone always win,
+  // so "restore" would change nothing. Nothing that is missing in the revision gets deleted.
   async function gistHistoryRestore(i) {
     const rev = gistRevs[i]; if (!rev) return;
     const d = rev.committed_at ? new Date(rev.committed_at).toLocaleString('cs-CZ') : '?';
-    if (!await customConfirm('Restore the version from ' + d + '? Current data stays — the older version will be merged via the standard merge.', 'restore')) return;
-    const winAtStart = (typeof activeWin !== 'undefined') ? activeWin : null;
     try {
       const r = await fetchGistRevision(rev.version), record = r.rec;
       if (!record && r.locked) { showStatusMsg(revLockMsg(r.locked), 5000); return; }
       if (!record) throw new Error('empty revision');
-      if (typeof activeWin !== 'undefined' && activeWin !== winAtStart) return;   // the window switched → the data belongs to another window
-      autoImportSilent(record);
-      scheduleAutoPush();
-      showStatusMsg('↩ version restored', 3000);
+      openImportModal();                                    // always switches the restore mode off …
+      importForceRestore = true; importRestoreLabel = d;    // … so it is switched on only AFTER it
+      el('importModal').classList.add('from-cloud');
+      el('importModal').querySelector('h2').textContent = 'Restore version — ' + d;
+      el('importApplyBtn').textContent = 'restore selected';
+      const hint = el('importHint');
+      hint.textContent = 'The ticked dips and materials are put back as they were in this version — they replace the current ones even if those are newer, and deleted ones come back. Nothing else is deleted. The change syncs to your other devices.';
+      hint.style.display = '';
+      parseImportJson(JSON.stringify(record));
       closeModal('gistHistoryModal');
     } catch(e) {
-      showStatusMsg('⚠ restore failed', 3000);
+      showStatusMsg('⚠ restore failed — the version could not be loaded', 4000);
     }
   }
   window.openGistHistory      = openGistHistory;

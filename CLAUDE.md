@@ -318,7 +318,7 @@ GitHub gist drží historii revizí (každý push = revize). Tlačítko „⏱ v
 - Po přepisu obnov živý buffer aktivního záznamu (`refreshActiveFromLibrary()` / `applySessionData()`), jinak ho příští flush přepíše starou verzí.
 - Tombstony smazaných položek se po restore samy uvolní přes save-hook (`reconcileTombstones` je smaže, protože položky zase existují) → resurrection funguje.
 
-**Mapování force-overwrite je per-app:** `todo-app` přes společný `importRecordWins()`/`importStamp()` (ve force režimu vrací vždy `true` / `now`); `tea-app` přes vlastní `doRestoreImport()` (overwrite by id — jeho běžný import jinak jede přes name-dedup + merge akce, ne LWW). `_template` má prohlížení + preview + filtr, ale **force-restore mapování zatím ne** — portovat na pokyn.
+**Mapování force-overwrite je per-app:** `todo-app` přes společný `importRecordWins()`/`importStamp()` (ve force režimu vrací vždy `true` / `now`); `tea-app` přes vlastní `doRestoreImport()` (overwrite by id — jeho běžný import jinak jede přes name-dedup + merge akce, ne LWW); `dip-app` přes běžný `doImport()`, který tam nahrazuje podle `id` a razítkuje `mt = now` vždy — restore režim (`importForceRestore`) mění jen nadpis, nápovědu a hlášku, shodné záznamy se nerazítkují (`sameRec`). `_template` má prohlížení + preview + filtr, ale **force-restore mapování zatím ne** — portovat na pokyn.
 
 ---
 
