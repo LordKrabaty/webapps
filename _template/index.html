@@ -1056,7 +1056,15 @@ document.addEventListener('keydown', e => {
     if (write) h['Content-Type'] = 'application/json';
     return h;
   }
-  function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
+  // a gist id is hex only. It comes from the ⚙ field or a 🔗 link and ends up in the request URL next to the token —
+  // anything else ("../…", "?…", "#…") would address ANOTHER GitHub endpoint with that token, so it never reaches fetch.
+  // Every path that puts a Gist ID into a URL goes through gistUrl().
+  function gistIdOk(id) { return /^[0-9a-f]{5,64}$/i.test(String(id == null ? '' : id)); }
+  function gistUrl(gistId) {
+    if (!gistId) return GIST_API;
+    if (!gistIdOk(gistId)) { const e = new Error('the saved Gist ID is not valid — correct it via ⚙'); e.badId = true; throw e; }
+    return GIST_API + '/' + gistId;
+  }
   // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private
   function gistWriteInit(token, creating, payload) {
     const files = {}; files[GIST_FILE] = { content: JSON.stringify(payload) };
@@ -1071,6 +1079,11 @@ document.addEventListener('keydown', e => {
     el('jsonbinModal').classList.add('open');
   }
   function saveJsonBinSettings() {
+    const idIn = (el('jbIdInput').value || '').trim();
+    if (idIn && !gistIdOk(idIn)) {   // nothing is saved — the value would end up in the request URL (see gistIdOk)
+      customAlert('This is not a Gist ID. It is the last part of the gist address — only digits and the letters a–f (not the whole address). Leave the field empty to let sync create a new gist.');
+      return;
+    }
     let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
@@ -1284,6 +1297,7 @@ document.addEventListener('keydown', e => {
       lastPushTs = Date.now(); setSyncState('ok');
     } catch(e) {
       console.warn('[autosync] push selhal:', (e && e.message) ? e.message : e);
+      if (e && e.badId) showStatusMsg('⚠ sync: ' + e.message, 6000);
       setSyncState('err');
     } finally {
       pushing = false;
@@ -1405,6 +1419,51 @@ document.addEventListener('keydown', e => {
     }
   }
 
+  // newest edit / deletion time anywhere in a payload: every `mt` / `…Mt` stamp and every tombstone time
+  function payloadMaxTs(o, inTomb) {
+    let max = 0;
+    if (!o || typeof o !== 'object') return max;
+    for (const k of Object.keys(o)) {
+      const v = o[k];
+      if (typeof v === 'number') { if ((inTomb || k === 'mt' || /Mt$/.test(k)) && isFinite(v) && v > max) max = v; }
+      else if (v && typeof v === 'object') max = Math.max(max, payloadMaxTs(v, inTomb || k === 'tombstones' || k === 'winTomb'));
+    }
+    return max;
+  }
+  // MANUAL UPLOAD: read the gist right before replacing it (a PATCH overwrites the whole file) and ASK when the upload
+  // would replace something newer — a gist written by a newer app version (this build may drop what it does not
+  // understand; autosync refuses that outright, here the user decides), data changed after anything this device holds
+  // (another device uploaded since), or content that cannot be read. Uploading older data on purpose (rolling the
+  // cloud back) stays possible. → true = go on with the upload
+  async function manualUploadOk(gistId, token) {
+    let res;
+    try { res = await gistGet(gistId, token); }
+    catch(e) { showSyncTooltip(e && e.badId ? '⚠ ' + e.message : '⚠ cannot reach GitHub — nothing was uploaded'); return false; }
+    if (res.status === 404) return true;   // deleted gist → the upload creates a new one
+    if (res.status === 403 || res.status === 429) {   // rate limited → back off (autosync too); nothing to decide here
+      pushCooldownUntil = Math.max(pushCooldownUntil, Date.now() + 60000);
+      showSyncTooltip('⚠ GitHub refused the request (rate limit) — nothing was uploaded, try again in a few minutes');
+      return false;
+    }
+    if (!res.ok) { showSyncTooltip('⚠ the gist could not be checked (HTTP ' + res.status + ') — nothing was uploaded'); return false; }
+    let hasFile = true;
+    try { const j = await res.clone().json(); hasFile = !!(j && j.files && j.files[GIST_FILE]); } catch(e) {}
+    const record = await gistRecord(res);
+    let q = '';
+    if (!record || typeof record !== 'object') {
+      if (!hasFile) return true;   // the gist holds no data of this app yet → nothing to replace
+      q = 'The gist content could not be read (damaged, or not data of this app). Uploading replaces it with your selection. Upload anyway?';
+    } else if ((+record.schema || 0) > APP_SCHEMA) {
+      q = 'The gist was written by a NEWER version of this app. This older version may drop data it does not understand — better reload the page first (Ctrl+Shift+R). Upload anyway?';
+    } else {
+      const cloudTs = payloadMaxTs(record);
+      if (cloudTs > payloadMaxTs(buildAutoPayload())) {
+        q = 'The gist holds NEWER data than this device (last change ' + new Date(cloudTs).toLocaleString('cs-CZ')
+          + (record.device ? ', from ' + record.device : '') + '). Uploading replaces the gist content with your selection — the newer changes disappear from the cloud. Upload anyway?';
+      }
+    }
+    return !q || await customConfirm(q, 'upload anyway');
+  }
   async function doCloudUpload() {
     const token = localStorage.getItem(GHTOKEN);
     if (!token) { showSyncTooltip('⚠ missing GitHub token — open ⚙'); return; }
@@ -1413,6 +1472,7 @@ document.addEventListener('keydown', e => {
     const archItems = archive.filter(e => exportArchSelected.has(e.id));
     if (!items.length && !archItems.length) { customAlert('Nothing is selected.'); return; }
     const payload = {v:1, schema: APP_SCHEMA, items, archive: archItems};
+    if (gistId && !await manualUploadOk(gistId, token)) return;   // newer / unreadable cloud → ask first (the export modal stays open on "cancel")
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
@@ -1639,12 +1699,28 @@ document.addEventListener('keydown', e => {
   setInterval(() => { if (autosyncEnabled() && document.visibilityState === 'visible') silentPull(); }, 5 * 60 * 1000);
   // ── SYNC LINK: one-time device setup from the URL hash (#gid=…&tok=…&as=1) ──
   // Must run BEFORE checkCloudOnStartup so the first cloud check already uses the new ID.
-  (function importSyncLink() {
+  async function importSyncLink() {
     if ((location.hash || '').indexOf('gid=') === -1) return;
     const p = new URLSearchParams(location.hash.slice(1));
     const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
     try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // delete the sensitive hash from the address and history
     if (!gid) return;
+    if (!gistIdOk(gid)) { showSyncTooltip('sync link ignored — it does not contain a valid Gist ID'); return; }
+    // A link must never set or re-point sync silently — not even on a device without sync: a link from someone
+    // else would make this device upload its data to THEIR gist (and merge THEIR data in). A foreign token alone is
+    // enough (a PATCH to a gist it cannot write → 404 → a new gist in THEIR account). So ask whenever the link sets
+    // or changes the Gist ID / token; only a link with the same ID and token passes without a question.
+    let curGid = '', curTok = '';
+    try { curGid = localStorage.getItem(GISTID) || ''; curTok = localStorage.getItem(GHTOKEN) || ''; } catch(e) {}
+    const newGid = gid !== curGid, newTok = !!tok && tok !== curTok;
+    if (newGid || newTok) {
+      const switching = (newGid && !!curGid) || (newTok && !!curTok);
+      const ok = await customConfirm(switching
+        ? 'This link switches sync on this device to a DIFFERENT gist or GitHub token. Only continue if you created the link yourself — a link from someone else would make this device upload its data to their gist.'
+        : 'Set up sync on this device from this link (' + (tok ? 'Gist ID and GitHub token' : 'Gist ID') + ')? Only continue if you created the link yourself via ⚙ on your other device — a link from someone else would make this device upload its data to their gist.',
+        switching ? 'switch' : 'set up');
+      if (!ok) { showSyncTooltip('sync link ignored — nothing changed'); return; }
+    }
     try {
       localStorage.setItem(GISTID, gid);
       if (tok) localStorage.setItem(GHTOKEN, tok);
@@ -1652,9 +1728,11 @@ document.addEventListener('keydown', e => {
     } catch(e) {}
     try { sessionStorage.removeItem('APP_NAME-cloud-checked'); } catch(e) {}
     showSyncTooltip(tok ? '🔗 sync set up from link' : '🔗 Gist ID set — enter the token via ⚙');
-  })();
+  }
   updateAutoSyncBtn();
-  checkCloudOnStartup();
+  // no link in the address → the cloud check starts right away; with a link it waits for the answer above
+  if ((location.hash || '').indexOf('gid=') === -1) checkCloudOnStartup();
+  else importSyncLink().catch(() => {}).then(() => { updateAutoSyncBtn(); checkCloudOnStartup(); });
 })();
 </script>
 <footer style="text-align:center; padding: 8px;">

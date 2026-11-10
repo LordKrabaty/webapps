@@ -3320,7 +3320,15 @@ document.addEventListener('keydown', e => {
     if (write) h['Content-Type'] = 'application/json';
     return h;
   }
-  function gistUrl(gistId) { return gistId ? GIST_API + '/' + gistId : GIST_API; }
+  // a gist id is hex only. It comes from the ⚙ field or a 🔗 link and ends up in the request URL next to the token —
+  // anything else ("../…", "?…", "#…") would address ANOTHER GitHub endpoint with that token, so it never reaches fetch
+  function gistIdOk(id) { return /^[0-9a-f]{5,64}$/i.test(String(id == null ? '' : id)); }
+  const BAD_ID_MSG = '⚠ the saved Gist ID is not valid — correct it via ⚙';
+  function gistUrl(gistId) {
+    if (!gistId) return GIST_API;
+    if (!gistIdOk(gistId)) { const e = new Error(BAD_ID_MSG); e.badId = true; throw e; }
+    return GIST_API + '/' + gistId;
+  }
   // fetch-init for writing: PATCH (existing) overwrites the file content; POST (new) also sets description + private.
   // `content` is the SEALED string from sealPayload() / sealWith() — never plain data.
   function gistWriteInit(token, creating, content) {
@@ -3563,6 +3571,10 @@ document.addEventListener('keydown', e => {
       const weak = passWeakness(pass);
       if (weak) { await customAlert(weak); return; }
     }
+    if (el('jbIdInput').value.trim() && !gistIdOk(el('jbIdInput').value.trim())) {
+      await customAlert('This is not a Gist ID. It is the last part of the gist address — only digits and the letters a–f (not the whole address).\n\nLeave the field empty to let sync create a new gist.');
+      return;
+    }
     let idChanged = false;
     try {
       const token = el('jbKeyInput').value.trim(), id = el('jbIdInput').value.trim();
@@ -3597,7 +3609,7 @@ document.addEventListener('keydown', e => {
     if (!gistId) return { env: null };
     let res;
     try { res = await gistGet(gistId, token); }
-    catch(e) { await customAlert('Cannot reach GitHub to check the key against the synced data. Try again when online.'); return { fail: true }; }
+    catch(e) { await customAlert(e && e.badId ? 'The saved Gist ID is not valid — correct it (or clear it) and save again.' : 'Cannot reach GitHub to check the key against the synced data. Try again when online.'); return { fail: true }; }
     if (!res.ok) {
       if (res.status === 404) return { env: null };
       await customAlert('GitHub refused the request (HTTP ' + res.status + ') — check the token and Gist ID, then try again.');
@@ -3998,6 +4010,7 @@ document.addEventListener('keydown', e => {
       lastPushTs = Date.now(); setSyncState('ok');
     } catch(e) {
       if (e && e.locked) showStatusMsg(lockMsg(e.locked), 5000);
+      else if (e && e.badId) showStatusMsg(BAD_ID_MSG, 5000);
       else console.warn('[autosync] push failed:', (e && e.message) ? e.message : e);
       setSyncState('err');
     } finally {
@@ -4119,6 +4132,46 @@ document.addEventListener('keydown', e => {
     }
   }
 
+  // newest edit / deletion time anywhere in a payload: every `mt` / `…Mt` stamp and every tombstone time
+  function payloadMaxTs(o, inTomb) {
+    let max = 0;
+    if (!o || typeof o !== 'object') return max;
+    for (const k of Object.keys(o)) {
+      const v = o[k];
+      if (typeof v === 'number') { if ((inTomb || k === 'mt' || /Mt$/.test(k)) && isFinite(v) && v > max) max = v; }
+      else if (v && typeof v === 'object') max = Math.max(max, payloadMaxTs(v, inTomb || k === 'tombstones'));
+    }
+    return max;
+  }
+  // Manual upload: READ the gist right before overwriting it (a PATCH replaces the whole file) → '' = safe to write,
+  // otherwise the reason to show. Without this a failed startup read (offline, rate limit) leaves cloudLock /
+  // cloudSchemaAhead unset, and a device still holding an OLD key — or an old build — would overwrite a gist that was
+  // re-keyed (passphrase changed) or written by a newer version: the other devices lock and the old passphrase is back.
+  async function cloudWriteBlock(gistId, token) {
+    let res;
+    try { res = await gistGet(gistId, token); }
+    catch(e) { return e && e.badId ? BAD_ID_MSG : '⚠ cannot reach GitHub to check the gist first — nothing was uploaded'; }
+    if (res.status === 404) { cloudReadTs = Date.now(); cloudLock = ''; return ''; }   // deleted gist → the upload creates a new one
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 429) pushCooldownUntil = Date.now() + rateLimitWait(res);   // autosync backs off too
+      return '⚠ the gist could not be checked first (HTTP ' + res.status + ') — nothing was uploaded';
+    }
+    const record = await gistRecord(res);   // tracks cloudLock / cloudEmpty; a newer schema → cloudSchemaAhead
+    if (cloudEmpty) return '';              // no data of ours in the gist → nothing to protect
+    if (record) checkCloudSchema(record);
+    if (cloudSchemaAhead) return '⚠ upload paused — a newer app version is in the cloud. Reload to update.';
+    if (cloudLock) return lockMsg();
+    if (!record) return '⚠ the gist could not be read right now — nothing was uploaded, try again in a moment';
+    // Data changed after anything this device holds (another device uploaded since) → the upload would replace it.
+    // Not a reason to refuse — uploading older data may be on purpose (rolling the cloud back) — but ask first.
+    const cloudTs = payloadMaxTs(record);
+    if (cloudTs > payloadMaxTs(buildAutoPayload())) {
+      const ok = await customConfirm('The gist holds NEWER data than this device (last change ' + new Date(cloudTs).toLocaleString('cs-CZ')
+        + (record.device ? ', from ' + record.device : '') + ').\n\nUploading replaces the gist content with your selection — the newer changes disappear from the cloud. Upload anyway?', 'upload anyway');
+      if (!ok) return 'upload cancelled — nothing was uploaded';
+    }
+    return '';
+  }
   async function doCloudUpload() {
     const token = localStorage.getItem(GHTOKEN);
     if (!token) { showSyncTooltip('⚠ missing GitHub token — open ⚙'); return; }
@@ -4128,11 +4181,15 @@ document.addEventListener('keydown', e => {
     if (!items.length && !mats.length) { customAlert('Nothing is selected.'); return; }
     if (cloudLock) { showStatusMsg(lockMsg(), 6000); return; }   // would lock the other devices out of the gist
     const payload = {v:1, schema: APP_SCHEMA, items, materials: mats, device: getDeviceName()};
+    if (gistId) {   // read before overwrite — the state from the startup read may be missing or stale (the export modal stays open on a refusal / "cancel")
+      const why = await cloudWriteBlock(gistId, token);
+      if (why) { showStatusMsg(why, 6000); return; }
+    }
     closeModal('exportModal');
     showSyncTooltip('↑ uploading…');
     try {
-      const content = await sealPayload(payload);   // throws without a key
       let creating = !gistId;
+      const content = await sealPayload(payload);   // throws without a key
       let res = await fetch(gistUrl(gistId), gistWriteInit(token, creating, content));
       if (!creating && res.status === 404) {   // migrated/deleted gist → create a new one
         creating = true; gistId = '';
@@ -4145,6 +4202,7 @@ document.addEventListener('keydown', e => {
       showSyncTooltip('↑ uploaded encrypted '+t+' ('+items.length+' dips, '+mats.length+' materials)');
     } catch(e) {
       if (e && e.locked) { showStatusMsg(lockMsg(e.locked), 6000); return; }
+      if (e && e.badId) { showStatusMsg(BAD_ID_MSG, 6000); return; }
       showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
     }
   }
@@ -4169,6 +4227,7 @@ document.addEventListener('keydown', e => {
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('↓ downloaded — check the selection and import');
     } catch(e) {
+      if (e && e.badId) { showStatusMsg(BAD_ID_MSG, 6000); return; }
       showSyncTooltip(isCorsErr(e) ? '⚠ CORS – open via localhost' : '⚠ '+e.message.slice(0,55));
     } finally { btn.disabled = false; }
   }
@@ -4215,7 +4274,7 @@ document.addEventListener('keydown', e => {
       el('importModal').querySelector('h2').textContent = 'Import from Gist';
       parseImportJson(JSON.stringify(record));
       showSyncTooltip('☁ cloud has different data — check the selection');
-    } catch(e) { unchecked(); } finally { btn.disabled = false; btn.title = origTitle; }
+    } catch(e) { unchecked(); if (e && e.badId) showStatusMsg(BAD_ID_MSG, 5000); } finally { btn.disabled = false; btn.title = origTitle; }
   }
 
   /* ── VERSION HISTORY (Gist revisions) ─────────────────────────────
@@ -4391,14 +4450,20 @@ document.addEventListener('keydown', e => {
     const gid = (p.get('gid') || '').trim(), tok = (p.get('tok') || '').trim();
     try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {}   // delete the sensitive hash from the address and history
     if (!gid) return;
-    // a link must not silently re-point a set-up device: a link from someone else could make it upload to THEIR gist
+    if (!gistIdOk(gid)) { showStatusMsg('sync link ignored — it does not contain a valid Gist ID', 5000); return; }
+    // a link must never set or re-point sync silently — not even on a device without sync: a link from someone else
+    // would make it upload to THEIR gist (sealed with a key from the passphrase typed here → they could guess it
+    // offline), and a foreign token alone is enough (a PATCH to a gist it cannot write → 404 → a new gist in THEIR account)
     let curGid = '', curTok = '';
     try { curGid = localStorage.getItem(GISTID) || ''; curTok = localStorage.getItem(GHTOKEN) || ''; } catch(e) {}
-    if ((curGid && curGid !== gid) || (tok && curTok && curTok !== tok)) {
-      if (!await customConfirm('This link switches sync on this device to a DIFFERENT gist or GitHub token.\n\nOnly continue if you created the link yourself — a link from someone else could make this device upload to their gist.', 'switch')) {
-        showStatusMsg('sync link ignored — nothing changed', 4000);
-        return;
-      }
+    const newGid = gid !== curGid, newTok = !!tok && tok !== curTok;
+    if (newGid || newTok) {
+      const switching = (newGid && !!curGid) || (newTok && !!curTok);
+      const ok = await customConfirm(switching
+        ? 'This link switches sync on this device to a DIFFERENT gist or GitHub token.\n\nOnly continue if you created the link yourself — a link from someone else could make this device upload to their gist.'
+        : 'Set up sync on this device from this link (' + (tok ? 'Gist ID and GitHub token' : 'Gist ID') + ')?\n\nOnly continue if you created the link yourself via ⚙ → "link for a new device" — a link from someone else would make this device upload its data to their gist.',
+        switching ? 'switch' : 'set up');
+      if (!ok) { showStatusMsg('sync link ignored — nothing changed', 4000); return; }
     }
     try {
       localStorage.setItem(GISTID, gid);
@@ -4409,7 +4474,7 @@ document.addEventListener('keydown', e => {
     showStatusMsg(tok ? '🔗 sync set up from link — now enter the encryption passphrase via ⚙' : '🔗 Gist ID set — enter the token and the encryption passphrase via ⚙', 6000);
   }
   updateAutoSyncBtn();
-  importSyncLink().catch(() => {}).then(() => checkCloudOnStartup());
+  importSyncLink().catch(() => {}).then(() => { updateAutoSyncBtn(); checkCloudOnStartup(); });   // (the link may have switched autosync on after a question)
 })();
 </script>
 <footer style="text-align:center; padding: 8px;">
