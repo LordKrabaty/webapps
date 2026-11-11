@@ -2856,8 +2856,9 @@ function moveVarTo(vid, refId, after) {
 // ── COPY A VARIANT AS A TABLE (text + Excel) ──────────────────────────────
 // ⧉ on a variant puts its recipe on the clipboard twice — as plain text (tab-separated: notes, chat, mail) and as an
 // HTML table for Excel, both laid out like the recipe: name · %chem · m · % in dip · % in solid · % wet · price.
-// In Excel the masses, %chem and the unit prices (a number inside the price formula) are values, everything else is
-// a formula → changing a mass there recalculates the sums, shares, solid and price.
+// In Excel the heading row holds the values to type over — batch, solid and strength — and the masses are formulas
+// of those, the name a formula of the strength (see varTable); %chem and the unit prices (a number inside the price formula) are values, everything else
+// is a formula → a new batch, solid or strength (or a mass typed over) recalculates the sums, shares, solid and price.
 //   x:num = the value · x:fmla = the formula · mso-number-format = the number format · x:str = keep as text
 // Rules (checked against Excel 2026-11-10 — pasted at B2 and at H20, sums / shares / solid as in the app):
 //   - Excel reads the x: attributes only when its namespace is declared on an <html> element (one inside the copied
@@ -2865,7 +2866,8 @@ function moveVarTo(vid, refId, after) {
 //     the regional settings ("1305.5" stays text with a decimal comma).
 //   - Formulas are written as if the table started at A1 — Excel moves them (also the $ ones) to where it is pasted.
 //   - x:num and numbers inside x:fmla always take a decimal point, whatever the regional settings (xlNum).
-//   - Only + − × ÷ and cell references, no function names → nothing depends on the language of Excel.
+//   - Only + − × ÷, & (joining text — the name with the strength) and cell references, no function names → nothing
+//     depends on the language of Excel. The formula goes into the attribute through esc() (its quotes and &).
 //   - Every cell is nowrap, otherwise a long name wraps in a narrow column and the row grows several lines high.
 // The plain text carries the values only, with the decimal separator of the browser's locale.
 const COPY_DEC = (() => { try { return (1.5).toLocaleString().indexOf(',') >= 0 ? ',' : '.'; } catch(e) { return '.'; } })();
@@ -2874,40 +2876,79 @@ const XF = { m: '0\\.0', p0: '0%', p2: '0\\.00%', p4: '0\\.0000%', eur: '0\\.000
 function xlPctFmt(d) { return '0' + (d ? '\\.' + '0'.repeat(d) : '') + '%'; }
 // a number for an Excel attribute / formula: always a decimal point, never an exponent
 function xlNum(n) { const x = +(+n).toPrecision(12); return x !== 0 && Math.abs(x) < 1e-6 ? x.toFixed(12) : String(x); }
-function xlTd(c) {
-  if (!c || (c.n == null && !c.t)) return '<td></td>';
-  const body = c.b ? '<b>' + esc(c.t) + '</b>' : esc(c.t);
-  if (c.n == null) return '<td x:str style="white-space:nowrap">' + body + '</td>';
-  return '<td x:num="' + xlNum(c.n) + '"' + (c.fm ? ' x:fmla="' + c.fm + '"' : '')
-    + ' style="mso-number-format:\'' + c.f + '\';white-space:nowrap">' + body + '</td>';
+// The look of the table in Excel — the fills, font colours and frame of the user's own sheet: name and code dark
+// green, the values to type over pink, section titles green, column heads / sums / the total row pale green, notes
+// red, % in dip purple. LITERAL COLOURS ON PURPOSE (the one exception to "CSS variables only"): this is not app UI but
+// a table that leaves for Excel, which knows no CSS variables — nothing of it is ever shown in the app.
+// Checked against Excel 2026-11-11: background / color / font-style / text-align in the style are taken as they are,
+// <b> = bold, a .5pt border is a thin line and 1pt a medium one (of two neighbours the heavier line shows).
+const XS = {
+  head: 'background:#375623;color:#FFFFFF',      // the name and the code
+  inp: 'background:#FCE4D6',                     // a value to type over — batch, solid, strength
+  sec: 'background:#92D050',                     // a section title with its %chem / m heads
+  soft: 'background:#E2EFDA',                    // column heads, sum labels, the total row
+  sum: 'background:#E2EFDA;font-style:italic',   // a sum of masses
+  note: 'background:#E2EFDA;color:#FF0000',      // maturing / note
+  key: 'color:#7030A0'                           // % in dip
+};
+const XB = { thin: '.5pt solid windowtext', med: '1pt solid windowtext' };
+// one <td>: `bd` = its border CSS (see the frame in varTable); an empty cell still carries its fill and border
+function xlTd(c, bd) {
+  const st = (c && c.k ? XS[c.k] + ';' : '') + bd + ';text-align:center;white-space:nowrap';
+  if (!c || (c.n == null && !c.t)) return '<td style="' + st + '"></td>';
+  const body = c.b ? '<b>' + esc(c.t) + '</b>' : esc(c.t), fm = c.fm ? ' x:fmla="' + esc(c.fm) + '"' : '';
+  if (c.n == null) return '<td x:str' + fm + ' style="' + st + '">' + body + '</td>';
+  return '<td x:num="' + xlNum(c.n) + '"' + fm + ' style="mso-number-format:\'' + c.f + '\';' + st + '">' + body + '</td>';
 }
-// { text, html } of a variant's recipe. Cells: text { t, b } or number { n, f (format), t (shown text), fm (formula), b }
+// { text, html } of a variant's recipe. Cells: text { t, b, fm (formula with a text result) } or number { n, f (format),
+// t (shown text), fm (formula), b }; both may carry k = a key of XS (the look in Excel)
 function varTable(v) {
   const c = calcVariant(v), hasT = c.total > 0, COLS = 7;
   const loc = s => COPY_DEC === ',' ? String(s).replace('.', ',') : String(s);
-  const S = (t, b) => ({ t: String(t == null ? '' : t), b: !!b });
+  const S = (t, b, fm) => ({ t: String(t == null ? '' : t), b: !!b, fm: fm || '' });
   const N = (n, f, t, fm, b) => ({ n: n != null && isFinite(n) ? n : 0, f, t: loc(t), fm: fm || '', b: !!b });
+  const K = (k, cl) => { cl = cl || S(''); cl.k = k; return cl; };   // gives a cell (or an empty one) its look
   // row numbers as if the table started at A1: 1 = the heading, then per section its title, components and sum; the total last
   let n = 1;
   const lay = v.secs.map(s => ({ s, head: ++n, rows: s.rows.map(r => ({ r, n: ++n })), sum: ++n }));
   const T = ++n;
   const plus = (col, ns) => '=' + ns.map(i => col + i).join('+');
   const dR = [], eR = [], fR = [], gR = [];   // the rows that have a % in dip / % in solid / % wet / price cell → the totals add those up
-  const grid = [[S([cur.name || 'untitled', v.name, 'W100'].filter(Boolean).join(' '), true),
-    N(c.total, XF.m, fmt(c.total, 1), '=C' + T), N(c.tsc / 100, XF.p2, pct(c.tsc), '=D' + T), null, S(v.code), S(v.date)]];
+  // The heading row drives the masses (when the recipe has a first water and some solid): batch (B1), solid of the
+  // full-strength dip (C1) and strength (G1) are values to type over, D1 shows the solid that comes out. The rules
+  // are those of scale batch / set solid / Lab weighing: every component = its recipe mass × batch × solid × strength
+  // ÷ the dry mass of the recipe, the first water takes up the rest of the batch. Without a water or without any
+  // solid there is nothing to balance with → the masses stay plain values and the heading only shows the sums.
+  const fw = firstWater(v), par = hasT && c.dry > 0 && !!fw, D0 = xlNum(c.dry);
+  const hasMass = r => r.m != null && r.m !== '' && isFinite(+r.m);
+  const others = [];   // the rows of every mass cell except the first water — it is the batch minus those
+  lay.forEach(L => L.rows.forEach(o => { if (o.r !== fw && hasMass(o.r)) others.push(o.n); }));
+  // The name ends with the strength ("R26 V5 W100"). With the strength cell it is a formula — "R26 V5 W"&(G$1*100) —
+  // so the name follows a strength typed over (W85); without one the recipe is the full-strength dip, plain "W100".
+  // A text inside a formula doubles its quotes and may be 255 characters at most → a longer name stays plain text.
+  const nameW = [cur.name || 'untitled', v.name].filter(Boolean).join(' ').replace(/[\t\r\n]+/g, ' ') + ' W';
+  const title = S(nameW + '100', true, par && nameW.length <= 250 ? '="' + nameW.replace(/"/g, '""') + '"&(G$1*100)' : ''), solid = c.tsc / 100;
+  const code = v.code ? K('head', S(v.code, true)) : null;
+  const grid = [par
+    ? [K('head', title), K('inp', N(c.total, XF.m, fmt(c.total, 1))), K('inp', N(solid, XF.p2, pct(c.tsc))), N(solid, XF.p2, pct(c.tsc), '=D' + T),
+       code, K('soft', S('strength', true)), K('inp', N(1, XF.p2, '100.00%'))]
+    : [K('head', title), N(c.total, XF.m, fmt(c.total, 1), '=C' + T), N(solid, XF.p2, pct(c.tsc), '=D' + T), null, code]];
   lay.forEach((L, i) => {
     const s = L.s;
-    grid.push([S(s.name || '—', true), S('%chem', true), S('m (g)', true)]
-      .concat(i ? [] : [S('% in dip', true), S('% in solid', true), S('% wet', true), S('price €/kg', true)]));
+    grid.push([K('sec', S(s.name || '—', true)), K('sec', S('%chem', true)), K('sec', S('m (g)', true))]
+      .concat(i ? [] : ['% in dip', '% in solid', '% wet', 'price €/kg'].map(t => K('soft', S(t, true)))));
     L.rows.forEach(({ r, n }) => {
       const x = c.rows[r.id] || {}, water = x.role === 'water', nested = x.role === 'dip';
       const conc = water ? null : nested ? x.conc : numOrNull(r.conc);   // a nested dip: its solid, live from its recipe
       const cd = conc == null ? 0 : nested ? 2 : Math.min(4, (fmtNum(conc).split('.')[1] || '').length);
-      const hasM = r.m != null && r.m !== '' && isFinite(+r.m);
+      const hasM = hasMass(r);
+      const mass = par && r === fw ? N(+r.m || 0, XF.m, fmtG(+r.m || 0), '=B$1' + others.map(i => '-C' + i).join(''))   // the first water = the batch minus the rest
+        : !hasM ? null
+        : N(+r.m, XF.m, fmtG(r.m), par ? `=${xlNum(+r.m)}*B$1*C$1*G$1/${D0}` : '');
       const row = [S(rowName(r)),
         conc == null ? null : N(conc / 100, xlPctFmt(cd), conc.toFixed(cd) + '%'),
-        hasM ? N(+r.m, XF.m, fmtG(r.m)) : null,
-        !water && hasT ? N(x.dip / 100, XF.p4, pct(x.dip, 4), `=C${n}*B${n}/C$${T}`) : null,
+        mass,
+        !water && hasT ? K('key', N(x.dip / 100, XF.p4, pct(x.dip, 4), `=C${n}*B${n}/C$${T}`, true)) : null,
         !water && c.dry > 0 ? N(x.solid / 100, XF.p2, pct(x.solid), `=D${n}/D$${T}`) : null,
         hasT ? N(x.wet / 100, XF.p2, pct(x.wet), `=C${n}/C$${T}`) : null,
         hasT && x.unit != null && isFinite(x.unit) ? N(x.price, XF.eur, fmt(x.price, 3), `=F${n}*${xlNum(x.unit)}`) : null];   // % wet × € per kg of the component
@@ -2918,21 +2959,28 @@ function varTable(v) {
       grid.push(row);
     });
     const mat = String(s.mature || '').trim(), note = String(s.note || '').trim(), sc = c.secs[s.id] || { m: 0 };
-    grid.push([S([mat ? 'maturing min. ' + mat : '', note].filter(Boolean).join(' · ')), S(secSumLabel(s)),
-      N(sc.m, XF.m, fmt(sc.m, 1), L.rows.length ? plus('C', L.rows.map(o => o.n)) : '')]);
+    const secNote = [mat ? 'maturing min. ' + mat : '', note].filter(Boolean).join(' · ');
+    grid.push([secNote ? K('note', S(secNote, true)) : null, K('soft', S(secSumLabel(s))),
+      K('sum', N(sc.m, XF.m, fmt(sc.m, 1), L.rows.length ? plus('C', L.rows.map(o => o.n)) : ''))]);
   });
   const wm = String(v.mature || '').trim();
-  grid.push([S(wm ? 'maturing min. ' + wm : ''), S(totLabelOf(c), true),
-    N(c.total, XF.m, fmt(c.total, 1), lay.length ? plus('C', lay.map(L => L.sum)) : '', true),
-    dR.length ? N(c.tsc / 100, XF.p4, pct(c.tsc, 4), plus('D', dR), true) : null,
-    eR.length ? N(1, XF.p0, '100%', plus('E', eR), true) : null,
-    fR.length ? N(1, XF.p0, '100%', plus('F', fR), true) : null,
-    gR.length ? N(c.price, c.priceOk ? XF.eur : XF.eurMin, eur(c.price, c.priceOk, 3, ''), plus('G', gR), true) : null]);   // no price for a component → a lower bound, as in the app
+  // the total row is pale green all the way across, also where it has nothing to show
+  grid.push([wm ? K('note', S('maturing min. ' + wm, true)) : K('soft'), K('soft', S(totLabelOf(c))),
+    K('sum', N(c.total, XF.m, fmt(c.total, 1), lay.length ? plus('C', lay.map(L => L.sum)) : '')),
+    K('soft', dR.length ? N(c.tsc / 100, XF.p4, pct(c.tsc, 4), plus('D', dR)) : null),
+    K('soft', eR.length ? N(1, XF.p0, '100%', plus('E', eR)) : null),
+    K('soft', fR.length ? N(1, XF.p0, '100%', plus('F', fR)) : null),
+    K('soft', gR.length ? N(c.price, c.priceOk ? XF.eur : XF.eurMin, eur(c.price, c.priceOk, 3, ''), plus('G', gR)) : null)]);   // no price for a component → a lower bound, as in the app
   // text: a name that starts like a formula would be run by a spreadsheet that takes the plain text → an apostrophe keeps it text
   const cellTxt = cl => { if (!cl) return ''; const t = cl.t.replace(/[\t\r\n]+/g, ' '); return cl.n == null && /^[=+\-@]/.test(t) ? "'" + t : t; };
   const text = grid.map(r => r.map(cellTxt).join('\t').replace(/\t+$/, '')).join('\n');
+  // the frame: thin lines everywhere, medium ones around the table, under the heading row and between m and % in dip
+  const last = grid.length - 1;
+  const frame = (ri, ci) => 'border:' + XB.thin
+    + (ri <= 1 ? ';border-top:' + XB.med : '') + (ri === 0 || ri === last ? ';border-bottom:' + XB.med : '')
+    + (ci === 0 || ci === 3 ? ';border-left:' + XB.med : '') + (ci === 2 || ci === COLS - 1 ? ';border-right:' + XB.med : '');
   const html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table>'
-    + grid.map(r => '<tr>' + Array.from({ length: COLS }, (_, i) => xlTd(r[i])).join('') + '</tr>').join('')
+    + grid.map((r, ri) => '<tr>' + Array.from({ length: COLS }, (_, ci) => xlTd(r[ci], frame(ri, ci))).join('') + '</tr>').join('')
     + '</table></body></html>';
   return { text, html };
 }
