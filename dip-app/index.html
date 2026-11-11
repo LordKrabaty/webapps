@@ -427,6 +427,19 @@ html.dark input[type="date"]{color-scheme:dark}
 .lab-nw:focus{background:var(--w);border:1px solid var(--black);border-radius:var(--r)}
 .lab-nw.diff{border:1px dashed var(--black);border-radius:var(--r)}
 .lab-nw.lab-dh{width:3.8rem;text-align:right}
+/* the product a material is weighed from — a quiet label after the name (wraps under it on a narrow screen). Several
+   approved alternatives = a select: no box, dotted underline, a frame on hover / focus; dashed + bold = NOT the one in production */
+.lab-comp{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .5rem;min-width:0}
+.lab-alt,.lab-alt1{max-width:min(13rem,45vw);min-width:0;font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--dark)}
+.lab-alt1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.lab-alt{background:var(--w);border:1px solid transparent;border-bottom:1px dotted var(--mid);border-radius:0;padding:0 .1rem;outline:none;cursor:pointer}
+@supports (field-sizing:content){.lab-alt{field-sizing:content}}
+@media(hover:hover){.lab-alt:hover{border:1px solid var(--light);border-radius:var(--r)}}
+@media(hover:none){.lab-alt{padding:.15rem .1rem}}
+.lab-alt:focus{border:1px solid var(--black);border-radius:var(--r)}
+.lab-alt.diff{border:1.5px dashed var(--black);border-radius:var(--r);color:var(--black);font-weight:600}
+.lab-altc{font-size:.68rem;font-weight:600;color:var(--black);white-space:nowrap}
+.lab-altc:empty{display:none}
 .lab-dil{margin-top:calc(.9rem/var(--pzc,1));font-size:.8rem;color:var(--black)}
 .lab-dil-t{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:calc(.3rem/var(--pzc,1));border-bottom:1.5px solid var(--black)}
 .lab-dil-r{display:flex;flex-wrap:wrap;align-items:baseline;gap:.1rem .35rem;margin-top:calc(.35rem/var(--pzc,1))}
@@ -507,8 +520,12 @@ html.dark input[type="date"]{color-scheme:dark}
 .mat-modal{max-width:760px;width:94%;max-height:92vh;overflow-y:auto}
 .mat-top{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem}
 .mat-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
-.mat-bar{display:flex;gap:.5rem;align-items:center}
-.mat-bar .lib-search{flex:1}
+.mat-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.mat-bar .lib-search{flex:1 1 8rem}
+/* which alternatives to show — by their approval status */
+.mat-filter{flex:0 1 auto;min-width:0;max-width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.34rem .4rem;outline:none;cursor:pointer}
+.mat-filter:focus{outline:2px solid var(--black);outline-offset:0}
+.mat-filter.on{border:var(--bh);font-weight:600}
 .mat-list{display:flex;flex-direction:column;gap:.35rem}
 .mat-group{font-size:.63rem;font-weight:600;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;padding:.5rem .1rem .05rem}
 .mat-item{border:var(--b);border-radius:var(--r);min-width:0}
@@ -519,10 +536,15 @@ html.dark input[type="date"]{color-scheme:dark}
 .mat-meta{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);flex:1;min-width:0}
 .mat-caret{font-size:.7rem;color:var(--muted)}
 .mat-body{padding:.5rem .6rem .7rem;display:flex;flex-direction:column;gap:.55rem;border-top:1px solid var(--light)}
-.mat-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.4fr) minmax(0,1fr);gap:.5rem}
+.mat-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:.5rem}
 .alt-title{font-size:.66rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-top:.15rem}
 .alt{border:1px solid var(--light);border-radius:var(--r);padding:.45rem .5rem;display:flex;flex-direction:column;gap:.4rem}
 .alt.on{border:var(--bh)}
+/* not approved yet (lab / production testing) = dashed frame */
+.alt.test{border-style:dashed;border-color:var(--dark)}
+.alt.on.test{border-color:var(--black)}
+.alt-hidden{font-size:.72rem;color:var(--muted);line-height:1.5}
+.alt-hidden .rc-open{font-size:inherit}
 .alt-top{display:flex;align-items:center;gap:.45rem}
 .alt-radio{width:18px;height:18px;border-radius:50%;border:var(--bh);background:var(--w);cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center}
 .alt.on .alt-radio::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--black)}
@@ -533,9 +555,12 @@ html.dark input[type="date"]{color-scheme:dark}
 .mf label{font-size:.6rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mf input,.mf select{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .45rem;outline:none}
 .mf input[inputmode="decimal"]{font-family:'DM Mono',monospace}
-.mf input:focus,.mf select:focus,.alt-name:focus{outline:2px solid var(--black);outline-offset:0}
+/* the note of an alternative grows with its text (auto-grow) — flex:0 0 auto, or the global textarea{flex:1} collapses it */
+.mf .alt-note{flex:0 0 auto;width:100%;min-width:0;min-height:0;resize:none;overflow:hidden;font-size:.82rem;line-height:1.4;padding:.28rem .45rem}
+.mf input:focus,.mf select:focus,.mf .alt-note:focus,.alt-name:focus{outline:2px solid var(--black);outline-offset:0}
 .mat-actions{display:flex;gap:.5rem;flex-wrap:wrap}
 .mat-info{font-size:.74rem;color:var(--muted);line-height:1.5}
+.mat-info b{color:var(--black);font-weight:600}
 @media(max-width:560px){.mat-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -711,9 +736,10 @@ html.dark input[type="date"]{color-scheme:dark}
 <div class="modal-bg" id="matModal">
   <div class="modal mat-modal">
     <div class="mat-top"><h2>Materials</h2><span class="mat-count" id="matCount"></span></div>
-    <p>Raw materials for the recipes. A material can hold several approved alternatives — ● marks the one mixed in production now; its price and as-delivered concentration are what the recipes use.</p>
+    <p>Raw materials for the recipes. A material can hold several alternatives — approved ones and candidates still in lab or production testing (dashed). ● marks the one mixed in production now; its price and as-delivered concentration are what the recipes use. Lab weighing names it at every component and lets you pick another one for a weighing.</p>
     <div class="mat-bar">
       <input type="text" id="matSearch" class="lib-search" placeholder="search…" oninput="renderMaterials()" autocomplete="off">
+      <select id="altFilter" class="mat-filter" onchange="setAltFilter(this.value)" title="which alternatives to show — by their approval status (kept on this device)"></select>
       <button class="btn-sm" onclick="addMaterial()">+ material</button>
     </div>
     <div class="mat-list" id="matList"></div>
@@ -742,6 +768,7 @@ const ACTVAR_KEY = 'dip-app-active-var';       // { solutionId: variantId } — 
 const NOTES_TAB_KEY = 'dip-app-notes-tab';
 const LIBORDER_KEY = 'dip-app-lib-order';    // { list:[dip ids], mt } — order of the dips in the library, synced as ONE record (LWW of the whole list)
 const LABVIEW_KEY = 'dip-app-lab-view';        // { solutionId: { str, batch } } — lab weighing override, local view state, NOT synced
+const ALTFILTER_KEY = 'dip-app-alt-filter';    // which alternatives ⚗ materials shows (by approval status) — local view state, NOT synced
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let library = [], activeLibId = null;
@@ -1389,8 +1416,8 @@ function doImport() {
 
 // ── DOMAIN ────────────────────────────────────────────────────────────────
 // Data model (all records keep unknown fields — normalizers spread the original first):
-//   material  { id, name, role, work (working conc. %, null = as delivered), note, alts:[alt], act (active alt id), mt }
-//   alt       { id, name, producer, card (master card = item no. in the stock system), conc (as delivered %), price (€/kg as delivered), cons (t/yr), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
+//   material  { id, name, role, work (working conc. %, null = as delivered), cons (t / year — the material as a whole), note, alts:[alt], act (active alt id), mt }
+//   alt       { id, name, producer, card (master card = item no. in the stock system), status ('approved' | 'lab' | 'prod' — testing), conc (as delivered %), price (€/kg as delivered), share (% of the material's t / year), fF, fR (resin: F/R share of solid %), vp (VP latex: VP monomer %), note }
 //   solution  { id, name, desc, type ('rfl'|'predip'|'other'), labStr (recommended lab strength %, null = W100), note, vars:[variant], mt }   ← synced as ONE record (LWW), incl. all variants
 //   variant   { id, name, code, date, from (parent variant id), mature (min. maturing of the whole mixed dip, text), prep (preparation notes for the lab sheet), note, secs:[section], meas:{phRF, ph, solid} }   ← masses = the full-strength W100 dip
 //   section   { id, kind: 'rf'|'latex'|'add'|'other', kname (own kind name, only for 'other'), name, mature (min. maturing of this part, text — e.g. "30 min"), note, rows:[row] }
@@ -1458,14 +1485,26 @@ function setCell(id, t) {
 // ── NORMALIZERS (preserve-unknown) ─────────────────────────────────────────
 function normAlt(a) {
   a = a || {};
+  // status: a record from before the approval status = approved (that is what the list held)
   return { ...a, id: numId(a.id), name: String(a.name ?? ''), producer: String(a.producer ?? ''), card: String(a.card ?? ''),
-    conc: numOrNull(a.conc), price: numOrNull(a.price), cons: numOrNull(a.cons),
+    status: a.status ? String(a.status) : 'approved',
+    conc: numOrNull(a.conc), price: numOrNull(a.price), share: numOrNull(a.share),
     fF: numOrNull(a.fF), fR: numOrNull(a.fR), vp: numOrNull(a.vp), note: String(a.note ?? '') };
 }
 function normMaterial(m) {
   m = m || {};
   const alts = (Array.isArray(m.alts) && m.alts.length ? m.alts : [{}]).map(normAlt);
-  return { ...m, id: numId(m.id), name: String(m.name ?? ''), role: m.role || 'other', work: numOrNull(m.work),
+  // legacy: t / year used to be typed per alternative (`alt.cons`) → the material's total + each alternative's share of
+  // it in %. Deterministic (runs on pulled / imported old data too), stamps no mt. `alt.cons` is retired: one typed
+  // later by an older build no longer counts once the material has its own total or shares.
+  let cons = numOrNull(m.cons);
+  const old = alts.map(a => numOrNull(a.cons)), sum = old.reduce((s, x) => s + (x > 0 ? x : 0), 0);
+  if (cons == null && sum > 0 && alts.every(a => a.share == null)) {
+    cons = +sum.toFixed(4);
+    alts.forEach((a, i) => { if (old[i] != null) a.share = round2(Math.max(0, old[i]) / sum * 100); });
+  }
+  alts.forEach(a => { delete a.cons; });
+  return { ...m, id: numId(m.id), name: String(m.name ?? ''), role: m.role || 'other', work: numOrNull(m.work), cons,
     note: String(m.note ?? ''), alts, act: alts.some(a => a.id === m.act) ? m.act : alts[0].id, mt: +m.mt || 0 };
 }
 function normRow(r) {
@@ -1556,8 +1595,28 @@ function defaultVariant(type = 'rfl') {
 // ── MATERIAL HELPERS ──────────────────────────────────────────────────────
 function matById(id) { return id == null ? null : (materials.find(m => m.id === id) || null); }
 function actAlt(m) { return m ? (m.alts.find(a => a.id === m.act) || m.alts[0] || null) : null; }
-// concentration a material is mixed at (its default %chem in recipes)
-function matWork(m) { if (!m) return null; if (m.role === 'water') return 0; if (m.work != null) return m.work; const a = actAlt(m); return a ? a.conc : null; }
+// Approval status of an alternative: approved, or a candidate still being tested — in the lab, then in production.
+// Independent of ● (the one mixed in production now can be in production testing). An unknown status (newer build)
+// is stored untouched and counts as not approved.
+const ALT_STATUS = [['approved', 'approved'], ['lab', 'lab testing'], ['prod', 'production testing']];
+const ALT_STATUS_NAME = Object.fromEntries(ALT_STATUS);
+function altStatus(a) { return (a && a.status) || 'approved'; }
+function altApproved(a) { return altStatus(a) === 'approved'; }
+function altStatusName(a) { const s = altStatus(a); return ALT_STATUS_NAME[s] || s; }
+function altLabel(a) { return (a && (a.name.trim() || a.producer.trim())) || 'unnamed'; }
+// share of the material's yearly consumption (%) — the only alternative takes all of it unless it says otherwise
+function altShare(m, a) { return a.share != null ? a.share : (m.alts.length === 1 ? 100 : null); }
+// ⚗ materials can show only the alternatives of one status (local view state, not synced)
+const ALT_FILTERS = [['all', 'all alternatives'], ['approved', 'approved only'], ['test', 'not approved yet'], ...ALT_STATUS.filter(([k]) => k !== 'approved').map(([k, l]) => [k, l + ' only'])];
+const ALT_FILTER_NAME = Object.fromEntries(ALT_FILTERS);
+let altFilter = 'all';
+function loadAltFilter() { try { const f = localStorage.getItem(ALTFILTER_KEY); if (ALT_FILTER_NAME[f]) altFilter = f; } catch(e) {} }
+function altShown(a) { const s = altStatus(a); return altFilter === 'all' || (altFilter === 'test' ? s !== 'approved' : s === altFilter); }
+// what is added under a filter matches it — otherwise the new alternative would be hidden straight away
+function newAltStatus() { return ALT_STATUS_NAME[altFilter] ? altFilter : altFilter === 'test' ? 'lab' : 'approved'; }
+// concentration a material is mixed at (its default %chem in recipes) — with the alternative in production, or a given one
+function altWork(m, a) { if (!m) return null; if (m.role === 'water') return 0; if (m.work != null) return m.work; return a ? a.conc : null; }
+function matWork(m) { return altWork(m, actAlt(m)); }
 function waterPrice() { const a = actAlt(materials.find(m => m.role === 'water')); return a && a.price != null ? a.price : 0; }
 // € per kg of the material at `conc` % — pre-diluted with water from the as-delivered concentration of the active alternative
 function workPrice(m, conc) {
@@ -1857,6 +1916,7 @@ function rowSubHtml(s, r) {
   if (m) {
     const a = actAlt(m);
     if (a && a.name && a.name !== m.name) parts.push(esc(a.name));
+    if (a && !altApproved(a)) parts.push(esc(altStatusName(a)));   // production runs a candidate that is not approved yet
     if (m.alts.length > 1) parts.push(m.alts.length + ' alternatives');
     if (concDiffers(r, m)) parts.push('<b>≠ material ' + fmtNum(matWork(m)) + '%</b>');
     if (m.role !== 'water' && (!a || a.price == null)) parts.push('no price');
@@ -2057,12 +2117,57 @@ function updateLabDil(v, st) {
   msg.style.display = go ? 'none' : '';
 }
 function labNestBlur(rid) { const i = el('ln-' + rid), r = labRowById(rid); if (i && r) i.value = fmtNum(nestStr(r)); }
+// The product a material is weighed from: the alternative mixed in production now (● in ⚗ materials). Another one —
+// approved or a candidate in testing — can be picked for a weighing (a lab trial…) — local view state like the rest of the
+// sheet: labView[dip].alt = { <row id>: alternative id }, only while it differs from the one in production (dashed +
+// bold on the sheet). It only names the product: the masses stay those of the recipe (its %chem) — a product that is
+// mixed at another concentration than the recipe counts with is flagged ("40 % ≠ %chem"), not recalculated.
+function labAltLabel(a) { return altLabel(a) + (altApproved(a) ? '' : ' · ' + altStatusName(a)); }   // a candidate says so on the sheet
+function labAltOver(r, m) {
+  const o = labViewOf().alt, id = o ? o[r.id] : null, act = actAlt(m);
+  return id != null && act && id !== act.id ? (m.alts.find(a => a.id === id) || null) : null;
+}
+function labAlt(r, m) { return labAltOver(r, m) || actAlt(m); }
+function labAltFlag(r, m) {
+  if (!m || m.role === 'water') return '';
+  const d = altWork(m, labAlt(r, m));
+  return d != null && r.conc != null && Math.abs(d - r.conc) > 1e-9 ? fmtNum(d) + ' % ≠ %chem' : '';
+}
+function labAltTip(r, m) {
+  const a = labAlt(r, m), act = actAlt(m);
+  const info = a ? [a.producer.trim(), a.card.trim() ? 'card ' + a.card.trim() : '', a.note.trim()].filter(Boolean).join(' · ') : '';
+  return (info ? info + ' — ' : '') + (m.alts.length < 2
+    ? 'the product this is weighed from — the only alternative of this material. Click to edit the material.'
+    : labAltOver(r, m)
+    ? 'NOT the alternative mixed in production now (● ' + altLabel(act) + ') — picked for this weighing only; choose ● to go back.'
+    : 'the product this is weighed from — ● = mixed in production now. Another alternative can be picked for this weighing (dashed = changed); one that is not approved yet says so.');
+}
+function onLabAlt(rid, sel) {
+  const r = labRowById(rid), m = r && matById(r.mat), act = actAlt(m); if (!act) return;
+  const id = +sel.value, o = { ...(labViewOf().alt || {}) };
+  if (id !== act.id && m.alts.some(a => a.id === id)) o[rid] = id; else delete o[rid];
+  setLabView('alt', Object.keys(o).length ? o : null);
+  updateCalc();
+}
+function labAltHtml(r, m) {
+  const a = labAlt(r, m), act = actAlt(m);
+  if (m.alts.length > 1) {
+    return `<select class="lab-alt${labAltOver(r, m) ? ' diff' : ''}" id="la${r.id}" data-r="${r.id}" onchange="onLabAlt(${r.id},this)" title="${esc(labAltTip(r, m))}">`
+      + m.alts.map(x => `<option value="${x.id}"${x === a ? ' selected' : ''}>${x === act ? '● ' : ''}${esc(labAltLabel(x))}</option>`).join('') + '</select>';
+  }
+  // the only alternative: just its name, when it says more than the material's — or when it is not approved yet
+  const nm = a ? (a.name.trim() || a.producer.trim()) : '', ok = !a || altApproved(a);
+  return (nm && nm !== m.name.trim()) || !ok ? `<span class="lab-alt1" onclick="openMaterials(${m.id})" title="${esc(labAltTip(r, m))}">${esc(ok ? nm : labAltLabel(a))}</span>` : '';
+}
 function labNameHtml(r) {
-  if (!isDipRow(r)) return `<span class="lab-n">${esc(rowName(r))}</span>`;
+  if (!isDipRow(r)) {
+    const m = matById(r.mat), nm = `<span class="lab-n">${esc(rowName(r))}</span>`;
+    return m ? `<span class="lab-comp">${nm}${labAltHtml(r, m)}<b class="lab-altc" id="lx${r.id}" title="the product is mixed at this concentration, the recipe counts with its own %chem — the masses below are those of the recipe"></b></span>` : nm;
+  }
   return `<span class="lab-nest"><span class="lab-n">${esc(rowName(r))}</span><label class="lab-m">W<input class="lab-nw${nestOver(r) != null ? ' diff' : ''}" id="ln-${r.id}" data-r="${r.id}" inputmode="decimal" value="${fmtNum(nestStr(r))}" oninput="onLabNest(${r.id},this)" onblur="labNestBlur(${r.id})" title="this dip goes in already diluted to this strength (W85 = 85 parts of it at full strength + 15 parts water) — it weighs more and the first water less. Prefilled from its own lab strength; 100 = full strength. For this weighing only (dashed = changed)." autocomplete="off"></label></span>`;
 }
 // The lab sheet also repeats the dip name and the maturing times — prefilled from the dip / recipe, any of them can be
-// overwritten for this weighing (same local view state as the strength: labView[dip] = { str, batch, title, mat:{secId|'all'} }).
+// overwritten for this weighing (same local view state as the strength: labView[dip] = { str, batch, title, mat:{secId|'all'}, nest, alt, dfrom, dhave }).
 // Empty or equal to the preset = no override.
 function labViewOf() { return (cur && labView[cur.id]) || {}; }
 function labTitleDef() { return cur ? (cur.name || '') : ''; }
@@ -2127,7 +2232,7 @@ function labHtml(v) {
       <div class="lab-dil-r lab-dil-msg" id="ldMsg" style="display:none"></div>
     </div>
     <div class="field lab-prep"><label>preparation notes</label><textarea id="labPrep" class="prep-note ed" placeholder="How to mix — e.g. add the formaldehyde slowly while stirring, temperature, order, what to watch…" oninput="onVarField('prep',this);autoGrow(this)">${esc(v.prep)}</textarea></div>
-    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. Name, strengths, batch and maturing changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.</div>`;
+    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. After a material is the product it is weighed from — the alternative mixed in production now (● in ⚗ materials); another one can be picked for a weighing (dashed and bold = not the one in production; a candidate that is not approved yet says “lab testing” / “production testing”). It only names the product, the masses stay those of the recipe — “40 % ≠ %chem” says that product is mixed at another concentration than the recipe counts with. Name, strengths, batch, maturing and alternatives changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.</div>`;
 }
 // numbers and prefilled values of the lab sheet — the inputs are never re-rendered while typing
 function updateLab(v, c, st) {
@@ -2142,6 +2247,7 @@ function updateLab(v, c, st) {
       const cr = c.rows[r.id];
       // a nested dip: its solid at the strength it goes in with
       setText('lc' + r.id, rowRole(r) === 'water' ? '—' : isDipRow(r) ? fmt((cr ? cr.conc : r.conc) * nestStr(r) / 100, 2) : (fmtNum(r.conc) || '?'));
+      if (!isDipRow(r)) setText('lx' + r.id, labAltFlag(r, matById(r.mat)));
     });
     total += sum;
     setText('ls' + s.id, ok ? fmt(sum, 1) : '—');
@@ -2163,6 +2269,13 @@ function updateLab(v, c, st) {
     const r = labRowById(+i.dataset.r); if (!r) return;
     if (i !== act) i.value = fmtNum(nestStr(r));
     i.classList.toggle('diff', nestOver(r) != null);
+  });
+  document.querySelectorAll('#mainBody .lab-alt[data-r]').forEach(s => {   // the preset follows the alternative in production
+    const r = labRowById(+s.dataset.r), m = r && matById(r.mat); if (!m) return;
+    const a = labAlt(r, m);
+    if (s !== act && a && s.value !== String(a.id)) s.value = String(a.id);
+    s.classList.toggle('diff', !!labAltOver(r, m));
+    s.title = labAltTip(r, m);
   });
 }
 function parHtml(c, labStr, type) {
@@ -2314,7 +2427,7 @@ function autoGrow(ta) {
   if (h > max) { ta.style.height = max + 'px'; ta.style.overflowY = 'auto'; }
   else { ta.style.height = h + 'px'; ta.style.overflowY = 'hidden'; }
 }
-function growAll() { document.querySelectorAll('#panel-notes textarea, #labPrep').forEach(autoGrow); }
+function growAll() { document.querySelectorAll('#panel-notes textarea, #labPrep, #matList textarea').forEach(autoGrow); }
 
 // ── EDIT HANDLERS ─────────────────────────────────────────────────────────
 function onSolField(key, inp) {
@@ -3179,8 +3292,10 @@ let matOpenId = null;
 function openMaterials(focusId) {
   if (focusId != null) matOpenId = focusId;
   el('matSearch').value = '';
+  syncAltFilterUi();
   renderMaterials();
   el('matModal').classList.add('open');
+  growMatNotes();   // rendered while the modal was still hidden → fit the notes now
   if (focusId != null) setTimeout(() => { const it = el('mat-' + focusId); if (it) it.scrollIntoView({ block: 'nearest' }); }, 0);
 }
 function matUsage(id) {   // stored dips using the material → ["R01 (W85, W100)", …]
@@ -3196,68 +3311,116 @@ function matMetaText(m) {
   if (m.role !== 'water') parts.push(w != null ? fmtNum(w) + '%' : '? %');
   if (a && a.name && a.name !== m.name) parts.push(a.name);
   if (a && a.card && a.card.trim()) parts.push('card ' + a.card.trim());
-  if (m.alts.length > 1) parts.push(m.alts.length + ' alternatives');
+  const nt = m.alts.filter(x => !altApproved(x)).length;
+  if (m.alts.length > 1) parts.push(m.alts.length + ' alternatives' + (nt ? ', ' + nt + ' not approved yet' : ''));
+  else if (nt) parts.push(altStatusName(m.alts[0]));
   const p = workPrice(m, w);
   parts.push(p != null ? p.toFixed(3) + ' €/kg' : 'no price');
   return parts.join(' · ');
 }
+// the yearly consumption split by the alternatives' shares — "120 t / year: A 84 t, B 36 t" — and a warning when the
+// shares do not add up to 100 % (pieces of escaped HTML)
+function matConsHtml(m) {
+  const sh = m.alts.map(a => altShare(m, a)), set = sh.filter(x => x != null), sum = set.reduce((s, x) => s + x, 0), parts = [];
+  if (m.cons != null) {
+    const split = m.alts.length > 1 ? m.alts.map((a, i) => sh[i] != null ? altLabel(a) + ' ' + fmtNum(+(m.cons * sh[i] / 100).toFixed(3)) + ' t' : '').filter(Boolean) : [];
+    parts.push(esc(fmtNum(m.cons) + ' t / year' + (split.length ? ': ' + split.join(', ') : '')));
+  }
+  if (set.length && Math.abs(sum - 100) > 0.05) parts.push('<b>' + esc('shares add up to ' + fmtNum(+sum.toFixed(2)) + ' %, not 100') + '</b>');
+  return parts;
+}
 function matInfoHtml(m) {
   const a = actAlt(m), w = matWork(m), p = workPrice(m, w), parts = [];
-  if (m.role !== 'water' && a && a.conc != null && w != null && w < a.conc) parts.push('pre-diluted ' + fmtNum(a.conc) + ' → ' + fmtNum(w) + '% with water');
-  parts.push('as mixed: ' + (p != null ? p.toFixed(3) + ' €/kg' : 'no price'));
+  if (m.role !== 'water' && a && a.conc != null && w != null && w < a.conc) parts.push(esc('pre-diluted ' + fmtNum(a.conc) + ' → ' + fmtNum(w) + '% with water'));
+  parts.push(esc('as mixed: ' + (p != null ? p.toFixed(3) + ' €/kg' : 'no price')));
+  parts.push(...matConsHtml(m));
   const u = matUsage(m.id);
-  parts.push(u.length ? 'used in: ' + u.join('; ') : 'not used in any recipe');
-  return esc(parts.join(' · '));
+  parts.push(esc(u.length ? 'used in: ' + u.join('; ') : 'not used in any recipe'));
+  return parts.join(' · ');
+}
+// the status filter: a material is listed when it has an alternative to show; the open one stays (with a line saying
+// how many of its alternatives the filter hides) until the filter is changed
+function matShown(m) { return m.id === matOpenId || m.alts.some(altShown); }
+function syncAltFilterUi() {
+  const s = el('altFilter'); if (!s) return;
+  if (!s.options.length) s.innerHTML = ALT_FILTERS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+  s.value = altFilter; s.classList.toggle('on', altFilter !== 'all');
+}
+function setAltFilter(f) {
+  altFilter = ALT_FILTER_NAME[f] ? f : 'all';
+  try { localStorage.setItem(ALTFILTER_KEY, altFilter); } catch(e) {}
+  const m = matById(matOpenId); if (m && !m.alts.some(altShown)) matOpenId = null;
+  syncAltFilterUi(); renderMaterials();
 }
 function renderMaterials() {
   const list = el('matList'); if (!list) return;
-  const q = (el('matSearch').value || '').trim().toLowerCase();
-  const match = m => !q || (m.name + ' ' + m.note + ' ' + m.alts.map(a => a.name + ' ' + a.producer + ' ' + a.card).join(' ')).toLowerCase().includes(q);
-  let h = '';
+  const q = (el('matSearch').value || '').trim().toLowerCase(), filt = altFilter !== 'all';
+  const match = m => !q || (m.name + ' ' + m.note + ' ' + m.alts.map(a => a.name + ' ' + a.producer + ' ' + a.card + ' ' + a.note).join(' ')).toLowerCase().includes(q);
+  let h = '', n = 0;
   ROLES.forEach(([k, label]) => {
-    const ms = materials.filter(m => roleKey(m.role) === k && match(m)).sort(byName);
+    const ms = materials.filter(m => roleKey(m.role) === k && match(m) && matShown(m)).sort(byName);
+    n += ms.length;
     if (ms.length) h += `<div class="mat-group">${esc(label)}</div>` + ms.map(matHtml).join('');
   });
-  list.innerHTML = h || '<div class="lib-empty">' + (q ? 'Nothing matches.' : 'No materials yet — add one, or import a JSON file that contains them (⇩).') + '</div>';
-  setText('matCount', materials.length ? materials.length + ' materials' : '');
+  list.innerHTML = h || '<div class="lib-empty">' + (q || filt ? 'Nothing matches' + (filt ? ' — the filter is “' + esc(ALT_FILTER_NAME[altFilter]) + '”.' : '.')
+    : 'No materials yet — add one, or import a JSON file that contains them (⇩).') + '</div>';
+  setText('matCount', !materials.length ? '' : (q || filt) && n !== materials.length ? n + ' of ' + materials.length + ' materials' : materials.length + ' materials');
+  growMatNotes();
+}
+// fit the notes of the alternatives (one, or all — a no-op while the modal is hidden). The modal scrolls and autoGrow
+// collapses the field for a moment → put the scroll position back, or typing near the bottom makes the list jump
+function growMatNotes(ta) {
+  const sc = document.querySelector('#matModal .mat-modal'), y = sc ? sc.scrollTop : 0;
+  (ta ? [ta] : [...document.querySelectorAll('#matList textarea')]).forEach(t => autoGrow(t));
+  if (sc && sc.scrollTop !== y) sc.scrollTop = y;
 }
 function matHtml(m) {
   const open = m.id === matOpenId, water = m.role === 'water';
   let h = `<div class="mat-item${open ? ' open' : ''}" id="mat-${m.id}">
     <div class="mat-head" onclick="toggleMat(${m.id})"><span class="mat-name" id="matN-${m.id}">${esc(m.name || 'unnamed')}</span><span class="mat-meta" id="matM-${m.id}">${esc(matMetaText(m))}</span><span class="mat-caret">${open ? '▾' : '▸'}</span></div>`;
   if (open) {
+    const shown = m.alts.filter(altShown), hid = m.alts.length - shown.length;
     h += `<div class="mat-body">
       <div class="mat-grid">
         <div class="mf"><label>name in recipes</label><input type="text" value="${esc(m.name)}" oninput="matField(${m.id},'name',this.value)" autocomplete="off"></div>
         <div class="mf"><label>role</label><select onchange="matField(${m.id},'role',this.value)">${ROLES.map(([k, l]) => `<option value="${k}"${roleKey(m.role) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
         ${water ? '' : `<div class="mf"><label>working conc. %</label><input type="text" inputmode="decimal" value="${m.work ?? ''}" placeholder="as delivered" oninput="matField(${m.id},'work',this.value)" title="pre-diluted to this concentration for mixing (e.g. NaOH 50 → 10 %) — empty = used as delivered" autocomplete="off"></div>`}
+        <div class="mf"><label>t / year</label><input type="text" inputmode="decimal" value="${m.cons ?? ''}" oninput="matField(${m.id},'cons',this.value)" title="yearly consumption of this material — all its alternatives together; each alternative takes its share of it (share % below)" autocomplete="off"></div>
       </div>
       <div class="mf"><label>note</label><input type="text" value="${esc(m.note)}" oninput="matField(${m.id},'note',this.value)" autocomplete="off"></div>
-      <div class="alt-title">approved alternatives — ● = mixed in production now</div>
-      ${m.alts.map(a => altHtml(m, a)).join('')}
+      <div class="alt-title">alternatives — ● = mixed in production now · dashed = not approved yet</div>
+      ${shown.map(a => altHtml(m, a)).join('')}
+      ${hid ? `<div class="alt-hidden">${hid} more ${hid === 1 ? 'alternative is' : 'alternatives are'} not shown — the filter is “${esc(ALT_FILTER_NAME[altFilter])}”. <button class="rc-open" onclick="setAltFilter('all')">show all</button></div>` : ''}
       <div class="mat-actions"><button class="btn-sm" onclick="addAlt(${m.id})">+ alternative</button><button class="btn-sm danger" onclick="deleteMaterial(${m.id})">delete material</button></div>
       <div class="mat-info" id="matI-${m.id}">${matInfoHtml(m)}</div>
     </div>`;
   }
   return h + '</div>';
 }
-const ALT_TEXT = ['name', 'producer', 'card', 'note'];   // text fields of an alternative — the rest are numbers
+const ALT_TEXT = ['name', 'producer', 'card', 'note', 'status'];   // text fields of an alternative — the rest are numbers
+function altStatusOptions(a) {   // + the stored one, when a newer build knows a status this one does not
+  const s = altStatus(a);
+  return ALT_STATUS.map(([k, l]) => `<option value="${k}"${k === s ? ' selected' : ''}>${esc(l)}</option>`).join('')
+    + (ALT_STATUS_NAME[s] ? '' : `<option value="${esc(s)}" selected>${esc(s)}</option>`);
+}
 function altHtml(m, a) {
   const on = a.id === m.act, water = m.role === 'water';
   const f = (key, label, ph, tip) => `<div class="mf${key === 'card' ? ' mf-wide' : ''}"><label>${label}</label><input type="text"${ALT_TEXT.includes(key) ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${m.id},${a.id},'${key}',this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off"></div>`;
-  return `<div class="alt${on ? ' on' : ''}">
+  return `<div class="alt${on ? ' on' : ''}${altApproved(a) ? '' : ' test'}">
       <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${m.id},${a.id})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>
         <input class="alt-name" type="text" value="${esc(a.name)}" placeholder="product name" oninput="altField(${m.id},${a.id},'name',this.value)" autocomplete="off">
         <button class="ib" onclick="deleteAlt(${m.id},${a.id})" title="remove alternative"${m.alts.length < 2 ? ' disabled' : ''}>✕</button></div>
       <div class="alt-fields">
+        <div class="mf mf-wide"><label>status</label><select onchange="altField(${m.id},${a.id},'status',this.value)" title="approved, or a candidate still being tested — in the lab, then in production. Independent of ● (production can run a candidate). The list above can be filtered by it.">${altStatusOptions(a)}</select></div>
         ${f('producer', 'producer')}
         ${f('card', 'master card', 'item no.', 'kmenová karta — the item number of this product in the company stock system')}
         ${water ? '' : f('conc', 'conc. %', 'as delivered', 'concentration as delivered')}
         ${f('price', '€ / kg', '', 'price per kg as delivered')}
-        ${f('cons', 't / year', '', 'consumption')}
+        ${f('share', 'share %', m.alts.length === 1 ? '100' : '', 'share of the material’s yearly consumption (t / year above) that this alternative takes — the tonnes are in the line at the bottom')}
         ${m.role === 'resin' ? f('fF', 'F in solid %', String(RESIN_F), 'formaldehyde share of the resin solid') + f('fR', 'R in solid %', String(RESIN_R), 'resorcinol share of the resin solid') : ''}
         ${m.role === 'latex-vp' ? f('vp', 'VP monomer %', '?', 'vinylpyridine share of the latex polymer') : ''}
       </div>
+      <div class="mf"><label>note</label><textarea class="alt-note" rows="1" placeholder="approval, supplier, what to watch…" oninput="altField(${m.id},${a.id},'note',this.value);growMatNotes(this)" title="note to this alternative — also shown on hover over it in Lab weighing" autocomplete="off">${esc(a.note)}</textarea></div>
     </div>`;
 }
 function toggleMat(id) { matOpenId = matOpenId === id ? null : id; renderMaterials(); }
@@ -3274,7 +3437,7 @@ function updateMatHead(m) {
 function matField(id, key, val) {
   const m = matById(id); if (!m) return;
   const before = JSON.stringify(m);
-  m[key] = key === 'work' ? numOrNull(val) : val;
+  m[key] = key === 'work' || key === 'cons' ? numOrNull(val) : val;
   if (!touchMaterial(m, before)) return;
   if (key === 'role') renderMaterials(); else updateMatHead(m);
 }
@@ -3282,7 +3445,8 @@ function altField(mid, aid, key, val) {
   const m = matById(mid), a = m && m.alts.find(x => x.id === aid); if (!a) return;
   const before = JSON.stringify(m);
   a[key] = ALT_TEXT.includes(key) ? val : numOrNull(val);
-  if (touchMaterial(m, before)) updateMatHead(m);
+  if (!touchMaterial(m, before)) return;
+  if (key === 'status') renderMaterials(); else updateMatHead(m);   // the status changes the frame and what the filter shows
 }
 function setActAlt(mid, aid) {
   const m = matById(mid); if (!m) return;
@@ -3293,7 +3457,7 @@ function setActAlt(mid, aid) {
 function addAlt(mid) {
   const m = matById(mid); if (!m) return;
   const before = JSON.stringify(m), a = actAlt(m);
-  m.alts.push(normAlt({ id: uid(), conc: a ? a.conc : null, fF: a ? a.fF : null, fR: a ? a.fR : null }));
+  m.alts.push(normAlt({ id: uid(), status: newAltStatus(), conc: a ? a.conc : null, fF: a ? a.fF : null, fR: a ? a.fR : null }));
   touchMaterial(m, before); renderMaterials();
 }
 async function deleteAlt(mid, aid) {
@@ -3306,7 +3470,7 @@ async function deleteAlt(mid, aid) {
   touchMaterial(m, before); renderMaterials();
 }
 function addMaterial() {
-  const m = normMaterial({ id: uid(), name: '', role: 'other', alts: [{ id: uid() }], mt: Date.now() });
+  const m = normMaterial({ id: uid(), name: '', role: 'other', alts: [{ id: uid(), status: newAltStatus() }], mt: Date.now() });
   materials.push(m); saveMaterials();
   matOpenId = m.id; el('matSearch').value = '';
   renderMaterials();
@@ -3332,6 +3496,7 @@ function init() {
   loadLibOrder();
   loadActiveVarMap();
   loadLabView();
+  loadAltFilter();
   initRowDnd();
   initListDnd(el('varsBody'), { grip: '.var-grip', item: '.var-item', onDrop: moveVarTo });
   initListDnd(el('libList'), { grip: '.lib-grip', item: '.lib-item', group: e => e.dataset.grp, onDrop: moveDipTo });
