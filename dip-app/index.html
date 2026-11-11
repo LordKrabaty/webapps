@@ -440,6 +440,10 @@ html.dark input[type="date"]{color-scheme:dark}
 .lab-alt.diff{border:1.5px dashed var(--black);border-radius:var(--r);color:var(--black);font-weight:600}
 .lab-altc{font-size:.68rem;font-weight:600;color:var(--black);white-space:nowrap}
 .lab-altc:empty{display:none}
+/* the lab sheet is the operator's worksheet — its labels can be switched to Czech (EN / CZ in its title) */
+.lab-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.lab-lang{display:flex;gap:.2rem;flex-shrink:0}
+.lab-lang .chip{font-size:.66rem;padding:.1rem .4rem;letter-spacing:0}
 .lab-dil{margin-top:calc(.9rem/var(--pzc,1));font-size:.8rem;color:var(--black)}
 .lab-dil-t{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:calc(.3rem/var(--pzc,1));border-bottom:1.5px solid var(--black)}
 .lab-dil-r{display:flex;flex-wrap:wrap;align-items:baseline;gap:.1rem .35rem;margin-top:calc(.35rem/var(--pzc,1))}
@@ -769,6 +773,7 @@ const NOTES_TAB_KEY = 'dip-app-notes-tab';
 const LIBORDER_KEY = 'dip-app-lib-order';    // { list:[dip ids], mt } — order of the dips in the library, synced as ONE record (LWW of the whole list)
 const LABVIEW_KEY = 'dip-app-lab-view';        // { solutionId: { str, batch } } — lab weighing override, local view state, NOT synced
 const ALTFILTER_KEY = 'dip-app-alt-filter';    // which alternatives ⚗ materials shows (by approval status) — local view state, NOT synced
+const LABLANG_KEY = 'dip-app-lab-lang';        // 'en' | 'cs' — language of the Lab weighing sheet (the operator's worksheet), local view state, NOT synced
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let library = [], activeLibId = null;
@@ -2026,6 +2031,111 @@ function measHtml(v, type) {
   return '<div class="meas-grid">' + (type === 'rfl' ? f('phRF', 'pH RF', '—') + f('ph', 'pH RFL', '—') : f('ph', 'pH', '—')) + f('solid', 'solid measured %', '—')
     + '<div class="field"><label id="measDL">Δ solid vs calc.</label><div class="meas-d" id="measD">—</div></div></div>';
 }
+// ── LAB SHEET LANGUAGE ────────────────────────────────────────────────────
+// The lab sheet is the operator's worksheet → its labels, messages and tips can be switched to Czech (EN / CZ in its
+// title; kept on the device, not synced). It is the ONLY Czech UI text in the app — everything else stays English
+// (root CLAUDE.md; the user asked for this one explicitly). Numbers keep the decimal point in both.
+// The texts are plain constants — no markup, no user data; {0}, {1}… are filled in by the caller (lt).
+const LAB_T = {
+  en: {
+    title: 'Lab weighing',
+    langTip: 'language of this sheet — labels and messages for the operator (kept on this device)',
+    strength: 'strength W',
+    strengthTip: 'strength of the lab dip in % of the full-strength W100 recipe — only for this weighing; the recommended value of the dip is in the header (lab strength %)',
+    batch: 'batch',
+    batchTip: 'lab batch mass (g) — empty = the recipe batch',
+    recReset: '↺ dip W{0}',
+    recResetTip: 'back to the recommended lab strength of the dip',
+    recIs: 'the dip’s lab strength',
+    titlePh: 'dip',
+    titleTip: 'the dip name on this sheet — add or change anything for this weighing (dashed = changed); empty = the dip name',
+    strTagTip: 'the strength of this lab dip — set above (strength W)',
+    thComp: 'component', thChem: '%chem', thWeigh: 'weigh (g)',
+    matPart: 'maturing min.', matAll: 'whole dip — maturing min.',
+    matPartTip: 'minimum maturing of this part', matAllTip: 'minimum maturing of the whole mixed dip',
+    matTipEnd: ' — prefilled from the recipe; a different value is for this weighing only (dashed = changed)',
+    total: 'total W{0} · solid {1}',
+    dilTitle: 'or dilute a finished dip with water',
+    dilFrom: 'from W', dilTo: 'to',
+    dilFromTip: 'the strength you dilute from — 100 = the full-strength dip; for stepwise dilution the one you already have (e.g. 90). For this weighing only (dashed = changed).',
+    dilFor: 'for {0} g of {1}: {2} g of {3} + {4} g water',
+    dilHave: 'to {0} g of {1} add {2} g water → {3} g of {4}',
+    dilHaveTip: 'how much of the stronger dip you have (g) — empty = 1000 g',
+    dilFull: 'The sheet is W100 (full strength) — set a lower strength above to see how to dilute.',
+    dilSame: 'It already is {0} — nothing to dilute.',
+    dilNo: 'Water only dilutes — {0} does not give {1}. Weigh it from the recipe above, or start from a stronger dip.',
+    prep: 'preparation notes',
+    prepPh: 'How to mix — e.g. add the formaldehyde slowly while stirring, temperature, order, what to watch…',
+    hint: 'The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. After a material is the product it is weighed from — the alternative mixed in production now (● in ⚗ materials); another one can be picked for a weighing (dashed and bold = not the one in production; a candidate that is not approved yet says “lab testing” / “production testing”). It only names the product, the masses stay those of the recipe — “40 % ≠ %chem” says that product is mixed at another concentration than the recipe counts with. Name, strengths, batch, maturing and alternatives changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.',
+    errNoMass: 'The recipe has no mass yet.',
+    errNoWater: 'Diluting needs a water row in the recipe — the first water takes up the dilution.',
+    errNestWater: 'A diluted dip brings its own water — the recipe needs a water row to take it up. Or set that dip to W100.',
+    errOver: 'Not possible: at W{0} the other components alone weigh {1} g — more than the batch ({2} g).',
+    errOverDil: ' The diluted dips bring their own water — setting them to W100 leaves more room.',
+    errOverMax: ' The most is W{0}.',
+    nestTip: 'this dip goes in already diluted to this strength (W85 = 85 parts of it at full strength + 15 parts water) — it weighs more and the first water less. Prefilled from its own lab strength; 100 = full strength. For this weighing only (dashed = changed).',
+    altFlagTip: 'the product is mixed at this concentration, the recipe counts with its own %chem — the masses below are those of the recipe',
+    altOnly: 'the product this is weighed from — the only alternative of this material. Click to edit the material.',
+    altOther: 'NOT the alternative mixed in production now (● {0}) — picked for this weighing only; choose ● to go back.',
+    altDef: 'the product this is weighed from — ● = mixed in production now. Another alternative can be picked for this weighing (dashed = changed); one that is not approved yet says so.',
+    card: 'card ', unnamed: 'unnamed', st_lab: 'lab testing', st_prod: 'production testing'
+  },
+  cs: {
+    title: 'Laboratorní navážka',
+    langTip: 'jazyk tohoto listu — popisky a hlášky pro obsluhu (pamatuje si to toto zařízení)',
+    strength: 'síla W',
+    strengthTip: 'síla laboratorního dipu v % receptury plné síly W100 — jen pro tuto navážku; doporučená hodnota dipu je v hlavičce (lab strength %)',
+    batch: 'dávka',
+    batchTip: 'hmotnost laboratorní dávky (g) — prázdné = dávka z receptury',
+    recReset: '↺ dip W{0}',
+    recResetTip: 'zpět na doporučenou laboratorní sílu dipu',
+    recIs: 'laboratorní síla dipu',
+    titlePh: 'dip',
+    titleTip: 'název dipu na tomto listu — pro tuto navážku jde cokoli doplnit nebo změnit (čárkovaně = změněno); prázdné = název dipu',
+    strTagTip: 'síla tohoto laboratorního dipu — nastavuje se nahoře (síla W)',
+    thComp: 'složka', thChem: '%chem', thWeigh: 'navážka (g)',
+    matPart: 'zrání min.', matAll: 'celý dip — zrání min.',
+    matPartTip: 'minimální zrání této části', matAllTip: 'minimální zrání celého namíchaného dipu',
+    matTipEnd: ' — předvyplněno z receptury; jiná hodnota platí jen pro tuto navážku (čárkovaně = změněno)',
+    total: 'celkem W{0} · sušina {1}',
+    dilTitle: 'nebo nařeď hotový dip vodou',
+    dilFrom: 'z W', dilTo: 'na',
+    dilFromTip: 'síla, ze které se ředí — 100 = dip plné síly; při postupném ředění ta, kterou už máš (např. 90). Jen pro tuto navážku (čárkovaně = změněno).',
+    dilFor: 'na {0} g {1}: {2} g {3} + {4} g vody',
+    dilHave: 'k {0} g {1} přidej {2} g vody → {3} g {4}',
+    dilHaveTip: 'kolik silnějšího dipu máš (g) — prázdné = 1000 g',
+    dilFull: 'List je W100 (plná síla) — nastav nahoře nižší sílu a ukáže se, jak ředit.',
+    dilSame: 'Už je to {0} — není co ředit.',
+    dilNo: 'Vodou jde jen ředit — z {0} nevznikne {1}. Navaž ho podle receptury nahoře, nebo vyjdi ze silnějšího dipu.',
+    prep: 'poznámky k přípravě',
+    prepPh: 'Jak míchat — např. formaldehyd přidávat pomalu za míchání, teplota, pořadí, na co si dát pozor…',
+    hint: 'Receptura nahoře je dip plné síly W100 — tak jede provoz a k němu se počítá cena. Laboratorní linka nanáší víc, proto se laboratorní dipy ředí: každá složka × síla, první voda dorovná zbytek dávky. Dip použitý jako složka může jít do směsi už naředěný (jeho W vedle názvu, předvyplněné z jeho vlastní laboratorní síly): váží se ho víc a přináší vodu, takže první vody je méně. Hotový dip jde také jen naředit vodou — z W100, nebo postupně z už naředěného (W90 → W85): složení vyjde stejné. Za surovinou je produkt, ze kterého se váží — alternativa, která se teď míchá v provozu (● v ⚗ materials); pro navážku jde vybrat jinou (čárkovaně a tučně = není to ta provozní; kandidát, který ještě není schválený, má u sebe „laboratorní test“ / „provozní test“). Jen pojmenovává produkt, hmotnosti zůstávají podle receptury — „40 % ≠ %chem“ znamená, že se ten produkt míchá při jiné koncentraci, než s jakou počítá receptura. Název, síly, dávka, zrání a alternativy změněné na tomto listu zůstávají jen na tomto zařízení a recepturu nemění; poznámky k přípravě se ukládají s variantou.',
+    errNoMass: 'Receptura zatím nemá žádnou hmotnost.',
+    errNoWater: 'K ředění je v receptuře potřeba řádek s vodou — ředění bere první voda.',
+    errNestWater: 'Naředěný dip přináší vlastní vodu — receptura potřebuje řádek s vodou, který ji vyrovná. Nebo nastav ten dip na W100.',
+    errOver: 'Nejde to: při W{0} váží ostatní složky samy {1} g — víc než dávka ({2} g).',
+    errOverDil: ' Naředěné dipy přinášejí vlastní vodu — s W100 u nich zbude víc místa.',
+    errOverMax: ' Nejvíc jde W{0}.',
+    nestTip: 'tento dip jde do směsi už naředěný na tuto sílu (W85 = 85 dílů dipu plné síly + 15 dílů vody) — váží se ho víc a první vody méně. Předvyplněno z jeho vlastní laboratorní síly; 100 = plná síla. Jen pro tuto navážku (čárkovaně = změněno).',
+    altFlagTip: 'produkt se míchá při této koncentraci, receptura počítá se svým %chem — hmotnosti níže jsou podle receptury',
+    altOnly: 'produkt, ze kterého se váží — jediná alternativa této suroviny. Klikem se otevře surovina.',
+    altOther: 'NENÍ to alternativa, která se teď míchá v provozu (● {0}) — vybraná jen pro tuto navážku; zpět se vrátíš výběrem ●.',
+    altDef: 'produkt, ze kterého se váží — ● = teď se míchá v provozu. Pro tuto navážku jde vybrat jinou alternativu (čárkovaně = změněno); u té, která ještě není schválená, je to napsáno.',
+    card: 'karta ', unnamed: 'bez názvu', st_lab: 'laboratorní test', st_prod: 'provozní test'
+  }
+};
+let labLang = 'en';
+function loadLabLang() { try { if (localStorage.getItem(LABLANG_KEY) === 'cs') labLang = 'cs'; } catch(e) {} }
+// a text of the lab sheet in its language (falls back to English); {0}, {1}… = the arguments
+function lt(k, ...a) {
+  const s = LAB_T[labLang][k] ?? LAB_T.en[k] ?? k;
+  return a.length ? s.replace(/\{(\d)\}/g, (x, i) => a[+i] ?? '') : s;
+}
+function setLabLang(l) {
+  labLang = l === 'cs' ? 'cs' : 'en';
+  try { localStorage.setItem(LABLANG_KEY, labLang); } catch(e) {}
+  renderMain();
+}
 // ── LAB WEIGHING ──────────────────────────────────────────────────────────
 // The recipe is the full-strength W100 dip: production runs it and the price is W100. The lab line (SEDU) picks up
 // more, so lab dips are diluted (typically W85). The strength is NOT part of the variant — the dip recommends one
@@ -2054,18 +2164,18 @@ function resetLabStr() { setLabView('str', null); labInBlur(); updateCalc(); }
 function labCalc(v, str, batch, nest) {
   const T = sumMass(v), k = str / 100, w = firstWater(v), m = {};
   const q = r => (nest && isDipRow(r) ? nest(r) / 100 : 1);
-  if (!(T > 0)) return { err: 'The recipe has no mass yet.' };
+  if (!(T > 0)) return { err: lt('errNoMass') };
   const dil = v.secs.some(s => s.rows.some(r => r.m > 0 && q(r) < 1));
-  if (!w && Math.abs(k - 1) > 1e-9) return { err: 'Diluting needs a water row in the recipe — the first water takes up the dilution.' };
-  if (!w && dil) return { err: 'A diluted dip brings its own water — the recipe needs a water row to take it up. Or set that dip to W100.' };
+  if (!w && Math.abs(k - 1) > 1e-9) return { err: lt('errNoWater') };
+  if (!w && dil) return { err: lt('errNestWater') };
   const B = batch > 0 ? batch : T, f = B / T;
   let others = 0, rest = 0;   // rest = the other components as weighed at W100 (÷ their own strength) — for the most possible W
   v.secs.forEach(s => s.rows.forEach(r => { if (r === w) return; const p = q(r); m[r.id] = roundM((+r.m || 0) * f * k / p); others += m[r.id]; rest += (+r.m || 0) / p; }));
   if (w) {
     const x = roundM(B - others);
     if (x < 0) {
-      return { err: 'Not possible: at W' + fmtNum(str) + ' the other components alone weigh ' + fmt(others, 1) + ' g — more than the batch (' + fmt(B, 1) + ' g).'
-        + (dil ? ' The diluted dips bring their own water — setting them to W100 leaves more room.' : '') + (rest > 0 ? ' The most is W' + fmt(100 * T / rest, 1) + '.' : '') };
+      return { err: lt('errOver', fmtNum(str), fmt(others, 1), fmt(B, 1))
+        + (dil ? lt('errOverDil') : '') + (rest > 0 ? lt('errOverMax', fmt(100 * T / rest, 1)) : '') };
     }
     m[w.id] = x;
   }
@@ -2106,14 +2216,15 @@ function updateLabDil(v, st) {
   const r1 = el('ldR1'), r2 = el('ldR2'), msg = el('ldMsg');
   if (go && B > 0) {   // only numbers go into the markup
     const S = roundM(B * b / a);
-    r1.innerHTML = 'for <b class="dn">' + fmt(B, 1) + '</b> g of ' + wb + ': <b class="dn">' + fmt(S, 1) + '</b> g of ' + wa + ' + <b class="dn">' + fmt(roundM(B - S), 1) + '</b> g water';
+    const bn = x => '<b class="dn">' + fmt(x, 1) + '</b>';
+    r1.innerHTML = lt('dilFor', bn(B), wb, bn(S), wa, bn(roundM(B - S)));
   }
   r1.style.display = go && B > 0 ? '' : 'none';
   r2.style.display = go ? '' : 'none';
   if (go) { setText('ldAdd', fmt(roundM(H * (a / b - 1)), 1)); setText('ldGet', fmt(roundM(H * a / b), 1)); }
   msg.textContent = go ? '' : Math.abs(a - b) < 1e-9
-    ? (b === 100 ? 'The sheet is W100 (full strength) — set a lower strength above to see how to dilute.' : 'It already is ' + wb + ' — nothing to dilute.')
-    : 'Water only dilutes — ' + wa + ' does not give ' + wb + '. Weigh it from the recipe above, or start from a stronger dip.';
+    ? (b === 100 ? lt('dilFull') : lt('dilSame', wb))
+    : lt('dilNo', wa, wb);
   msg.style.display = go ? 'none' : '';
 }
 function labNestBlur(rid) { const i = el('ln-' + rid), r = labRowById(rid); if (i && r) i.value = fmtNum(nestStr(r)); }
@@ -2122,7 +2233,12 @@ function labNestBlur(rid) { const i = el('ln-' + rid), r = labRowById(rid); if (
 // sheet: labView[dip].alt = { <row id>: alternative id }, only while it differs from the one in production (dashed +
 // bold on the sheet). It only names the product: the masses stay those of the recipe (its %chem) — a product that is
 // mixed at another concentration than the recipe counts with is flagged ("40 % ≠ %chem"), not recalculated.
-function labAltLabel(a) { return altLabel(a) + (altApproved(a) ? '' : ' · ' + altStatusName(a)); }   // a candidate says so on the sheet
+// name of an alternative on the sheet — a candidate says so ("· lab testing"), in the sheet's language
+function labAltName(a) { return (a && (a.name.trim() || a.producer.trim())) || lt('unnamed'); }
+function labAltLabel(a) {
+  const s = altStatus(a);
+  return labAltName(a) + (s === 'approved' ? '' : ' · ' + (LAB_T.en['st_' + s] ? lt('st_' + s) : altStatusName(a)));
+}
 function labAltOver(r, m) {
   const o = labViewOf().alt, id = o ? o[r.id] : null, act = actAlt(m);
   return id != null && act && id !== act.id ? (m.alts.find(a => a.id === id) || null) : null;
@@ -2135,12 +2251,8 @@ function labAltFlag(r, m) {
 }
 function labAltTip(r, m) {
   const a = labAlt(r, m), act = actAlt(m);
-  const info = a ? [a.producer.trim(), a.card.trim() ? 'card ' + a.card.trim() : '', a.note.trim()].filter(Boolean).join(' · ') : '';
-  return (info ? info + ' — ' : '') + (m.alts.length < 2
-    ? 'the product this is weighed from — the only alternative of this material. Click to edit the material.'
-    : labAltOver(r, m)
-    ? 'NOT the alternative mixed in production now (● ' + altLabel(act) + ') — picked for this weighing only; choose ● to go back.'
-    : 'the product this is weighed from — ● = mixed in production now. Another alternative can be picked for this weighing (dashed = changed); one that is not approved yet says so.');
+  const info = a ? [a.producer.trim(), a.card.trim() ? lt('card') + a.card.trim() : '', a.note.trim()].filter(Boolean).join(' · ') : '';
+  return (info ? info + ' — ' : '') + (m.alts.length < 2 ? lt('altOnly') : labAltOver(r, m) ? lt('altOther', labAltName(act)) : lt('altDef'));
 }
 function onLabAlt(rid, sel) {
   const r = labRowById(rid), m = r && matById(r.mat), act = actAlt(m); if (!act) return;
@@ -2162,9 +2274,9 @@ function labAltHtml(r, m) {
 function labNameHtml(r) {
   if (!isDipRow(r)) {
     const m = matById(r.mat), nm = `<span class="lab-n">${esc(rowName(r))}</span>`;
-    return m ? `<span class="lab-comp">${nm}${labAltHtml(r, m)}<b class="lab-altc" id="lx${r.id}" title="the product is mixed at this concentration, the recipe counts with its own %chem — the masses below are those of the recipe"></b></span>` : nm;
+    return m ? `<span class="lab-comp">${nm}${labAltHtml(r, m)}<b class="lab-altc" id="lx${r.id}" title="${esc(lt('altFlagTip'))}"></b></span>` : nm;
   }
-  return `<span class="lab-nest"><span class="lab-n">${esc(rowName(r))}</span><label class="lab-m">W<input class="lab-nw${nestOver(r) != null ? ' diff' : ''}" id="ln-${r.id}" data-r="${r.id}" inputmode="decimal" value="${fmtNum(nestStr(r))}" oninput="onLabNest(${r.id},this)" onblur="labNestBlur(${r.id})" title="this dip goes in already diluted to this strength (W85 = 85 parts of it at full strength + 15 parts water) — it weighs more and the first water less. Prefilled from its own lab strength; 100 = full strength. For this weighing only (dashed = changed)." autocomplete="off"></label></span>`;
+  return `<span class="lab-nest"><span class="lab-n">${esc(rowName(r))}</span><label class="lab-m">W<input class="lab-nw${nestOver(r) != null ? ' diff' : ''}" id="ln-${r.id}" data-r="${r.id}" inputmode="decimal" value="${fmtNum(nestStr(r))}" oninput="onLabNest(${r.id},this)" onblur="labNestBlur(${r.id})" title="${esc(lt('nestTip'))}" autocomplete="off"></label></span>`;
 }
 // The lab sheet also repeats the dip name and the maturing times — prefilled from the dip / recipe, any of them can be
 // overwritten for this weighing (same local view state as the strength: labView[dip] = { str, batch, title, mat:{secId|'all'}, nest, alt, dfrom, dhave }).
@@ -2197,42 +2309,48 @@ function onLabMature(key, inp) {
 }
 function labMatBlur(key) { const i = el('lm-' + key); if (i) i.value = labMat(key); }
 function labMatHtml(key, label) {
-  const tip = key === 'all' ? 'minimum maturing of the whole mixed dip' : 'minimum maturing of this part';
-  return `<label class="lab-m">${label} <input class="lab-mat${labMatOver(key) != null ? ' diff' : ''}" id="lm-${key}" data-k="${key}" value="${esc(labMat(key))}" placeholder="—" oninput="onLabMature('${key}',this)" onblur="labMatBlur('${key}')" title="${tip} — prefilled from the recipe; a different value is for this weighing only (dashed = changed)" autocomplete="off"></label>`;
+  const tip = lt(key === 'all' ? 'matAllTip' : 'matPartTip') + lt('matTipEnd');
+  return `<label class="lab-m">${esc(label)} <input class="lab-mat${labMatOver(key) != null ? ' diff' : ''}" id="lm-${key}" data-k="${key}" value="${esc(labMat(key))}" placeholder="—" oninput="onLabMature('${key}',this)" onblur="labMatBlur('${key}')" title="${esc(tip)}" autocomplete="off"></label>`;
 }
 function labHtml(v) {
   const st = labState(), o = labViewOf();
   const body = v.secs.map(s => `<tr class="lab-sec"><td><span class="lab-n" id="lsn${s.id}">${esc(s.name || '—')}</span></td><td></td><td class="n" id="ls${s.id}"></td></tr>`
     + s.rows.map(r => `<tr><td>${labNameHtml(r)}</td><td class="n${rowRole(r) === 'water' ? ' num-dash' : ''}" id="lc${r.id}"></td><td class="n lab-g" id="lw${r.id}"></td></tr>`).join('')
-    + `<tr class="lab-mrow"><td colspan="3">${labMatHtml(s.id, 'maturing min.')}</td></tr>`).join('');
-  return `<div class="sub-title">Lab weighing</div>
+    + `<tr class="lab-mrow"><td colspan="3">${labMatHtml(s.id, lt('matPart'))}</td></tr>`).join('');
+  const T = k => esc(lt(k));   // a text of the sheet in its language (see LAB SHEET LANGUAGE)
+  const lang = (l, label) => `<button class="chip${labLang === l ? ' on' : ''}" onclick="setLabLang('${l}')">${label}</button>`;
+  // "to [how much] g of W100 add … g water → … g of W85" — the word order differs by language, the pieces are the same
+  const have = lt('dilHave',
+    `<input id="labDilHave" class="lab-nw lab-dh" inputmode="decimal" value="${labDilHave() != null ? fmtNum(labDilHave()) : ''}" placeholder="1000" oninput="onLabDil('dhave',this)" title="${T('dilHaveTip')}" autocomplete="off">`,
+    '<span id="ldFrom2"></span>', '<b class="dn" id="ldAdd"></b>', '<b class="dn" id="ldGet"></b>', '<span id="ldTo2"></span>');
+  return `<div class="sub-title lab-head"><span>${T('title')}</span><span class="lab-lang" title="${T('langTip')}">${lang('en', 'EN')}${lang('cs', 'CZ')}</span></div>
     <div class="lab-ctl">
-      <span class="tool">strength W <input id="labStrIn" class="rc-in" inputmode="decimal" value="${fmtNum(st.str)}" placeholder="${fmtNum(st.rec)}" oninput="onLabStr(this)" onblur="labInBlur()" title="strength of the lab dip in % of the full-strength W100 recipe — only for this weighing; the dip's recommended value is in the header (lab strength %)" autocomplete="off"></span>
-      <span class="tool">batch <input id="labBatchIn" class="rc-in" inputmode="decimal" value="${st.batch != null ? fmtNum(st.batch) : ''}" oninput="onLabBatch(this)" title="lab batch mass (g) — empty = the recipe batch" autocomplete="off"> g</span>
+      <span class="tool">${T('strength')} <input id="labStrIn" class="rc-in" inputmode="decimal" value="${fmtNum(st.str)}" placeholder="${fmtNum(st.rec)}" oninput="onLabStr(this)" onblur="labInBlur()" title="${T('strengthTip')}" autocomplete="off"></span>
+      <span class="tool">${T('batch')} <input id="labBatchIn" class="rc-in" inputmode="decimal" value="${st.batch != null ? fmtNum(st.batch) : ''}" oninput="onLabBatch(this)" title="${T('batchTip')}" autocomplete="off"> g</span>
       <span class="lab-rec" id="labRec"></span>
     </div>
     <div class="lab-top">
-      <input id="labTitle" class="lab-title${o.title != null ? ' diff' : ''}" value="${esc(labTitle())}" size="${labTitleSize(labTitle())}" placeholder="dip" oninput="onLabTitle(this)" onblur="labTitleBlur()" title="the dip name on this sheet — add or change anything for this weighing (dashed = changed); empty = the dip name" autocomplete="off">
-      <span class="lab-str" id="labStrTag" title="the strength of this lab dip — set above (strength W)"></span>
+      <input id="labTitle" class="lab-title${o.title != null ? ' diff' : ''}" value="${esc(labTitle())}" size="${labTitleSize(labTitle())}" placeholder="${T('titlePh')}" oninput="onLabTitle(this)" onblur="labTitleBlur()" title="${T('titleTip')}" autocomplete="off">
+      <span class="lab-str" id="labStrTag" title="${T('strTagTip')}"></span>
       <span class="lab-var" id="labVar"></span>
     </div>
     <div class="lab-msg" id="labMsg" style="display:none"></div>
     <table class="lab-tbl">
-      <thead><tr><th>component</th><th>%chem</th><th>weigh (g)</th></tr></thead>
+      <thead><tr><th>${T('thComp')}</th><th>${T('thChem')}</th><th>${T('thWeigh')}</th></tr></thead>
       <tbody>${body}
         <tr class="lab-total"><td><span class="lab-n" id="labTotL"></span></td><td></td><td class="n" id="labTot"></td></tr>
-        <tr class="lab-mrow"><td colspan="3">${labMatHtml('all', 'whole dip — maturing min.')}</td></tr>
+        <tr class="lab-mrow"><td colspan="3">${labMatHtml('all', lt('matAll'))}</td></tr>
       </tbody>
     </table>
     <div class="lab-dil">
-      <div class="lab-dil-t">or dilute a finished dip with water</div>
-      <div class="lab-dil-r"><label class="lab-m">from W<input id="labDilFrom" class="lab-nw${labDilFrom() !== 100 ? ' diff' : ''}" inputmode="decimal" value="${fmtNum(labDilFrom())}" oninput="onLabDil('dfrom',this)" onblur="labDilBlur()" title="the strength you dilute from — 100 = the full-strength dip; for stepwise dilution the one you already have (e.g. 90). For this weighing only (dashed = changed)." autocomplete="off"></label> to <b class="dn" id="ldTo"></b></div>
+      <div class="lab-dil-t">${T('dilTitle')}</div>
+      <div class="lab-dil-r"><label class="lab-m">${T('dilFrom')}<input id="labDilFrom" class="lab-nw${labDilFrom() !== 100 ? ' diff' : ''}" inputmode="decimal" value="${fmtNum(labDilFrom())}" oninput="onLabDil('dfrom',this)" onblur="labDilBlur()" title="${T('dilFromTip')}" autocomplete="off"></label> ${T('dilTo')} <b class="dn" id="ldTo"></b></div>
       <div class="lab-dil-r" id="ldR1"></div>
-      <div class="lab-dil-r" id="ldR2">to <input id="labDilHave" class="lab-nw lab-dh" inputmode="decimal" value="${labDilHave() != null ? fmtNum(labDilHave()) : ''}" placeholder="1000" oninput="onLabDil('dhave',this)" title="how much of the stronger dip you have (g) — empty = 1000 g" autocomplete="off"> g of <span id="ldFrom2"></span> add <b class="dn" id="ldAdd"></b> g water → <b class="dn" id="ldGet"></b> g of <span id="ldTo2"></span></div>
+      <div class="lab-dil-r" id="ldR2">${have}</div>
       <div class="lab-dil-r lab-dil-msg" id="ldMsg" style="display:none"></div>
     </div>
-    <div class="field lab-prep"><label>preparation notes</label><textarea id="labPrep" class="prep-note ed" placeholder="How to mix — e.g. add the formaldehyde slowly while stirring, temperature, order, what to watch…" oninput="onVarField('prep',this);autoGrow(this)">${esc(v.prep)}</textarea></div>
-    <div class="tool-hint">The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. After a material is the product it is weighed from — the alternative mixed in production now (● in ⚗ materials); another one can be picked for a weighing (dashed and bold = not the one in production; a candidate that is not approved yet says “lab testing” / “production testing”). It only names the product, the masses stay those of the recipe — “40 % ≠ %chem” says that product is mixed at another concentration than the recipe counts with. Name, strengths, batch, maturing and alternatives changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.</div>`;
+    <div class="field lab-prep"><label>${T('prep')}</label><textarea id="labPrep" class="prep-note ed" placeholder="${T('prepPh')}" oninput="onVarField('prep',this);autoGrow(this)">${esc(v.prep)}</textarea></div>
+    <div class="tool-hint">${T('hint')}</div>`;
 }
 // numbers and prefilled values of the lab sheet — the inputs are never re-rendered while typing
 function updateLab(v, c, st) {
@@ -2254,7 +2372,7 @@ function updateLab(v, c, st) {
     setText('lsn' + s.id, s.name || '—');
   });
   setText('labTot', ok ? fmt(total, 1) : '—');
-  setText('labTotL', 'total W' + fmtNum(st.str) + ' · solid ' + pct(c.tsc != null ? c.tsc * st.str / 100 : null));
+  setText('labTotL', lt('total', fmtNum(st.str), pct(c.tsc != null ? c.tsc * st.str / 100 : null)));
   setText('labStrTag', 'W' + fmtNum(st.str));
   setText('labVar', [v.name, v.code].filter(Boolean).join(' · '));
   const act = document.activeElement, o = labViewOf();
@@ -2349,8 +2467,8 @@ function updateCalc() {
   const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c, st.str, dipType(cur));
   updateLab(v, c, st);
   const lr = el('labRec');
-  if (lr) lr.innerHTML = st.over ? `<button class="btn-sm" onclick="resetLabStr()" title="back to the dip's recommended lab strength">↺ dip W${fmtNum(st.rec)}</button>`
-    : cur.labStr > 0 ? 'the dip’s lab strength' : '';
+  if (lr) lr.innerHTML = st.over ? `<button class="btn-sm" onclick="resetLabStr()" title="${esc(lt('recResetTip'))}">${esc(lt('recReset', fmtNum(st.rec)))}</button>`
+    : cur.labStr > 0 ? esc(lt('recIs')) : '';
   const si = el('labStrIn'); if (si && document.activeElement !== si) si.value = fmtNum(st.str);
   if (si) si.placeholder = fmtNum(st.rec);
   const bi = el('labBatchIn'); if (bi) bi.placeholder = fmt(c.total, 1);
@@ -3497,6 +3615,7 @@ function init() {
   loadActiveVarMap();
   loadLabView();
   loadAltFilter();
+  loadLabLang();
   initRowDnd();
   initListDnd(el('varsBody'), { grip: '.var-grip', item: '.var-item', onDrop: moveVarTo });
   initListDnd(el('libList'), { grip: '.lib-grip', item: '.lib-item', group: e => e.dataset.grp, onDrop: moveDipTo });
