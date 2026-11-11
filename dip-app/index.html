@@ -444,6 +444,11 @@ html.dark input[type="date"]{color-scheme:dark}
 .lab-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .lab-lang{display:flex;gap:.2rem;flex-shrink:0}
 .lab-lang .chip{font-size:.66rem;padding:.1rem .4rem;letter-spacing:0}
+/* display currency of the prices (EUR / CZK / USD chips in the Parameters title) + the rate line under it */
+.fx-row{display:flex;flex-wrap:wrap;align-items:center;gap:calc(.3rem/var(--pzc,1)) .5rem;font-size:.76rem;color:var(--dark);margin-bottom:calc(.35rem/var(--pzc,1))}
+.fx-row .rc-in{width:5.2rem}
+.fx-note{color:var(--muted)}
+.fx-note b{color:var(--black);font-weight:600}
 .lab-dil{margin-top:calc(.9rem/var(--pzc,1));font-size:.8rem;color:var(--black)}
 .lab-dil-t{font-size:.62rem;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-bottom:calc(.3rem/var(--pzc,1));border-bottom:1.5px solid var(--black)}
 .lab-dil-r{display:flex;flex-wrap:wrap;align-items:baseline;gap:.1rem .35rem;margin-top:calc(.35rem/var(--pzc,1))}
@@ -774,6 +779,7 @@ const LIBORDER_KEY = 'dip-app-lib-order';    // { list:[dip ids], mt } — order
 const LABVIEW_KEY = 'dip-app-lab-view';        // { solutionId: { str, batch } } — lab weighing override, local view state, NOT synced
 const ALTFILTER_KEY = 'dip-app-alt-filter';    // which alternatives ⚗ materials shows (by approval status) — local view state, NOT synced
 const LABLANG_KEY = 'dip-app-lab-lang';        // 'en' | 'cs' — language of the Lab weighing sheet (the operator's worksheet), local view state, NOT synced
+const CURRENCY_KEY = 'dip-app-currency';       // { cur, rates:{ CZK:{r,d}, USD:{r,d} } } — display currency + rates per 1 €, local view state, NOT synced
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let library = [], activeLibId = null;
@@ -1471,7 +1477,95 @@ function numOrNull(v) { if (v == null || v === '') return null; const n = typeof
 function fmt(n, d = 2) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(d); }
 function pct(n, d = 2) { return (n == null || !isFinite(n)) ? '—' : n.toFixed(d) + '%'; }
 function fmtNum(n) { return (n == null || !isFinite(n)) ? '' : String(+(+n).toFixed(4)); }
-function eur(n, ok = true, d = 3, unit = ' €') { return (n == null || !isFinite(n)) ? '—' : (ok ? '' : '≥ ') + n.toFixed(d) + unit; }
+// ── DISPLAY CURRENCY ──────────────────────────────────────────────────────
+// Prices are ALWAYS stored and calculated in € (materials are priced in €). The currency is only how the app shows
+// them: € × the rate (CZK / USD per 1 €). Currency and rates are local view state (not synced, no mt) — a rate is
+// typed by hand, or fetched on a click (fetchFx). The Excel copy (⧉) goes out in the display currency too.
+const CURRENCIES = [['EUR', '€'], ['CZK', 'Kč'], ['USD', '$']];
+const CUR_SYM = Object.fromEntries(CURRENCIES);
+const FX_CODES = CURRENCIES.map(c => c[0]).filter(k => k !== 'EUR');
+let fx = { cur: 'EUR', rates: {} };
+function loadFx() {
+  try {
+    const o = JSON.parse(localStorage.getItem(CURRENCY_KEY) || 'null') || {};
+    const rates = {};
+    FX_CODES.forEach(k => {
+      const x = o.rates && o.rates[k], r = x ? +x.r : NaN;
+      if (isFinite(r) && r > 0) rates[k] = { r, d: typeof x.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.d) ? x.d : null };
+    });
+    fx = { cur: CUR_SYM[o.cur] ? o.cur : 'EUR', rates };
+  } catch(e) { fx = { cur: 'EUR', rates: {} }; }
+}
+function saveFx() { try { localStorage.setItem(CURRENCY_KEY, JSON.stringify(fx)); } catch(e) {} }
+function fxRate(k) { return k === 'EUR' ? 1 : (fx.rates[k] ? fx.rates[k].r : null); }
+// the currency prices are shown in — the chosen one, or € while it has no rate yet (never € numbers with another label)
+function dispCur() { return fxRate(fx.cur) != null ? fx.cur : 'EUR'; }
+function curSym() { return CUR_SYM[dispCur()]; }
+// a price in € → the display currency. unit: undefined = " Kč", '' = bare number, '/kg' = " Kč/kg".
+// A crown is worth ~1/25 of a euro → one decimal less.
+function money(n, ok = true, d = 3, unit) {
+  if (n == null || !isFinite(n)) return '—';
+  const k = dispCur();
+  return (ok ? '' : '≥ ') + (n * fxRate(k)).toFixed(k === 'CZK' ? Math.max(0, d - 1) : d) + (unit === '' ? '' : ' ' + CUR_SYM[k] + (unit || ''));
+}
+// "1 € = 24.337 Kč (ECB 2026-11-10)" — where a converted price says what it was converted with
+function fxText() {
+  const k = dispCur(); if (k === 'EUR') return '';
+  const x = fx.rates[k];
+  return '1 € = ' + fmtNum(x.r) + ' ' + CUR_SYM[k] + ' (' + (x.d ? 'ECB ' + x.d : 'typed by hand') + ')';
+}
+function currencyChipsHtml() {
+  return '<span class="lab-lang" title="currency the prices are shown in — they are stored and calculated in €; another currency is converted with the rate below (kept on this device)">'
+    + CURRENCIES.map(([k]) => `<button class="chip${fx.cur === k ? ' on' : ''}" onclick="setCurrency('${k}')">${k}</button>`).join('') + '</span>';
+}
+function fxRowHtml() {
+  const k = fx.cur; if (k === 'EUR') return '';
+  const x = fx.rates[k];
+  return `<div class="fx-row">1 € = <input id="fxRateIn" class="rc-in" inputmode="decimal" value="${x ? fmtNum(x.r) : ''}" placeholder="rate" oninput="onFxRate(this)" title="how many ${k} one euro is — type it, or get the ECB reference rate with ↻. Kept on this device." autocomplete="off"> ${CUR_SYM[k]}
+      <button class="btn-sm" id="fxBtn" onclick="fetchFx()" title="get the latest ECB reference rates (EUR → CZK, USD) from api.frankfurter.dev — only when you click here, never on its own. Nothing from your data is sent; that server sees the request (IP address, time, the address of this site).">↻ ECB rate</button>
+      <span class="fx-note" id="fxNote"></span></div>`;
+}
+function updateFxUi() {
+  const k = fx.cur, x = fx.rates[k], n = el('fxNote'), i = el('fxRateIn'), b = el('fxBtn');
+  if (n) n.innerHTML = x ? (x.d ? 'ECB reference rate of ' + x.d : 'typed by hand') : '<b>no rate yet — prices stay in € until you type one or get it with ↻</b>';   // constants and a validated date only
+  if (i && i !== document.activeElement) i.value = x ? fmtNum(x.r) : '';
+  if (b) b.disabled = fxBusy;
+  setText('rcCurH', curSym() + '/kg');
+}
+function refreshPrices() { updateCalc(); if (el('matModal').classList.contains('open')) renderMaterials(); }
+function setCurrency(k) {
+  fx.cur = CUR_SYM[k] ? k : 'EUR'; saveFx();
+  renderMain();
+  if (el('matModal').classList.contains('open')) renderMaterials();
+}
+function onFxRate(inp) {
+  const k = fx.cur, n = numOrNull(inp.value); if (k === 'EUR') return;
+  if (n > 0) fx.rates[k] = { r: n, d: null }; else delete fx.rates[k];
+  saveFx(); refreshPrices();
+}
+// The ONLY request the app makes outside GitHub: the latest ECB reference rates from the public Frankfurter API, and
+// only when the user clicks ↻ (never on its own — the user's decision, see dip-app/CLAUDE.md). A plain GET without
+// credentials or referrer: nothing from the data goes out; that server sees the IP address, the time and the origin of
+// the site. The answer is untrusted → only finite positive numbers and a well-formed date are taken from it.
+// (ČNB and the ECB itself do not allow cross-origin reads, so a browser can not ask them directly.)
+const FX_URL = 'https://api.frankfurter.dev/v1/latest?base=EUR&symbols=' + FX_CODES.join(',');
+let fxBusy = false;
+async function fetchFx() {
+  if (fxBusy) return;
+  fxBusy = true; updateFxUi();
+  let got = 0, date = null;
+  try {
+    const res = await fetch(FX_URL, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' });
+    if (res.ok) {
+      const j = await res.json();
+      date = j && typeof j.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.date) ? j.date : todayIso();
+      FX_CODES.forEach(k => { const r = j && j.rates ? +j.rates[k] : NaN; if (isFinite(r) && r > 0) { fx.rates[k] = { r, d: date }; got++; } });
+    }
+  } catch(e) {}
+  fxBusy = false;
+  if (got) { saveFx(); refreshPrices(); showSave('↻ ECB rates of ' + date); }
+  else { updateFxUi(); await customAlert('Could not get the exchange rate — offline, or the rate service does not answer. Type the rate by hand (1 € = …); it is kept on this device.'); }
+}
 function round2(n) { return Math.round(n * 100) / 100; }
 // masses are weighed to 0.1 g: shown with one decimal (the data keeps what was typed / calculated, so the tools still
 // hit their target exactly), the lab sheet is calculated at 0.1 g so that its column adds up to the batch
@@ -1857,7 +1951,7 @@ function renderMain() {
   _dipChoices = dipChoices();   // the dips offered as a component — once per render, not per row
   box.innerHTML = chipsHtml(v) + headHtml(v) + recipeHtml(v)
     + toolsHtml(type)
-    + '<div class="sub-title">Parameters</div><div class="par-grid" id="parGrid"></div>'
+    + '<div class="sub-title lab-head"><span>Parameters</span>' + currencyChipsHtml() + '</div>' + fxRowHtml() + '<div class="par-grid" id="parGrid"></div>'
     + labHtml(v)
     + '<div class="sub-title">Measured</div>' + measHtml(v, type);
   _dipChoices = null;
@@ -1911,7 +2005,7 @@ function dipSubHtml(s, r) {
   if (!n.exact && r.dv != null) parts.push('<b>variant deleted — ' + (n.v === used ? 'the one in use' : 'the top one') + ' is used</b>');
   parts.push(esc(DIP_TYPE_NAME[dipType(n.sol)]));
   if (nc && !(nc.total > 0)) parts.push('<b>no mass yet</b>');
-  else if (nc) parts.push(eur(nc.price, nc.priceOk, 3, ' €/kg'));
+  else if (nc) parts.push(esc(money(nc.price, nc.priceOk, 3, '/kg')));
   parts.push(`<button class="rc-open" onclick="openNested(${n.sol.id},${n.v.id})" title="open ${esc(n.sol.name || 'untitled')} ${esc(n.v.name || '')}">open ↗</button>`);
   return parts.join(' · ');
 }
@@ -1995,7 +2089,7 @@ function secHtml(s, i, n) {
 }
 function recipeHtml(v) {
   return `<div class="rc">
-      <div class="rc-grid rc-head"><span class="a-name">component</span><span class="a-conc">%chem</span><span class="a-m">m (g)</span><span class="a-dip">% in dip</span><span class="a-solid">% in solid</span><span class="a-wet">% wet</span><span class="a-price">€/kg</span><span class="a-act"></span></div>
+      <div class="rc-grid rc-head"><span class="a-name">component</span><span class="a-conc">%chem</span><span class="a-m">m (g)</span><span class="a-dip">% in dip</span><span class="a-solid">% in solid</span><span class="a-wet">% wet</span><span class="a-price" id="rcCurH" title="price of the component per kg of dip — in the currency picked at Parameters">${esc(curSym())}/kg</span><span class="a-act"></span></div>
       ${v.secs.map((s, i) => secHtml(s, i, v.secs.length)).join('')}
       <div class="rc-grid rc-sum total"><div class="a-name"><span class="sum-l" id="totL">sum RFL</span></div><span class="num a-m" id="tm"></span><span class="num a-dip" id="td"></span><span class="num a-solid" id="ts"></span><span class="num a-wet" id="tw"></span><span class="num a-price" id="tp"></span></div>
     </div>
@@ -2404,9 +2498,11 @@ function parHtml(c, labStr, type) {
     ...(Math.abs(labStr - 100) > 1e-9 ? [P('solid lab W' + fmtNum(labStr), pct(c.tsc != null ? c.tsc * labStr / 100 : null), { tip: 'solid of the diluted lab dip — see Lab weighing' })] : []),
     P('solid w/o NH₃', pct(c.tscNoNH3), { tip: 'TSC without the ammonia — incl. the ammonia inside nested dips' })
   ];
+  // shown in another currency → the tip says what it was converted with (" · converted from € — 1 € = …")
+  const conv = dispCur() === 'EUR' ? '' : ' · converted from € — ' + fxText();
   const price = [
-    P('price / kg dip', eur(c.price, c.priceOk), { key: true, tip: (c.priceOk ? 'active alternatives, incl. the pre-dilution' : 'some components have no price — the sum is a lower bound') + ' — the full-strength W100 dip, as production runs it' }),
-    P('price / kg solid', eur(c.priceSolid, c.priceOk))
+    P('price / kg dip', esc(money(c.price, c.priceOk)), { key: true, tip: (c.priceOk ? 'active alternatives, incl. the pre-dilution' : 'some components have no price — the sum is a lower bound') + ' — the full-strength W100 dip, as production runs it' + conv }),
+    P('price / kg solid', esc(money(c.priceSolid, c.priceOk)), conv ? { tip: conv.slice(3) } : {})
   ];
   if (type !== 'rfl') return [
     ...solid,
@@ -2446,7 +2542,7 @@ function updateCalc() {
     setText('s' + s.id + 'd', pct(c.total > 0 ? sc.dry / c.total * 100 : null));
     setText('s' + s.id + 's', pct(c.dry > 0 ? sc.dry / c.dry * 100 : null));
     setText('s' + s.id + 'w', pct(c.total > 0 ? sc.m / c.total * 100 : null));
-    setText('s' + s.id + 'p', eur(sc.price, sc.priceOk, 3, ''));
+    setText('s' + s.id + 'p', money(sc.price, sc.priceOk, 3, ''));
     s.rows.forEach(r => {
       const x = c.rows[r.id]; if (!x) return;
       const water = x.role === 'water';
@@ -2454,7 +2550,7 @@ function updateCalc() {
       setCell('c' + r.id + 'd', water ? '' : pct(x.dip));
       setCell('c' + r.id + 's', water ? '' : pct(x.solid));
       setCell('c' + r.id + 'w', pct(x.wet));
-      setText('c' + r.id + 'p', eur(x.price, true, 3, ''));
+      setText('c' + r.id + 'p', money(x.price, true, 3, ''));
     });
   });
   setText('totL', totLabelOf(c));
@@ -2462,7 +2558,8 @@ function updateCalc() {
   setText('td', pct(c.tsc));
   setText('ts', c.dry > 0 ? '100%' : '—');
   setText('tw', c.total > 0 ? '100%' : '—');
-  setText('tp', eur(c.price, c.priceOk, 3, ''));
+  setText('tp', money(c.price, c.priceOk, 3, ''));
+  updateFxUi();
   const st = labState(), diluted = Math.abs(st.str - 100) > 1e-9;
   const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c, st.str, dipType(cur));
   updateLab(v, c, st);
@@ -2487,7 +2584,7 @@ function varStats(c) {
   const t = dipType(cur), out = [pct(c.tsc)];
   if (t === 'rfl') out.push('PHR ' + fmt(c.phr), 'F/R ' + fmt(c.fr));
   if (t === 'predip') out.push('epoxy:IK ' + fmt(c.epIk));
-  return out.concat(eur(c.price, c.priceOk, 2) + '/kg', fmt(c.total, 1) + ' g').join(' · ');
+  return out.concat(money(c.price, c.priceOk, 2, '/kg'), fmt(c.total, 1) + ' g').join(' · ');
 }
 function varDiffText(v) {
   const p = v.from != null ? cur.vars.find(x => x.id === v.from) : null;
@@ -3103,8 +3200,14 @@ function moveVarTo(vid, refId, after) {
 // The plain text carries the values only, with the decimal separator of the browser's locale.
 const COPY_DEC = (() => { try { return (1.5).toLocaleString().indexOf(',') >= 0 ? ',' : '.'; } catch(e) { return '.'; } })();
 // Excel number formats, written the way mso-number-format wants them inside a style attribute (\. = a dot, \0022 = a quote)
-const XF = { m: '0\\.0', p0: '0%', p2: '0\\.00%', p4: '0\\.0000%', eur: '0\\.000 \\0022€\\0022', eurMin: '\\0022≥ \\00220\\.000 \\0022€\\0022' };
+const XF = { m: '0\\.0', p0: '0%', p2: '0\\.00%', p4: '0\\.0000%' };
 function xlPctFmt(d) { return '0' + (d ? '\\.' + '0'.repeat(d) : '') + '%'; }
+// a price: d decimals + the currency symbol as a literal ("0.000 €", "0.00 Kč", "0.000 $"); min = a lower bound
+// ("≥ 0.000 €"). A column of the default width shows about 9 characters, more turns into #### (checked against Excel
+// 2026-11-11: "≥ 29,21 Kč" does not fit, "≥29,21 Kč" does) → with a two-letter symbol the ≥ goes without the space.
+function xlMoneyFmt(sym, d, min) {
+  return (min ? '\\0022≥' + (sym.length > 1 ? '' : ' ') + '\\0022' : '') + '0' + (d ? '\\.' + '0'.repeat(d) : '') + ' \\0022' + sym + '\\0022';
+}
 // a number for an Excel attribute / formula: always a decimal point, never an exponent
 function xlNum(n) { const x = +(+n).toPrecision(12); return x !== 0 && Math.abs(x) < 1e-6 ? x.toFixed(12) : String(x); }
 // The look of the table in Excel — the fills, font colours and frame of the user's own sheet: name and code dark
@@ -3145,6 +3248,9 @@ function varTable(v) {
   const T = ++n;
   const plus = (col, ns) => '=' + ns.map(i => col + i).join('+');
   const dR = [], eR = [], fR = [], gR = [];   // the rows that have a % in dip / % in solid / % wet / price cell → the totals add those up
+  // Prices leave in the currency the app shows them in: the unit prices inside the formulas are already converted with
+  // the current rate (the sheet holds no rate cell), the number format carries that currency's symbol and decimals.
+  const ck = dispCur(), rate = fxRate(ck), sym = CUR_SYM[ck], pd = ck === 'CZK' ? 2 : 3;
   // The heading row drives the masses (when the recipe has a first water and some solid): batch (B1), solid of the
   // full-strength dip (C1) and strength (G1) are values to type over, D1 shows the solid that comes out. The rules
   // are those of scale batch / set solid / Lab weighing: every component = its recipe mass × batch × solid × strength
@@ -3167,7 +3273,7 @@ function varTable(v) {
   lay.forEach((L, i) => {
     const s = L.s;
     grid.push([K('sec', S(s.name || '—', true)), K('sec', S('%chem', true)), K('sec', S('m (g)', true))]
-      .concat(i ? [] : ['% in dip', '% in solid', '% wet', 'price €/kg'].map(t => K('soft', S(t, true)))));
+      .concat(i ? [] : ['% in dip', '% in solid', '% wet', 'price ' + sym + '/kg'].map(t => K('soft', S(t, true)))));
     L.rows.forEach(({ r, n }) => {
       const x = c.rows[r.id] || {}, water = x.role === 'water', nested = x.role === 'dip';
       const conc = water ? null : nested ? x.conc : numOrNull(r.conc);   // a nested dip: its solid, live from its recipe
@@ -3182,7 +3288,7 @@ function varTable(v) {
         !water && hasT ? K('key', N(x.dip / 100, XF.p4, pct(x.dip, 4), `=C${n}*B${n}/C$${T}`, true)) : null,
         !water && c.dry > 0 ? N(x.solid / 100, XF.p2, pct(x.solid), `=D${n}/D$${T}`) : null,
         hasT ? N(x.wet / 100, XF.p2, pct(x.wet), `=C${n}/C$${T}`) : null,
-        hasT && x.unit != null && isFinite(x.unit) ? N(x.price, XF.eur, fmt(x.price, 3), `=F${n}*${xlNum(x.unit)}`) : null];   // % wet × € per kg of the component
+        hasT && x.unit != null && isFinite(x.unit) ? N(x.price * rate, xlMoneyFmt(sym, pd), money(x.price, true, 3, ''), `=F${n}*${xlNum(x.unit * rate)}`) : null];   // % wet × price per kg of the component (display currency)
       if (row[3]) dR.push(n);
       if (row[4]) eR.push(n);
       if (row[5]) fR.push(n);
@@ -3201,7 +3307,7 @@ function varTable(v) {
     K('soft', dR.length ? N(c.tsc / 100, XF.p4, pct(c.tsc, 4), plus('D', dR)) : null),
     K('soft', eR.length ? N(1, XF.p0, '100%', plus('E', eR)) : null),
     K('soft', fR.length ? N(1, XF.p0, '100%', plus('F', fR)) : null),
-    K('soft', gR.length ? N(c.price, c.priceOk ? XF.eur : XF.eurMin, eur(c.price, c.priceOk, 3, ''), plus('G', gR)) : null)]);   // no price for a component → a lower bound, as in the app
+    K('soft', gR.length ? N(c.price * rate, xlMoneyFmt(sym, pd, !c.priceOk), money(c.price, c.priceOk, 3, ''), plus('G', gR)) : null)]);   // no price for a component → a lower bound, as in the app
   // text: a name that starts like a formula would be run by a spreadsheet that takes the plain text → an apostrophe keeps it text
   const cellTxt = cl => { if (!cl) return ''; const t = cl.t.replace(/[\t\r\n]+/g, ' '); return cl.n == null && /^[=+\-@]/.test(t) ? "'" + t : t; };
   const text = grid.map(r => r.map(cellTxt).join('\t').replace(/\t+$/, '')).join('\n');
@@ -3219,7 +3325,7 @@ function copyVariantText(vid) {
   if (!cur) return;
   const v = cur.vars.find(x => x.id === vid); if (!v) return;
   const t = varTable(v);
-  copyText(t.text, '⧉ ' + (v.name || '—') + ' copied — paste as text or into Excel', t.html);
+  copyText(t.text, '⧉ ' + (v.name || '—') + ' copied — paste as text or into Excel' + (dispCur() === 'EUR' ? '' : ' · prices in ' + curSym()), t.html);
 }
 // Text to the clipboard, optionally with an HTML flavor next to it (a table for Excel / Word / mail).
 // The HTML has to go through a `copy` event: that writes it exactly as given, while the async Clipboard API
@@ -3450,7 +3556,12 @@ function matConsHtml(m) {
 function matInfoHtml(m) {
   const a = actAlt(m), w = matWork(m), p = workPrice(m, w), parts = [];
   if (m.role !== 'water' && a && a.conc != null && w != null && w < a.conc) parts.push(esc('pre-diluted ' + fmtNum(a.conc) + ' → ' + fmtNum(w) + '% with water'));
-  parts.push(esc('as mixed: ' + (p != null ? p.toFixed(3) + ' €/kg' : 'no price')));
+  const other = dispCur() !== 'EUR';   // prices are typed in € — in another display currency the line adds the conversion
+  parts.push(esc('as mixed: ' + (p != null ? p.toFixed(3) + ' €/kg' + (other ? ' = ' + money(p, true, 3, '/kg') : '') : 'no price')));
+  if (other) {
+    const del = m.alts.filter(x => x.price != null).map(x => altLabel(x) + ' ' + money(x.price, true, 3, '/kg'));
+    if (del.length) parts.push(esc('as delivered: ' + del.join(', ') + ' — ' + fxText()));
+  }
   parts.push(...matConsHtml(m));
   const u = matUsage(m.id);
   parts.push(esc(u.length ? 'used in: ' + u.join('; ') : 'not used in any recipe'));
@@ -3616,6 +3727,7 @@ function init() {
   loadLabView();
   loadAltFilter();
   loadLabLang();
+  loadFx();
   initRowDnd();
   initListDnd(el('varsBody'), { grip: '.var-grip', item: '.var-item', onDrop: moveVarTo });
   initListDnd(el('libList'), { grip: '.lib-grip', item: '.lib-item', group: e => e.dataset.grp, onDrop: moveDipTo });
