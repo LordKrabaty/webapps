@@ -469,6 +469,7 @@ html.dark input[type="date"]{color-scheme:dark}
 .var-item.active .var-head{background:var(--black);color:var(--w)}
 .var-name{font-weight:600;font-size:.88rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .var-code,.var-date{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);white-space:nowrap}
+.var-code{min-width:0;overflow:hidden;text-overflow:ellipsis;flex-shrink:5}   /* on a narrow screen the code gives way first, the name stays readable */
 .var-item.active .var-code,.var-item.active .var-date,.var-item.active .ib{color:var(--mid)}
 .var-btns{margin-left:auto;display:flex;gap:.1rem;flex-shrink:0}
 .var-grip{display:flex;align-items:center;justify-content:center;align-self:center;width:18px;height:1.5rem;margin:0 -.3rem 0 -.25rem;flex-shrink:0;cursor:grab;opacity:.5;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -935,7 +936,7 @@ function duplicateSolution() {
   library.push(normSolution(s)); saveLibrary();
   if (av) { activeVarMap[s.id] = av.id; saveActiveVarMap(); }   // variant ids are copied → the same variant stays shown
   loadSolution(s.id, true);
-  showSave('⧉ dip duplicated');
+  showSave('+ dip duplicated');   // ⧉ means "copy as text" (see copyVariantText)
 }
 async function deleteSolution(id) {
   const e = library.find(x => x.id === id); if (!e) return;
@@ -1683,7 +1684,7 @@ function calcVariant(v, stack) {
       c.price += pr; sc.price += pr;
       if (nc && !nc.priceOk && m > 0) { c.priceOk = false; sc.priceOk = false; }   // the nested price is a lower bound
     }
-    c.rows[r.id] = { role, m, dry, conc, price: pr, dip: c.total > 0 ? dry / c.total * 100 : null, wet: c.total > 0 ? m / c.total * 100 : null, solid: c.dry > 0 ? dry / c.dry * 100 : null };
+    c.rows[r.id] = { role, m, dry, conc, price: pr, unit: p, dip: c.total > 0 ? dry / c.total * 100 : null, wet: c.total > 0 ? m / c.total * 100 : null, solid: c.dry > 0 ? dry / c.dry * 100 : null };
   });
   const T = c.total, D = c.dry, latex = c.vpDry + c.sbrDry + c.nrDry;
   c.tsc = T > 0 ? D / T * 100 : null;
@@ -2280,7 +2281,7 @@ function renderVariants() {
           <span class="var-name" id="vn-${v.id}">${esc(v.name || '—')}</span>
           <span class="var-code" id="vc-${v.id}">${esc(v.code)}</span>
           <span class="var-date" id="vt-${v.id}">${esc(v.date)}</span>
-          <span class="var-btns"><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},1)"${i === n - 1 ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="event.stopPropagation();newVariant(${v.id})" title="new variant from this one">⧉</button><button class="ib" onclick="event.stopPropagation();deleteVariant(${v.id})" title="delete variant">✕</button></span>
+          <span class="var-btns"><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},1)"${i === n - 1 ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="event.stopPropagation();copyVariantText(${v.id})" title="copy as text — the recipe as a table; pasted into Excel it keeps its formulas (sums, shares, solid and price recalculate)">⧉</button><button class="ib" onclick="event.stopPropagation();newVariant(${v.id})" title="new variant from this one (a copy)">+</button><button class="ib" onclick="event.stopPropagation();deleteVariant(${v.id})" title="delete variant">✕</button></span>
         </div>
         <div class="var-body">
           <div class="var-stats" id="vs-${v.id}"></div>
@@ -2850,6 +2851,127 @@ function moveVarTo(vid, refId, after) {
   renderMain(); renderVariants(); schedSave();
   const v = cur.vars.find(x => x.id === vid);
   showSave('⇅ ' + ((v && v.name) || '—') + ' moved');
+}
+
+// ── COPY A VARIANT AS A TABLE (text + Excel) ──────────────────────────────
+// ⧉ on a variant puts its recipe on the clipboard twice — as plain text (tab-separated: notes, chat, mail) and as an
+// HTML table for Excel, both laid out like the recipe: name · %chem · m · % in dip · % in solid · % wet · price.
+// In Excel the masses, %chem and the unit prices (a number inside the price formula) are values, everything else is
+// a formula → changing a mass there recalculates the sums, shares, solid and price.
+//   x:num = the value · x:fmla = the formula · mso-number-format = the number format · x:str = keep as text
+// Rules (checked against Excel 2026-11-10 — pasted at B2 and at H20, sums / shares / solid as in the app):
+//   - Excel reads the x: attributes only when its namespace is declared on an <html> element (one inside the copied
+//     fragment is enough; on <table> it is NOT). Without it the formulas are dropped and the numbers are parsed by
+//     the regional settings ("1305.5" stays text with a decimal comma).
+//   - Formulas are written as if the table started at A1 — Excel moves them (also the $ ones) to where it is pasted.
+//   - x:num and numbers inside x:fmla always take a decimal point, whatever the regional settings (xlNum).
+//   - Only + − × ÷ and cell references, no function names → nothing depends on the language of Excel.
+//   - Every cell is nowrap, otherwise a long name wraps in a narrow column and the row grows several lines high.
+// The plain text carries the values only, with the decimal separator of the browser's locale.
+const COPY_DEC = (() => { try { return (1.5).toLocaleString().indexOf(',') >= 0 ? ',' : '.'; } catch(e) { return '.'; } })();
+// Excel number formats, written the way mso-number-format wants them inside a style attribute (\. = a dot, \0022 = a quote)
+const XF = { m: '0\\.0', p0: '0%', p2: '0\\.00%', p4: '0\\.0000%', eur: '0\\.000 \\0022€\\0022', eurMin: '\\0022≥ \\00220\\.000 \\0022€\\0022' };
+function xlPctFmt(d) { return '0' + (d ? '\\.' + '0'.repeat(d) : '') + '%'; }
+// a number for an Excel attribute / formula: always a decimal point, never an exponent
+function xlNum(n) { const x = +(+n).toPrecision(12); return x !== 0 && Math.abs(x) < 1e-6 ? x.toFixed(12) : String(x); }
+function xlTd(c) {
+  if (!c || (c.n == null && !c.t)) return '<td></td>';
+  const body = c.b ? '<b>' + esc(c.t) + '</b>' : esc(c.t);
+  if (c.n == null) return '<td x:str style="white-space:nowrap">' + body + '</td>';
+  return '<td x:num="' + xlNum(c.n) + '"' + (c.fm ? ' x:fmla="' + c.fm + '"' : '')
+    + ' style="mso-number-format:\'' + c.f + '\';white-space:nowrap">' + body + '</td>';
+}
+// { text, html } of a variant's recipe. Cells: text { t, b } or number { n, f (format), t (shown text), fm (formula), b }
+function varTable(v) {
+  const c = calcVariant(v), hasT = c.total > 0, COLS = 7;
+  const loc = s => COPY_DEC === ',' ? String(s).replace('.', ',') : String(s);
+  const S = (t, b) => ({ t: String(t == null ? '' : t), b: !!b });
+  const N = (n, f, t, fm, b) => ({ n: n != null && isFinite(n) ? n : 0, f, t: loc(t), fm: fm || '', b: !!b });
+  // row numbers as if the table started at A1: 1 = the heading, then per section its title, components and sum; the total last
+  let n = 1;
+  const lay = v.secs.map(s => ({ s, head: ++n, rows: s.rows.map(r => ({ r, n: ++n })), sum: ++n }));
+  const T = ++n;
+  const plus = (col, ns) => '=' + ns.map(i => col + i).join('+');
+  const dR = [], eR = [], fR = [], gR = [];   // the rows that have a % in dip / % in solid / % wet / price cell → the totals add those up
+  const grid = [[S([cur.name || 'untitled', v.name, 'W100'].filter(Boolean).join(' '), true),
+    N(c.total, XF.m, fmt(c.total, 1), '=C' + T), N(c.tsc / 100, XF.p2, pct(c.tsc), '=D' + T), null, S(v.code), S(v.date)]];
+  lay.forEach((L, i) => {
+    const s = L.s;
+    grid.push([S(s.name || '—', true), S('%chem', true), S('m (g)', true)]
+      .concat(i ? [] : [S('% in dip', true), S('% in solid', true), S('% wet', true), S('price €/kg', true)]));
+    L.rows.forEach(({ r, n }) => {
+      const x = c.rows[r.id] || {}, water = x.role === 'water', nested = x.role === 'dip';
+      const conc = water ? null : nested ? x.conc : numOrNull(r.conc);   // a nested dip: its solid, live from its recipe
+      const cd = conc == null ? 0 : nested ? 2 : Math.min(4, (fmtNum(conc).split('.')[1] || '').length);
+      const hasM = r.m != null && r.m !== '' && isFinite(+r.m);
+      const row = [S(rowName(r)),
+        conc == null ? null : N(conc / 100, xlPctFmt(cd), conc.toFixed(cd) + '%'),
+        hasM ? N(+r.m, XF.m, fmtG(r.m)) : null,
+        !water && hasT ? N(x.dip / 100, XF.p4, pct(x.dip, 4), `=C${n}*B${n}/C$${T}`) : null,
+        !water && c.dry > 0 ? N(x.solid / 100, XF.p2, pct(x.solid), `=D${n}/D$${T}`) : null,
+        hasT ? N(x.wet / 100, XF.p2, pct(x.wet), `=C${n}/C$${T}`) : null,
+        hasT && x.unit != null && isFinite(x.unit) ? N(x.price, XF.eur, fmt(x.price, 3), `=F${n}*${xlNum(x.unit)}`) : null];   // % wet × € per kg of the component
+      if (row[3]) dR.push(n);
+      if (row[4]) eR.push(n);
+      if (row[5]) fR.push(n);
+      if (row[6]) gR.push(n);
+      grid.push(row);
+    });
+    const mat = String(s.mature || '').trim(), note = String(s.note || '').trim(), sc = c.secs[s.id] || { m: 0 };
+    grid.push([S([mat ? 'maturing min. ' + mat : '', note].filter(Boolean).join(' · ')), S(secSumLabel(s)),
+      N(sc.m, XF.m, fmt(sc.m, 1), L.rows.length ? plus('C', L.rows.map(o => o.n)) : '')]);
+  });
+  const wm = String(v.mature || '').trim();
+  grid.push([S(wm ? 'maturing min. ' + wm : ''), S(totLabelOf(c), true),
+    N(c.total, XF.m, fmt(c.total, 1), lay.length ? plus('C', lay.map(L => L.sum)) : '', true),
+    dR.length ? N(c.tsc / 100, XF.p4, pct(c.tsc, 4), plus('D', dR), true) : null,
+    eR.length ? N(1, XF.p0, '100%', plus('E', eR), true) : null,
+    fR.length ? N(1, XF.p0, '100%', plus('F', fR), true) : null,
+    gR.length ? N(c.price, c.priceOk ? XF.eur : XF.eurMin, eur(c.price, c.priceOk, 3, ''), plus('G', gR), true) : null]);   // no price for a component → a lower bound, as in the app
+  // text: a name that starts like a formula would be run by a spreadsheet that takes the plain text → an apostrophe keeps it text
+  const cellTxt = cl => { if (!cl) return ''; const t = cl.t.replace(/[\t\r\n]+/g, ' '); return cl.n == null && /^[=+\-@]/.test(t) ? "'" + t : t; };
+  const text = grid.map(r => r.map(cellTxt).join('\t').replace(/\t+$/, '')).join('\n');
+  const html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table>'
+    + grid.map(r => '<tr>' + Array.from({ length: COLS }, (_, i) => xlTd(r[i])).join('') + '</tr>').join('')
+    + '</table></body></html>';
+  return { text, html };
+}
+function copyVariantText(vid) {
+  if (!cur) return;
+  const v = cur.vars.find(x => x.id === vid); if (!v) return;
+  const t = varTable(v);
+  copyText(t.text, '⧉ ' + (v.name || '—') + ' copied — paste as text or into Excel', t.html);
+}
+// Text to the clipboard, optionally with an HTML flavor next to it (a table for Excel / Word / mail).
+// The HTML has to go through a `copy` event: that writes it exactly as given, while the async Clipboard API
+// sanitizes HTML (the namespace on <html> that Excel needs for the formulas would be gone). A selection is needed
+// for the event to fire → a hidden read-only textarea (read-only = no keyboard on a phone). When that fails the
+// plain text goes through writeText, and when even that is not available it is shown to copy by hand.
+function copyText(txt, okMsg, html) {
+  const done = () => showSave(okMsg || '✓ copied');
+  const prev = document.activeElement;
+  const ta = document.createElement('textarea');
+  ta.value = txt; ta.readOnly = true;
+  ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  const on = e => {
+    if (!e.clipboardData) return;
+    e.clipboardData.setData('text/plain', txt);
+    if (html) e.clipboardData.setData('text/html', html);
+    e.preventDefault();
+  };
+  document.addEventListener('copy', on, true);
+  let ok = false;
+  try { ta.focus({ preventScroll: true }); ta.select(); ok = document.execCommand('copy'); } catch(e) {}
+  document.removeEventListener('copy', on, true);
+  document.body.removeChild(ta);
+  try { if (prev && prev !== document.body && prev.focus) prev.focus({ preventScroll: true }); } catch(e) {}
+  if (ok) { done(); return; }
+  const show = () => customAlert(txt);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(show);
+    else show();
+  } catch(e) { show(); }
 }
 
 // ── TOOLS (recalculation rules: keep the batch mass; solid changes go through the first water) ──

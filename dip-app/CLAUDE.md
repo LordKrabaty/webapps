@@ -93,6 +93,24 @@ alt      { id, name, producer, card, conc, price, cons, fF, fR, vp, note }   // 
 - **★ in use** (`solution.used`, `toggleUsedVar`): jedna varianta na dip, klik na označenou ji odznačí (`delete used` → stejný tvar jako dip, který ji nikdy neměl; `normSolution` pole nepřidává). Smazání varianty ★ zruší. Zobrazí se ★ v seznamu, v čipu a v knihovně (`★ V5` za názvem dipu).
 - **Výchozí varianta** = `defVarOf(sol)`: ★ in use, jinak horní v seznamu (poslední v poli). Platí pro otevření dipu bez uložené zobrazené varianty (`activeVar`), připojení dipu jako složky a náhradu smazané varianty u vnořeného dipu. „Nejnovější" se už nikde neříká — po přeskládání by to nebyla pravda.
 
+## Kopie varianty jako text / do Excelu (⧉)
+
+Tlačítko **⧉** v hlavičce karty varianty (`copyVariantText` → `varTable` → `copyText`) dá do schránky recepturu té varianty **dvakrát**: jako prostý text (hodnoty oddělené tabulátorem — poznámky, chat, mail) a jako HTML tabulku pro Excel. Rozložení kopíruje Excel list uživatele: `název · %chem · m · % in dip · % in solid · % wet · price €/kg`; řádek 1 = `<dip> <varianta> W100`, celková hmotnost, sušina, kód, datum; pak za každou část titulek, složky a součet (vlevo zrání / poznámka části), nakonec celkový řádek (vlevo zrání celého dipu). Parametry (PHR, F/R…), měřené hodnoty a poznámky se nekopírují — blok má být kompaktní, aby šel vložit do existujícího listu a nepřepsal buňky pod sebou.
+
+- **⧉ = „copy as text“** (stejně jako ve `workout-app`). „Nová varianta z této“ má proto **+** (jako čip a `+ new variant`); stavová hláška duplikace dipu taky `+`.
+- **V Excelu jsou hodnoty jen hmotnosti, %chem a jednotkové ceny** (číslo uvnitř vzorce ceny `=F5*3.85` = % wet × €/kg složky při její %chem, `c.rows[id].unit` z `calcVariant`); všechno ostatní jsou vzorce → změna hmotnosti v Excelu přepočítá součty, podíly, sušinu i cenu. %chem vnořeného dipu je hodnota (jeho sušina v okamžiku kopie).
+- **Formát buněk** (`xlTd`): `x:num` = hodnota, `x:fmla` = vzorec, `mso-number-format` = formát čísla (`XF`, `xlPctFmt`), `x:str` = nech jako text (jinak se z „2:1“ stane čas, z „1E5“ číslo, z data pořadové číslo, text začínající `=` by se spustil). Pravidla — **ověřeno proti Excelu 2026-11-10**, bez nich to tiše přestane fungovat:
+  - Excel čte atributy `x:` **jen když je jeho namespace na elementu `<html>`** (`<html xmlns:x="urn:schemas-microsoft-com:office:excel">` uvnitř kopírovaného fragmentu stačí; na `<table>` **ne**). Bez něj vzorce zahodí a čísla parsuje podle místního nastavení (`1305.5` zůstane při desetinné čárce textem).
+  - Vzorce se píšou, **jako by tabulka začínala v A1** — Excel je při vložení posune tam, kam se vkládá (i `$` odkazy). Vzorec jako text buňky (`<td>=C2*2</td>`) se neposouvá → nepoužívat.
+  - `x:num` a čísla uvnitř `x:fmla` mají **vždy desetinnou tečku** (`xlNum`, nikdy exponent), nezávisle na místním nastavení.
+  - **Jen `+ − × ÷` a odkazy na buňky, žádné názvy funkcí** (`SUM` ≠ `SUMA`) — jazyk Excelu se tu ověřit nedal (je anglický), takže na něm nesmí nic záviset.
+  - Každá buňka má `white-space:nowrap`, jinak se dlouhý název v úzkém sloupci zalomí a řádek naroste na několik řádků. Šířky sloupců se nemění.
+  - Cena bez všech cen = dolní mez: formát čísla nese `"≥ "` (`XF.eurMin`), stejně jako appka.
+- **Prostý text** nese jen hodnoty, s desetinným oddělovačem podle jazyka prohlížeče (`COPY_DEC`; Excel si při běžném Ctrl+V bere HTML, text jen při „vložit jako text“). Text začínající `= + - @` dostane apostrof (jinak by ho tabulkový procesor spustil jako vzorec).
+- **Zápis do schránky** (`copyText(txt, okMsg, html)`): přes událost `copy` + `execCommand('copy')` nad skrytou read-only textareou. **Ne async Clipboard API** — to HTML sanitizuje a namespace na `<html>` by zmizel. Když to selže, jde prostý text přes `writeText`, jinak se text ukáže v `customAlert`.
+- **Data ve schránce nejsou šifrovaná** (receptura i ceny) — je to výslovná akce uživatele, nikam se neposílají; kopie ale může zůstat v historii schránky (Win+V, cloudová schránka, klávesnice telefonu), stejně jako u `📋 copy` exportu.
+- Ověřeno: stejný HTML / text, jaký staví `varTable` (přepis do Pythonu — mimo prohlížeč tu JS spustit nejde), vložený do skrytého Excelu přes schránku ve tvaru, v jakém ho zapisuje Chrome: na B2 i jinde sedí vzorce, součty, 23,8708 % jako na listu uživatele, formáty, texty. **Neověřeno v prohlížeči:** samotné tlačítko a zápis do schránky (smoke test jen na pokyn).
+
 ## Typ dipu (`solution.type`)
 
 Výběr „type" v hlavičce dipu: **RFL** · **Pre-dip** · **Other** (`DIP_TYPES`, `dipType()`). Výpočet (`calcVariant`) je pro všechny stejný — typ určuje jen, **co se zobrazí**:
