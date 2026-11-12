@@ -442,7 +442,15 @@ const UNDO_MAX = 40;
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 function el(id) { return document.getElementById(id); }
-function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// a value as a JS literal for an inline handler — onclick="fn(${jsArg(id)})": JSON, then HTML-escaped for the attribute.
+// Data never goes into a handler any other way: '${id}' breaks out on an apostrophe, a bare ${id} runs as code.
+function jsArg(v) { const j = JSON.stringify(v); return esc(j === undefined ? 'null' : j); }
+// an id / key coming from outside (sync, import): a finite number, or a short string of letters, digits, space and _ . : -
+// (nothing that could act as markup or code, should a sink ever miss its escaping)
+function idOk(v) { return (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && /^[\p{L}\p{N} _.:-]{1,80}$/u.test(v)); }
+// records from outside whose id (or another key field) passes idOk — the rest is dropped
+function okRecs(arr, key) { return (Array.isArray(arr) ? arr : []).filter(x => x && typeof x === 'object' && idOk(x[key || 'id'])); }
 function parseNum(v) { return parseFloat(String(v).replace(',','.')); }
 function normDec(v) { return (v || '').toString().replace(',','.'); }
 
@@ -781,10 +789,10 @@ function openExportModal() {
   exportSelected = new Set(library.map(e => e.id));
   exportArchSelected = new Set(archive.map(e => e.id));
   el('exportList').innerHTML = library.length
-    ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? library.map(e => `<label class="modal-item sel" id="ei-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
   el('exportArchList').innerHTML = archive.length
-    ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? archive.map(e => `<label class="modal-item sel" id="eai-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportArchSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
   updateExportFilename();
   el('exportModal').classList.add('open');
@@ -859,20 +867,21 @@ function openImportModal() {
 function parseImportJson(text) {
   try {
     const parsed = JSON.parse(text);
-    const items = parsed.items || parsed.teas || [];
+    const items = okRecs(parsed.items || parsed.teas);   // records with an unusable id are dropped (see idOk)
+    // APP LOGIC: run every other imported collection through okRecs() as well
     if (!items.length) throw new Error('No items in the file');
     importData = items;
     importSelected = new Set(items.map(x => x.id));
     el('importList').innerHTML = items.map(x => `
-      <label class="modal-item sel" id="ii-${x.id}">
-        <input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />
+      <label class="modal-item sel" id="ii-${esc(x.id)}">
+        <input type="checkbox" checked onchange="toggleImportSel(${jsArg(x.id)},this.checked)" />
         ${esc(x.name||String(x.id))}
       </label>`).join('');
     el('importItemSection').style.display = 'block';
     el('importActions').style.display = 'flex';
     el('importCancel').style.display = 'none';
   } catch(err) {
-    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Chyba: '+err.message+'</p>';
+    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Error: '+esc(err.message)+'</p>';
     el('importItemSection').style.display = 'block';
   }
 }
@@ -1338,11 +1347,12 @@ document.addEventListener('keydown', e => {
     let removed = applyTombstones();           // append-only collections (archive)
     let added = 0, updated = 0;
     // library — LWW by id
-    const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
+    // (okRecs: a cloud record with an unusable id never gets in — see idOk; wrap every new collection the same way)
+    const libR = lwwMerge(library, okRecs(record.items || record.teas), 'lib', x => x.id, c => c);
     library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
     // archive — only add missing (append-only)
     const arcIds = new Set(archive.map(x => String(x.id)));
-    (record.archive || []).forEach(it => {
+    okRecs(record.archive).forEach(it => {
       if (it && it.id != null && !arcIds.has(String(it.id)) && !isTombstoned('arc:' + it.id)) { archive.push(it); arcIds.add(String(it.id)); added++; }
     });
     // APP LOGIC: merge other collections here — arrays by id/data via lwwMerge(...), object-maps (blocks) with a custom merge

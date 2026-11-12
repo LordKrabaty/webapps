@@ -793,7 +793,11 @@ const UNDO_MAX = 40;
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 function el(id) { return document.getElementById(id); }
-function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// a value as a JS literal for an inline handler — onclick="fn(${jsArg(id)})": JSON, then HTML-escaped for the attribute.
+// Data never goes into a handler any other way: '${id}' breaks out on an apostrophe, a bare ${id} runs as code.
+// (Ids are numbers here anyway — numId / refId in the normalizers; this is the second line of defence.)
+function jsArg(v) { const j = JSON.stringify(v); return esc(j === undefined ? 'null' : j); }
 function parseNum(v) { return parseFloat(String(v).replace(',','.')); }
 function normDec(v) { return (v || '').toString().replace(',','.'); }
 
@@ -942,11 +946,11 @@ function renderLibrary() {
 }
 function libItemHtml(e) {
   const u = usedVarOf(e);
-  return `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" data-dnd="${e.id}" data-grp="${esc(dipType(e))}" onclick="loadSolution(${e.id})">
+  return `<div class="lib-item${e.id === activeLibId ? ' active' : ''}" data-dnd="${esc(e.id)}" data-grp="${esc(dipType(e))}" onclick="loadSolution(${jsArg(e.id)})">
       <span class="lib-grip" title="drag to change the order (within its type)">${GRIP_SVG}</span>
       <span class="lib-item-name"><b>${esc(e.name || 'untitled')}</b>${u ? ` <span class="lib-used" title="the variant in use">★ ${esc(u.name || '—')}</span>` : ''}${e.desc ? ' · ' + esc(e.desc) : ''}</span>
       <span class="lib-item-n" title="variants">${e.vars.length}</span>
-      <button class="lib-item-del" onclick="event.stopPropagation();deleteSolution(${e.id})" title="delete dip"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
+      <button class="lib-item-del" onclick="event.stopPropagation();deleteSolution(${jsArg(e.id)})" title="delete dip"><svg viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>
     </div>`;
 }
 function loadSolution(id, force) {
@@ -1258,10 +1262,10 @@ function openExportModal() {
   exportSelected = new Set(library.map(e => e.id));
   exportMatSelected = new Set(materials.map(e => e.id));
   el('exportList').innerHTML = library.length
-    ? library.slice().sort(byName).map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||'untitled')}${e.desc ? ' · ' + esc(e.desc) : ''}</label>`).join('')
+    ? library.slice().sort(byName).map(e => `<label class="modal-item sel" id="ei-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||'untitled')}${e.desc ? ' · ' + esc(e.desc) : ''}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">No dips.</p>';
   el('exportMatList').innerHTML = materials.length
-    ? materials.slice().sort(byName).map(e => `<label class="modal-item sel" id="emi-${e.id}"><input type="checkbox" checked onchange="toggleExportMatSel(${e.id},this.checked)" />${esc(e.name||'unnamed')}</label>`).join('')
+    ? materials.slice().sort(byName).map(e => `<label class="modal-item sel" id="emi-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportMatSel(${jsArg(e.id)},this.checked)" />${esc(e.name||'unnamed')}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">No materials.</p>';
   updateExportFilename();
   el('exportModal').classList.add('open');
@@ -1366,13 +1370,13 @@ function parseImportJson(text) {
       return t ? ' <span style="color:var(--muted)">(' + t + ')</span>' : '';
     };
     el('importList').innerHTML = items.map(x => `
-      <label class="modal-item sel" id="ii-${x.id}">
-        <input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />
+      <label class="modal-item sel" id="ii-${esc(x.id)}">
+        <input type="checkbox" checked onchange="toggleImportSel(${jsArg(x.id)},this.checked)" />
         <span>${esc(x.name||'untitled')}${x.desc ? ' · ' + esc(x.desc) : ''}${tag(library, x, normSolution)}</span>
       </label>`).join('');
     el('importMatList').innerHTML = mats.map(x => `
-      <label class="modal-item sel" id="imi-${x.id}">
-        <input type="checkbox" checked onchange="toggleImportMatSel(${x.id},this.checked)" />
+      <label class="modal-item sel" id="imi-${esc(x.id)}">
+        <input type="checkbox" checked onchange="toggleImportMatSel(${jsArg(x.id)},this.checked)" />
         <span>${esc(x.name||'unnamed')}${tag(materials, x, normMaterial)}</span>
       </label>`).join('');
     el('importItemSection').style.display = items.length ? 'block' : 'none';
@@ -1516,7 +1520,7 @@ function fxText() {
 }
 function currencyChipsHtml() {
   return '<span class="lab-lang" title="currency the prices are shown in — they are stored and calculated in €; another currency is converted with the rate below (kept on this device)">'
-    + CURRENCIES.map(([k]) => `<button class="chip${fx.cur === k ? ' on' : ''}" onclick="setCurrency('${k}')">${k}</button>`).join('') + '</span>';
+    + CURRENCIES.map(([k]) => `<button class="chip${fx.cur === k ? ' on' : ''}" onclick="setCurrency(${jsArg(String(k))})">${k}</button>`).join('') + '</span>';
 }
 function fxRowHtml() {
   const k = fx.cur; if (k === 'EUR') return '';
@@ -1961,7 +1965,7 @@ function renderMain() {
 function chipsHtml(av) {
   const used = usedVarOf(cur);
   return '<div class="var-chips"><span class="var-chips-label">variants</span>'
-    + varListOrder().map(v => `<button class="chip${v === av ? ' on' : ''}" onclick="selectVariant(${v.id})"${v === used ? ' title="★ the variant in use"' : ''}>${v === used ? '★ ' : ''}<span id="chip-${v.id}">${esc(v.name || '—')}</span></button>`).join('')
+    + varListOrder().map(v => `<button class="chip${v === av ? ' on' : ''}" onclick="selectVariant(${jsArg(v.id)})"${v === used ? ' title="★ the variant in use"' : ''}>${v === used ? '★ ' : ''}<span id="chip-${esc(v.id)}">${esc(v.name || '—')}</span></button>`).join('')
     + '<button class="chip" onclick="newVariant()" title="new variant — a copy of the active one">+</button></div>';
 }
 function headHtml(v) {
@@ -1984,14 +1988,14 @@ function matOptions(r) {
   ROLES.forEach(([k, label]) => {
     const ms = materials.filter(m => roleKey(m.role) === k).sort(byName);
     if (!ms.length) return;
-    h += `<optgroup label="${esc(label)}">` + ms.map(m => `<option value="${m.id}"${m.id === r.mat ? ' selected' : ''}>${esc(m.name || 'unnamed')}</option>`).join('') + '</optgroup>';
+    h += `<optgroup label="${esc(label)}">` + ms.map(m => `<option value="${esc(m.id)}"${m.id === r.mat ? ' selected' : ''}>${esc(m.name || 'unnamed')}</option>`).join('') + '</optgroup>';
   });
-  if (r.mat != null && !matById(r.mat)) h += `<option value="${r.mat}" selected>${esc(r.nm || '?')} (deleted)</option>`;
+  if (r.mat != null && !matById(r.mat)) h += `<option value="${esc(r.mat)}" selected>${esc(r.nm || '?')} (deleted)</option>`;
   // another dip as a component (an RFL inside a pre-dip…) — not itself and not one that contains it
   const dips = _dipChoices || dipChoices();
   if (dips.length) h += '<optgroup label="Dips (a whole recipe as a component)">'
-    + dips.map(d => `<option value="d:${d.id}"${d.id === r.dip ? ' selected' : ''}>${esc(d.name || 'untitled')} · ${esc(DIP_TYPE_NAME[dipType(d)])}</option>`).join('') + '</optgroup>';
-  if (isDipRow(r) && !dips.some(d => d.id === r.dip)) h += `<option value="d:${r.dip}" selected>${esc(r.nm || '?')} (${solById(r.dip) ? 'circular' : 'deleted'})</option>`;
+    + dips.map(d => `<option value="d:${esc(d.id)}"${d.id === r.dip ? ' selected' : ''}>${esc(d.name || 'untitled')} · ${esc(DIP_TYPE_NAME[dipType(d)])}</option>`).join('') + '</optgroup>';
+  if (isDipRow(r) && !dips.some(d => d.id === r.dip)) h += `<option value="d:${esc(r.dip)}" selected>${esc(r.nm || '?')} (${solById(r.dip) ? 'circular' : 'deleted'})</option>`;
   return h;
 }
 // the line under a nested dip: which variant, its type and price, a link to open it
@@ -2000,13 +2004,13 @@ function dipSubHtml(s, r) {
   if (!n) return '<b>dip deleted</b> · calculated with its last solid ' + (r.conc != null ? fmtNum(r.conc) + ' %' : '?') + ', no price';
   if (n.sol === cur || dipUses(n.sol.id, cur.id)) return '<b>circular — ' + esc(n.sol.name || 'untitled') + ' contains this dip</b> · calculated with the stored solid, no price';
   const used = usedVarOf(n.sol), nc = nestedCalc(r), parts = [];
-  parts.push(`<select class="rc-dv ed" onchange="onRowDv(${s.id},${r.id},this.value)" title="the variant of ${esc(n.sol.name || 'untitled')} used here — the solid and price come from its recipe (★ = the variant marked in use there)">`
-    + n.sol.vars.slice().reverse().map(x => `<option value="${x.id}"${x === n.v ? ' selected' : ''}>${x === used ? '★ ' : ''}${esc(x.name || '—')}</option>`).join('') + '</select>');
+  parts.push(`<select class="rc-dv ed" onchange="onRowDv(${jsArg(s.id)},${jsArg(r.id)},this.value)" title="the variant of ${esc(n.sol.name || 'untitled')} used here — the solid and price come from its recipe (★ = the variant marked in use there)">`
+    + n.sol.vars.slice().reverse().map(x => `<option value="${esc(x.id)}"${x === n.v ? ' selected' : ''}>${x === used ? '★ ' : ''}${esc(x.name || '—')}</option>`).join('') + '</select>');
   if (!n.exact && r.dv != null) parts.push('<b>variant deleted — ' + (n.v === used ? 'the one in use' : 'the top one') + ' is used</b>');
   parts.push(esc(DIP_TYPE_NAME[dipType(n.sol)]));
   if (nc && !(nc.total > 0)) parts.push('<b>no mass yet</b>');
   else if (nc) parts.push(esc(money(nc.price, nc.priceOk, 3, '/kg')));
-  parts.push(`<button class="rc-open" onclick="openNested(${n.sol.id},${n.v.id})" title="open ${esc(n.sol.name || 'untitled')} ${esc(n.v.name || '')}">open ↗</button>`);
+  parts.push(`<button class="rc-open" onclick="openNested(${jsArg(n.sol.id)},${jsArg(n.v.id)})" title="open ${esc(n.sol.name || 'untitled')} ${esc(n.v.name || '')}">open ↗</button>`);
   return parts.join(' · ');
 }
 function rowSubHtml(s, r) {
@@ -2026,22 +2030,22 @@ function rowSubHtml(s, r) {
 const PCT_TIP = { dip: '% in dip', solid: '% in solid', wet: '% wet' };
 const GRIP_SVG = '<svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg>';
 function pctIn(s, r, kind, suf) {
-  return `<input class="rc-pct ed a-${kind}" id="c${r.id}${suf}" inputmode="decimal" onfocus="pctFocus(this)" onkeydown="pctKey(event,this)" onchange="onRowPct(${s.id},${r.id},'${kind}',this)" title="${PCT_TIP[kind]} — type a value to recalculate the mass (Enter); the batch stays, the first water takes up the difference · Esc = back" autocomplete="off">`;
+  return `<input class="rc-pct ed a-${kind}" id="c${esc(r.id)}${suf}" inputmode="decimal" onfocus="pctFocus(this)" onkeydown="pctKey(event,this)" onchange="onRowPct(${jsArg(s.id)},${jsArg(r.id)},${jsArg(String(kind))},this)" title="${PCT_TIP[kind]} — type a value to recalculate the mass (Enter); the batch stays, the first water takes up the difference · Esc = back" autocomplete="off">`;
 }
 function rowHtml(s, r, i) {
   const m = matById(r.mat), water = rowRole(r) === 'water', last = i === s.rows.length - 1, nested = isDipRow(r);
   const def = m ? matWork(m) : null;
   const conc = water ? '<span class="num num-dash">—</span>'
-    : nested ? `<span class="num num-link" id="k${r.id}" title="%chem = the solid of the nested dip (full-strength W100) — computed from its recipe"></span>`
-    : `<input class="rc-in ed${concDiffers(r, m) ? ' diff' : ''}" inputmode="decimal" value="${r.conc ?? ''}" oninput="onRowNum(${s.id},${r.id},'conc',this)" title="%chem — concentration as mixed${def != null ? ' (material: ' + fmtNum(def) + ' %)' : ''}" autocomplete="off">`;
-  const subOpen = nested ? `<div class="rc-sub rc-sub-dip" id="sub${r.id}">`
-    : `<div class="rc-sub" id="sub${r.id}"${m ? ` onclick="openMaterials(${m.id})" title="edit the material"` : ''}>`;
-  return `<div class="rc-grid rc-row" data-row="${r.id}">
-      <div class="a-name rc-name"><span class="rc-grip" title="drag to move — also into another part">${GRIP_SVG}</span><div class="rc-nm"><select class="rc-mat ed" onchange="onRowMat(${s.id},${r.id},this.value)" title="material — or another dip as a whole (Dips at the end of the list)">${matOptions(r)}</select>${subOpen}${rowSubHtml(s, r)}</div></div></div>
+    : nested ? `<span class="num num-link" id="k${esc(r.id)}" title="%chem = the solid of the nested dip (full-strength W100) — computed from its recipe"></span>`
+    : `<input class="rc-in ed${concDiffers(r, m) ? ' diff' : ''}" inputmode="decimal" value="${esc(r.conc ?? '')}" oninput="onRowNum(${jsArg(s.id)},${jsArg(r.id)},'conc',this)" title="%chem — concentration as mixed${def != null ? ' (material: ' + fmtNum(def) + ' %)' : ''}" autocomplete="off">`;
+  const subOpen = nested ? `<div class="rc-sub rc-sub-dip" id="sub${esc(r.id)}">`
+    : `<div class="rc-sub" id="sub${esc(r.id)}"${m ? ` onclick="openMaterials(${jsArg(m.id)})" title="edit the material"` : ''}>`;
+  return `<div class="rc-grid rc-row" data-row="${esc(r.id)}">
+      <div class="a-name rc-name"><span class="rc-grip" title="drag to move — also into another part">${GRIP_SVG}</span><div class="rc-nm"><select class="rc-mat ed" onchange="onRowMat(${jsArg(s.id)},${jsArg(r.id)},this.value)" title="material — or another dip as a whole (Dips at the end of the list)">${matOptions(r)}</select>${subOpen}${rowSubHtml(s, r)}</div></div></div>
       <div class="a-conc">${conc}</div>
-      <div class="a-m"><input class="rc-in m-in ed" id="m${r.id}" inputmode="decimal" value="${fmtG(r.m)}" oninput="onRowNum(${s.id},${r.id},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
-      ${water ? `<span class="num a-dip" id="c${r.id}d"></span><span class="num a-solid" id="c${r.id}s"></span>` : pctIn(s, r, 'dip', 'd') + pctIn(s, r, 'solid', 's')}${pctIn(s, r, 'wet', 'w')}<span class="num a-price" id="c${r.id}p"></span>
-      <div class="a-act rc-act"><button class="ib" onclick="moveRow(${s.id},${r.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="moveRow(${s.id},${r.id},1)"${last ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="delRow(${s.id},${r.id})" title="remove component">✕</button></div>
+      <div class="a-m"><input class="rc-in m-in ed" id="m${esc(r.id)}" inputmode="decimal" value="${fmtG(r.m)}" oninput="onRowNum(${jsArg(s.id)},${jsArg(r.id)},'m',this)" onkeydown="rcEnter(event,this)" title="m — mass (g)" autocomplete="off"></div>
+      ${water ? `<span class="num a-dip" id="c${esc(r.id)}d"></span><span class="num a-solid" id="c${esc(r.id)}s"></span>` : pctIn(s, r, 'dip', 'd') + pctIn(s, r, 'solid', 's')}${pctIn(s, r, 'wet', 'w')}<span class="num a-price" id="c${esc(r.id)}p"></span>
+      <div class="a-act rc-act"><button class="ib" onclick="moveRow(${jsArg(s.id)},${jsArg(r.id)},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="moveRow(${jsArg(s.id)},${jsArg(r.id)},1)"${last ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="delRow(${jsArg(s.id)},${jsArg(r.id)})" title="remove component">✕</button></div>
     </div>`;
 }
 // own section kinds = every `kname` in use anywhere in the library (+ the open dip) — nothing extra to store or sync
@@ -2072,18 +2076,18 @@ async function onSecKind(sid, sel) {
   renderMain(); schedSave();
 }
 function secHtml(s, i, n) {
-  return `<div class="sec" data-sec="${s.id}">
+  return `<div class="sec" data-sec="${esc(s.id)}">
       <div class="sec-head">
-        <input class="sec-name ed" value="${esc(s.name)}" placeholder="section" oninput="onSecField(${s.id},'name',this.value)" title="section name" autocomplete="off">
-        ${dipType(cur) === 'rfl' ? `<select class="sec-kind ed" onchange="onSecKind(${s.id},this)" title="what this section counts as — RF resin and latex drive the parameters (PHR, L in solid…); additives, other and your own kinds count in the total only">${kindOptions(s)}</select>` : ''}
-        <label class="sec-mat-w" title="minimum maturing of this part before it is mixed on (e.g. RF resin 30 min) — empty = none; the whole dip's maturing is under the recipe">maturing min. <input class="sec-mat ed" value="${esc(s.mature)}" placeholder="—" oninput="onSecField(${s.id},'mature',this.value)" autocomplete="off"></label>
-        <input class="sec-note ed" value="${esc(s.note)}" placeholder="note" oninput="onSecField(${s.id},'note',this.value)" autocomplete="off">
-        <span class="sec-btns"><button class="ib" onclick="moveSection(${s.id},-1)"${i === 0 ? ' disabled' : ''} title="move section up">↑</button><button class="ib" onclick="moveSection(${s.id},1)"${i === n - 1 ? ' disabled' : ''} title="move section down">↓</button><button class="ib" onclick="delSection(${s.id})" title="delete section">✕</button></span>
+        <input class="sec-name ed" value="${esc(s.name)}" placeholder="section" oninput="onSecField(${jsArg(s.id)},'name',this.value)" title="section name" autocomplete="off">
+        ${dipType(cur) === 'rfl' ? `<select class="sec-kind ed" onchange="onSecKind(${jsArg(s.id)},this)" title="what this section counts as — RF resin and latex drive the parameters (PHR, L in solid…); additives, other and your own kinds count in the total only">${kindOptions(s)}</select>` : ''}
+        <label class="sec-mat-w" title="minimum maturing of this part before it is mixed on (e.g. RF resin 30 min) — empty = none; the whole dip's maturing is under the recipe">maturing min. <input class="sec-mat ed" value="${esc(s.mature)}" placeholder="—" oninput="onSecField(${jsArg(s.id)},'mature',this.value)" autocomplete="off"></label>
+        <input class="sec-note ed" value="${esc(s.note)}" placeholder="note" oninput="onSecField(${jsArg(s.id)},'note',this.value)" autocomplete="off">
+        <span class="sec-btns"><button class="ib" onclick="moveSection(${jsArg(s.id)},-1)"${i === 0 ? ' disabled' : ''} title="move section up">↑</button><button class="ib" onclick="moveSection(${jsArg(s.id)},1)"${i === n - 1 ? ' disabled' : ''} title="move section down">↓</button><button class="ib" onclick="delSection(${jsArg(s.id)})" title="delete section">✕</button></span>
       </div>
       ${s.rows.map((r, j) => rowHtml(s, r, j)).join('')}
       <div class="rc-grid rc-sum">
-        <div class="a-name sec-foot"><button class="btn-add-row" onclick="addRow(${s.id})">+ component</button><span class="sum-l" id="sl${s.id}">${esc(secSumLabel(s))}</span></div>
-        <span class="num a-m" id="s${s.id}m"></span><span class="num a-dip" id="s${s.id}d"></span><span class="num a-solid" id="s${s.id}s"></span><span class="num a-wet" id="s${s.id}w"></span><span class="num a-price" id="s${s.id}p"></span>
+        <div class="a-name sec-foot"><button class="btn-add-row" onclick="addRow(${jsArg(s.id)})">+ component</button><span class="sum-l" id="sl${esc(s.id)}">${esc(secSumLabel(s))}</span></div>
+        <span class="num a-m" id="s${esc(s.id)}m"></span><span class="num a-dip" id="s${esc(s.id)}d"></span><span class="num a-solid" id="s${esc(s.id)}s"></span><span class="num a-wet" id="s${esc(s.id)}w"></span><span class="num a-price" id="s${esc(s.id)}p"></span>
       </div>
     </div>`;
 }
@@ -2120,7 +2124,7 @@ function toolsHtml(type) {
 }
 function measHtml(v, type) {
   const ms = v.meas || {};
-  const f = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" inputmode="decimal" class="ed" value="${esc(ms[key] ?? '')}" placeholder="${ph}" oninput="onMeas('${key}',this)" autocomplete="off"></div>`;
+  const f = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" inputmode="decimal" class="ed" value="${esc(ms[key] ?? '')}" placeholder="${ph}" oninput="onMeas(${jsArg(String(key))},this)" autocomplete="off"></div>`;
   // pH RF only means something for an RFL — a stored value of another type stays in the data, just not shown
   return '<div class="meas-grid">' + (type === 'rfl' ? f('phRF', 'pH RF', '—') + f('ph', 'pH RFL', '—') : f('ph', 'pH', '—')) + f('solid', 'solid measured %', '—')
     + '<div class="field"><label id="measDL">Δ solid vs calc.</label><div class="meas-d" id="measD">—</div></div></div>';
@@ -2358,19 +2362,19 @@ function onLabAlt(rid, sel) {
 function labAltHtml(r, m) {
   const a = labAlt(r, m), act = actAlt(m);
   if (m.alts.length > 1) {
-    return `<select class="lab-alt${labAltOver(r, m) ? ' diff' : ''}" id="la${r.id}" data-r="${r.id}" onchange="onLabAlt(${r.id},this)" title="${esc(labAltTip(r, m))}">`
-      + m.alts.map(x => `<option value="${x.id}"${x === a ? ' selected' : ''}>${x === act ? '● ' : ''}${esc(labAltLabel(x))}</option>`).join('') + '</select>';
+    return `<select class="lab-alt${labAltOver(r, m) ? ' diff' : ''}" id="la${esc(r.id)}" data-r="${esc(r.id)}" onchange="onLabAlt(${jsArg(r.id)},this)" title="${esc(labAltTip(r, m))}">`
+      + m.alts.map(x => `<option value="${esc(x.id)}"${x === a ? ' selected' : ''}>${x === act ? '● ' : ''}${esc(labAltLabel(x))}</option>`).join('') + '</select>';
   }
   // the only alternative: just its name, when it says more than the material's — or when it is not approved yet
   const nm = a ? (a.name.trim() || a.producer.trim()) : '', ok = !a || altApproved(a);
-  return (nm && nm !== m.name.trim()) || !ok ? `<span class="lab-alt1" onclick="openMaterials(${m.id})" title="${esc(labAltTip(r, m))}">${esc(ok ? nm : labAltLabel(a))}</span>` : '';
+  return (nm && nm !== m.name.trim()) || !ok ? `<span class="lab-alt1" onclick="openMaterials(${jsArg(m.id)})" title="${esc(labAltTip(r, m))}">${esc(ok ? nm : labAltLabel(a))}</span>` : '';
 }
 function labNameHtml(r) {
   if (!isDipRow(r)) {
     const m = matById(r.mat), nm = `<span class="lab-n">${esc(rowName(r))}</span>`;
-    return m ? `<span class="lab-comp">${nm}${labAltHtml(r, m)}<b class="lab-altc" id="lx${r.id}" title="${esc(lt('altFlagTip'))}"></b></span>` : nm;
+    return m ? `<span class="lab-comp">${nm}${labAltHtml(r, m)}<b class="lab-altc" id="lx${esc(r.id)}" title="${esc(lt('altFlagTip'))}"></b></span>` : nm;
   }
-  return `<span class="lab-nest"><span class="lab-n">${esc(rowName(r))}</span><label class="lab-m">W<input class="lab-nw${nestOver(r) != null ? ' diff' : ''}" id="ln-${r.id}" data-r="${r.id}" inputmode="decimal" value="${fmtNum(nestStr(r))}" oninput="onLabNest(${r.id},this)" onblur="labNestBlur(${r.id})" title="${esc(lt('nestTip'))}" autocomplete="off"></label></span>`;
+  return `<span class="lab-nest"><span class="lab-n">${esc(rowName(r))}</span><label class="lab-m">W<input class="lab-nw${nestOver(r) != null ? ' diff' : ''}" id="ln-${esc(r.id)}" data-r="${esc(r.id)}" inputmode="decimal" value="${fmtNum(nestStr(r))}" oninput="onLabNest(${jsArg(r.id)},this)" onblur="labNestBlur(${jsArg(r.id)})" title="${esc(lt('nestTip'))}" autocomplete="off"></label></span>`;
 }
 // The lab sheet also repeats the dip name and the maturing times — prefilled from the dip / recipe, any of them can be
 // overwritten for this weighing (same local view state as the strength: labView[dip] = { str, batch, title, mat:{secId|'all'}, nest, alt, dfrom, dhave }).
@@ -2404,15 +2408,15 @@ function onLabMature(key, inp) {
 function labMatBlur(key) { const i = el('lm-' + key); if (i) i.value = labMat(key); }
 function labMatHtml(key, label) {
   const tip = lt(key === 'all' ? 'matAllTip' : 'matPartTip') + lt('matTipEnd');
-  return `<label class="lab-m">${esc(label)} <input class="lab-mat${labMatOver(key) != null ? ' diff' : ''}" id="lm-${key}" data-k="${key}" value="${esc(labMat(key))}" placeholder="—" oninput="onLabMature('${key}',this)" onblur="labMatBlur('${key}')" title="${esc(tip)}" autocomplete="off"></label>`;
+  return `<label class="lab-m">${esc(label)} <input class="lab-mat${labMatOver(key) != null ? ' diff' : ''}" id="lm-${key}" data-k="${key}" value="${esc(labMat(key))}" placeholder="—" oninput="onLabMature(${jsArg(String(key))},this)" onblur="labMatBlur(${jsArg(String(key))})" title="${esc(tip)}" autocomplete="off"></label>`;
 }
 function labHtml(v) {
   const st = labState(), o = labViewOf();
-  const body = v.secs.map(s => `<tr class="lab-sec"><td><span class="lab-n" id="lsn${s.id}">${esc(s.name || '—')}</span></td><td></td><td class="n" id="ls${s.id}"></td></tr>`
-    + s.rows.map(r => `<tr><td>${labNameHtml(r)}</td><td class="n${rowRole(r) === 'water' ? ' num-dash' : ''}" id="lc${r.id}"></td><td class="n lab-g" id="lw${r.id}"></td></tr>`).join('')
+  const body = v.secs.map(s => `<tr class="lab-sec"><td><span class="lab-n" id="lsn${esc(s.id)}">${esc(s.name || '—')}</span></td><td></td><td class="n" id="ls${esc(s.id)}"></td></tr>`
+    + s.rows.map(r => `<tr><td>${labNameHtml(r)}</td><td class="n${rowRole(r) === 'water' ? ' num-dash' : ''}" id="lc${esc(r.id)}"></td><td class="n lab-g" id="lw${esc(r.id)}"></td></tr>`).join('')
     + `<tr class="lab-mrow"><td colspan="3">${labMatHtml(s.id, lt('matPart'))}</td></tr>`).join('');
   const T = k => esc(lt(k));   // a text of the sheet in its language (see LAB SHEET LANGUAGE)
-  const lang = (l, label) => `<button class="chip${labLang === l ? ' on' : ''}" onclick="setLabLang('${l}')">${label}</button>`;
+  const lang = (l, label) => `<button class="chip${labLang === l ? ' on' : ''}" onclick="setLabLang(${jsArg(String(l))})">${label}</button>`;
   // "to [how much] g of W100 add … g water → … g of W85" — the word order differs by language, the pieces are the same
   const have = lt('dilHave',
     `<input id="labDilHave" class="lab-nw lab-dh" inputmode="decimal" value="${labDilHave() != null ? fmtNum(labDilHave()) : ''}" placeholder="1000" oninput="onLabDil('dhave',this)" title="${T('dilHaveTip')}" autocomplete="off">`,
@@ -2602,19 +2606,19 @@ function renderVariants() {
   const av = activeVar(), used = usedVarOf(cur), list = varListOrder(), n = list.length;
   box.innerHTML = `<div class="var-tools"><button class="btn-sm" onclick="newVariant()" title="a copy of the active variant — change it and note what and why">+ new variant</button><span class="var-count">${n} variant${n === 1 ? '' : 's'}</span></div>`
     + '<div class="var-list">' + list.map((v, i) => `
-      <div class="var-item${v === av ? ' active' : ''}" data-dnd="${v.id}">
-        <div class="var-head" onclick="selectVariant(${v.id})" title="show this variant">
+      <div class="var-item${v === av ? ' active' : ''}" data-dnd="${esc(v.id)}">
+        <div class="var-head" onclick="selectVariant(${jsArg(v.id)})" title="show this variant">
           <span class="var-grip" title="drag to change the order">${GRIP_SVG}</span>
-          <button class="var-star${v === used ? ' on' : ''}" onclick="event.stopPropagation();toggleUsedVar(${v.id})" title="${v === used ? '★ the variant in use — click to unmark' : 'mark as the variant in use (one per dip)'}">${v === used ? '★' : '☆'}</button>
-          <span class="var-name" id="vn-${v.id}">${esc(v.name || '—')}</span>
-          <span class="var-code" id="vc-${v.id}">${esc(v.code)}</span>
-          <span class="var-date" id="vt-${v.id}">${esc(v.date)}</span>
-          <span class="var-btns"><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="event.stopPropagation();moveVar(${v.id},1)"${i === n - 1 ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="event.stopPropagation();copyVariantText(${v.id})" title="copy as text — the recipe as a table; pasted into Excel it keeps its formulas (sums, shares, solid and price recalculate)">⧉</button><button class="ib" onclick="event.stopPropagation();newVariant(${v.id})" title="new variant from this one (a copy)">+</button><button class="ib" onclick="event.stopPropagation();deleteVariant(${v.id})" title="delete variant">✕</button></span>
+          <button class="var-star${v === used ? ' on' : ''}" onclick="event.stopPropagation();toggleUsedVar(${jsArg(v.id)})" title="${v === used ? '★ the variant in use — click to unmark' : 'mark as the variant in use (one per dip)'}">${v === used ? '★' : '☆'}</button>
+          <span class="var-name" id="vn-${esc(v.id)}">${esc(v.name || '—')}</span>
+          <span class="var-code" id="vc-${esc(v.id)}">${esc(v.code)}</span>
+          <span class="var-date" id="vt-${esc(v.id)}">${esc(v.date)}</span>
+          <span class="var-btns"><button class="ib" onclick="event.stopPropagation();moveVar(${jsArg(v.id)},-1)"${i === 0 ? ' disabled' : ''} title="move up">↑</button><button class="ib" onclick="event.stopPropagation();moveVar(${jsArg(v.id)},1)"${i === n - 1 ? ' disabled' : ''} title="move down">↓</button><button class="ib" onclick="event.stopPropagation();copyVariantText(${jsArg(v.id)})" title="copy as text — the recipe as a table; pasted into Excel it keeps its formulas (sums, shares, solid and price recalculate)">⧉</button><button class="ib" onclick="event.stopPropagation();newVariant(${jsArg(v.id)})" title="new variant from this one (a copy)">+</button><button class="ib" onclick="event.stopPropagation();deleteVariant(${jsArg(v.id)})" title="delete variant">✕</button></span>
         </div>
         <div class="var-body">
-          <div class="var-stats" id="vs-${v.id}"></div>
-          <div class="var-diff" id="vd-${v.id}"></div>
-          <textarea class="var-note ed" placeholder="What changed and why — observations, test results…" oninput="onVarNote(${v.id},this)">${esc(v.note)}</textarea>
+          <div class="var-stats" id="vs-${esc(v.id)}"></div>
+          <div class="var-diff" id="vd-${esc(v.id)}"></div>
+          <textarea class="var-note ed" placeholder="What changed and why — observations, test results…" oninput="onVarNote(${jsArg(v.id)},this)">${esc(v.note)}</textarea>
         </div>
       </div>`).join('') + '</div>';
   updateVarMeta();
@@ -3605,23 +3609,23 @@ function growMatNotes(ta) {
 }
 function matHtml(m) {
   const open = m.id === matOpenId, water = m.role === 'water';
-  let h = `<div class="mat-item${open ? ' open' : ''}" id="mat-${m.id}">
-    <div class="mat-head" onclick="toggleMat(${m.id})"><span class="mat-name" id="matN-${m.id}">${esc(m.name || 'unnamed')}</span><span class="mat-meta" id="matM-${m.id}">${esc(matMetaText(m))}</span><span class="mat-caret">${open ? '▾' : '▸'}</span></div>`;
+  let h = `<div class="mat-item${open ? ' open' : ''}" id="mat-${esc(m.id)}">
+    <div class="mat-head" onclick="toggleMat(${jsArg(m.id)})"><span class="mat-name" id="matN-${esc(m.id)}">${esc(m.name || 'unnamed')}</span><span class="mat-meta" id="matM-${esc(m.id)}">${esc(matMetaText(m))}</span><span class="mat-caret">${open ? '▾' : '▸'}</span></div>`;
   if (open) {
     const shown = m.alts.filter(altShown), hid = m.alts.length - shown.length;
     h += `<div class="mat-body">
       <div class="mat-grid">
-        <div class="mf"><label>name in recipes</label><input type="text" value="${esc(m.name)}" oninput="matField(${m.id},'name',this.value)" autocomplete="off"></div>
-        <div class="mf"><label>role</label><select onchange="matField(${m.id},'role',this.value)">${ROLES.map(([k, l]) => `<option value="${k}"${roleKey(m.role) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-        ${water ? '' : `<div class="mf"><label>working conc. %</label><input type="text" inputmode="decimal" value="${m.work ?? ''}" placeholder="as delivered" oninput="matField(${m.id},'work',this.value)" title="pre-diluted to this concentration for mixing (e.g. NaOH 50 → 10 %) — empty = used as delivered" autocomplete="off"></div>`}
-        <div class="mf"><label>t / year</label><input type="text" inputmode="decimal" value="${m.cons ?? ''}" oninput="matField(${m.id},'cons',this.value)" title="yearly consumption of this material — all its alternatives together; each alternative takes its share of it (share % below)" autocomplete="off"></div>
+        <div class="mf"><label>name in recipes</label><input type="text" value="${esc(m.name)}" oninput="matField(${jsArg(m.id)},'name',this.value)" autocomplete="off"></div>
+        <div class="mf"><label>role</label><select onchange="matField(${jsArg(m.id)},'role',this.value)">${ROLES.map(([k, l]) => `<option value="${k}"${roleKey(m.role) === k ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        ${water ? '' : `<div class="mf"><label>working conc. %</label><input type="text" inputmode="decimal" value="${esc(m.work ?? '')}" placeholder="as delivered" oninput="matField(${jsArg(m.id)},'work',this.value)" title="pre-diluted to this concentration for mixing (e.g. NaOH 50 → 10 %) — empty = used as delivered" autocomplete="off"></div>`}
+        <div class="mf"><label>t / year</label><input type="text" inputmode="decimal" value="${esc(m.cons ?? '')}" oninput="matField(${jsArg(m.id)},'cons',this.value)" title="yearly consumption of this material — all its alternatives together; each alternative takes its share of it (share % below)" autocomplete="off"></div>
       </div>
-      <div class="mf"><label>note</label><input type="text" value="${esc(m.note)}" oninput="matField(${m.id},'note',this.value)" autocomplete="off"></div>
+      <div class="mf"><label>note</label><input type="text" value="${esc(m.note)}" oninput="matField(${jsArg(m.id)},'note',this.value)" autocomplete="off"></div>
       <div class="alt-title">alternatives — ● = mixed in production now · dashed = not approved yet</div>
       ${shown.map(a => altHtml(m, a)).join('')}
       ${hid ? `<div class="alt-hidden">${hid} more ${hid === 1 ? 'alternative is' : 'alternatives are'} not shown — the filter is “${esc(ALT_FILTER_NAME[altFilter])}”. <button class="rc-open" onclick="setAltFilter('all')">show all</button></div>` : ''}
-      <div class="mat-actions"><button class="btn-sm" onclick="addAlt(${m.id})">+ alternative</button><button class="btn-sm danger" onclick="deleteMaterial(${m.id})">delete material</button></div>
-      <div class="mat-info" id="matI-${m.id}">${matInfoHtml(m)}</div>
+      <div class="mat-actions"><button class="btn-sm" onclick="addAlt(${jsArg(m.id)})">+ alternative</button><button class="btn-sm danger" onclick="deleteMaterial(${jsArg(m.id)})">delete material</button></div>
+      <div class="mat-info" id="matI-${esc(m.id)}">${matInfoHtml(m)}</div>
     </div>`;
   }
   return h + '</div>';
@@ -3634,13 +3638,13 @@ function altStatusOptions(a) {   // + the stored one, when a newer build knows a
 }
 function altHtml(m, a) {
   const on = a.id === m.act, water = m.role === 'water';
-  const f = (key, label, ph, tip) => `<div class="mf${key === 'card' ? ' mf-wide' : ''}"><label>${label}</label><input type="text"${ALT_TEXT.includes(key) ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${m.id},${a.id},'${key}',this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off"></div>`;
+  const f = (key, label, ph, tip) => `<div class="mf${key === 'card' ? ' mf-wide' : ''}"><label>${label}</label><input type="text"${ALT_TEXT.includes(key) ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},${jsArg(String(key))},this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off"></div>`;
   return `<div class="alt${on ? ' on' : ''}${altApproved(a) ? '' : ' test'}">
-      <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${m.id},${a.id})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>
-        <input class="alt-name" type="text" value="${esc(a.name)}" placeholder="product name" oninput="altField(${m.id},${a.id},'name',this.value)" autocomplete="off">
-        <button class="ib" onclick="deleteAlt(${m.id},${a.id})" title="remove alternative"${m.alts.length < 2 ? ' disabled' : ''}>✕</button></div>
+      <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${jsArg(m.id)},${jsArg(a.id)})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>
+        <input class="alt-name" type="text" value="${esc(a.name)}" placeholder="product name" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},'name',this.value)" autocomplete="off">
+        <button class="ib" onclick="deleteAlt(${jsArg(m.id)},${jsArg(a.id)})" title="remove alternative"${m.alts.length < 2 ? ' disabled' : ''}>✕</button></div>
       <div class="alt-fields">
-        <div class="mf mf-wide"><label>status</label><select onchange="altField(${m.id},${a.id},'status',this.value)" title="approved, or a candidate still being tested — in the lab, then in production. Independent of ● (production can run a candidate). The list above can be filtered by it.">${altStatusOptions(a)}</select></div>
+        <div class="mf mf-wide"><label>status</label><select onchange="altField(${jsArg(m.id)},${jsArg(a.id)},'status',this.value)" title="approved, or a candidate still being tested — in the lab, then in production. Independent of ● (production can run a candidate). The list above can be filtered by it.">${altStatusOptions(a)}</select></div>
         ${f('producer', 'producer')}
         ${f('card', 'master card', 'item no.', 'kmenová karta — the item number of this product in the company stock system')}
         ${water ? '' : f('conc', 'conc. %', 'as delivered', 'concentration as delivered')}
@@ -3649,7 +3653,7 @@ function altHtml(m, a) {
         ${m.role === 'resin' ? f('fF', 'F in solid %', String(RESIN_F), 'formaldehyde share of the resin solid') + f('fR', 'R in solid %', String(RESIN_R), 'resorcinol share of the resin solid') : ''}
         ${m.role === 'latex-vp' ? f('vp', 'VP monomer %', '?', 'vinylpyridine share of the latex polymer') : ''}
       </div>
-      <div class="mf"><label>note</label><textarea class="alt-note" rows="1" placeholder="approval, supplier, what to watch…" oninput="altField(${m.id},${a.id},'note',this.value);growMatNotes(this)" title="note to this alternative — also shown on hover over it in Lab weighing" autocomplete="off">${esc(a.note)}</textarea></div>
+      <div class="mf"><label>note</label><textarea class="alt-note" rows="1" placeholder="approval, supplier, what to watch…" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},'note',this.value);growMatNotes(this)" title="note to this alternative — also shown on hover over it in Lab weighing" autocomplete="off">${esc(a.note)}</textarea></div>
     </div>`;
 }
 function toggleMat(id) { matOpenId = matOpenId === id ? null : id; renderMaterials(); }

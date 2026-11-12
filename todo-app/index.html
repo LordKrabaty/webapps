@@ -1400,7 +1400,33 @@ const UNDO_MAX = 40;
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function el(id) { return document.getElementById(id); }
-function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// a value as a JS literal for an inline handler — onclick="fn(${jsArg(id)})": JSON, then HTML-escaped for the attribute.
+// Data never goes into a handler any other way: '${id}' breaks out on an apostrophe, a bare ${id} runs as code.
+function jsArg(v) { const j = JSON.stringify(v); return esc(j === undefined ? 'null' : j); }
+// an id / key coming from outside (sync, import): a finite number, or a short string of letters, digits, space and _ . : -
+// (nothing that could act as markup or code, should a sink ever miss its escaping)
+function idOk(v) { return (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && /^[\p{L}\p{N} _.:-]{1,80}$/u.test(v)); }
+// records from outside whose key field passes idOk — the rest is dropped; `optional` lets a record without that field through
+// (older exports carry items without an id, the normalizers then make one up)
+function okRecs(arr, key, optional) {
+  key = key || 'id';
+  return (Array.isArray(arr) ? arr : []).filter(x => x && typeof x === 'object' && ((optional && x[key] == null) || idOk(x[key])));
+}
+// A payload from outside (cloud merge, import, version history): every collection keeps only the records whose
+// id / date / month / key is a plain identifier. Returns a copy — the caller's object is left as it was read.
+function cleanIncoming(rec) {
+  if (!rec || typeof rec !== 'object') return rec;
+  const out = { ...rec };
+  const keep = (k, f, optional) => { if (out[k] != null) out[k] = okRecs(out[k], f, optional); };
+  keep('items'); keep('teas'); keep('archive');
+  keep('weekDays', 'date'); keep('weekPlans', 'date'); keep('weekDays', 'id', true); keep('weekPlans', 'id', true);
+  keep('recurrences', 'id', true); keep('weekNotes', 'key'); keep('evals', 'id', true);
+  keep('inbox', 'id', true); keep('later', 'ym');
+  if (out.settings && typeof out.settings === 'object' && out.settings.blockTypes != null)
+    out.settings = { ...out.settings, blockTypes: okRecs(out.settings.blockTypes, 'key') };
+  return out;
+}
 
 function timeToMin(t) {
   if (!t) return 0;
@@ -2028,7 +2054,7 @@ function MCTX(ym) {
     undo() { pushLaterUndo(); },                // snapshot BEFORE the change → ↩ reverts (delete, move, edit…)
     save() { const b = laterBucket(ym); b.mt = Date.now(); saveLater(); },
     render() { renderLater(); },
-    call(name, idx, extra) { return name + "('" + ym + "'," + idx + (extra != null ? ',' + extra : '') + ')'; },
+    call(name, idx, extra) { return name + '(' + jsArg(String(ym)) + ',' + idx + (extra != null ? ',' + extra : '') + ')'; },
   };
 }
 const INBOXCTX = {
@@ -2071,7 +2097,7 @@ function rowsHtml(ctx, insertBefore = {}) {
     if (ctx.kind === 'inbox') {
       const tg = item.done ? '☑' : '☐';
       const c = ['item-row', 'is-line', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : ''].filter(Boolean).join(' ');
-      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" draggable="true">
+      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${esc(item.id)}" draggable="true">
         <span class="item-main">
           <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
           <span class="item-text" onclick="${ctx.call(ctx.h.edit, idx)}">${esc(item.text)}</span>
@@ -2092,13 +2118,13 @@ function rowsHtml(ctx, insertBefore = {}) {
       const _da = _pd ? ` data-day="${DAY_ABBREV_CZ[_pd.getDay()]}"` : '';
       const dayBadge = `<span class="day-badge${item.dayLabel ? '' : ' empty'}"${_da} onclick="${ctx.call('mEditDay', idx)}" title="assign a day (e.g. 7.6.) · range 15.-18.7. = multi-day · d → duplicate · r1m → recurrence">${item.dayLabel ? esc(laterDayDisplay(item)) : '+day'}</span>`;
       const timeBadge = (item.isEvent && item.eventStart)
-        ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="click: edit time · 0 → no time · -/✒ → task · d → duplicate">${item.eventStart}–${item.eventEnd || '?'}</span>`
+        ? `<span class="dur-badge editable" onclick="${ctx.call(ctx.h.ev, idx)}" title="click: edit time · 0 → no time · -/✒ → task · d → duplicate">${esc(item.eventStart)}–${esc(item.eventEnd || '?')}</span>`
         : '';
       const c = ['item-row', 'is-line', item.isEvent ? 'is-event-block' : '', item.done ? 'is-done' : '', item.urgent ? 'is-urgent' : '', item.note ? 'has-note' : '', item.isGhost ? 'is-ghost' : ''].filter(Boolean).join(' ');
       const gBadge = item.isGhost
         ? `<span class="recur-ghost-badge is-confirm" onclick="${ctx.call('mConfirmGhost', idx)}" title="recurrence — click to confirm into this month">🔃</span>`
         : (item.recurId != null ? '<span class="recur-ghost-badge" title="recurring task (confirmed)">🔃</span>' : '');
-      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${item.id}" ${item.isGhost ? '' : 'draggable="true"'}>
+      return (insertBefore[idx] || '') + `<div class="${c}" data-idx="${idx}" data-id="${esc(item.id)}" ${item.isGhost ? '' : 'draggable="true"'}>
         <span class="item-main">
           ${dayBadge}${timeBadge}${gBadge}
           <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${tg}</span>
@@ -2159,7 +2185,7 @@ function rowsHtml(ctx, insertBefore = {}) {
     // their time stays); only ghosts (recurrence previews) are excluded
     const draggable = !item.isGhost ? 'draggable="true"' : '';
 
-    return (insertBefore[idx] || '') + `<div class="${cls}" data-idx="${idx}" data-id="${item.id}" ${draggable}>
+    return (insertBefore[idx] || '') + `<div class="${cls}" data-idx="${idx}" data-id="${esc(item.id)}" ${draggable}>
       <span class="item-main">
         <span class="item-toggle" onclick="${ctx.call(ctx.h.toggle, idx)}" title="done">${toggle}</span>
         ${ghostBadge}${emoji}
@@ -2167,7 +2193,7 @@ function rowsHtml(ctx, insertBefore = {}) {
         ${chkBadge(item, `onclick="ieNextTab('list');${ctx.call(ctx.h.edit, idx)}"`)}
       </span>
       <span class="item-ctrls">
-        ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${durLabel}</span>` : ''}
+        ${durLabel ? `<span class="dur-badge${durEditable ? ' editable' : ''}" ${durClick}>${esc(durLabel)}</span>` : ''}
         <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, -1)}" title="up" ${idx===0?'disabled':''}>↑</button>
         <button class="item-move" onclick="${ctx.call(ctx.h.move, idx, 1)}" title="down" ${idx===list.length-1?'disabled':''}>↓</button>
         <button class="item-send" onclick="${ctx.call(ctx.h.send, idx)}" title="insert into the buffer (move to another card) · then add it on the target card; &quot;.del&quot; in the field = move (deletes the source)">→</button>
@@ -2342,7 +2368,7 @@ function renderLaterTimeline(container) {
     if (year !== lastYear) {   // collapsible year header (groups its months)
       const yColl = isLaterCalYearCollapsed(year, curYm, nextYm);
       const yt = yearItems[year] || 0;
-      html += `<div class="tl-cal-yr-hdr${firstYear ? ' first' : ''}${year < curY ? ' overdue' : ''}" onclick="toggleLaterCalYear('${year}')"><span class="tl-cal-caret">${yColl ? '▸' : '▾'}</span>${year}${yt ? `<span class="tl-cal-yr-sum">${yt} ${yt === 1 ? 'item' : 'items'}</span>` : ''}</div>`;   // a year with only other windows' items → no "0 items"
+      html += `<div class="tl-cal-yr-hdr${firstYear ? ' first' : ''}${year < curY ? ' overdue' : ''}" onclick="toggleLaterCalYear(${jsArg(String(year))})"><span class="tl-cal-caret">${yColl ? '▸' : '▾'}</span>${esc(year)}${yt ? `<span class="tl-cal-yr-sum">${yt} ${yt === 1 ? 'item' : 'items'}</span>` : ''}</div>`;   // a year with only other windows' items → no "0 items"
       lastYear = year; firstYear = false;
     }
     if (isLaterCalYearCollapsed(year, curYm, nextYm)) return;   // collapsed year hides its months
@@ -2352,13 +2378,13 @@ function renderLaterTimeline(container) {
     const total = itemCountByYm[ym] || 0;
     const mColl = isLaterCalMonthCollapsed(ym, curYm, nextYm);
     const undatedBadge = undatedNames.length
-      ? `<span class="tl-later-undated" onclick="event.stopPropagation();laterCalJump('${ym}')" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
+      ? `<span class="tl-later-undated" onclick="event.stopPropagation();laterCalJump(${jsArg(String(ym))})" title="${tip(undatedNames)}">+${undatedNames.length} undated</span>`
       : '';
     // month-sum preview: every item of the month, dated ones prefixed with their day/range
     const sumNames = (itemsByYm[ym] || []).map(it => (it.dayLabel ? laterDayDisplay(it) + ' · ' : '') + ((it.text || '').trim() || '(untitled)'));
     const sum = total ? `<span class="tl-later-msum" title="${tip(sumNames)}">${total} ${total === 1 ? 'item' : 'items'}</span>` : '';
     html += `<div class="tl-later-month">
-      <div class="tl-later-mlabel${od ? ' overdue' : ''}" onclick="toggleLaterCalMonth('${ym}')"><span class="tl-cal-caret">${mColl ? '▸' : '▾'}</span>${monthLabel(ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}${sum}</div>`;
+      <div class="tl-later-mlabel${od ? ' overdue' : ''}" onclick="toggleLaterCalMonth(${jsArg(String(ym))})"><span class="tl-cal-caret">${mColl ? '▸' : '▾'}</span>${monthLabel(ym)}${od ? '<span class="tl-later-od">overdue</span>' : ''}${undatedBadge}${sum}</div>`;
     if (!mColl) {   // expanded → the day grid
       const dayNames = {}, othDayNames = {};
       spans.forEach(sp => {
@@ -2401,7 +2427,7 @@ function renderLaterTimeline(container) {
         const hol = getHoliday(ym + '-' + String(d).padStart(2, '0'));
         const cls = ['tl-cal-day', hasRange ? 'has-range' : (hasSingle ? 'has' : (othNamesD.length ? 'oth' : '')), isToday ? 'today' : '', hol ? 'hol' : ''].filter(Boolean).join(' ');
         const tipTxt = [hol ? esc(hol) : '', n ? tip(names) : '', othNamesD.length ? esc(othNamesD.map(x => '◦ ' + x).join('\n')) : ''].filter(Boolean).join('\n');
-        const click = (n ? ` onclick="laterCalJump('${ym}')"` : '') + (tipTxt ? ` title="${tipTxt}"` : '');
+        const click = (n ? ` onclick="laterCalJump(${jsArg(String(ym))})"` : '') + (tipTxt ? ` title="${tipTxt}"` : '');
         const dot = (hasRange && hasSingle) ? '<span class="tl-cal-dot"></span>' : '';   // a point task that day, on top of a range
         const ring = othSingle ? '<span class="tl-cal-oth"></span>' : '';               // another window has a task that day
         const cnt = (!hasRange && singleCount > 1) ? `<span class="tl-cal-cnt">${singleCount}</span>` : '';
@@ -3884,7 +3910,8 @@ function mdMarks(h) {
   h = h.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
        .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '<s>$1</s>');
   // single * / _ only on a word boundary: "* milk" stays a bullet, snake_case stays a name
-  return h.replace(/(^|[\s([{"'])[*_](?=\S)([^*_\n]*\S)[*_](?=$|[\s.,;:!?)\]}"'])/g, '$1<em>$2</em>');
+  // (the text is escaped already, so a quote next to the mark arrives as &quot; / &#39;)
+  return h.replace(/(^|[\s([{]|&quot;|&#39;)[*_](?=\S)([^*_\n]*\S)[*_](?=$|[\s.,;:!?)\]}]|&quot;|&#39;)/g, '$1<em>$2</em>');
 }
 // Every field that shows this HTML carries class="md" (see the CSS block above).
 function mdInline(s) {
@@ -3893,7 +3920,9 @@ function mdInline(s) {
   // Code first, then links, parked in placeholders before the text is escaped and marked up —
   // nothing inside a `…` span is markup any more (not even an address), and a "_" or "*" inside
   // an address is never read as italics.
-  const h = String(s || '')
+  // NUL is the placeholder mark — a NUL already in the text would be taken for one (and could pull a parked
+  // link into another link's address, breaking out of the attribute), so it is dropped first
+  const h = String(s || '').replace(/\u0000/g, '')
     .replace(/`([^`\n]+)`/g, (_m, c) => keep('<code>' + esc(c) + '</code>'))
     .replace(MD_LINK_RE, (_m, label, url) => keep(mdLinkHtml(url, mdMarks(esc(label)))))
     .replace(MD_URL_RE, (m, pre, raw) => {
@@ -4882,7 +4911,7 @@ function mergeWindowRegistry(cloudWins, cloudTomb) {
   }
   const byId = new Map(dayWindows.map(w => [w.id, w]));
   (Array.isArray(cloudWins) ? cloudWins : []).forEach(cw => {
-    if (!cw || !cw.id) return;
+    if (!cw || !cw.id || !idOk(cw.id)) return;        // a window id that is not a plain identifier is ignored (see idOk)
     if (cw.id !== 'main') {                           // window Gist ID: LWW by binIdMt (override and deletion); without a stamp only fill in missing
       const k = 'todo-app-gist-id::' + cw.id;
       const ex0 = byId.get(cw.id);
@@ -4937,10 +4966,10 @@ function renderWindowTabs() {
   const tabs = dayWindows.map(w => {
     const act = w.id === activeWin;
     const tools = act
-      ? `<span class="win-tab-tool" title="rename" onclick="event.stopPropagation();renameWindow('${w.id}')">✎</span>`
-        + (w.id !== 'main' ? `<span class="win-tab-tool" title="delete window" onclick="event.stopPropagation();deleteWindow('${w.id}')">✕</span>` : '')
+      ? `<span class="win-tab-tool" title="rename" onclick="event.stopPropagation();renameWindow(${jsArg(String(w.id))})">✎</span>`
+        + (w.id !== 'main' ? `<span class="win-tab-tool" title="delete window" onclick="event.stopPropagation();deleteWindow(${jsArg(String(w.id))})">✕</span>` : '')
       : '';
-    return `<button class="win-tab${act ? ' active' : ''}" onclick="switchWindow('${w.id}')"><span class="win-tab-name">${esc(w.name)}</span>${tools}</button>`;
+    return `<button class="win-tab${act ? ' active' : ''}" onclick="switchWindow(${jsArg(String(w.id))})"><span class="win-tab-name">${esc(w.name)}</span>${tools}</button>`;
   }).join('');
   c.innerHTML = tabs + `<button class="win-tab-add" onclick="addWindow()" title="add a day window">+</button>`;
 }
@@ -5105,7 +5134,7 @@ function updateAbbrevHint() {
   const list = addCtx.list || [];
   const { blocks } = presentBlockAbbrevs(list);
   hint.innerHTML = blocks.map(b =>
-    `<span class="ab" role="button" onclick="addUnderBlock('${b.id}')" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)} (any case)"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
+    `<span class="ab" role="button" onclick="addUnderBlock(${jsArg(String(b.id))})" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)} (any case)"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
   ).join('');
 }
 
@@ -5156,17 +5185,17 @@ function renderBlockTypeList() {
   const ro = reorderMode.bt;
   list.innerHTML = blockTypeOrder.map((key, idx) => {
     const bt = BLOCK_TYPES[key]; if (!bt) return '';
-    if (ro) return `<div class="lib-item reordering" data-idx="${idx}" data-key="${key}" draggable="true">
-      <span class="lib-item-name">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</span>
+    if (ro) return `<div class="lib-item reordering" data-idx="${idx}" data-key="${esc(key)}" draggable="true">
+      <span class="lib-item-name">${esc(bt.emoji ? bt.emoji + ' ' : '')}${esc(bt.label)}</span>
       ${reorderBtns('moveBlockType', idx, blockTypeOrder.length)}
     </div>`;
     const tasks = bt.defaultTasks || [];
     const taskTotal = tasks.reduce((s, t) => s + (t.duration || 0), 0);
     const durStr = formatDur(tasks.length ? taskTotal : bt.defaultDuration);
     const taskBadge = tasks.length ? ` · ${tasks.length} tasks` : '';
-    return `<div class="lib-item" data-idx="${idx}" data-key="${key}" draggable="true" onclick="openBlockTypeEdit('${key}')" title="edit">
-      <span class="lib-item-name">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}<span style="margin-left:.3rem;font-family:'DM Mono',monospace;font-size:.7em;color:var(--muted)">${durStr}${taskBadge}</span></span>
-      ${key !== 'TASK' ? `<button class="lib-item-del" onclick="event.stopPropagation();deleteBlockType('${key}')" title="delete"><svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></button>` : ''}
+    return `<div class="lib-item" data-idx="${idx}" data-key="${esc(key)}" draggable="true" onclick="openBlockTypeEdit(${jsArg(String(key))})" title="edit">
+      <span class="lib-item-name">${esc(bt.emoji ? bt.emoji + ' ' : '')}${esc(bt.label)}<span style="margin-left:.3rem;font-family:'DM Mono',monospace;font-size:.7em;color:var(--muted)">${durStr}${taskBadge}</span></span>
+      ${key !== 'TASK' ? `<button class="lib-item-del" onclick="event.stopPropagation();deleteBlockType(${jsArg(String(key))})" title="delete"><svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg></button>` : ''}
     </div>`;
   }).filter(Boolean).join('');
 }
@@ -5283,7 +5312,7 @@ function addBlockEditTask(text, duration, note) {
     <div style="display:flex;gap:.3rem;align-items:center">
       <span class="bet-grip" title="drag to reorder">⠿</span>
       <input type="text" class="bet-text" placeholder="Task name" value="${esc(text||'')}" style="flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.85rem;border:var(--b);border-radius:var(--r);padding:.3rem .5rem;background:var(--w);color:var(--black);outline:none">
-      <input type="number" class="bet-dur" placeholder="min" value="${duration||''}" min="1" max="480" style="width:58px;font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.3rem .4rem;background:var(--w);color:var(--black);outline:none;text-align:right">
+      <input type="number" class="bet-dur" placeholder="min" value="${esc(duration||'')}" min="1" max="480" style="width:58px;font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);padding:.3rem .4rem;background:var(--w);color:var(--black);outline:none;text-align:right">
       <button class="bet-move" onclick="moveBetRow(this,-1)" title="up">↑</button>
       <button class="bet-move" onclick="moveBetRow(this,1)" title="down">↓</button>
       <button class="bet-move" onmousedown="event.preventDefault()" onclick="presetNoteChk(this.closest('.bet-row').querySelector('.bet-note'))" title="checklist item in the description (Ctrl+L)">☑</button>
@@ -5590,7 +5619,7 @@ function renderLibrary() {
         ? `<span class="lib-type-badge lib-type-week">${weekDayCount}d</span>`
         : `<span class="lib-type-badge lib-type-day">1d</span>`;
       // reorder mode: badge + name + ↑/↓ only (the time badge would squeeze the name in the 185–210px column)
-      if (reorderMode.lib) return `<div class="lib-item reordering" data-idx="${idx}" data-id="${entry.id}" draggable="true">
+      if (reorderMode.lib) return `<div class="lib-item reordering" data-idx="${idx}" data-id="${esc(entry.id)}" draggable="true">
         ${typeBadge}
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
         ${reorderBtns('moveLibEntry', idx, library.length)}
@@ -5599,11 +5628,11 @@ function renderLibrary() {
         ? Object.values(entry.weekData || {}).reduce((s, d) => s + dayTotalMinutes(d?.items), 0)
         : dayTotalMinutes(entry.data?.items);
       const timeBadge = totalMin ? `<span class="lib-item-time">${formatDur(totalMin)}</span>` : '';
-      return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${entry.id}" draggable="true" onclick="openLibEntry(${entry.id})">
+      return `<div class="lib-item${entry.id === activeLibId ? ' active' : ''}" data-idx="${idx}" data-id="${esc(entry.id)}" draggable="true" onclick="openLibEntry(${jsArg(entry.id)})">
         ${typeBadge}
         <span class="lib-item-name">${esc(entry.name || String(entry.id))}</span>
         ${timeBadge}
-        <button class="lib-item-del" onclick="event.stopPropagation();deleteLibEntry(${entry.id})" title="delete">
+        <button class="lib-item-del" onclick="event.stopPropagation();deleteLibEntry(${jsArg(entry.id)})" title="delete">
           <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
         </button>
       </div>`;
@@ -5690,10 +5719,10 @@ function openWeekTplLoadModal(entry) {
     if (!data) return '';
     const totalMin = dayTotalMinutes(data.items);
     return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.83rem">
-      <span style="min-width:2.5rem;font-weight:500">${dayKey} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${totalMin ? formatDur(totalMin) : '—'}</span></span>
+      <span style="min-width:2.5rem;font-weight:500">${esc(dayKey)} <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace">${totalMin ? formatDur(totalMin) : '—'}</span></span>
       <span style="color:var(--muted);font-size:.75rem">→</span>
-      <select id="wtl-${dayKey}" style="${selectStyle}"></select>
-      <button onclick="openPreview('weekTplDay',${entry.id},'${dayKey}')" style="border:none;background:none;cursor:pointer;padding:.15rem .2rem;flex-shrink:0;display:flex;align-items:center;opacity:.6" title="preview">
+      <select id="wtl-${esc(dayKey)}" style="${selectStyle}"></select>
+      <button onclick="openPreview('weekTplDay',${jsArg(entry.id)},${jsArg(String(dayKey))})" style="border:none;background:none;cursor:pointer;padding:.15rem .2rem;flex-shrink:0;display:flex;align-items:center;opacity:.6" title="preview">
         <svg width="14" height="11" viewBox="0 0 10 8" fill="none" stroke="var(--black)" stroke-width="1.5" stroke-linecap="round"><path d="M1,4 Q3,1 5,1 Q7,1 9,4 Q7,7 5,7 Q3,7 1,4 Z"/><circle cx="5" cy="4" r="1.5"/></svg>
       </button>
     </div>`;
@@ -5912,7 +5941,7 @@ function renderPreviewList() {
       <span class="preview-item-text${item.done ? ' done' : ''}"
         onclick="startPreviewEdit(${i},this)">${esc(ptext)}</span>
       ${sched}
-      <span class="preview-item-dur" onclick="startPreviewDurEdit(${i},this)" title="edit time">${durTxt}</span>
+      <span class="preview-item-dur" onclick="startPreviewDurEdit(${i},this)" title="edit time">${esc(durTxt)}</span>
       <div class="preview-item-move">
         <button onclick="movePreviewItem(${i},-1)" ${i===0?'disabled':''}>▲</button>
         <button onclick="movePreviewItem(${i},1)" ${i===n-1?'disabled':''}>▼</button>
@@ -6171,7 +6200,7 @@ function toggleBlockMenu(e) {
   if (menu._src === 'block' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   let html = orderedBlockTypes()
     .filter(([k, bt]) => !bt.isEvent)
-    .map(([k, bt]) => `<button class="block-menu-item" onclick="addBlockItem('${k}')">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</button>`)
+    .map(([k, bt]) => `<button class="block-menu-item" onclick="addBlockItem(${jsArg(String(k))})">${esc(bt.emoji ? bt.emoji + ' ' : '')}${esc(bt.label)}</button>`)
     .join('');
   // a new type straight from here — saved AND inserted on this card in one go (see newBlockTypeFromMenu)
   html += (html ? '<div class="new-menu-sep"></div>' : '') + `<button class="block-menu-item" onclick="newBlockTypeFromMenu()">+ new block type…</button>`;
@@ -6186,7 +6215,7 @@ function toggleEventMenu(e) {
   if (menu._src === 'event' && menu.style.display === 'flex') { closeBlockMenu(); return; }
   const eventTypes = orderedBlockTypes().filter(([k, bt]) => bt.isEvent);
   let html = eventTypes.map(([k, bt]) =>
-    `<button class="block-menu-item" onclick="addBlockItem('${k}')">${bt.emoji ? bt.emoji + ' ' : ''}${esc(bt.label)}</button>`
+    `<button class="block-menu-item" onclick="addBlockItem(${jsArg(String(k))})">${esc(bt.emoji ? bt.emoji + ' ' : '')}${esc(bt.label)}</button>`
   ).join('');
   if (eventTypes.length) html += '<div class="new-menu-sep"></div>';
   html += `<button class="block-menu-item" onclick="openNewItem('event')">+ custom event</button>`;
@@ -6207,7 +6236,7 @@ function toggleTaskMenu(e) {
       seen.add(t.text);
       const btn = document.createElement('button');
       btn.className = 'block-menu-item';
-      btn.innerHTML = `✒ ${esc(t.text)}<span style="margin-left:.5rem;font-family:'DM Mono',monospace;font-size:.78em;color:var(--muted)">${t.duration||15}m</span>`;
+      btn.innerHTML = `✒ ${esc(t.text)}<span style="margin-left:.5rem;font-family:'DM Mono',monospace;font-size:.78em;color:var(--muted)">${esc(t.duration||15)}m</span>`;
       btn.addEventListener('click', () => addPredefinedTask(t.text, t.duration || 30, t.note || ''));
       menu.appendChild(btn);
     });
@@ -6594,7 +6623,7 @@ let _loadConflictChoices = null;
 function renderLoadConflictList() {
   el('loadConflictList').innerHTML = _loadConflictConflicts.map(c => {
     const m = _loadConflictChoices[c.iso];
-    const seg = (val, label) => `<button class="lc-seg${m === val ? ' active' : ''}" onclick="setLoadConflictChoice('${c.iso}','${val}')">${label}</button>`;
+    const seg = (val, label) => `<button class="lc-seg${m === val ? ' active' : ''}" onclick="setLoadConflictChoice(${jsArg(String(c.iso))},${jsArg(String(val))})">${label}</button>`;
     return `<div style="border:var(--b);border-radius:var(--r);padding:.4rem .5rem">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem">
         <span style="font-weight:600;font-size:.82rem;flex:1;min-width:0">${esc(c.label)}</span>
@@ -6714,12 +6743,12 @@ function buildSelTree(listId, prefix, groups, sel, after, collapsed) {
     const leaves = g.leaves.map(lf => {
       const on = sel.has(lf.key);
       return `<label class="modal-item sel-leaf${on ? ' sel' : ''}" id="${prefix}-l-${_treeKeyId(lf.key)}">`
-        + `<input type="checkbox" ${on ? 'checked' : ''} onchange="selTreeLeaf('${prefix}','${lf.key}',this.checked)">`
+        + `<input type="checkbox" ${on ? 'checked' : ''} onchange="selTreeLeaf(${jsArg(String(prefix))},${jsArg(String(lf.key))},this.checked)">`
         + `${esc(lf.label)}<span class="sel-count">${lf.count}×</span></label>`;
     }).join('');
     return `<div class="sel-grp-row">`
-      + `<span class="sel-caret" onclick="selTreeToggleCollapse('${prefix}','${g.key}')">${isColl ? '▸' : '▾'}</span>`
-      + `<label class="modal-item sel-grp" id="${prefix}-g-${kid}"><input type="checkbox" onchange="selTreeGroup('${prefix}','${g.key}',this.checked)">${esc(g.label)}</label>`
+      + `<span class="sel-caret" onclick="selTreeToggleCollapse(${jsArg(String(prefix))},${jsArg(String(g.key))})">${isColl ? '▸' : '▾'}</span>`
+      + `<label class="modal-item sel-grp" id="${prefix}-g-${kid}"><input type="checkbox" onchange="selTreeGroup(${jsArg(String(prefix))},${jsArg(String(g.key))},this.checked)">${esc(g.label)}</label>`
       + `</div>`
       + `<div class="sel-grp-leaves" id="${prefix}-lv-${kid}"${isColl ? ' style="display:none"' : ''}>${leaves}</div>`;
   }).join('');
@@ -6832,10 +6861,10 @@ function openExportModal() {
   exportSelected = new Set(library.map(e => e.id));
   exportArchSelected = new Set(archive.map(e => e.id));
   el('exportList').innerHTML = library.length
-    ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? library.map(e => `<label class="modal-item sel" id="ei-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">No saved templates.</p>';
   el('exportArchList').innerHTML = archive.length
-    ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? archive.map(e => `<label class="modal-item sel" id="eai-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportArchSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
   // days / plans / later — selection trees (groups = weeks / years), all selected
   setupSelTree('exportDayList', 'exDay', weekDays, 'expWdLbl', 'Saved days', dayWeekGroups, updateExportFilename);
@@ -6973,7 +7002,7 @@ function openImportModal() {
 }
 function parseImportJson(text) {
   try {
-    const parsed = JSON.parse(text);
+    const parsed = cleanIncoming(JSON.parse(text));   // records with an unusable id / date / key are dropped before anything is listed
     const its = parsed.items || parsed.teas || [];
     const hasDays = parsed.weekDays && parsed.weekDays.length > 0;
     const hasPlans = parsed.weekPlans && parsed.weekPlans.length > 0;
@@ -6983,7 +7012,7 @@ function parseImportJson(text) {
     if (!its.length && !hasDays && !hasPlans && !hasInbox && !hasLater && !hasRecur) throw new Error('No items in the file');
     importData = its; importSelected = new Set(its.map(x => x.id));
     if (its.length) {
-      el('importList').innerHTML = its.map(x => `<label class="modal-item sel" id="ii-${x.id}"><input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />${esc(x.name||String(x.id))}</label>`).join('');
+      el('importList').innerHTML = its.map(x => `<label class="modal-item sel" id="ii-${esc(x.id)}"><input type="checkbox" checked onchange="toggleImportSel(${jsArg(x.id)},this.checked)" />${esc(x.name||String(x.id))}</label>`).join('');
       el('importItemSection').style.display = 'block';
     } else {
       el('importItemSection').style.display = 'none';
@@ -7020,7 +7049,7 @@ function parseImportJson(text) {
     if (daysSection) daysSection.style.display = (hasDays || hasPlans || hasSettings || hasInbox || hasLater || recurN) ? '' : 'none';
     el('importActions').style.display = 'flex'; el('importCancel').style.display = 'none';
   } catch(err) {
-    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Error: ' + err.message + '</p>';
+    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Error: ' + esc(err.message) + '</p>';
     el('importItemSection').style.display = 'block';
     el('importActions').style.display = 'none'; el('importCancel').style.display = 'flex';
   }
@@ -7800,13 +7829,13 @@ function renderRecurList() {
         </div>
         <div class="recur-rule-desc">${esc(describeRecur(rec))}</div>
         ${noteHtml}
-        <div class="recur-rule-from"><label>valid from</label><input type="date" value="${esc((rec.anchor || '').slice(0, 10))}" onchange="setRecurAnchor(${rec.id}, this.value)"></div>
+        <div class="recur-rule-from"><label>valid from</label><input type="date" value="${esc((rec.anchor || '').slice(0, 10))}" onchange="setRecurAnchor(${jsArg(rec.id)}, this.value)"></div>
         <div class="recur-rule-next">next: ${occHtml}</div>
         <div class="recur-rule-btns">
-          <button class="btn-io" onclick="editRecurText(${rec.id})">text</button>
-          <button class="btn-io" onclick="editRecurRules(${rec.id})">rule</button>
-          <button class="btn-io" onclick="editRecurNote(${rec.id})">note</button>
-          <button class="btn-io danger" onclick="deleteRecur(${rec.id})">delete</button>
+          <button class="btn-io" onclick="editRecurText(${jsArg(rec.id)})">text</button>
+          <button class="btn-io" onclick="editRecurRules(${jsArg(rec.id)})">rule</button>
+          <button class="btn-io" onclick="editRecurNote(${jsArg(rec.id)})">note</button>
+          <button class="btn-io danger" onclick="deleteRecur(${jsArg(rec.id)})">delete</button>
         </div>
       </div>`;
     }).join('');
@@ -8042,7 +8071,7 @@ function populateLaterAddMonth() {
   later.forEach(b => { if (b.ym && !have.has(b.ym)) { have.add(b.ym); opts.push([b.ym, shortYm(b.ym)]); } });
   opts.sort((a, b) => a[0].localeCompare(b[0]));
   const prev = sel.value;
-  sel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  sel.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
   if (prev && have.has(prev)) sel.value = prev;
 }
 
@@ -8511,7 +8540,7 @@ function renderLater() {
   months.forEach(ym => { const b = byYm.get(ym); if (b && b.items.length) sortBucketItems(b.items, ym); });
   const curYm = curMonthYm();
   const curYear = String(now.getFullYear());
-  const addBtn = ym => `<button class="later-month-add" onclick="event.stopPropagation();pickLaterMonth('${ym}')" title="add to this month">+</button>`;
+  const addBtn = ym => `<button class="later-month-add" onclick="event.stopPropagation();pickLaterMonth(${jsArg(String(ym))})" title="add to this month">+</button>`;
   const odTag = ym => ym < curYm ? `<span class="later-month-od">overdue</span>` : '';
   // items per year → year-header summary
   const yearCount = {};
@@ -8523,7 +8552,7 @@ function renderLater() {
       const yc = searching ? false : isLaterYearCollapsed(year);
       const yn = yearCount[year] || 0;
       const yod = year < curYear ? ' overdue' : '';
-      html += `<div class="later-year-hdr${yod}${yearIdx === 0 ? ' first' : ''}" onclick="toggleLaterYear('${year}')"><span class="later-month-toggle">${yc ? '▸' : '▾'}</span>${year}<span class="later-month-sum">${yn} ${yn === 1 ? 'item' : 'items'}</span></div>`;
+      html += `<div class="later-year-hdr${yod}${yearIdx === 0 ? ' first' : ''}" onclick="toggleLaterYear(${jsArg(String(year))})"><span class="later-month-toggle">${yc ? '▸' : '▾'}</span>${esc(year)}<span class="later-month-sum">${yn} ${yn === 1 ? 'item' : 'items'}</span></div>`;
       lastYear = year; yearIdx++; firstInYear = true;
     }
     if (!searching && isLaterYearCollapsed(year)) return;   // collapsed year hides all its months
@@ -8533,11 +8562,11 @@ function renderLater() {
     const od = ym < curYm ? ' overdue' : '';
     const fr = firstInYear ? ' first' : ''; firstInYear = false;   // first month under a year header drops its own top border
     if (!n) {   // empty month → header only (drop target + click directs adding)
-      html += `<div class="later-month-hdr empty${od}${fr}" data-ym="${ym}" onclick="pickLaterMonth('${ym}')" title="add here · or drag an item here"><span class="later-month-toggle">·</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
+      html += `<div class="later-month-hdr empty${od}${fr}" data-ym="${esc(ym)}" onclick="pickLaterMonth(${jsArg(String(ym))})" title="add here · or drag an item here"><span class="later-month-toggle">·</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
       return;
     }
     const collapsed = searching ? false : isLaterCollapsed(ym);
-    const hdr = `<div class="later-month-hdr${od}${fr}" data-ym="${ym}" onclick="toggleLaterMonth('${ym}')"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
+    const hdr = `<div class="later-month-hdr${od}${fr}" data-ym="${esc(ym)}" onclick="toggleLaterMonth(${jsArg(String(ym))})"><span class="later-month-toggle">${collapsed ? '▸' : '▾'}</span>${monthLabel(ym)}${odTag(ym)}<span class="later-month-sum">${cnt}</span>${addBtn(ym)}</div>`;
     if (collapsed) { html += hdr; return; }
     const hols = monthHolidays(ym);
     const holFmt = h => { const [, mo, da] = h.iso.split('-'); return (+da) + '.' + (+mo) + '. ' + esc(h.name); };
@@ -8547,8 +8576,8 @@ function renderLater() {
     const { ins: headers, usedWeeks } = buildWeekHeaders(b.items, ym, byWeekStr);
     // holidays whose week has no dated item (so no week header) → keep them visible at the top of the month
     const leftover = hols.filter(h => !usedWeeks.has(getWeekMondayKey(new Date(h.iso + 'T12:00:00'))));
-    const holHtml = leftover.length ? `<div class="later-month-holidays" data-ym="${ym}">${leftover.map(holFmt).join(' · ')}</div>` : '';
-    html += hdr + holHtml + `<div class="later-rows" data-ym="${ym}">${rowsHtml(MCTX(ym), headers)}</div>`;
+    const holHtml = leftover.length ? `<div class="later-month-holidays" data-ym="${esc(ym)}">${leftover.map(holFmt).join(' · ')}</div>` : '';
+    html += hdr + holHtml + `<div class="later-rows" data-ym="${esc(ym)}">${rowsHtml(MCTX(ym), headers)}</div>`;
   });
   c.innerHTML = html;
   initLaterDnd();
@@ -8703,7 +8732,7 @@ function openDaySwapModal() {
   el('daySwapList').innerHTML = others.map(({ iso }) => {
     const its = weekDays.find(d => d.date === iso)?.items || [];
     const empty = its.length ? '' : ' <span style="font-weight:400;color:var(--muted);font-style:italic">(empty)</span>';
-    return `<div class="day-swap-card" onclick="swapDayWith('${iso}')" style="border:var(--b);border-radius:var(--r);padding:.45rem .55rem">
+    return `<div class="day-swap-card" onclick="swapDayWith(${jsArg(String(iso))})" style="border:var(--b);border-radius:var(--r);padding:.45rem .55rem">
       <div style="font-weight:600;font-size:.83rem;margin-bottom:${its.length ? '.2rem' : '0'}">${esc(dayConflictLabel(iso))}${empty}</div>
       ${its.length ? `<div style="font-size:.78rem;color:var(--muted);display:flex;flex-direction:column;gap:.08rem">${daySummaryLines(its)}</div>` : ''}
     </div>`;
@@ -8762,7 +8791,7 @@ function renderDayButtons() {
     // note marker — the live buffer for the active day (weekDays is only flushed debounced), its record otherwise
     const noteTxt = ((isActive ? dayNote : (weekDays.find(d => d.date === iso)?.note || '')) || '').trim();
     const noteMark = noteTxt ? `<span class="day-btn-note" title="note: ${esc(noteTxt.slice(0, 160))}">✎</span>` : '';
-    return `<div class="day-btn-wrap${isActive ? ' active' : ''}" onclick="switchPlanDay('${iso}')">
+    return `<div class="day-btn-wrap${isActive ? ' active' : ''}" onclick="switchPlanDay(${jsArg(String(iso))})">
       ${status}${noteMark}<span class="day-btn-label"><span>${dayShort}</span><small>${dateStr}</small>${mins ? `<small class="day-btn-count">${formatDur(mins)}</small>` : ''}${hol ? `<small class="day-btn-holiday" title="${esc(hol)}">${esc(hol)}</small>` : ''}</span>
     </div>`;
   }).join('');
@@ -8783,7 +8812,7 @@ function renderWorkDayPicker() {
     const active = wDays.includes(d);
     return `<label style="display:flex;flex-direction:column;align-items:center;gap:.2rem;cursor:pointer;flex:1;min-width:0;user-select:none">
       <span style="font-size:.7rem;font-weight:500;color:${active ? 'var(--black)' : 'var(--muted)'}">${n}</span>
-      <input type="checkbox" ${active ? 'checked' : ''} style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="toggleWorkingDay(${d},this.checked)">
+      <input type="checkbox" ${active ? 'checked' : ''} style="width:13px;height:13px;accent-color:var(--black);cursor:pointer" onchange="toggleWorkingDay(${jsArg(d)},this.checked)">
     </label>`;
   }).join('');
   // default row: shown selection vs. this window's default (new weeks start from the default)
@@ -8994,13 +9023,13 @@ function renderPlanRow(p) {
   const blockCount = p.items.filter(i => !i.isSubtask).length || p.items.length;
   const totalDur = p.items.filter(i => !i.isSubtask).reduce((s, i) => s + (i.duration || 0), 0);
   const isOpen = inlinePreviewKey === 'weekPlan:' + p.id;
-  return `<div class="week-row-wrap" id="wrap-weekPlan-${p.id}">
+  return `<div class="week-row-wrap" id="wrap-weekPlan-${esc(p.id)}">
     <div class="plan-day-row" data-eval-day="${esc(p.date)}">
       <span class="week-day-date">${formatDateCz(p.date)}</span>
       ${noteFlag(p)}
       <span class="week-day-meta">${blockCount}p${totalDur ? ' · ' + formatDur(totalDur) : ''}</span>
-      <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="toggleInlinePreview('weekPlan',${p.id})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
-      <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekPlanDay(${p.id})" title="delete">✕</button>
+      <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;margin-left:auto;opacity:.7" onclick="toggleInlinePreview('weekPlan',${jsArg(p.id)})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
+      <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekPlanDay(${jsArg(p.id)})" title="delete">✕</button>
     </div>${isOpen ? `<div class="inline-preview">${renderInlinePreviewBody('weekPlan', p.id)}</div>` : ''}
   </div>`;
 }
@@ -9009,14 +9038,14 @@ function renderDayRow(d) {
   const { done, total } = dayTimeSplit(d.items);
   const hol = getHoliday(d.date);
   const isOpen = inlinePreviewKey === 'weekDay:' + d.id;
-  return `<div class="week-row-wrap" id="wrap-weekDay-${d.id}">
+  return `<div class="week-row-wrap" id="wrap-weekDay-${esc(d.id)}">
     <div class="week-day-row" style="cursor:default" data-eval-day="${esc(d.date)}">
       <span class="week-day-date">${formatDateCz(d.date)}${hol ? ` <span class="holiday-name">· ${esc(hol)}</span>` : ''}</span>
       ${noteFlag(d)}
       <span class="week-day-meta">${done ? formatDur(done) : '0'} / ${formatDur(total)}</span>
-      <button class="btn-add eval-add" style="margin-left:auto" onclick="addEvalForDay('${d.date}')" title="add an evaluation ending on this day">✎+</button>
-      <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;opacity:.7" onclick="toggleInlinePreview('weekDay',${d.id})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
-      <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${d.id})" title="delete from Reality">✕</button>
+      <button class="btn-add eval-add" style="margin-left:auto" onclick="addEvalForDay(${jsArg(String(d.date))})" title="add an evaluation ending on this day">✎+</button>
+      <button class="btn-add" style="font-size:.72rem;padding:.15rem .35rem;opacity:.7" onclick="toggleInlinePreview('weekDay',${jsArg(d.id)})" title="${isOpen ? 'close preview' : 'preview'}">${isOpen ? '▴ close' : 'preview'}</button>
+      <button class="item-del" style="opacity:.4;margin-left:.3rem" onclick="deleteWeekDay(${jsArg(d.id)})" title="delete from Reality">✕</button>
     </div>${isOpen ? `<div class="inline-preview">${renderInlinePreviewBody('weekDay', d.id)}</div>` : ''}
   </div>`;
 }
@@ -9345,13 +9374,13 @@ function renderWeekTab() {
   weeks.forEach(w => {
     if (w.year !== lastYear) {
       const yc = isDoneCollapsed(w.year, open);
-      html += `<div class="later-year-hdr${firstYear ? ' first' : ''}" onclick="toggleDoneGroup('${w.year}')"><span class="later-month-toggle">${yc ? '▸' : '▾'}</span>${w.year}<span class="later-month-sum">${daysLbl(sumDays[w.year])}</span></div>`;
+      html += `<div class="later-year-hdr${firstYear ? ' first' : ''}" onclick="toggleDoneGroup(${jsArg(String(w.year))})"><span class="later-month-toggle">${yc ? '▸' : '▾'}</span>${esc(w.year)}<span class="later-month-sum">${daysLbl(sumDays[w.year])}</span></div>`;
       lastYear = w.year; lastYm = null; firstYear = false; firstInYear = true;
     }
     if (isDoneCollapsed(w.year, open)) return;   // collapsed year hides all its months
     if (w.ym !== lastYm) {
       const mc = isDoneCollapsed(w.ym, open);
-      html += `<div class="later-month-hdr${firstInYear ? ' first' : ''}" onclick="toggleDoneGroup('${w.ym}')"><span class="later-month-toggle">${mc ? '▸' : '▾'}</span>${monthLabel(w.ym)}<span class="later-month-sum">${daysLbl(sumDays[w.ym])}</span></div>`;
+      html += `<div class="later-month-hdr${firstInYear ? ' first' : ''}" onclick="toggleDoneGroup(${jsArg(String(w.ym))})"><span class="later-month-toggle">${mc ? '▸' : '▾'}</span>${monthLabel(w.ym)}<span class="later-month-sum">${daysLbl(sumDays[w.ym])}</span></div>`;
       lastYm = w.ym; firstInYear = false; firstInMonth = true;
     }
     if (isDoneCollapsed(w.ym, open)) return;     // collapsed month hides all its weeks
@@ -9376,11 +9405,11 @@ function renderWeekTab() {
       ? `<div class="week-sub-hdr">${rg ? 'Reality' : 'Evaluation'}</div>${entries.map(e => e.html).join('')}`
       : '';
     const tplBtn = rg
-      ? `<button class="week-section-sel" style="background:none;border:none;font-family:inherit" onclick="weekGroupToTemplate('${key}')" title="save the whole week as a template">+ template</button>`
+      ? `<button class="week-section-sel" style="background:none;border:none;font-family:inherit" onclick="weekGroupToTemplate(${jsArg(String(key))})" title="save the whole week as a template">+ template</button>`
       : '';
     html += `<div class="week-section">
       <div class="week-section-hdr${firstInMonth ? ' first' : ''}">
-        <span class="week-hdr-toggle" onclick="toggleDoneGroup('${key}')"><span class="sel-caret">${isColl ? '▸' : '▾'}</span>Week ${week}${isColl ? ` <span class="sel-count">${dayCount}×</span>` : ''}</span>${tplBtn}
+        <span class="week-hdr-toggle" onclick="toggleDoneGroup(${jsArg(String(key))})"><span class="sel-caret">${isColl ? '▸' : '▾'}</span>Week ${week}${isColl ? ` <span class="sel-count">${dayCount}×</span>` : ''}</span>${tplBtn}
       </div>
       <div class="week-section-body"${isColl ? ' style="display:none"' : ''}>${planSection}${realSection}</div>
     </div>`;
@@ -9523,16 +9552,16 @@ function renderInlinePreviewBody(type, id) {
     : '<div style="color:var(--muted);font-size:.8rem;font-style:italic;padding:.3rem 0">No items.</div>';
   // clickable block-abbreviation chips under the field — same as #abbrevHint on the day cards
   const abbrevChips = presentBlockAbbrevs(arr).blocks.map(b =>
-    `<span class="ab" role="button" onclick="dnAddUnderBlock('${type}',${id},'${b.id}')" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)} (any case)"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
+    `<span class="ab" role="button" onclick="dnAddUnderBlock(${jsArg(String(type))},${jsArg(id)},${jsArg(String(b.id))})" title="${esc(b.name)} → click (inserts text under this block) or type -${esc(b.abbr)} (any case)"><b>${esc(b.abbr)}</b>${b.emoji ? esc(b.emoji) : ''}</span>`
   ).join('');
   return `<div class="preview-win" style="margin-bottom:.35rem">
       <span>window</span>
-      <input type="text" value="${esc(rec.windowStart || '')}" placeholder="6:00" onchange="inlineSetWindow('${type}',${id},'windowStart',this.value)">
+      <input type="text" value="${esc(rec.windowStart || '')}" placeholder="6:00" onchange="inlineSetWindow(${jsArg(String(type))},${jsArg(id)},'windowStart',this.value)">
       <span>–</span>
-      <input type="text" value="${esc(rec.windowEnd || '')}" placeholder="14:00" onchange="inlineSetWindow('${type}',${id},'windowEnd',this.value)">
-    </div>${tl}<div class="preview-item-list" id="inlItems-${type}-${id}" style="display:flex;flex-direction:column;gap:.1rem">${itemsHtml}</div>
-    <textarea id="inlNote-${type}-${id}" class="week-note day-note" placeholder="note for this day…"
-      oninput="inlineNoteInput('${type}',${id},this)" onfocus="autoGrowTextarea(this)">${esc(rec.note || '')}</textarea>
+      <input type="text" value="${esc(rec.windowEnd || '')}" placeholder="14:00" onchange="inlineSetWindow(${jsArg(String(type))},${jsArg(id)},'windowEnd',this.value)">
+    </div>${tl}<div class="preview-item-list" id="inlItems-${esc(type)}-${esc(id)}" style="display:flex;flex-direction:column;gap:.1rem">${itemsHtml}</div>
+    <textarea id="inlNote-${esc(type)}-${esc(id)}" class="week-note day-note" placeholder="note for this day…"
+      oninput="inlineNoteInput(${jsArg(String(type))},${jsArg(id)},this)" onfocus="autoGrowTextarea(this)">${esc(rec.note || '')}</textarea>
     <div class="notes-add" style="margin-top:.4rem">
       <textarea id="inlAddText" autocapitalize="none" placeholder="${esc(quickAddPlaceholder())}" rows="2"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();inlineAddQuick();}"></textarea>
@@ -9541,7 +9570,7 @@ function renderInlinePreviewBody(type, id) {
         <button class="btn-add" onclick="inlineOpenMenu(event,'task')">+ Task ▾</button>
         <button class="btn-add" onclick="inlineOpenMenu(event,'block')">+ Block ▾</button>
         <button class="btn-add" onclick="inlineOpenMenu(event,'event')">+ Event ▾</button>
-        <button class="btn-add" onclick="inlineSaveAsTemplate('${type}',${id})" title="save these items as a reusable template">+ template</button>
+        <button class="btn-add" onclick="inlineSaveAsTemplate(${jsArg(String(type))},${jsArg(id)})" title="save these items as a reusable template">+ template</button>
         <button class="btn-add btn-help" onclick="openShortcutsHelp()" title="shortcuts — everything you can type into the field">?</button>
       </div>
     </div>`;
@@ -9562,7 +9591,7 @@ function DNCTX(type, id) {
     undo() {},
     save() { persistInlineRecord(type, id); },
     render() { refreshInlineWrap(type, id); },
-    call(name, idx, extra) { return name + "('" + type + "'," + id + ',' + idx + (extra != null ? ',' + extra : '') + ')'; },
+    call(name, idx, extra) { return name + '(' + jsArg(String(type)) + ',' + jsArg(id) + ',' + idx + (extra != null ? ',' + extra : '') + ')'; },
   };
 }
 // row-handler wrappers (referenced from rowsHtml via DNCTX.h) — all delegate to the shared op_* logic
@@ -9713,16 +9742,16 @@ function renderWeekExportList() {
     const allSel = selN === days.length;
     return `<div style="margin-bottom:.5rem">
       <div class="sel-grp-row">
-        <span class="sel-caret" onclick="toggleWeekExportCollapse('${key}')">${isColl ? '▸' : '▾'}</span>
-        <label class="modal-item sel-grp${allSel ? ' sel' : ''}" id="wexp-wk-${key}">
-          <input type="checkbox" ${allSel ? 'checked' : ''} onchange="toggleWeekExportAll('${key}',this.checked)">
-          <span>Week ${week} &middot; ${year}${isColl ? ` <span class="sel-count">${selN}/${days.length}</span>` : ''}</span>
+        <span class="sel-caret" onclick="toggleWeekExportCollapse(${jsArg(String(key))})">${isColl ? '▸' : '▾'}</span>
+        <label class="modal-item sel-grp${allSel ? ' sel' : ''}" id="wexp-wk-${esc(key)}">
+          <input type="checkbox" ${allSel ? 'checked' : ''} onchange="toggleWeekExportAll(${jsArg(String(key))},this.checked)">
+          <span>Week ${week} &middot; ${esc(year)}${isColl ? ` <span class="sel-count">${selN}/${days.length}</span>` : ''}</span>
         </label>
       </div>
-      <div class="sel-grp-leaves" id="wexp-days-${key}"${isColl ? ' style="display:none"' : ''}>
+      <div class="sel-grp-leaves" id="wexp-days-${esc(key)}"${isColl ? ' style="display:none"' : ''}>
       ${days.map(d => `
-        <label class="modal-item sel-leaf${weekExportSelected.has(d.id) ? ' sel' : ''}" id="wexp-${d.id}">
-          <input type="checkbox" ${weekExportSelected.has(d.id) ? 'checked' : ''} onchange="toggleWeekExportDay(${d.id},'${key}',this.checked)">
+        <label class="modal-item sel-leaf${weekExportSelected.has(d.id) ? ' sel' : ''}" id="wexp-${esc(d.id)}">
+          <input type="checkbox" ${weekExportSelected.has(d.id) ? 'checked' : ''} onchange="toggleWeekExportDay(${jsArg(d.id)},${jsArg(String(key))},this.checked)">
           <span>${formatDateCz(d.date)}</span>
         </label>`).join('')}
       </div>
@@ -11094,7 +11123,7 @@ window.addEventListener('resize', updateAppGrid);
       isEvent: !!b.isEvent, eventStart: b.eventStart || null, eventEnd: b.eventEnd || null,
       defaultTasks: b.defaultTasks || [], note: b.note || '', mt: +b.mt || 0 }; };
     (cloudBlocks || []).forEach(b => {
-      if (!b || !b.key || b.key === 'TASK') return;
+      if (!b || !b.key || b.key === 'TASK' || !idOk(b.key)) return;
       const key = b.key, cmt = +b.mt || 0, local = BLOCK_TYPES[key];
       if (local) {
         if (cmt > (+local.mt || 0)) { BLOCK_TYPES[key] = norm(b); if (!blockTypeOrder.includes(key)) blockTypeOrder.push(key); updated++; }
@@ -11117,6 +11146,7 @@ window.addEventListener('resize', updateAppGrid);
   //  1) unify tombstones  2) LWW for templates/days/plans/inbox/blocks (incl. deletions and edits)  3) add archive
   function autoImportSilent(record) {
     if (!record || typeof record !== 'object') return;
+    record = cleanIncoming(record);   // a record with an unusable id / date / key never gets in (see idOk)
     ensureSyncState();          // merge against THIS window's tombstones, never a leftover foreign map
     applyingRemote = true;
     try {

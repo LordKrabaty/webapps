@@ -811,7 +811,15 @@ let _focusSnap = null, _pushedThisFocus = false;   // undo coalescing across a t
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 function el(id) { return document.getElementById(id); }
-function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// a value as a JS literal for an inline handler — onclick="fn(${jsArg(id)})": JSON, then HTML-escaped for the attribute.
+// Data never goes into a handler any other way: '${id}' breaks out on an apostrophe, a bare ${id} runs as code.
+function jsArg(v) { const j = JSON.stringify(v); return esc(j === undefined ? 'null' : j); }
+// an id / key coming from outside (sync, import): a finite number, or a short string of letters, digits, space and _ . : -
+// (nothing that could act as markup or code, should a sink ever miss its escaping)
+function idOk(v) { return (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && /^[\p{L}\p{N} _.:-]{1,80}$/u.test(v)); }
+// records from outside whose id (or another key field) passes idOk — the rest is dropped
+function okRecs(arr, key) { return (Array.isArray(arr) ? arr : []).filter(x => x && typeof x === 'object' && idOk(x[key || 'id'])); }
 function parseNum(v) { return parseFloat(String(v).replace(',','.')); }
 function normDec(v) { return (v || '').toString().replace(',','.'); }
 
@@ -1290,10 +1298,10 @@ function openExportModal() {
   exportGuide = true;
   const gcb = el('exportGuideCb'); if (gcb) gcb.checked = true;
   el('exportList').innerHTML = library.length
-    ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? library.map(e => `<label class="modal-item sel" id="ei-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
   el('exportArchList').innerHTML = archive.length
-    ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${e.id},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? archive.map(e => `<label class="modal-item sel" id="eai-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportArchSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
   updateExportFilename();
   el('exportModal').classList.add('open');
@@ -1369,16 +1377,16 @@ function openImportModal() {
 function parseImportJson(text) {
   try {
     const parsed = JSON.parse(text);
-    const items = parsed.items || parsed.teas || [];
+    const items = okRecs(parsed.items || parsed.teas);   // records with an unusable id are dropped (see idOk)
     if (!items.length) throw new Error('No items in the file');
     importData = items;
-    importArchiveData = parsed.archive || [];   // saved versions travel with the import
+    importArchiveData = okRecs(parsed.archive);   // saved versions travel with the import
     importGuideData = (parsed.guide && Array.isArray(parsed.guide.sections)) ? parsed.guide : null;   // editable guide travels too
     importMmbirth = (parsed.mmbirth && typeof parsed.mmbirth === 'object') ? parsed.mmbirth : null;   // date of birth travels too
     importSelected = new Set(items.map(x => x.id));
     el('importList').innerHTML = items.map(x => `
-      <label class="modal-item sel" id="ii-${x.id}">
-        <input type="checkbox" checked onchange="toggleImportSel(${x.id},this.checked)" />
+      <label class="modal-item sel" id="ii-${esc(x.id)}">
+        <input type="checkbox" checked onchange="toggleImportSel(${jsArg(x.id)},this.checked)" />
         ${esc(x.name||String(x.id))}
       </label>`).join('');
     el('importItemSection').style.display = 'block';
@@ -1387,7 +1395,7 @@ function parseImportJson(text) {
     el('importActions').style.display = 'flex';
     el('importCancel').style.display = 'none';
   } catch(err) {
-    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Error: '+err.message+'</p>';
+    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Error: '+esc(err.message)+'</p>';
     el('importItemSection').style.display = 'block';
   }
 }
@@ -1590,29 +1598,29 @@ function projCardHTML(p) {
   return `<div class="proj-card${col?' collapsed':''}" data-id="${esc(p.id)}">
     <div class="proj-head">
       ${projGrip()}
-      <textarea class="proj-name vis-edit" rows="1" placeholder="Project name…" oninput="onProjField('${esc(p.id)}','name',this.value);autoGrow(this)">${esc(p.name)}</textarea>
-      <button class="proj-btn" title="${col?'expand':'collapse'}" onclick="toggleCollapse('${esc(p.id)}')">${col?'▸':'▾'}</button>
-      <button class="proj-btn${cur?' on':''}" title="${cur?'currently focused — click to return to pool':'mark as current'}" onclick="setProjStatus('${esc(p.id)}','${cur?'pool':'current'}')">★</button>
-      <button class="proj-btn" title="mark as done" onclick="setProjStatus('${esc(p.id)}','done')">✓</button>
-      <button class="proj-btn danger" title="delete project" onclick="delProject('${esc(p.id)}')">✕</button>
+      <textarea class="proj-name vis-edit" rows="1" placeholder="Project name…" oninput="onProjField(${jsArg(String(p.id))},'name',this.value);autoGrow(this)">${esc(p.name)}</textarea>
+      <button class="proj-btn" title="${col?'expand':'collapse'}" onclick="toggleCollapse(${jsArg(String(p.id))})">${col?'▸':'▾'}</button>
+      <button class="proj-btn${cur?' on':''}" title="${cur?'currently focused — click to return to pool':'mark as current'}" onclick="setProjStatus(${jsArg(String(p.id))},'${cur?'pool':'current'}')">★</button>
+      <button class="proj-btn" title="mark as done" onclick="setProjStatus(${jsArg(String(p.id))},'done')">✓</button>
+      <button class="proj-btn danger" title="delete project" onclick="delProject(${jsArg(String(p.id))})">✕</button>
     </div>
     <label class="proj-lbl">Why do it now?</label>
-    <textarea class="proj-ta vis-edit" placeholder="What makes it worth focusing on now…" oninput="onProjField('${esc(p.id)}','whyNow',this.value);autoGrow(this)">${esc(p.whyNow)}</textarea>
+    <textarea class="proj-ta vis-edit" placeholder="What makes it worth focusing on now…" oninput="onProjField(${jsArg(String(p.id))},'whyNow',this.value);autoGrow(this)">${esc(p.whyNow)}</textarea>
     <label class="proj-lbl">Why it can wait</label>
-    <textarea class="proj-ta vis-edit" placeholder="What makes it OK to postpone…" oninput="onProjField('${esc(p.id)}','whyPostpone',this.value);autoGrow(this)">${esc(p.whyPostpone)}</textarea>
+    <textarea class="proj-ta vis-edit" placeholder="What makes it OK to postpone…" oninput="onProjField(${jsArg(String(p.id))},'whyPostpone',this.value);autoGrow(this)">${esc(p.whyPostpone)}</textarea>
     <label class="proj-lbl">Next step</label>
-    <textarea class="proj-ta proj-next vis-edit" placeholder="First concrete action…" oninput="onProjField('${esc(p.id)}','nextStep',this.value);autoGrow(this)">${esc(p.nextStep)}</textarea>
+    <textarea class="proj-ta proj-next vis-edit" placeholder="First concrete action…" oninput="onProjField(${jsArg(String(p.id))},'nextStep',this.value);autoGrow(this)">${esc(p.nextStep)}</textarea>
   </div>`;
 }
 function projDoneHTML(p) {
   const d = p.doneAt ? new Date(p.doneAt).toLocaleDateString('cs-CZ',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
   const outcome = (p.outcome || '').trim();
-  return `<div class="proj-card done" data-id="${esc(p.id)}" onclick="openProjDetail('${esc(p.id)}')" title="open details">
+  return `<div class="proj-card done" data-id="${esc(p.id)}" onclick="openProjDetail(${jsArg(String(p.id))})" title="open details">
     <div class="proj-head">
       <span class="proj-done-name">${esc(p.name || 'Untitled project')}</span>
       ${d ? `<span class="proj-done-date">${esc(d)}</span>` : ''}
-      <button class="proj-btn" title="reopen (back to pool)" onclick="event.stopPropagation();setProjStatus('${esc(p.id)}','pool')">↩</button>
-      <button class="proj-btn danger" title="delete project" onclick="event.stopPropagation();delProject('${esc(p.id)}')">✕</button>
+      <button class="proj-btn" title="reopen (back to pool)" onclick="event.stopPropagation();setProjStatus(${jsArg(String(p.id))},'pool')">↩</button>
+      <button class="proj-btn danger" title="delete project" onclick="event.stopPropagation();delProject(${jsArg(String(p.id))})">✕</button>
     </div>
     ${outcome ? `<div class="proj-done-outcome">${esc(outcome)}</div>` : '<div class="proj-done-hint">+ add an outcome note</div>'}
   </div>`;
@@ -1791,7 +1799,7 @@ function renderBlocks() {
       <div class="vis-block-head">
         <span class="vis-block-grip" title="drag to reorder"><svg viewBox="0 0 8 12" aria-hidden="true"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span>
         <textarea class="vis-head vis-edit" rows="1" placeholder="Heading…" oninput="onBlockHead(${i},this.value);autoGrow(this)">${esc(b.heading)}</textarea>
-        <button class="vis-block-btn" title="${col?'expand':'collapse'}" onclick="toggleCollapse('${esc(b.id)}')">${col?'▸':'▾'}</button>
+        <button class="vis-block-btn" title="${col?'expand':'collapse'}" onclick="toggleCollapse(${jsArg(String(b.id))})">${col?'▸':'▾'}</button>
         <button class="vis-block-btn" onclick="moveBlock(${i},-1)" ${i===0?'disabled':''} title="move up">↑</button>
         <button class="vis-block-btn" onclick="moveBlock(${i},1)" ${i===blocks.length-1?'disabled':''} title="move down">↓</button>
         <button class="vis-block-btn danger" onclick="delBlock(${i})" title="delete block">✕</button>
@@ -1944,14 +1952,14 @@ function renderVisions() {
     const active = String(e.id) === String(activeLibId);
     const nm = e.name || (e.data && e.data.title) || 'Untitled vision';
     const note = (e.note || '').trim();
-    return `<div class="lib-item${active?' active':''}" onclick="selectVision('${e.id}')">
+    return `<div class="lib-item${active?' active':''}" onclick="selectVision(${jsArg(String(e.id))})">
       <div class="lib-item-meta">
         <span class="lib-item-name">${esc(nm)}</span>
         ${note ? `<span class="lib-item-note">${esc(note)}</span>` : ''}
       </div>
-      <button class="lib-item-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('vision','${e.id}')">✎</button>
-      <button class="lib-item-exp" title="export as text or JSON" onclick="event.stopPropagation();exportVisionText('${e.id}')">↑</button>
-      <button class="lib-item-del" title="delete vision" onclick="event.stopPropagation();deleteVision('${e.id}')"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8"/></svg></button>
+      <button class="lib-item-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('vision',${jsArg(String(e.id))})">✎</button>
+      <button class="lib-item-exp" title="export as text or JSON" onclick="event.stopPropagation();exportVisionText(${jsArg(String(e.id))})">↑</button>
+      <button class="lib-item-del" title="delete vision" onclick="event.stopPropagation();deleteVision(${jsArg(String(e.id))})"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8"/></svg></button>
     </div>`;
   }).join('');
 }
@@ -2200,11 +2208,11 @@ function renderVersions() {
   if (!vers.length) { wrap.innerHTML = '<p class="lib-empty">No saved versions yet. Click "save version" to snapshot the current vision.</p>'; return; }
   wrap.innerHTML = vers.map(s => {
     const active = String(s.id) === String(previewId);
-    return `<div class="ver-item${active?' active':''}" onclick="viewSnapshot('${s.id}')">
+    return `<div class="ver-item${active?' active':''}" onclick="viewSnapshot(${jsArg(String(s.id))})">
       <div class="ver-meta"><span class="ver-date">${esc(s.name||'')}</span><span class="ver-sum">${esc(verSummary(s))}</span>${(s.note||'').trim() ? `<span class="ver-note">${esc((s.note||'').trim())}</span>` : ''}</div>
-      <button class="ver-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('version','${s.id}')">✎</button>
-      <button class="ver-exp" title="export as text or JSON" onclick="event.stopPropagation();exportVersionText('${s.id}')">↑</button>
-      <button class="ver-del" title="delete version" onclick="event.stopPropagation();deleteVersion('${s.id}')">✕</button>
+      <button class="ver-edit" title="rename / note" onclick="event.stopPropagation();openItemEdit('version',${jsArg(String(s.id))})">✎</button>
+      <button class="ver-exp" title="export as text or JSON" onclick="event.stopPropagation();exportVersionText(${jsArg(String(s.id))})">↑</button>
+      <button class="ver-del" title="delete version" onclick="event.stopPropagation();deleteVersion(${jsArg(String(s.id))})">✕</button>
     </div>`;
   }).join('');
 }
@@ -2264,7 +2272,7 @@ function renderSnapPreview(s) {
   const p = el('snapPreview'); if (!p) return;
   const d = s.data || {};
   let html = `<div class="snap-bar"><span class="snap-bar-label">Viewing version <b>${esc(s.name||'')}</b> — read-only</span>`
-    + `<button class="btn-sm" onclick="restoreVersion('${s.id}')" title="replace current vision with this version">↩ restore</button>`
+    + `<button class="btn-sm" onclick="restoreVersion(${jsArg(String(s.id))})" title="replace current vision with this version">↩ restore</button>`
     + `<button class="btn-sm" onclick="exitPreview()">✕ exit</button></div>`;
   if (d.title) html += `<div class="snap-title">${esc(d.title)}</div>`;
   (d.blocks || []).forEach(b => { if (!(b.heading || b.text)) return;
@@ -2765,10 +2773,10 @@ function renderCompare(snap, cur, meta) {
     let removed = applyTombstones();           // append-only collections (none currently)
     let added = 0, updated = 0;
     // library — LWW by id
-    const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
+    const libR = lwwMerge(library, okRecs(record.items || record.teas), 'lib', x => x.id, c => c);
     library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
     // archive — LWW by id (so version renames/notes sync; newer mt wins, deletions via tombstones)
-    const arcR = lwwMerge(archive, (record.archive || []), 'arc', x => x.id, c => c);
+    const arcR = lwwMerge(archive, okRecs(record.archive), 'arc', x => x.id, c => c);
     archive = arcR.arr; added += arcR.added; updated += arcR.updated; removed += arcR.removed;
     // guide — single LWW object (newer mt wins); never clobber an in-progress local edit
     let guideChanged = false;

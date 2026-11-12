@@ -1111,7 +1111,15 @@ const UNDO_MAX = 40;
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 function el(id) { return document.getElementById(id); }
-function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// a value as a JS literal for an inline handler — onclick="fn(${jsArg(id)})": JSON, then HTML-escaped for the attribute.
+// Data never goes into a handler any other way: '${id}' breaks out on an apostrophe, a bare ${id} runs as code.
+function jsArg(v) { const j = JSON.stringify(v); return esc(j === undefined ? 'null' : j); }
+// an id / key coming from outside (sync, import): a finite number, or a short string of letters, digits, space and _ . : -
+// (nothing that could act as markup or code, should a sink ever miss its escaping)
+function idOk(v) { return (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && /^[\p{L}\p{N} _.:-]{1,80}$/u.test(v)); }
+// records from outside whose id (or another key field) passes idOk — the rest is dropped
+function okRecs(arr, key) { return (Array.isArray(arr) ? arr : []).filter(x => x && typeof x === 'object' && idOk(x[key || 'id'])); }
 function parseNum(v) { return parseFloat(String(v).replace(',','.')); }
 function normDec(v) { return (v || '').toString().replace(',','.'); }
 
@@ -1218,7 +1226,7 @@ function renderLibrary() {
       const t = e.data && e.data.weekTarget;
       if (t == null || t <= 0) return '';
       const n = archive.filter(a => String(a.tplId) === String(e.id) && (a.date || a.id || 0) >= wkStart).length;
-      return `<span class="lib-wk${n >= t ? ' met' : ''}" title="done / weekly goal (this week, Mon–Sun)">${n}/${t}</span>`;
+      return `<span class="lib-wk${n >= t ? ' met' : ''}" title="done / weekly goal (this week, Mon–Sun)">${n}/${esc(t)}</span>`;
     };
     const durBadge = e => {
       const est = estimateDur(e.data || {});
@@ -1496,10 +1504,10 @@ function openExportModal() {
   exportArchSelected = new Set(archive.map(e => e.id));
   Object.keys(exportInc).forEach(k => setExportInc(k, true));   // the extras start included, as before
   el('exportList').innerHTML = library.length
-    ? library.map(e => `<label class="modal-item sel" id="ei-${e.id}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? library.map(e => `<label class="modal-item sel" id="ei-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Library is empty.</p>';
   el('exportArchList').innerHTML = archive.length
-    ? archive.map(e => `<label class="modal-item sel" id="eai-${e.id}"><input type="checkbox" checked onchange="toggleExportArchSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
+    ? archive.map(e => `<label class="modal-item sel" id="eai-${esc(e.id)}"><input type="checkbox" checked onchange="toggleExportArchSel(${jsArg(e.id)},this.checked)" />${esc(e.name||String(e.id))}</label>`).join('')
     : '<p style="padding:.2rem;font-size:.82rem;color:var(--muted)">Archive is empty.</p>';
   updateExportFilename();
   el('exportModal').classList.add('open');
@@ -1595,13 +1603,15 @@ function openImportModal() {
 function parseImportJson(text) {
   try {
     const parsed = JSON.parse(text);
+    // records with an unusable id are dropped before anything is listed or imported (see idOk)
+    ['items', 'teas', 'archive', 'body', 'weekNotes'].forEach(k => { if (parsed[k] != null) parsed[k] = okRecs(parsed[k]); });
     importRecord = parsed;
     const items = parsed.items || parsed.teas || [];
     if (!items.length && !(parsed.archive || []).length && !(parsed.body || []).length && !(parsed.weekNotes || []).length) throw new Error('No items in the file');
     importData = items;
     importSelected = new Set(items.map(x => x.id));
     el('importList').innerHTML = items.map(x => `
-      <label class="modal-item sel" id="ii-${x.id}">
+      <label class="modal-item sel" id="ii-${esc(x.id)}">
         <input type="checkbox" checked onchange="toggleImportSel(${jsArg(x.id)},this.checked)" />
         ${esc(x.name||String(x.id))}
       </label>`).join('');
@@ -1609,7 +1619,7 @@ function parseImportJson(text) {
     el('importActions').style.display = 'flex';
     el('importCancel').style.display = 'none';
   } catch(err) {
-    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Chyba: '+err.message+'</p>';
+    el('importList').innerHTML = '<p style="color:var(--muted);font-size:.82rem">Error: '+esc(err.message)+'</p>';
     el('importItemSection').style.display = 'block';
   }
 }
@@ -1739,7 +1749,6 @@ function saveBody() { try { localStorage.setItem(BODY_KEY, JSON.stringify(body))
 function blankWorkout() { return {name:'', type:'strength', order:'circuit', pauseSec:105, setPauseSec:null, prepSec:120, sidePauseSec:0, adjSec:30, weekTarget:null, note:'', exercises:[], run:null}; }
 let wk = blankWorkout();
 
-function jsArg(v) { return typeof v === 'string' ? "'" + String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'" : v; }
 function mmss(s) { s = Math.max(0, Math.floor(+s || 0)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
 function fmtDate(d) { const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3]+'.'+m[2]+'.'+m[1].slice(2) : String(d || ''); }
 // auto-grow note textareas (tea-app pattern); hidden (inactive tab) → wrong scrollHeight, resize again when shown
@@ -1868,7 +1877,7 @@ function renderMain() {
         <div class="np-z np-tl" onclick="event.stopPropagation();stepBack()" title="back to the previous exercise / side">⏮</div>
         <div class="np-z np-bl" onclick="event.stopPropagation();addPhase(-${adj})" title="shorten the current phase by ${adj} s (configurable via ±step)">−${adj}</div>
         <div class="np-z np-tr" onclick="event.stopPropagation();skipPhase()" title="skip to the next phase">⏭</div>
-        <div class="np-z np-br" onclick="event.stopPropagation();addPhase(${adj})" title="add ${adj} s to the current phase (configurable via ±step)">+${adj}</div>
+        <div class="np-z np-br" onclick="event.stopPropagation();addPhase(${jsArg(adj)})" title="add ${adj} s to the current phase (configurable via ±step)">+${adj}</div>
       </div>
       <div class="now-ov" id="nowOv" onclick="overallTap()" title="overall workout progress — tap to start / finish &amp; log">
         <div class="now-ov-fill" id="nowOvFill"></div>
@@ -2099,7 +2108,7 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   // cardio is time-based: instead of reps × weight one wide interval-name field (work / rest / all-in)
   const mid = cardio
     ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">
-    ${isBikeWk() ? `<input class="set-in set-lvl" type="text" inputmode="numeric" value="${s.lvl != null ? s.lvl : ''}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">` : ''}
+    ${isBikeWk() ? `<input class="set-in set-lvl" type="text" inputmode="numeric" value="${esc(s.lvl != null ? s.lvl : '')}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">` : ''}
     <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
     : `<input class="set-in${s.pr != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
@@ -2110,7 +2119,7 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
     ${mid}${setChgHtml(s)}
     <input class="set-in set-t${s.pd != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${s.durSec != null ? mmss(s.durSec) : ''}" onchange="setDurInput(${ei},${si},this)" title="${sr ? sr + ' · ' : ''}time — m:ss or seconds, editable any time" placeholder="m:ss">
     <span class="set-dur" title="${sr}">${sr}</span>
-    ${(() => { const ex = wk.exercises[ei], R = exRepeat(ex); return R > 1 ? `<span class="set-rep" title="completed repetitions of this interval">${setDn(s)}/${R}</span>` : ''; })()}
+    ${(() => { const ex = wk.exercises[ei], R = exRepeat(ex); return R > 1 ? `<span class="set-rep" title="completed repetitions of this interval">${esc(setDn(s))}/${R}</span>` : ''; })()}
     <button class="set-go" onclick="jumpToStep(${ei},${si})" title="jump here — start this exercise now and continue from it">▶</button>
     <button class="set-done${s.done ? ' on' : ''}" onclick="toggleSetDone(${ei},${si})" title="done → starts the rest timer">✓</button>
     ${numbered ? `<button class="set-del" onclick="removeSet(${ei},${si})" title="remove this ${cardio ? 'interval' : 'set'}">✕</button>` : ''}
@@ -2282,8 +2291,8 @@ function anchorOpts(cur, anchors) {
 }
 function exScoreBtnHtml(ex, ei, src) {
   const parts = [ex.tech != null ? 'T' + ex.tech : null, ex.rir != null ? 'R' + ex.rir : null].filter(Boolean);
-  return `<button class="ex-score-btn${parts.length ? '' : ' unset'}" onclick="openExScore('${src || 'wk'}',${ei})"
-    title="rate this exercise — technique (1–5) + reps in reserve on the last set">${parts.join('·') || 'rate'}</button>`;
+  return `<button class="ex-score-btn${parts.length ? '' : ' unset'}" onclick="openExScore(${jsArg(String(src || 'wk'))},${ei})"
+    title="rate this exercise — technique (1–5) + reps in reserve on the last set">${esc(parts.join('·') || 'rate')}</button>`;
 }
 let scoreCtx = null;   // where the modal writes: {src:'wk'|'log', ei}
 function scoreTargetEx() {
@@ -2306,10 +2315,10 @@ function renderExScore() {
   // anchored rows; a second tap on the same row bumps to the half step (4 → 4.5), a third clears
   el('scoreTechBtns').innerHTML = [5,4,3,2,1].map(v => {
     const sel = ex.tech === v || ex.tech === v + 0.5;
-    return `<button class="score-opt${sel ? ' sel' : ''}" onclick="setExScore('tech',${v})">${ex.tech === v + 0.5 ? v + '.5' : v} · ${TECH_ANCHORS[v]}</button>`;
+    return `<button class="score-opt${sel ? ' sel' : ''}" onclick="setExScore('tech',${jsArg(v)})">${ex.tech === v + 0.5 ? v + '.5' : v} · ${TECH_ANCHORS[v]}</button>`;
   }).join('');
   el('scoreRirBtns').innerHTML = [0,1,2,3,4].map(v =>
-    `<button class="score-opt${ex.rir === v ? ' sel' : ''}" onclick="setExScore('rir',${v})">${v}</button>`).join('');
+    `<button class="score-opt${ex.rir === v ? ' sel' : ''}" onclick="setExScore('rir',${jsArg(v)})">${v}</button>`).join('');
   // the picked value's meaning, spelled out below the scale (tooltips don't show on touch)
   el('scoreRirCap').textContent = ex.rir != null ? RIR_CAPS[ex.rir] : 'how many clean reps you had left on the last set';
 }
@@ -2386,7 +2395,7 @@ function renderExHistory(ex) {
       return `<div class="exh-row"><span class="exh-date">${esc(fD(h.t))}</span><span class="exh-score${p ? '' : ' none'}">${esc(p || 'unrated')}</span></div>`
         + (h.e.note ? `<div class="exh-note">${esc(h.e.note)}</div>` : '');
     }).join('') + (rows.length > shown.length ? `<button class="exh-more" onclick="exHistShowRows(${gi})" title="show the older sessions at this setting">▸ ${rows.length - shown.length} more</button>` : '');
-    return `<div class="exh-grp"><div class="exh-head"><span class="exh-sig">${esc(sig)}</span><span class="exh-n">${rows.length}×</span><span class="exh-avg" title="average technique / RIR across the sessions at this exact setting">ø T ${aT ?? '–'} · R ${aR ?? '–'}</span></div>${body}</div>`;
+    return `<div class="exh-grp"><div class="exh-head"><span class="exh-sig">${esc(sig)}</span><span class="exh-n">${rows.length}×</span><span class="exh-avg" title="average technique / RIR across the sessions at this exact setting">ø T ${esc(aT ?? '–')} · R ${esc(aR ?? '–')}</span></div>${body}</div>`;
   }).join('') + (!exHistAllGrps && groups.size > EXH_MAX_GROUPS ? `<button class="exh-more" onclick="exHistShowGrps()" title="show the older settings too">▸ ${groups.size - EXH_MAX_GROUPS} more setting(s) in the log</button>` : '');
 }
 // ── WHOLE-WORKOUT HISTORY (⏱ in the run bar) — the per-exercise idea one level up.
@@ -2522,11 +2531,11 @@ function renderExSettings() {
     <label class="modal-item${ex.side ? ' sel' : ''}"><input type="checkbox" ${ex.side ? 'checked' : ''} onchange="toggleExSide(${exSetEi});renderExSettings()"><span>one side at a time (L/R) — the timer runs twice, left then right</span></label>
     <label class="modal-item${ex.linked === false ? '' : ' sel'}"><input type="checkbox" ${ex.linked === false ? '' : 'checked'} onchange="toggleExLink(${exSetEi});renderExSettings()"><span>linked sets — reps / weight / time edits mirror into every set</span></label>`}
     <div class="jb-field"><label>rest between ${cardio ? 'intervals inside this segment' : 'sets of this exercise'} (s) — empty = inherit</label>
-      <input type="text" inputmode="numeric" value="${ex.innerPauseSec != null ? ex.innerPauseSec : ''}" placeholder="${(() => { const v = ex.pauseSec != null ? ex.pauseSec : (wk.setPauseSec != null ? wk.setPauseSec : (wk.pauseSec ?? 0)); return esc(v); })()}" title="rest inserted between the ${cardio ? 'intervals of this segment (and between its repeats)' : 'sets of this exercise'} — the ↳ rest gap under a row can still override it per ${cardio ? 'interval' : 'set'}" onchange="setExPause(${exSetEi},'innerPauseSec',this.value);renderExSettings()"></div>
+      <input type="text" inputmode="numeric" value="${esc(ex.innerPauseSec != null ? ex.innerPauseSec : '')}" placeholder="${(() => { const v = ex.pauseSec != null ? ex.pauseSec : (wk.setPauseSec != null ? wk.setPauseSec : (wk.pauseSec ?? 0)); return esc(v); })()}" title="rest inserted between the ${cardio ? 'intervals of this segment (and between its repeats)' : 'sets of this exercise'} — the ↳ rest gap under a row can still override it per ${cardio ? 'interval' : 'set'}" onchange="setExPause(${exSetEi},'innerPauseSec',this.value);renderExSettings()"></div>
     <div class="jb-field"><label>rest after this ${cardio ? 'segment' : 'exercise'} (s) — empty = workout default</label>
-      <input type="text" inputmode="numeric" value="${ex.pauseSec != null ? ex.pauseSec : ''}" placeholder="${esc(wk.pauseSec ?? '')}" title="rest before the next ${cardio ? 'segment' : 'exercise'}; without the 'between' value above it also applies inside" onchange="setExPause(${exSetEi},'pauseSec',this.value);renderExSettings()"></div>
+      <input type="text" inputmode="numeric" value="${esc(ex.pauseSec != null ? ex.pauseSec : '')}" placeholder="${esc(wk.pauseSec ?? '')}" title="rest before the next ${cardio ? 'segment' : 'exercise'}; without the 'between' value above it also applies inside" onchange="setExPause(${exSetEi},'pauseSec',this.value);renderExSettings()"></div>
     ${ex.side ? `<div class="jb-field"><label>L↔R switch pause (s) — empty = workout default</label>
-      <input type="text" inputmode="numeric" value="${ex.sidePauseSec != null ? ex.sidePauseSec : ''}" placeholder="${esc(wk.sidePauseSec ?? 0)}" onchange="setExPause(${exSetEi},'sidePauseSec',this.value);renderExSettings()"></div>` : ''}
+      <input type="text" inputmode="numeric" value="${esc(ex.sidePauseSec != null ? ex.sidePauseSec : '')}" placeholder="${esc(wk.sidePauseSec ?? 0)}" onchange="setExPause(${exSetEi},'sidePauseSec',this.value);renderExSettings()"></div>` : ''}
     <div class="jb-field"><label>music during this ${cardio ? 'segment' : 'exercise'}</label>
       <select onchange="setExMusic(${exSetEi},this.value)" title="file that plays during the work phases of this ${cardio ? 'segment' : 'exercise'} — rest-kind intervals keep the rest track">${exMusicOptions(ex)}</select></div>
     <button class="modal-btn danger" onclick="closeModal('exSetModal');removeExercise(${exSetEi})">✕ remove ${cardio ? 'segment' : 'exercise'}</button>`;
@@ -3865,7 +3874,7 @@ function renderMusicModal() {
     const sel = musicStem(kind);
     if (!list.includes(sel)) { list.push(sel); list.sort(); }   // keep the offline-selected file visible
     el(kind === 'work' ? 'musWorkSel' : 'musRestSel').innerHTML =
-      list.map(s => `<option value="${s}"${s === sel ? ' selected' : ''}>${s}.mp3</option>`).join('')
+      list.map(s => `<option value="${esc(s)}"${s === sel ? ' selected' : ''}>${esc(s)}.mp3</option>`).join('')
       + (musicFiles ? '' : '<option disabled>scanning…</option>');
   });
 }
@@ -4202,12 +4211,12 @@ function renderLogPick() {
   body.innerHTML = idx.length ? idx.map(([mk, m]) => {
     const on = logPickOn() && logPick.has(mk);
     return `<label class="modal-item${on ? ' sel' : ''}" title="show this whole calendar month">
-        <input type="checkbox"${on ? ' checked' : ''} onchange="toggleLogPick('${mk}')">
+        <input type="checkbox"${on ? ' checked' : ''} onchange="toggleLogPick(${jsArg(String(mk))})">
         <span>${esc(logMonthLabel(mk))}</span><span class="lp-cnt">${m.n}×</span></label>`
       + m.weeks.map(([wkk, n]) => {
         const wo = logPickOn() && logPick.has(wkk);
         return `<label class="modal-item lp-week${wo ? ' sel' : ''}" title="show this whole ISO week (Mon–Sun), even the part under the neighbouring month">
-          <input type="checkbox"${wo ? ' checked' : ''} onchange="toggleLogPick('${wkk}')">
+          <input type="checkbox"${wo ? ' checked' : ''} onchange="toggleLogPick(${jsArg(String(wkk))})">
           <span>${esc(logWeekLabel(wkk))}</span><span class="lp-cnt">${n ? n + '×' : 'note'}</span></label>`;
       }).join('');
   }).join('') : '<p class="lib-empty">Nothing logged yet.</p>';
@@ -4311,7 +4320,7 @@ function weekWorkoutBadges(wkk, itemsAll) {
   return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label)).map(g => {
     const state = g.target ? (g.n >= g.target ? ' met' : g.n ? '' : ' miss') : '';
     const goal = g.target ? (g.n >= g.target ? ' — weekly goal met ✓' : ' — ' + (g.target - g.n) + ' more to the weekly goal') : '';
-    return `<span class="log-wk-badge${state}" onclick="event.stopPropagation();openWeekDetail('${wkk}')" title="${esc(g.label)} — sessions in this ISO week${goal} · click for the per-exercise breakdown">${esc(g.label)} ${g.n}${g.target ? '/' + g.target : '×'}</span>`;
+    return `<span class="log-wk-badge${state}" onclick="event.stopPropagation();openWeekDetail(${jsArg(String(wkk))})" title="${esc(g.label)} — sessions in this ISO week${goal} · click for the per-exercise breakdown">${esc(g.label)} ${g.n}${g.target ? '/' + g.target : '×'}</span>`;
   }).join('');
 }
 // weekly goal of one exercise code = summed weekly goals of the templates containing it
@@ -4369,7 +4378,7 @@ function openWeekDetail(wkk) {
   };
   el('weekDetailTitle').textContent = logWeekLabel(wkk);
   // the same week note as in the log — editing it here rerenders the log
-  const wnote = `<textarea class="le-note" rows="1" placeholder="· week note" title="note for this week — the same one as in the log" oninput="autoResizeTA(this)" onchange="updateWeekNote('${wkk}',this.value,true)">${esc(weekNoteOf(wkk))}</textarea>`;
+  const wnote = `<textarea class="le-note" rows="1" placeholder="· week note" title="note for this week — the same one as in the log" oninput="autoResizeTA(this)" onchange="updateWeekNote(${jsArg(String(wkk))},this.value,true)">${esc(weekNoteOf(wkk))}</textarea>`;
   el('weekDetailBody').innerHTML = wnote + (map.size
     ? [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([cd, g]) => {
         const t = codeWeekTarget(cd);
@@ -4432,7 +4441,7 @@ function renderLog() {
         const ev = exVolume(e);
         // per-round notes (editable) — rendered only for sets that have one
         const setNotes = e.sets.map((s, sIdx) => s.note
-          ? `<div class="log-set-note"><span class="log-rn">r${s.rd || sIdx + 1}</span>
+          ? `<div class="log-set-note"><span class="log-rn">r${esc(s.rd || sIdx + 1)}</span>
              <textarea class="log-note-in" rows="1" title="round note — editable" oninput="autoResizeTA(this)" onchange="updateLogSetNote(${jsArg(a.id)},${idx},${sIdx},this.value)">${esc(s.note)}</textarea></div>`
           : '').join('');
         return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(exStatText(e))}${ev ? ` · <span title="training volume of this exercise — Σ reps × kg${e.side ? ', both sides' : ''}">vol ${esc(fmtVol(ev))}</span>` : ''}</div>
@@ -4501,22 +4510,22 @@ function renderLog() {
     const all = [...weeks.values()].flat();
     const coll = !searching && logMonthColl.has(mk);
     const tot = all.reduce((t, a) => t + (a.totalSec || 0), 0), mv = groupVolume(all);
-    const head = `<div class="log-month-hdr" onclick="toggleLogMonth('${mk}')" title="${coll ? 'expand' : 'collapse'} this month">
+    const head = `<div class="log-month-hdr" onclick="toggleLogMonth(${jsArg(String(mk))})" title="${coll ? 'expand' : 'collapse'} this month">
       <span class="rnd-tgl">${coll ? '▸' : '▾'}</span>${logMonthLabel(mk)}
       <span class="log-grp-sum">${all.length}×${tot ? ' · ' + fmtEst(tot) : ''}${mv ? ' · vol ' + fmtVol(mv) : ''}</span>
-      <button class="log-del" onclick="event.stopPropagation();copyLogGroup('m','${mk}')" title="copy this month as text">⧉</button></div>`;
+      <button class="log-del" onclick="event.stopPropagation();copyLogGroup('m',${jsArg(String(mk))})" title="copy this month as text">⧉</button></div>`;
     if (coll) return head;
     return head + [...weeks.entries()].map(([wkk, arr]) => {
       const wcoll = !searching && logWeekColl.has(wkk), wv = groupVolume(arr);
-      const whead = `<div class="log-week-hdr" onclick="toggleLogWeek('${wkk}')" title="${wcoll ? 'expand' : 'collapse'} this week">
-        <span class="rnd-tgl">${wcoll ? '▸' : '▾'}</span>${logWeekLabel(wkk)}
+      const whead = `<div class="log-week-hdr" onclick="toggleLogWeek(${jsArg(String(wkk))})" title="${wcoll ? 'expand' : 'collapse'} this week">
+        <span class="rnd-tgl">${wcoll ? '▸' : '▾'}</span>${esc(logWeekLabel(wkk))}
         <span class="log-grp-sum">${arr.length}×${wv ? ' · vol ' + fmtVol(wv) : ''}</span>
         ${weekWorkoutBadges(wkk, items)}
-        <button class="log-del" onclick="event.stopPropagation();copyLogGroup('w','${wkk}')" title="copy this week as text (the whole ISO week)">⧉</button></div>`;
+        <button class="log-del" onclick="event.stopPropagation();copyLogGroup('w',${jsArg(String(wkk))})" title="copy this week as text (the whole ISO week)">⧉</button></div>`;
       // week note: always editable on an expanded week, kept visible on a collapsed one
       const wnote = weekNoteOf(wkk);
       const wnoteHtml = (wcoll && !wnote) ? '' :
-        `<textarea class="log-note-in log-note-week" rows="1" placeholder="· week note" title="note for this week — editable" oninput="autoResizeTA(this)" onchange="updateWeekNote('${wkk}',this.value,${arr.length ? 'false' : 'true'})">${esc(wnote)}</textarea>`;
+        `<textarea class="log-note-in log-note-week" rows="1" placeholder="· week note" title="note for this week — editable" oninput="autoResizeTA(this)" onchange="updateWeekNote(${jsArg(String(wkk))},this.value,${arr.length ? 'false' : 'true'})">${esc(wnote)}</textarea>`;
       return wcoll ? whead + wnoteHtml : whead + wnoteHtml + arr.map(itemHtml).join('');
     }).join('');
   }).join('');
@@ -4673,8 +4682,8 @@ function renderLogEdit() {
   const scoreRow = cardio
     ? `<div class="modal-row">
         <div class="jb-field" style="flex:1.4"><label>RPE (session)</label><select onchange="${leNum('rpe')}">${scoreOpts('RPE', d.rpe, [1,2,3,4,5])}</select></div>
-        <div class="jb-field" style="flex:1"><label>HR avg</label><input type="number" inputmode="numeric" min="0" value="${d.hrAvg ?? ''}" placeholder="–" oninput="${leNum('hrAvg')}"></div>
-        <div class="jb-field" style="flex:1"><label>HR max</label><input type="number" inputmode="numeric" min="0" value="${d.hrMax ?? ''}" placeholder="–" oninput="${leNum('hrMax')}"></div>
+        <div class="jb-field" style="flex:1"><label>HR avg</label><input type="number" inputmode="numeric" min="0" value="${esc(d.hrAvg ?? '')}" placeholder="–" oninput="${leNum('hrAvg')}"></div>
+        <div class="jb-field" style="flex:1"><label>HR max</label><input type="number" inputmode="numeric" min="0" value="${esc(d.hrMax ?? '')}" placeholder="–" oninput="${leNum('hrMax')}"></div>
       </div>`
     : `<div class="modal-row">
         <div class="jb-field" style="flex:1"><label>energy today</label><div class="jb-sub">how you felt during the session</div><select onchange="${leNum('energy')}">${anchorOpts(d.energy, ENERGY_ANCHORS)}</select></div>
@@ -4703,7 +4712,7 @@ function renderLogEdit() {
       <textarea class="le-note le-note-ex" rows="1" oninput="autoResizeTA(this);logEditDraft.entries[${ei}].note=this.value" placeholder="· exercise note">${esc(e.note || '')}</textarea>
       ${(e.sets || []).map((s, si) => `
         <div class="le-row">
-          <span class="set-num">${s.rd || si + 1}</span>
+          <span class="set-num">${esc(s.rd || si + 1)}</span>
           ${s.iname != null ? `<input class="set-in iv-name" type="text" value="${esc(s.iname)}" title="interval name" placeholder="work / rest…" oninput="logEditDraft.entries[${ei}].sets[${si}].iname=this.value">`
           : `<input class="set-in" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" title="reps" placeholder="–" oninput="logEditDraft.entries[${ei}].sets[${si}].reps=this.value">
           <span class="set-x">×</span>
@@ -4713,7 +4722,7 @@ function renderLogEdit() {
           <input class="set-in set-t" type="text" inputmode="numeric" value="${s.restSec != null ? mmss(s.restSec) : ''}" title="rest after this ${s.iname != null ? 'interval' : 'set'} (m:ss or seconds, empty = not logged)" placeholder="rest" onchange="leRest(${ei},${si},this)">
           <button class="set-del" onclick="leDelSet(${ei},${si})" title="remove this round">✕</button>
         </div>
-        <textarea class="le-note le-note-set" rows="1" oninput="autoResizeTA(this);logEditDraft.entries[${ei}].sets[${si}].note=this.value" placeholder="· note (${s.iname != null ? 'interval' : 'round'} ${s.rd || si + 1})">${esc(s.note || '')}</textarea>`).join('')}`).join('')
+        <textarea class="le-note le-note-set" rows="1" oninput="autoResizeTA(this);logEditDraft.entries[${ei}].sets[${si}].note=this.value" placeholder="· note (${s.iname != null ? 'interval' : 'round'} ${esc(s.rd || si + 1)})">${esc(s.note || '')}</textarea>`).join('')}`).join('')
     + `<button class="btn-io" style="margin-top:.4rem" onclick="leAddEx()">+ add exercise</button>`;
   requestAnimationFrame(() => el('logEditBody') && el('logEditBody').querySelectorAll('.le-note').forEach(autoResizeTA));
 }
@@ -5426,7 +5435,7 @@ function renderBodyForm() {
     <div class="bf-tg bf-tg-h"><span>column</span><span>min</span><span>max</span><span title="desired change of the monthly average — the lowest (signed)">Δ min</span><span title="desired change of the monthly average — the highest (signed)">Δ max</span><span></span></div>
     ${fields.map(f => { const t = bodyTgt(f), dt = bodyTgt(f, true);
       // the Δ boxes take a minus — the numeric keypad (inputmode=decimal) has none on Android
-      const box = (which, v, dec, title) => `<input type="text"${dec ? ' inputmode="decimal"' : ''} class="bf-in" placeholder="–" value="${v ?? ''}" onchange="setBodyTarget(${jsArg(f.key)},'${which}',this)" title="${title}">`;
+      const box = (which, v, dec, title) => `<input type="text"${dec ? ' inputmode="decimal"' : ''} class="bf-in" placeholder="–" value="${esc(v ?? '')}" onchange="setBodyTarget(${jsArg(f.key)},${jsArg(String(which))},this)" title="${title}">`;
       return `<div class="bf-tg"><span title="${esc(f.label)}">${esc(f.label)}</span>`
         + box('min', t.min, true, 'desired minimum — lower values get ▾')
         + box('max', t.max, true, 'desired maximum — higher values get ▴')
@@ -6424,16 +6433,16 @@ init();
     let removed = applyTombstones();           // append-only collections (archive)
     let added = 0, updated = 0;
     // library — LWW by id
-    const libR = lwwMerge(library, (record.items || record.teas || []), 'lib', x => x.id, c => c);
+    const libR = lwwMerge(library, okRecs(record.items || record.teas), 'lib', x => x.id, c => c);   // okRecs: an unusable id never gets in (see idOk)
     library = libR.arr; added += libR.added; updated += libR.updated; removed += libR.removed;
     // archive (workout log) — LWW by id: log notes are editable afterwards, edits must propagate
-    const arcR = lwwMerge(archive, record.archive || [], 'arc', x => x.id, c => c);
+    const arcR = lwwMerge(archive, okRecs(record.archive), 'arc', x => x.id, c => c);
     archive = arcR.arr; added += arcR.added; updated += arcR.updated; removed += arcR.removed;
     // body measurements — LWW by id (identity normalize → unknown/newer fields survive)
-    const bodR = lwwMerge(body, record.body || [], 'bod', x => x.id, c => c);
+    const bodR = lwwMerge(body, okRecs(record.body), 'bod', x => x.id, c => c);
     body = bodR.arr; added += bodR.added; updated += bodR.updated; removed += bodR.removed;
     // week notes — LWW by ISO week key; a cleared note is a deletion (tombstone)
-    const wnR = lwwMerge(weekNotes, (record.weekNotes || []).filter(n => n && n.id != null), 'wkn', x => x.id, c => c);
+    const wnR = lwwMerge(weekNotes, okRecs(record.weekNotes), 'wkn', x => x.id, c => c);
     weekNotes = wnR.arr; added += wnR.added; updated += wnR.updated; removed += wnR.removed;
     // body column config — whole-object LWW by mt
     const cbf = record.bodyFields;

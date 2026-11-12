@@ -173,7 +173,32 @@ schedSave()                       // debounced uložení (300ms)
 pushUndo()                        // volat před každou uživatelskou změnou
 closeModal('modal-id')            // zavřít modal
 toggleDark()                      // přepínač dark mode
+esc(value)                        // každá datová hodnota v HTML (text i atribut)
+jsArg(value)                      // datová hodnota jako argument inline handleru
+idOk(v) / okRecs(arr, key)        // kontrola ID / klíče záznamů zvenku (sync, import)
 ```
+
+---
+
+## Data v HTML — escapování (XSS) — POVINNÉ
+
+Appky skládají HTML ze stringů (`innerHTML`). Data ze syncu / importu jsou **cizí vstup**: gist jde přepsat tokenem, soubor k importu může být upravený. Skript spuštěný v jedné appce dosáhne na data všech (sdílený origin — viz „GitHub Gist sync“), proto tři pravidla, hotová ve všech appkách i v `_template` (`dip-app` má pravidla 1 a 2; místo pravidla 3 má vlastní přísnější normalizéry `numId` / `refId`):
+
+1. **Text i atribut → `esc()`** — `${esc(x.name)}`, `value="${esc(x.val)}"`, `data-id="${esc(x.id)}"`, `id="row-${esc(x.id)}"`. Platí i pro „čísla“ a „data“ z uložených záznamů (trvání, čas události, datum, emoji, pořadí kola…) — z cloudu může přijít cokoli. `esc()` escapuje `& < > " '`. Bez `esc()` smí jen hodnota, kterou appka sama **spočítala** (délka pole, `Math.*`, `+x`) nebo hotový kus HTML složený stejnými pravidly. **Výstup formátovače escapuj taky**, pokud formátovač umí vrátit vstup beze změny — `fmtTime(sec)` v `tea-app` vrací u nečíselného `sec` řetězec `${sec}s` (díra, kterou našel až smoke test); bezpečný je jen formátovač, jehož výstup vždy vznikne výpočtem z čísla (`mmss`, `fmtKg`).
+2. **Argument inline handleru → `jsArg()`**, nikdy jinak: `onclick="openItem(${jsArg(e.id)})"`.
+   - ❌ `onclick="fn('${id}')"` ani `fn('${esc(id)}')` — atribut se nejdřív HTML-dekóduje a teprve pak parsuje jako JS, takže apostrof (i jako `&#39;`) řetězec ukončí a zbytek běží jako kód
+   - ❌ holé `onclick="fn(${id})"` — textové ID se vyhodnotí jako výraz
+   - `jsArg(v)` = `esc(JSON.stringify(v))`: číslo zůstane číslem, text je řetězcový literál. Kde funkce čeká vždy řetězec (dřív `'${id}'`), piš `jsArg(String(id))`. Indexy z `.map((x, i) => …)` smí zůstat holé.
+   - Totéž platí pro kusy kódu skládané mimo šablonu (`ctx.call()` v `todo-app`, `open` v `tea-app`).
+3. **Záznamy zvenku s podivným ID / klíčem se zahodí** — `okRecs(pole, 'id')` před `lwwMerge()` v `autoImportSilent()` i v `parseImportJson()` (v `todo-app` souhrnně `cleanIncoming()`, navíc `idOk` v `mergeWindowRegistry` a `mergeBlocksLww`). `idOk` pustí konečné číslo nebo řetězec do 80 znaků z písmen, číslic, mezery a `_ . : -`. Je to druhá vrstva pro případ, že někde chybí pravidlo 1 nebo 2 — **nenahrazuje je** (vnořená ID a textová pole nekontroluje). Klíče z volného textu (prodejce v `tea-app` = normalizované jméno) se takhle nefiltrují.
+   - **Při načtení z localStorage se nefiltruje** (záměrně): zahozený záznam by `reconcileTombstones()` vzal jako smazání a tombstone by ho smazal na všech zařízeních.
+   - **Nový generátor ID / klíče** musí dávat hodnoty, které `idOk` pustí — jinak se záznam nikdy nenasynchronizuje (příjemce ho zahodí a zařízení si ho budou přepisovat tam a zpět).
+
+Další místa téže chyby: `err.message` v hlášce (text chyby `JSON.parse` obsahuje kus vstupu → `esc()`), URL z dat v `href` (jen `http(s):` / `mailto:` — `sellerHref` v `tea-app`, `MD_LINK_RE` v `todo-app`), zástupné značky v textu (`mdInline` v `todo-app` parkuje odkazy za znak NUL → NUL ze vstupu se předem zahazuje). Porovnání `el.innerHTML === html` nepoužívej — prohlížeč vrací escapované znaky jinak, než byly zapsány; pamatuj si naposledy zapsaný string.
+
+**Kontrola bez prohlížeče:** po větším zásahu do renderování projdi šablony, jestli každé `${…}` v HTML je `esc(…)` / `jsArg(…)`, literál, spočítané číslo, nebo ověřený kus HTML. `dip-app` má navíc vlastní přísnější normalizéry (`numId` / `refId`) — ty nerozvolňuj.
+
+**Ověřeno** (2026-11-12, headless Chrome + falešný Gist API, 53 načtení, kontrolní běh proti commitu `ca45035` před opravou): s běžnými daty dávají stará i nová verze stejný text, hodnoty polí, atributy i volání všech inline handlerů (rozdíly jen dva, oba záměrné: `vision-app` — zaškrtávátka exportu u textových ID dřív házela chybu, teď fungují; `todo-app` — kurzíva těsně za uvozovkou). S „otrávenými“ daty (textová pole / čísla a data / ID a klíče) se v nové verzi nespustil žádný skript a žádný handler se nerozbil, ve staré ano (kromě `dip-app`, kterou chránily normalizéry). Test pokrývá hlavní seznamy, detail, export / import a pár modalů — ne každý stav appky.
 
 ---
 
@@ -241,7 +266,7 @@ API tvar (GET `…/gists/{id}` → `files['APP_NAME-sync.json'].content`; PATCH 
 
 **End-to-end šifrování (citlivá data):** „secret" gist **není šifrovaný** — kdo zná jeho ID, přečte ho bez přihlášení, a GitHub drží všechny revize navždy. Appka s citlivými (firemními) daty proto do gistu posílá jen šifrovanou obálku: AES-256-GCM přes Web Crypto, náhodný datový klíč zabalený heslem (PBKDF2) i záchranným klíčem (obnova zapomenutého hesla bez serveru), hlavička ověřená jako GCM additional data, každá změna hesla = nový datový klíč, heslo se neukládá, na zařízení jen ne-exportovatelný klíč v IndexedDB, nešifrovaný obsah gistu se nepřijme. Hotové **jen v `dip-app`** (`sealPayload` / `openContent` / `setPassphrase`, popis v `dip-app/CLAUDE.md`) — do `_template` a dalších appek portovat na pokyn. Šifrovaný obsah je při každém uploadu jiný (nové `iv`), takže push beze změny dat by přidal revizi → nutné přeskočení přes `syncedSig`.
 
-**⚠ Sdílený origin = sdílené riziko.** Všechny appky běží na `lordkrabaty.github.io` → sdílejí localStorage, IndexedDB (i šifrovací klíč `dip-app`) a GitHub tokeny. Cizí skript (CDN knihovna) nebo XSS (data v HTML bez `esc()`, nečíselná ID v inline handlerech) v **kterékoli** appce tak ohrozí i firemní data v `dip-app`. Před přidáním `<script src>` z CDN nebo podobného zásahu v jakékoli appce **upozorni uživatele** (pravidla v `dip-app/CLAUDE.md` → „Bezpečnost šifrování“).
+**⚠ Sdílený origin = sdílené riziko.** Všechny appky běží na `lordkrabaty.github.io` → sdílejí localStorage, IndexedDB (i šifrovací klíč `dip-app`) a GitHub tokeny. Cizí skript (CDN knihovna) nebo XSS (data v HTML bez `esc()`, data v inline handleru mimo `jsArg()` — viz „Data v HTML“) v **kterékoli** appce tak ohrozí i firemní data v `dip-app`. Před přidáním `<script src>` z CDN nebo podobného zásahu v jakékoli appce **upozorni uživatele** (pravidla v `dip-app/CLAUDE.md` → „Bezpečnost šifrování“).
 
 ---
 
@@ -415,3 +440,4 @@ Po každém commitu zkontroluj `git log --oneline -1` — subject musí začína
 - ❌ npm nebo build pipeline — pouze CDN nebo čisté JS
 - ❌ CSS animace a přechody (e-ink displej)
 - ❌ Reimplementace komponent a funkcí které jsou hotové v šabloně
+- ❌ Data v HTML bez `esc()`, data v inline handleru jinak než přes `jsArg()` (viz „Data v HTML“)
