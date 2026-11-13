@@ -412,7 +412,7 @@ textarea::placeholder{color:var(--mid)}
 /* "clock" popover for event time / task length (above the time badge) */
 .time-pop{position:fixed;z-index:400;background:var(--w);border:var(--bh);border-radius:var(--r);padding:.5rem .55rem;display:flex;flex-direction:column;gap:.4rem;min-width:215px;max-width:calc(100vw - 16px)}
 .time-pop-row{display:flex;align-items:center;gap:.35rem}
-.time-pop-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);width:1.6rem;flex:0 0 auto}
+.time-pop-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);width:2.4rem;flex:0 0 auto}
 .time-pop-val{font-family:'DM Mono',monospace;font-size:.95rem;color:var(--black);min-width:3.4rem;text-align:center;flex:1}
 .time-pop-btn{font-family:'DM Mono',monospace;font-size:.85rem;padding:.18rem .5rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--dark);cursor:pointer;line-height:1.2;flex:0 0 auto}
 @media(hover:hover){.time-pop-btn:hover{border-color:var(--black);color:var(--black)}}
@@ -422,6 +422,20 @@ textarea::placeholder{color:var(--mid)}
 .time-pop-input{width:100%;font-family:'DM Mono',monospace;font-size:.82rem;padding:.28rem .45rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);outline:none;box-sizing:border-box}
 .time-pop-input:focus{border:var(--bh)}
 .time-pop-foot{display:flex;justify-content:space-between;gap:.4rem;margin-top:.05rem}
+/* from–to day window picker: the highlighted row is the one the hour grid sets */
+.time-pop-win{min-width:250px}
+.time-pop-win .time-pop-row{padding:.1rem .2rem;border-radius:var(--r);cursor:pointer;border:1px solid transparent}
+.time-pop-win .time-pop-row.on{background:var(--off);border-color:var(--light)}
+.time-pop-win .time-pop-row.on .time-pop-lbl{color:var(--black);font-weight:600}
+.time-pop-hours{display:grid;grid-template-columns:repeat(6,1fr);gap:.2rem}
+.time-pop-hours .time-pop-btn{padding:.3rem 0;text-align:center;font-size:.8rem;min-width:0}
+.time-pop-btn.in{background:var(--off)}                                                  /* hour inside the window */
+.time-pop-btn.on{background:var(--black);color:var(--w);border-color:var(--black)}       /* from / to hour */
+@media(hover:hover){.time-pop-btn.on:hover{color:var(--w)}}
+/* from–to chip in the Timeline title (and in the previews) — click opens the hour picker */
+.tl-win-chip{font-family:'DM Mono',monospace;font-size:.72rem;font-weight:400;letter-spacing:0;text-transform:none;line-height:1.3;color:var(--black);background:var(--off);border:1px solid var(--light);border-radius:2px;padding:.08rem .38rem;cursor:pointer;flex-shrink:0;white-space:nowrap}
+@media(hover:hover){.tl-win-chip:hover{border-color:var(--black)}}
+#panel-main .card-title-text{flex:0 1 auto}   /* the chip sits right after the heading, clear of the zoom / expand controls in the top-right corner */
 .item-toggle{font-size:.85rem;cursor:pointer;flex-shrink:0;width:18px;text-align:center;color:var(--muted);line-height:1;user-select:none}
 @media(hover:hover){.item-toggle:hover{color:var(--black)}}
 .item-emoji{flex-shrink:0;margin-right:.1rem;line-height:1;cursor:pointer;border-radius:2px;user-select:none}
@@ -495,12 +509,6 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.btn-add.planned:hover{background:var(--black)}}
 .btn-help{margin-left:auto;font-family:'DM Mono',monospace;padding:.3rem .6rem}   /* "?" → shortcuts legend, right end of the row */
 
-/* ── STATS ── */
-.stats-row{display:grid;grid-template-columns:auto 1fr;gap:.15rem .5rem;font-size:.78rem;margin-top:.4rem}
-.stat-lbl{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
-.stat-val{font-family:'DM Mono',monospace;font-weight:500}
-.stat-val.overflow{font-weight:700}
-
 /* ── NOTES TABS ── */
 .notes-add{display:flex;flex-direction:column;gap:.35rem;flex-shrink:0;margin-bottom:.5rem}
 .notes-tabs{display:flex;flex-wrap:wrap;gap:0;border-bottom:1.5px solid var(--black);margin-bottom:calc(.5rem/var(--pzc,1));flex-shrink:0}
@@ -562,8 +570,6 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.preview-item-note:hover{color:var(--dark)}}
 .preview-item-sched{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--mid);flex-shrink:0;white-space:nowrap;min-width:5.4rem;text-align:right}
 .preview-win{display:flex;align-items:center;gap:.35rem;font-size:.74rem;color:var(--muted);flex-shrink:0}
-.preview-win input{width:3.4rem;font-family:'DM Mono',monospace;font-size:.74rem;border:var(--b);border-radius:var(--r);padding:.15rem .3rem;background:var(--w);color:var(--black);outline:none;text-align:center}
-.preview-win input:focus{outline:1.5px solid var(--black);outline-offset:1px}
 .preview-item-dur{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0;white-space:nowrap;cursor:pointer;border-bottom:1px dashed transparent}
 @media(hover:hover){.preview-item-dur:hover{border-bottom-color:var(--mid)}}
 .preview-item-move{display:flex;flex-direction:column;gap:0;flex-shrink:0;opacity:0}
@@ -788,24 +794,7 @@ textarea::placeholder{color:var(--mid)}
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Day window</span></div>
-    <div class="setup-grid">
-      <div class="field">
-        <label>From</label>
-        <input type="text" id="winStart" value="6:00" oninput="onWindowChange()" placeholder="6:00">
-      </div>
-      <div class="field">
-        <label>To</label>
-        <input type="text" id="winEnd" value="14:00" oninput="onWindowChange()" placeholder="14:00">
-      </div>
-    </div>
-    <div class="stats-row" id="statsRow">
-      <span class="stat-lbl">Day window</span><span class="stat-val" id="stat-window">8h</span>
-      <span class="stat-lbl">Scheduled</span><span class="stat-val" id="stat-planned">0 min</span>
-      <span class="stat-lbl">Remaining / Overflow</span><span class="stat-val" id="stat-remain">—</span>
-    </div>
-
-    <div class="card-title" style="margin-top:.75rem"><span class="card-title-text" id="workDayPickerTitle">Working days</span></div>
+    <div class="card-title"><span class="card-title-text" id="workDayPickerTitle">Working days</span></div>
     <div id="workDayPicker" style="display:flex;gap:.3rem;margin-top:.2rem"></div>
     <div id="workDayDefaultRow" style="display:flex;align-items:center;gap:.3rem;margin-top:.3rem"></div>
 
@@ -837,7 +826,7 @@ textarea::placeholder{color:var(--mid)}
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Timeline</span></div>
+    <div class="card-title"><span class="card-title-text">Timeline</span><button type="button" class="tl-win-chip" id="tlWinChip" onclick="openDayWindowPicker(this)">6:00–14:00</button></div>
     <div id="tl-container" class="tl-container"></div>
   </div>
 </div>
@@ -1175,9 +1164,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div class="preview-win">
       <span>day window</span>
-      <input type="text" id="previewWinStart" placeholder="6:00" oninput="setPreviewWindow()" title="window start — from when scheduling begins">
-      <span>–</span>
-      <input type="text" id="previewWinEnd" placeholder="14:00" oninput="setPreviewWindow()" title="window end — until when scheduling goes">
+      <button type="button" class="tl-win-chip" id="previewWinChip" onclick="openPreviewWindowPicker(this)" title="from / to — click to change (blocks are scheduled from the start)">6:00–14:00</button>
     </div>
     <div id="previewItemList" style="overflow-y:auto;flex:1;min-height:60px;border-top:1.5px solid var(--black);padding-top:.3rem"></div>
     <div class="modal-row">
@@ -1848,10 +1835,12 @@ function renderTimeline() {
   const container = el('tl-container');
   if (!container) return;
   const titleEl = document.querySelector('#panel-main .card-title-text');
+  const chip = el('tlWinChip');
   // On the Later card the central panel shows a day-overview calendar instead of the hour timeline
   if (isLaterTabActive()) {
     container.classList.add('later-mode');
     if (titleEl) titleEl.textContent = 'Later · days with tasks';
+    if (chip) chip.style.display = 'none';
     renderLaterTimeline(container);
     return;
   }
@@ -1860,6 +1849,12 @@ function renderTimeline() {
   container.innerHTML = '';
 
   const { blocks, wStart, wEnd, nowMin } = computeTimeline();
+  if (chip) {   // from–to of this day — click opens the hour picker (replaces the former left-panel inputs + stats)
+    const planned = items.reduce((sum, it, i) => !it.isSubtask ? sum + getEffectiveDuration(i) : sum, 0);
+    chip.style.display = '';
+    chip.textContent = windowStart + '–' + windowEnd;
+    chip.title = 'day window ' + formatDur(Math.max(0, wEnd - wStart)) + ' · scheduled ' + formatDur(planned) + ' — click to change from / to';
+  }
   const minStart = blocks.reduce((mn, b) => Math.min(mn, b.startMin), wStart);
   const maxEnd = blocks.reduce((mx, b) => Math.max(mx, b.endMin), wEnd);
   // Extend the grid backward by whole rows so events before the window start are visible too
@@ -2213,26 +2208,6 @@ function renderItemList() {
   container.innerHTML = rowsHtml(DAYCTX);
 }
 
-// ── STATS ─────────────────────────────────────────────────────────────────────
-function updateStats() {
-  const wS = timeToMin(windowStart), wE = timeToMin(windowEnd);
-  const wLen = Math.max(0, wE - wS);
-  const planned = items.reduce((s, item, i) => !item.isSubtask ? s + getEffectiveDuration(i) : s, 0);
-  const overflow = Math.max(0, planned - wLen);
-  const remain = wLen - planned;
-
-  el('stat-window').textContent = (Math.round(wLen / 6) / 10) + 'h';
-  el('stat-planned').textContent = planned + ' min';
-  const remEl = el('stat-remain');
-  if (overflow > 0) {
-    remEl.textContent = '+' + overflow + 'min overflow';
-    remEl.classList.add('overflow');
-  } else {
-    remEl.textContent = '−' + remain + 'min';
-    remEl.classList.remove('overflow');
-  }
-}
-
 // ── LATER OVERVIEW (central panel on the Later card) ──────────────────────────
 // A compact month calendar per month that has items; days carrying tasks are filled,
 // with a count. No times — just "which concrete days have something". Clicking a day
@@ -2485,7 +2460,6 @@ function renderAll() {
   // F2: recurrence ghosts only on the Later card for now (day cards "later") → syncDayGhosts() disabled
   renderTimeline();
   renderItemList();
-  updateStats();
   renderDayButtons();      // take the time in the active day name from the live state → update immediately on edit
   syncDayNoteUi();
   updateDirtyState();
@@ -4617,11 +4591,11 @@ function openRangePicker(ctx, idx, anchor, start, end) {
   // manual entry in the field → take it into the steppers (best effort)
   const readInput = () => { const m = input.value.match(/(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i); if (m) { s = timeToMin(m[1]); e = timeToMin(m[2]); } };
 
-  const rowS = _tpRow('od');
+  const rowS = _tpRow('from');
   rowS.appendChild(_tpBtn('−', '15 min earlier (keeps length)', () => { readInput(); const d = e - s; s = _tpClamp(s - 15); e = _tpClamp(s + d); sync(); }));
   rowS.appendChild(valS);
   rowS.appendChild(_tpBtn('+', '15 min later (keeps length)', () => { readInput(); const d = e - s; s = _tpClamp(s + 15); e = _tpClamp(s + d); sync(); }));
-  const rowE = _tpRow('do');
+  const rowE = _tpRow('to');
   rowE.appendChild(_tpBtn('−', 'end 15 min earlier (shortens)', () => { readInput(); e = Math.max(s + 5, e - 15); sync(); }));
   rowE.appendChild(valE);
   rowE.appendChild(_tpBtn('+', 'end 15 min later (extends)', () => { readInput(); e = _tpClamp(e + 15); sync(); }));
@@ -4633,6 +4607,80 @@ function openRangePicker(ctx, idx, anchor, start, end) {
   input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
 
   pop.appendChild(rowS); pop.appendChild(rowE); pop.appendChild(input); pop.appendChild(foot);
+  sync();
+  requestAnimationFrame(pop._place);
+}
+
+// from–to day window (hour timeline, previews): a from row and a to row with ±15 min steppers, an hour grid
+// that sets the highlighted row by a click (from first, then automatically to), and a field for typing it in.
+// onOk(start, end) gets 'h:mm' strings; the end may be '24:00' (pick 0 as the end = midnight).
+function windowPickerPop(anchor, start, end, onOk) {
+  const pop = _openTimePop(anchor);
+  pop.classList.add('time-pop-win');
+  const DAY = 24 * 60;
+  let s = timeToMin(start), e = timeToMin(end);
+  if (!(s >= 0 && s < DAY)) s = 6 * 60;
+  if (!(e > s && e <= DAY)) e = Math.min(DAY, s + 8 * 60);
+  let active = 's';                                                     // which row the hour grid sets
+
+  const input = document.createElement('input');
+  input.className = 'time-pop-input';
+  input.title = 'manually: 6:00-14:00';
+  const valS = document.createElement('span'); valS.className = 'time-pop-val';
+  const valE = document.createElement('span'); valE.className = 'time-pop-val';
+  const rowS = _tpRow('from'), rowE = _tpRow('to');
+  rowS.title = 'click, then pick the start hour below'; rowE.title = 'click, then pick the end hour below';
+  const hourBtns = [];
+  const sync = () => {
+    valS.textContent = minToTime(s); valE.textContent = minToTime(e);
+    input.value = minToTime(s) + '-' + minToTime(e);
+    rowS.classList.toggle('on', active === 's'); rowE.classList.toggle('on', active === 'e');
+    hourBtns.forEach((b, h) => {
+      const m = h * 60;
+      b.classList.toggle('on', m === s || m === e || (h === 0 && e === DAY));
+      b.classList.toggle('in', m > s && m < e);
+    });
+  };
+  // typed "6:00-14:00" → take it over (best effort, only a valid window)
+  const readInput = () => {
+    const m = input.value.match(/(\d{1,2}:\d{2})\s*(?:[–\-]|to)\s*(\d{1,2}:\d{2})/i);
+    if (!m) return;
+    const a = timeToMin(m[1]), b = timeToMin(m[2]);
+    if (a >= 0 && a < DAY && b > a && b <= DAY) { s = a; e = b; }
+  };
+  const setS = v => { const d = e - s; s = Math.max(0, Math.min(DAY - 5, v)); e = Math.min(DAY, s + d); };   // moving the start keeps the length (6–14 → 14–22 in one click)
+  const setE = v => { e = Math.max(s + 5, Math.min(DAY, v)); };
+
+  rowS.appendChild(_tpBtn('−', '15 min earlier (keeps length)', () => { readInput(); setS(s - 15); sync(); }));
+  rowS.appendChild(valS);
+  rowS.appendChild(_tpBtn('+', '15 min later (keeps length)', () => { readInput(); setS(s + 15); sync(); }));
+  rowE.appendChild(_tpBtn('−', 'end 15 min earlier', () => { readInput(); setE(e - 15); sync(); }));
+  rowE.appendChild(valE);
+  rowE.appendChild(_tpBtn('+', 'end 15 min later', () => { readInput(); setE(e + 15); sync(); }));
+  rowS.addEventListener('click', ev => { if (ev.target.tagName !== 'BUTTON') { active = 's'; sync(); } });
+  rowE.addEventListener('click', ev => { if (ev.target.tagName !== 'BUTTON') { active = 'e'; sync(); } });
+
+  const grid = document.createElement('div'); grid.className = 'time-pop-hours';
+  for (let h = 0; h < 24; h++) {
+    const b = _tpBtn(String(h), '', () => {
+      readInput();
+      const m = h * 60;
+      if (active === 's') { setS(m); active = 'e'; }                   // start picked → the next click sets the end
+      else if (m === 0) setE(DAY);                                        // "to 0" = midnight
+      else if (m <= s) s = m;                                             // an end before the start → it is the start; still waiting for the end
+      else setE(m);
+      sync();
+    });
+    hourBtns.push(b); grid.appendChild(b);
+  }
+
+  const foot = document.createElement('div'); foot.className = 'time-pop-foot';
+  foot.appendChild(_tpBtn('cancel', '', () => closeTimePop()));
+  const ok = () => { readInput(); closeTimePop(); onOk(minToTime(s), minToTime(e)); };
+  foot.appendChild(_tpBtn('OK', '', ok, 'primary'));
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
+
+  pop.appendChild(rowS); pop.appendChild(rowE); pop.appendChild(grid); pop.appendChild(input); pop.appendChild(foot);
   sync();
   requestAnimationFrame(pop._place);
 }
@@ -4775,11 +4823,16 @@ function mStartBlockTimeEdit(ym, idx) { materializeLaterGhost(ym, idx); op_start
 function iStartIconEdit(idx) { op_startIconEdit(INBOXCTX, idx); }
 function iStartBlockTimeEdit(idx) { op_startBlockTimeEdit(INBOXCTX, idx); }
 
-// ── WINDOW CHANGE ─────────────────────────────────────────────────────────────
-function onWindowChange() {
-  windowStart = el('winStart')?.value || '6:00';
-  windowEnd   = el('winEnd')?.value   || '14:00';
+// ── DAY WINDOW (from–to) ──────────────────────────────────────────────────────
+// Set from the hour picker opened by the chip in the Timeline title (openDayWindowPicker).
+function setDayWindow(start, end) {
+  if (start === windowStart && end === windowEnd) return;
+  pushUndo();
+  windowStart = start; windowEnd = end;
   schedSave(); renderAll();
+}
+function openDayWindowPicker(anchor) {
+  windowPickerPop(anchor, windowStart, windowEnd, setDayWindow);
 }
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
@@ -4795,9 +4848,7 @@ function applySessionData(d) {
   windowStart = d.windowStart || '6:00';
   windowEnd   = d.windowEnd   || '14:00';
   dayNote     = d.note || '';    // always reset — an older record without a note must not inherit the previous day's one
-  if (el('winStart')) el('winStart').value = windowStart;
-  if (el('winEnd'))   el('winEnd').value   = windowEnd;
-  syncDayNoteUi();
+  syncDayNoteUi();               // the from–to chip in the Timeline title is filled by renderTimeline()
 }
 
 // Pushes dayNote into the field (day switch, undo, sync merge, tab switch). Never while the user
@@ -4998,8 +5049,6 @@ function activateWindow(id) {
   if (todayEntry) applySessionData(todayEntry);
   else {
     items = []; windowStart = '6:00'; windowEnd = '14:00'; dayNote = '';
-    if (el('winStart')) el('winStart').value = windowStart;
-    if (el('winEnd'))   el('winEnd').value   = windowEnd;
   }
   renderWindowTabs(); renderLibrary(); renderBlockTypeList(); renderWorkDayPicker();
   renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
@@ -5810,8 +5859,6 @@ async function doLoadWeekTemplate() {
       const rec = weekDays.find(d => d.date === iso);
       items = JSON.parse(JSON.stringify(rec.items));   // own copy — do not share a reference with the stored day
       windowStart = rec.windowStart; windowEnd = rec.windowEnd; dayNote = rec.note || '';
-      if (el('winStart')) el('winStart').value = windowStart;
-      if (el('winEnd'))   el('winEnd').value   = windowEnd;
       syncDayNoteUi();
     }
     loaded++;
@@ -5856,8 +5903,7 @@ function openPreview(type, id, dayKey) {
   if (applyBtn) applyBtn.style.display = isLib ? 'block' : 'none';
   // primary preview action: "apply" for a template, otherwise "save changes"
   if (saveBtn) saveBtn.classList.toggle('primary', !isLib);
-  if (el('previewWinStart')) el('previewWinStart').value = src.windowStart || '';
-  if (el('previewWinEnd'))   el('previewWinEnd').value   = src.windowEnd   || '';
+  syncPreviewWinChip();
   renderPreviewList();   // sets previewMeta itself (total time)
   el('previewModal').classList.add('open');
 }
@@ -5975,13 +6021,20 @@ function updatePreviewMeta() {
     : 'Σ ' + (total ? formatDur(total) : '0');
 }
 
-// Editing the from-to window directly in the preview → recomputes block times (saved via "save changes"/"apply").
-function setPreviewWindow() {
+// Editing the from-to window directly in the preview (hour picker on the chip) → recomputes block times
+// (saved via "save changes"/"apply").
+function syncPreviewWinChip() {
+  const chip = el('previewWinChip');
+  if (chip && _previewSource) chip.textContent = (_previewSource.windowStart || '6:00') + '–' + (_previewSource.windowEnd || '14:00');
+}
+function openPreviewWindowPicker(anchor) {
   if (!_previewSource) return;
-  const s = el('previewWinStart')?.value.trim(), e = el('previewWinEnd')?.value.trim();
-  if (s) _previewSource.windowStart = s;
-  if (e) _previewSource.windowEnd = e;
-  renderPreviewList();
+  windowPickerPop(anchor, _previewSource.windowStart || '6:00', _previewSource.windowEnd || '14:00', (s, e) => {
+    if (!_previewSource) return;
+    _previewSource.windowStart = s; _previewSource.windowEnd = e;
+    syncPreviewWinChip();
+    renderPreviewList();
+  });
 }
 
 function togglePreviewDone(i, checked) {
@@ -8763,8 +8816,7 @@ function swapDayWith(targetIso) {
   // reload the (still active) day from its swapped-in content into the live buffer
   const newActive = weekDays.find(d => d.date === a);
   if (newActive) applySessionData(newActive);
-  else { items = []; windowStart = dataB.windowStart; windowEnd = dataB.windowEnd; dayNote = dataB.note; syncDayNoteUi();
-    if (el('winStart')) el('winStart').value = windowStart; if (el('winEnd')) el('winEnd').value = windowEnd; }
+  else { items = []; windowStart = dataB.windowStart; windowEnd = dataB.windowEnd; dayNote = dataB.note; syncDayNoteUi(); }
   activeLibId = null; savedSnapshot = null;
   closeModal('daySwapModal');
   schedSave(); renderAll(); renderDayButtons(); renderWeekTab(); renderLibrary();
@@ -9556,9 +9608,7 @@ function renderInlinePreviewBody(type, id) {
   ).join('');
   return `<div class="preview-win" style="margin-bottom:.35rem">
       <span>window</span>
-      <input type="text" value="${esc(rec.windowStart || '')}" placeholder="6:00" onchange="inlineSetWindow(${jsArg(String(type))},${jsArg(id)},'windowStart',this.value)">
-      <span>–</span>
-      <input type="text" value="${esc(rec.windowEnd || '')}" placeholder="14:00" onchange="inlineSetWindow(${jsArg(String(type))},${jsArg(id)},'windowEnd',this.value)">
+      <button type="button" class="tl-win-chip" onclick="inlineOpenWindowPicker(this,${jsArg(String(type))},${jsArg(id)})" title="from / to — click to change">${esc(rec.windowStart || '6:00')}–${esc(rec.windowEnd || '14:00')}</button>
     </div>${tl}<div class="preview-item-list" id="inlItems-${esc(type)}-${esc(id)}" style="display:flex;flex-direction:column;gap:.1rem">${itemsHtml}</div>
     <textarea id="inlNote-${esc(type)}-${esc(id)}" class="week-note day-note" placeholder="note for this day…"
       oninput="inlineNoteInput(${jsArg(String(type))},${jsArg(id)},this)" onfocus="autoGrowTextarea(this)">${esc(rec.note || '')}</textarea>
@@ -9628,12 +9678,14 @@ function inlineOpenMenu(e, which) {
   else toggleEventMenu(e);
 }
 
-function inlineSetWindow(type, id, key, val) {
+function inlineOpenWindowPicker(anchor, type, id) {
   const rec = getInlinePreviewRecord(type, id); if (!rec) return;
-  val = val.trim();
-  if (!val || val === rec[key]) { refreshInlineWrap(type, id); return; }
-  rec[key] = val;
-  commitInlineChange(type, id);
+  windowPickerPop(anchor, rec.windowStart || '6:00', rec.windowEnd || '14:00', (s, e) => {
+    const r = getInlinePreviewRecord(type, id); if (!r) return;
+    if (s === r.windowStart && e === r.windowEnd) return;
+    r.windowStart = s; r.windowEnd = e;
+    commitInlineChange(type, id);
+  });
 }
 
 async function inlineSaveAsTemplate(type, id) {
