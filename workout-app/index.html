@@ -47,13 +47,13 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 #statusMsg{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none;letter-spacing:.03em;display:none}
 #statusToast{display:none;position:fixed;top:.7rem;left:50%;transform:translateX(-50%);z-index:300;background:var(--w);color:var(--black);border:var(--bh);border-radius:var(--r);padding:.45rem .85rem;font-size:.78rem;font-family:'DM Mono',monospace;letter-spacing:.03em;max-width:min(480px,92vw);text-align:center;pointer-events:none}
 .jb-field{display:flex;flex-direction:column;gap:.3rem}
-.jb-field label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
-.jb-sub{font-size:.68rem;color:var(--muted);margin-top:-.15rem;line-height:1.3}
-.jb-field input,.jb-field select{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none;min-width:0;width:100%}
+.jb-field label{font-size:.76rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.jb-sub{font-size:.74rem;color:var(--muted);margin-top:-.15rem;line-height:1.3}
+.jb-field input,.jb-field select{font-family:'DM Mono',monospace;font-size:.9rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none;min-width:0;width:100%}
 .jb-field input:focus,.jb-field select:focus{outline:2.5px solid var(--black);outline-offset:1px}
-.jb-field textarea{font-family:'DM Sans',sans-serif;font-size:.82rem;line-height:1.5;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none;min-width:0;width:100%;flex:0 0 auto;min-height:0;resize:none;overflow:hidden}
+.jb-field textarea{font-family:'DM Sans',sans-serif;font-size:.9rem;line-height:1.5;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;outline:none;min-width:0;width:100%;flex:0 0 auto;min-height:0;resize:none;overflow:hidden}
 .jb-field textarea:focus{outline:2.5px solid var(--black);outline-offset:1px}
-.jb-readout{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--black);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;background:var(--off)}
+.jb-readout{font-family:'DM Mono',monospace;font-size:.9rem;color:var(--black);border:var(--bh);border-radius:var(--r);padding:.4rem .65rem;background:var(--off)}
 #importModal.from-cloud .jb-import-hide{display:none!important}
 
 /* export/import buttons */
@@ -66,26 +66,29 @@ html.dark .btn-lib.primary{background:var(--black);color:var(--w);border-color:v
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
 html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-bg.open{display:flex}
-.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
-.modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
-.modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
-.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+/* modals: widths in rem so a modal grows with the A± zoom instead of just wrapping its text tighter
+   (an e-ink screen needs the large text AND the room for it); max-height + overflow keep the buttons
+   reachable when a zoomed modal would outgrow the viewport; padding / gap are --pzc-compensated */
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:calc(1.25rem/var(--pzc,1)) calc(1.4rem/var(--pzc,1));max-width:34rem;width:92%;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column;gap:calc(.75rem/var(--pzc,1))}
+.modal h2{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;color:var(--black);letter-spacing:.03em}
+.modal p{font-size:.9rem;color:var(--muted);line-height:1.5}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:min(55vh,24rem);overflow-y:auto}
 .gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
 .gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
-.gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
-.gh-rev-chg{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
-.gh-rev-dev{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)}
+.gh-rev-date{font-family:'DM Mono',monospace;font-size:.84rem;color:var(--black)}
+.gh-rev-chg{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted)}
+.gh-rev-dev{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted)}
 .gh-rev-btns{display:flex;gap:.4rem;flex-shrink:0}
 .gh-rev-btns .btn-io{flex:0 0 auto;padding:.28rem .65rem}
-.modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.83rem;cursor:pointer;user-select:none}
+.modal-item{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;border-radius:var(--r);border:var(--b);font-size:.9rem;cursor:pointer;user-select:none}
 @media(hover:hover){.modal-item:hover{background:var(--off)}}
 .modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
 .lp-week{margin-left:1.05rem}   /* period picker: ISO weeks nested under their month */
-.lp-cnt{margin-left:auto;font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0}
+.lp-cnt{margin-left:auto;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);flex-shrink:0}
 .modal-item.sel .lp-cnt{color:var(--w)}
-.modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
-.modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
-.modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
+.modal-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
+.modal-row{display:flex;gap:calc(.5rem/var(--pzc,1));flex-wrap:wrap}
+.modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.9rem;padding:.55rem .8rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
 @media(hover:hover){.modal-btn:hover{background:var(--light)}}
 .modal-btn.primary{background:var(--black);color:var(--w)}
 @media(hover:hover){.modal-btn.primary:hover{background:var(--dark)}}
@@ -129,9 +132,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 .bike-lvl{display:flex;align-items:center;gap:.35rem}
 .bike-lvl .btn-sm{min-width:2.4em;padding:.3rem .55rem}
 .bike-lvl .btn-sm:disabled{color:var(--light);border-color:var(--light);cursor:default}   /* end of the 1–24 range */
-.bike-err{font-size:.72rem;color:var(--muted);overflow-wrap:anywhere}
-.bike-dec{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--black);overflow-wrap:anywhere}
-.bike-log{font-family:'DM Mono',monospace;font-size:.68rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow-y:auto;border:var(--b);border-radius:var(--r);padding:.4rem .5rem;background:var(--off);color:var(--dark);margin:0}
+.bike-err{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
+.bike-dec{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--black);overflow-wrap:anywhere}
+.bike-log{font-family:'DM Mono',monospace;font-size:.74rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow-y:auto;border:var(--b);border-radius:var(--r);padding:.4rem .5rem;background:var(--off);color:var(--dark);margin:0}
 .now-bike-row{padding:0 .9rem;margin-bottom:.35rem;font-family:'DM Mono',monospace;font-size:.95rem;color:var(--dark)}
 .now-bike-row b{color:var(--black);font-size:1.15rem}
 
@@ -400,36 +403,36 @@ textarea::placeholder{color:var(--mid)}
 .ex-name-sub{display:block;width:100%;font-family:'DM Sans',sans-serif;font-size:.8rem;font-weight:500;border:none;border-bottom:1px solid transparent;background:none;color:var(--black);outline:none;padding:.02rem 0 .02rem 1.4rem}
 .ex-name-sub:focus{border-bottom:1px solid var(--black)}
 .score-sec{display:flex;flex-direction:column;gap:.35rem}
-.score-sec>label{font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
+.score-sec>label{font-size:.76rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase}
 .score-opts{display:flex;flex-direction:column;gap:.3rem}
 .score-opts.row{flex-direction:row}
-.score-opt{font-family:'DM Mono',monospace;font-size:.76rem;text-align:left;background:var(--w);border:var(--b);border-radius:var(--r);padding:.4rem .55rem;color:var(--black);cursor:pointer;min-width:0}
+.score-opt{font-family:'DM Mono',monospace;font-size:.84rem;text-align:left;background:var(--w);border:var(--b);border-radius:var(--r);padding:.4rem .55rem;color:var(--black);cursor:pointer;min-width:0}
 .score-opts.row .score-opt{flex:1;text-align:center}
 .score-opt.sel{background:var(--black);color:var(--w);border-color:var(--black)}
 @media(hover:hover){.score-opt:not(.sel):hover{background:var(--off)}}
-.score-cap{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);min-height:1.1em}
+.score-cap{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--muted);min-height:1.1em}
 /* exercise history inside the rating modal — collapsed by default (a peek would bias the
    rating being entered), grouped by set configuration once expanded */
 .score-sec[hidden],.exh-body[hidden]{display:none}
-.exh-tgl{font-family:'DM Sans',sans-serif;font-size:.72rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;background:none;border:none;padding:0;text-align:left;cursor:pointer}
+.exh-tgl{font-family:'DM Sans',sans-serif;font-size:.76rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;background:none;border:none;padding:0;text-align:left;cursor:pointer}
 @media(hover:hover){.exh-tgl:hover{color:var(--black)}}
 .exh-body{display:flex;flex-direction:column;gap:.5rem;min-height:0}
 .exh-list{display:flex;flex-direction:column;gap:.5rem;max-height:34vh;overflow-y:auto;min-height:0}
 .exh-grp{display:flex;flex-direction:column;gap:.15rem}
-.exh-head{display:flex;flex-wrap:wrap;gap:.15rem .5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.74rem;min-width:0}
+.exh-head{display:flex;flex-wrap:wrap;gap:.15rem .5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.8rem;min-width:0}
 .exh-sig{font-weight:500;color:var(--black);min-width:0;overflow-wrap:anywhere}
 .exh-n{color:var(--muted);flex-shrink:0}
 .exh-avg{margin-left:auto;color:var(--black);flex-shrink:0;white-space:nowrap}
-.exh-row{display:flex;gap:.5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.7rem;padding-left:.6rem;min-width:0}
+.exh-row{display:flex;gap:.5rem;align-items:baseline;font-family:'DM Mono',monospace;font-size:.78rem;padding-left:.6rem;min-width:0}
 .exh-date{color:var(--muted);flex-shrink:0}
 .exh-score{flex-shrink:0;color:var(--black)}
 .exh-score.none{color:var(--muted)}
-.exh-note{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:1.3rem;overflow-wrap:anywhere;line-height:1.35}
+.exh-note{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--muted);padding-left:1.3rem;overflow-wrap:anywhere;line-height:1.35}
 .exh-sess{color:var(--black);min-width:0;overflow-wrap:anywhere}
 .exh-sess.none{color:var(--muted)}
-.exh-more{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:.6rem;background:none;border:none;text-align:left;cursor:pointer}
+.exh-more{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--muted);padding-left:.6rem;background:none;border:none;text-align:left;cursor:pointer}
 @media(hover:hover){.exh-more:hover{color:var(--black)}}
-.exh-hint{font-size:.7rem;color:var(--muted);margin:0;line-height:1.45}
+.exh-hint{font-size:.78rem;color:var(--muted);margin:0;line-height:1.45}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
 .set-in.chg{border:var(--bh)}
 .set-chg{font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--black);flex-shrink:0;cursor:help}
@@ -464,18 +467,18 @@ textarea::placeholder{color:var(--mid)}
 .set-eq{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.8rem;line-height:1;padding:0}
 .set-eq.on{color:var(--black);border-color:var(--dark)}
 @media(hover:hover){.set-eq:hover{background:var(--off);color:var(--black)}}
-.eq-sec{font-size:.66rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-top:.15rem}
+.eq-sec{font-size:.72rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-top:.15rem}
 .eq-chips{display:flex;gap:.35rem;flex-wrap:wrap}
-.eq-chip{font-family:'DM Mono',monospace;font-size:.76rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.32rem .55rem;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq-chip{font-family:'DM Mono',monospace;font-size:.82rem;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.32rem .55rem;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .eq-chip.sel{background:var(--black);border-color:var(--black);color:var(--w)}
 @media(hover:hover){.eq-chip:not(.sel):hover{background:var(--off)}}
 .eq-row{display:flex;align-items:center;gap:.4rem;min-width:0}
-.eq-name{flex:1;min-width:0;font-size:.82rem;color:var(--black);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.eq-kg{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--dark);flex-shrink:0}
+.eq-name{flex:1;min-width:0;font-size:.88rem;color:var(--black);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq-kg{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--dark);flex-shrink:0}
 .eq-step{width:28px;height:28px;border:var(--b);border-radius:var(--r);background:none;color:var(--black);cursor:pointer;font-size:.9rem;line-height:1;padding:0;flex-shrink:0}
 .eq-step:disabled{opacity:.3;cursor:default}
 @media(hover:hover){.eq-step:not(:disabled):hover{background:var(--off)}}
-.eq-cnt{font-family:'DM Mono',monospace;font-size:.78rem;min-width:2.6em;text-align:center;flex-shrink:0;color:var(--muted)}
+.eq-cnt{font-family:'DM Mono',monospace;font-size:.82rem;min-width:2.6em;text-align:center;flex-shrink:0;color:var(--muted)}
 .eq-cnt.on{color:var(--black);font-weight:600}
 .eq-total{font-family:'DM Mono',monospace;font-size:1rem;font-weight:600;color:var(--black);border-top:1.5px solid var(--black);padding-top:.45rem;margin-top:.2rem;display:flex;justify-content:space-between;align-items:baseline;gap:.6rem}
 .eq-sum{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);word-break:break-word}
@@ -531,8 +534,8 @@ textarea::placeholder{color:var(--mid)}
 .le-row{display:flex;gap:.4rem;align-items:center;padding:.15rem 0}
 .le-note{width:100%;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);font-family:'DM Sans',sans-serif;font-size:.8rem;padding:.3rem .4rem;outline:none;resize:none;overflow:hidden;line-height:1.4;flex:0 0 auto;min-height:0}
 .le-note:focus{outline:none;border-color:var(--black)}
-.le-note-ex{font-size:.74rem;color:var(--dark);margin-top:.2rem}
-.le-note-set{font-size:.72rem;color:var(--muted);margin:.05rem 0 .2rem 1.4rem;width:auto}
+.le-note-ex{font-size:.8rem;color:var(--dark);margin-top:.2rem}
+.le-note-set{font-size:.76rem;color:var(--muted);margin:.05rem 0 .2rem 1.4rem;width:auto}
 .log-tools{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.1rem}
 .log-filter{flex-shrink:0;display:flex;gap:.3rem;margin-bottom:.35rem}
 
@@ -750,7 +753,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Export modal -->
 <div class="modal-bg" id="exportModal">
-  <div class="modal" style="max-width:460px">
+  <div class="modal" style="max-width:38rem">
     <h2>Export</h2>
     <p style="font-size:.8rem;color:var(--muted)">Workouts from the library</p>
     <div class="modal-list" id="exportList"></div>
@@ -777,7 +780,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Export copy fallback modal -->
 <div class="modal-bg" id="exportCopyModal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:42rem">
     <h2>Copy JSON</h2>
     <p id="exportCopyNote" style="font-size:.8rem;color:var(--muted)">Download failed. Copy the content below and save it as a .json file.</p>
     <textarea id="exportCopyText" readonly style="font-family:'DM Mono',monospace;font-size:.72rem;min-height:160px;background:var(--off);border:var(--b);resize:vertical"></textarea>
@@ -791,7 +794,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Exercise settings modal -->
 <div class="modal-bg" id="exSetModal">
-  <div class="modal" style="max-width:380px;gap:.6rem">
+  <div class="modal" style="max-width:31rem;gap:.6rem">
     <h2 id="exSetTitle">Exercise settings</h2>
     <div id="exSetBody" style="display:flex;flex-direction:column;gap:.55rem"></div>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('exSetModal')">close</button></div>
@@ -800,7 +803,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Music tracks modal (which mp3 plays during work / rest) -->
 <div class="modal-bg" id="musicModal">
-  <div class="modal" style="max-width:360px;gap:.6rem">
+  <div class="modal" style="max-width:30rem;gap:.6rem">
     <h2>Sound &amp; music</h2>
     <button class="modal-btn" id="musicOnBtn" onclick="toggleMusic()">♪ music: on</button>
     <label class="modal-item" id="sndScopeRow"><input type="checkbox" id="sndScope" onchange="toggleSndScope(this.checked)"><span>tracks, alerts &amp; volumes for this workout only</span></label>
@@ -850,7 +853,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Heart-rate zones modal (bpm lower bound per zone, for the Z# tag & sparkline guides) -->
 <div class="modal-bg" id="hrZonesModal">
-  <div class="modal" style="max-width:340px;gap:.6rem">
+  <div class="modal" style="max-width:28rem;gap:.6rem">
     <h2>Heart-rate zones</h2>
     <p style="font-size:.78rem;color:var(--muted);line-height:1.5;margin:0">Lower bound of each zone in bpm — copy the 5 numbers from Polar Flow/Beat (profile → heart rate zones). The app has no way to work these out on its own; leave a zone empty to skip it.</p>
     <div class="modal-row" style="flex-wrap:wrap">
@@ -866,7 +869,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Exercise bike modal (BH i.Spada / Pafers console over BLE) — raw data for calibration -->
 <div class="modal-bg" id="bikeModal">
-  <div class="modal" style="max-width:460px;gap:.6rem">
+  <div class="modal" style="max-width:38rem;gap:.6rem">
     <h2>Exercise bike</h2>
     <p style="font-size:.78rem;color:var(--muted);line-height:1.5;margin:0">For BH i.Spada consoles made by Pafers (they show up as “PAFERS_…”). No pairing needed — wake the console, tap “Connect bike” and pick it in Chrome's list. The console takes one connection at a time: close the BH / Kinomap / nRF Connect app first.</p>
     <div class="jb-field"><label>last decoded frame</label><div class="bike-dec" id="bikeDec">–</div></div>
@@ -880,9 +883,9 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Finish workout modal (log or discard) -->
 <div class="modal-bg" id="finishModal">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:30rem">
     <h2>Finish workout</h2>
-    <p id="finishMsg" style="font-size:.85rem;color:var(--muted);line-height:1.5"></p>
+    <p id="finishMsg"></p>
     <div class="modal-row" id="finStr" style="display:none">
       <div class="jb-field" style="flex:1"><label>energy today</label>
         <div class="jb-sub">how you felt during the session</div>
@@ -926,7 +929,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Free activity modal (bike, swimming… — logged retrospectively, no timer) -->
 <div class="modal-bg" id="actModal">
-  <div class="modal" style="max-width:400px;gap:.6rem">
+  <div class="modal" style="max-width:33rem;gap:.6rem">
     <h2 id="actTitle">Log an activity</h2>
     <div class="jb-field"><label>activity</label><input id="actName" type="text" placeholder="e.g. bike, swimming, walk" spellcheck="false"></div>
     <div class="modal-row">
@@ -957,7 +960,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Tanita paste modal — the text My TANITA shares for one measurement ("• Weight:  73.8 kg" lines) fills the body form -->
 <div class="modal-bg" id="tanitaModal">
-  <div class="modal" style="max-width:420px;gap:.6rem">
+  <div class="modal" style="max-width:34rem;gap:.6rem">
     <h2>Measurement from Tanita</h2>
     <p>My TANITA → share the measurement → copy the text and paste it here. The text carries no timestamp — date &amp; time stay as set in the form.</p>
     <div class="jb-field"><label>shared text</label><textarea id="tanitaText" class="tn-text" rows="3" placeholder="• Weight:  73.8 kg&#10;• Body fat:  16.3 %&#10;…" spellcheck="false" oninput="autoResizeTA(this);renderTanitaPreview()"></textarea></div>
@@ -971,7 +974,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Save log entry as template modal -->
 <div class="modal-bg" id="tplNameModal">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:30rem">
     <h2>Save as a new template</h2>
     <div class="jb-field"><label>template name</label><input id="tplNameInput" type="text" spellcheck="false" onkeydown="if(event.key==='Enter')confirmLogToTemplate()"></div>
     <div class="modal-row">
@@ -983,9 +986,9 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Log entry edit modal -->
 <div class="modal-bg" id="logEditModal">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:36rem">
     <h2>Edit log entry</h2>
-    <div class="modal-list" id="logEditBody" style="max-height:340px"></div>
+    <div class="modal-list" id="logEditBody" style="max-height:min(60vh,28rem)"></div>
     <div class="modal-row">
       <button class="modal-btn" onclick="closeModal('logEditModal')">cancel</button>
       <button class="modal-btn primary" onclick="saveLogEdit()">save</button>
@@ -995,14 +998,14 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Exercise rating modal (tech 1–5 + RIR) — opened from the exercise header or the log edit -->
 <div class="modal-bg" id="exScoreModal">
-  <div class="modal" style="max-width:400px;max-height:88vh;gap:.7rem;overflow-y:auto">
+  <div class="modal" style="max-width:33rem;max-height:88vh;gap:.7rem;overflow-y:auto">
     <h2 id="exScoreTitle">Rate exercise</h2>
     <div class="score-sec"><label>technique — whole exercise</label>
       <div class="score-opts" id="scoreTechBtns"></div></div>
     <div class="score-sec"><label>RIR — reps left in reserve on the LAST set</label>
       <div class="score-opts row" id="scoreRirBtns"></div>
       <div class="score-cap" id="scoreRirCap"></div></div>
-    <p style="font-size:.74rem;color:var(--muted);margin:0">Technique: tap again = +0.5, third tap clears · RIR: tap again clears.</p>
+    <p style="font-size:.8rem;color:var(--muted);margin:0">Technique: tap again = +0.5, third tap clears · RIR: tap again clears.</p>
     <div class="score-sec" id="scoreHistSec" hidden>
       <button class="exh-tgl" id="scoreHistTgl" onclick="toggleExHist()">▸ history</button>
       <div class="exh-body" id="scoreHistBody" hidden>
@@ -1016,7 +1019,7 @@ textarea::placeholder{color:var(--mid)}
 <!-- Whole-workout history modal (⏱ in the run bar) — past sessions of THIS workout;
      cardio grouped by interval structure, strength as a flat session trend -->
 <div class="modal-bg" id="wkHistModal">
-  <div class="modal" style="max-width:560px;max-height:86vh;gap:.7rem">
+  <div class="modal" style="max-width:46rem;max-height:86vh;gap:.7rem">
     <h2 id="wkHistTitle">Workout history</h2>
     <!-- the LIST scrolls, not the modal — otherwise the shrunk flex body paints over the hint & buttons -->
     <div class="exh-body" id="wkHistBody" style="overflow-y:auto"></div>
@@ -1037,7 +1040,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Period picker — tick the months / ISO weeks the log should show (from the log filter row) -->
 <div class="modal-bg" id="logPickModal">
-  <div class="modal" style="max-width:420px;max-height:86vh;gap:.6rem">
+  <div class="modal" style="max-width:34rem;max-height:86vh;gap:.6rem">
     <h2>Months &amp; weeks</h2>
     <p id="logPickNote"></p>
     <div id="logPickBody" style="display:flex;flex-direction:column;gap:.25rem;overflow-y:auto;min-height:0"></div>
@@ -1051,7 +1054,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Week detail modal — per-exercise breakdown of one ISO week (opened from a week badge in the log) -->
 <div class="modal-bg" id="weekDetailModal">
-  <div class="modal" style="max-width:420px;gap:.7rem">
+  <div class="modal" style="max-width:34rem;gap:.7rem">
     <h2 id="weekDetailTitle">Week</h2>
     <div id="weekDetailBody" style="display:flex;flex-direction:column;gap:.3rem;overflow-y:auto;min-height:0"></div>
     <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('weekDetailModal')">done</button></div>
@@ -1060,7 +1063,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Import modal -->
 <div class="modal-bg" id="importModal">
-  <div class="modal" style="max-width:460px">
+  <div class="modal" style="max-width:38rem">
     <h2>Import</h2>
     <p class="jb-import-hide">Select a JSON file exported from this app.</p>
     <input type="file" id="importFile" accept=".json" style="font-size:.82rem;color:var(--black)" onchange="previewImport()" class="jb-import-hide" />
@@ -1082,7 +1085,7 @@ textarea::placeholder{color:var(--mid)}
 
 <!-- Equipment picker / editor — ⚖ next to a set's weight: pick a bar + plates, the kg is computed -->
 <div class="modal-bg" id="eqModal">
-  <div class="modal" style="max-width:420px;gap:.6rem">
+  <div class="modal" style="max-width:34rem;gap:.6rem">
     <h2 id="eqTitle">Load weight</h2>
     <div id="eqBody" style="display:flex;flex-direction:column;gap:.45rem;overflow-y:auto;max-height:60vh;min-height:0"></div>
     <div class="modal-row" id="eqActions"></div>
@@ -2370,7 +2373,7 @@ function renderExHistory(ex) {
   const open = exHistOpen && !!hist.length;
   // full-width notes & the per-setting columns need room — widen only while expanded
   const box = document.querySelector('#exScoreModal .modal');
-  if (box) box.style.maxWidth = open ? '560px' : '400px';
+  if (box) box.style.maxWidth = open ? '46rem' : '33rem';   // rem — grows with the A± zoom like the other modals
   if (!hist.length) return;
   el('scoreHistTgl').textContent = (open ? '▾' : '▸') + ' history — ' + hist.length + ' session' + (hist.length > 1 ? 's' : '');
   el('scoreHistBody').hidden = !open;
@@ -6031,7 +6034,7 @@ init();
 
 <!-- Clear storage modal -->
 <div class="modal-bg" id="clearStorageModal">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:30rem">
     <h2>delete data</h2>
     <p style="font-size:.82rem;color:var(--muted)">Select what you want to delete. This action cannot be undone.</p>
     <div style="display:flex;flex-direction:column;gap:.4rem;margin:.25rem 0">
@@ -6052,8 +6055,8 @@ init();
 
 <!-- Custom confirm modal -->
 <div class="modal-bg" id="confirmModal">
-  <div class="modal" style="max-width:340px">
-    <p id="confirmMsg" style="font-size:.9rem;line-height:1.55;color:var(--black)"></p>
+  <div class="modal" style="max-width:28rem">
+    <p id="confirmMsg" style="font-size:.95rem;line-height:1.55;color:var(--black)"></p>
     <div class="modal-row" style="margin-top:.25rem">
       <button class="modal-btn" id="confirmCancelBtn" onclick="_confirmResolve(false)">cancel</button>
       <button class="modal-btn primary" id="confirmOkBtn" onclick="_confirmResolve(true)">ok</button>
@@ -6063,7 +6066,7 @@ init();
 
 <!-- Gist settings modal -->
 <div class="modal-bg" id="jsonbinModal">
-  <div class="modal" style="max-width:400px;gap:.65rem">
+  <div class="modal" style="max-width:33rem;gap:.65rem">
     <h2>Gist sync settings</h2>
     <p>Enter your GitHub token and Gist ID. Data is stored only in this browser.</p>
     <p style="font-size:.78rem;color:var(--muted)">Create a token at <a href="https://github.com/settings/tokens" target="_blank" rel="noopener" style="color:var(--black)">github.com/settings/tokens</a> (scope <b>gist</b>). You can find your gists at <a href="https://gist.github.com" target="_blank" rel="noopener" style="color:var(--black)">gist.github.com</a>.</p>
@@ -6857,7 +6860,7 @@ init();
 
 <!-- Gist history modal -->
 <div class="modal-bg" id="gistHistoryModal">
-  <div class="modal" style="max-width:460px;gap:.65rem">
+  <div class="modal" style="max-width:38rem;gap:.65rem">
     <h2>Version history</h2>
     <div class="modal-row" id="ghDevFilterRow" style="display:none;align-items:center;gap:.5rem">
       <label style="font-size:.72rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase">Device</label>
