@@ -149,7 +149,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .chk-text{flex:1;font-size:.86rem;line-height:1.4;cursor:text;word-break:break-word;min-width:0}
 .chk-text.done{text-decoration:line-through;color:var(--muted)}
 .chk-text.blank{color:var(--mid);font-style:italic}
-.chk-edit{flex:1;font-family:'DM Sans',sans-serif;font-size:.86rem;border:none;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;padding:.05rem 0;min-width:0}
+.chk-edit{flex:1;font-family:'DM Sans',sans-serif;font-size:.86rem;line-height:1.4;border:none;border-radius:0;border-bottom:1.5px solid var(--black);background:transparent;color:var(--black);outline:none;padding:.05rem 0;margin:0;min-width:0;min-height:0;display:block;resize:none;overflow:hidden;box-sizing:border-box}   /* textarea: wraps a long item and grows with it, so the whole text stays in view while editing */
 .chk-plain{font-size:.8rem;color:var(--muted);line-height:1.45;padding:.28rem .1rem .12rem 1.9rem;word-break:break-word;white-space:pre-wrap}
 .chk-move{display:flex;flex-direction:column;flex-shrink:0;opacity:.5}
 .chk-move button{border:none;background:none;cursor:pointer;padding:0;font-size:.6rem;line-height:1;color:var(--black);width:17px;height:14px;display:flex;align-items:center;justify-content:center}
@@ -3798,17 +3798,23 @@ function addChkItem(afterLine) {
 function startChkEdit(lineIdx, span) {
   const it = parseChkLine(ieNoteLines()[lineIdx]);
   if (!it) return;
-  const inp = document.createElement('input');
+  // a textarea, not an input: a long item wraps and the field grows with it, so the whole text stays
+  // in view while editing (a one-line field hid everything but the end of the line)
+  const inp = document.createElement('textarea');
   inp.className = 'chk-edit';
+  inp.rows = 1;
+  inp.dataset.nocap = '';                   // grows to its text; .modal-scroll does the scrolling
   inp.value = it.text;
   span.replaceWith(inp);
+  autoGrowTextarea(inp);
   inp.focus(); inp.select();
+  inp.addEventListener('input', () => autoGrowTextarea(inp));
   let closed = false, addNext = false;
   const finish = commit => {
     if (closed) return; closed = true;
     const lines = ieNoteLines(), cur = parseChkLine(lines[lineIdx]);
     if (!commit || !cur) { renderChkList(); return; }
-    const v = inp.value.trim();
+    const v = inp.value.replace(/\s*\n\s*/g, ' ').trim();   // an item is ONE note line — a pasted break would split it
     if (!v) { lines.splice(lineIdx, 1); ieSetNoteLines(lines); return; }   // emptied → the item goes away
     lines[lineIdx] = chkLine(cur.indent, cur.done, v);
     // swap the input back for a plain span instead of rebuilding the list: blur usually comes from
