@@ -141,6 +141,9 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .chk-list{display:flex;flex-direction:column}
 .chk-row{display:flex;align-items:center;gap:.35rem;padding:.24rem .1rem;border-bottom:1px solid var(--light)}
 .chk-row:last-child{border-bottom:none}
+.chk-row.lv1{padding-left:calc(1.3rem/var(--pzc,1))}   /* a sub-item, as deep as it is indented in the text */
+.chk-row.lv2{padding-left:calc(2.5rem/var(--pzc,1))}
+.chk-row.lv3{padding-left:calc(3.7rem/var(--pzc,1))}
 .chk-row.dragging{opacity:.3}
 .chk-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
 .chk-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
@@ -193,6 +196,34 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .ie-pane textarea.note-line-edit{font-family:'DM Sans',sans-serif;font-size:.88rem;line-height:max(1.4,calc(1.8/var(--pzc,1)));color:var(--black);background:var(--off);border:none;border-radius:2px;padding:0;margin:0;min-height:0;width:100%;display:inline-block;vertical-align:top;resize:none;outline:none;overflow:hidden;box-sizing:border-box}
 .ie-pane textarea.note-line-edit.block{display:block;font-family:'DM Mono',monospace;font-size:.78rem}   /* table source — wraps, never a hidden horizontal overflow */
 .note-view .md-ln{cursor:text}
+/* The description's formatted view is one row per source line (a table = one row): ⠿ in front drags
+   it, the open line gets ▲▼ and × at its end. Rows sit flush, so the text reads as one block; the grip
+   column is the only thing added. Mouse: the grip shows on hover; touch: always, but faint. */
+.note-rows{padding-left:calc(.1rem/var(--pzc,1))}
+.note-row{display:flex;align-items:flex-start;min-width:0}
+.note-row > .md-ln{flex:1 1 0;min-width:0}
+.note-row > .md-tbl-wrap{flex:1 1 0;min-width:0}
+.note-row > textarea.note-line-edit{flex:1 1 0;width:auto;min-width:0}
+.note-ctl{white-space:normal;user-select:none;-webkit-user-select:none}
+.note-grip{flex:0 0 auto;width:.95rem;text-align:center;color:var(--mid);cursor:grab;touch-action:none}
+@media(hover:hover){.note-grip{visibility:hidden}.note-row:hover .note-grip,.note-row.open .note-grip{visibility:visible}}
+.note-row.blank:not(.open) .note-grip,.note-row.empty .note-grip{visibility:hidden}
+.note-row-ctl{display:none;flex:0 0 auto;align-items:center;min-height:1.6em;margin-left:.15rem}
+.note-row.open .note-row-ctl{display:flex}
+.note-row.empty .note-mv{display:none}
+.note-mv{display:flex;flex-direction:column;opacity:.5}
+.note-mv button{border:none;background:none;cursor:pointer;padding:0;font-size:.6rem;line-height:1;color:var(--black);width:18px;height:13px;display:flex;align-items:center;justify-content:center}
+.note-mv button:disabled{opacity:.25;cursor:default}
+.note-del{width:26px;height:26px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;opacity:.55}
+.note-del svg{width:9px;height:9px;stroke:var(--black);fill:none;stroke-width:2.5;stroke-linecap:round}
+@media(hover:hover){.note-del:hover,.note-mv:hover{opacity:1}}
+.note-row.dragging{opacity:.3}
+.note-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
+.note-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+/* where a deleted line was: what went, and the way back */
+.note-gone{display:flex;align-items:center;gap:.5rem;margin:calc(.15rem/var(--pzc,1)) 0 calc(.15rem/var(--pzc,1)) .95rem;padding:calc(.12rem/var(--pzc,1)) calc(.2rem/var(--pzc,1)) calc(.12rem/var(--pzc,1)) calc(.45rem/var(--pzc,1));border:1px dashed var(--mid);border-radius:var(--r);font-size:.76rem;line-height:1.4;color:var(--muted);cursor:default}
+.note-gone-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note-gone .btn-io{flex:0 0 auto;padding:.16rem .5rem}
 .ie-bar .btn-io:disabled{opacity:.35;cursor:default}
 .md-help-src{font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.5;color:var(--black);background:var(--off);border:var(--b);border-radius:var(--r);padding:calc(.45rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));margin:.3rem 0;white-space:pre;overflow-x:auto}
 .md-help-demo{display:grid;grid-template-columns:1fr 1fr;gap:calc(.5rem/var(--pzc,1));align-items:start}
@@ -1324,8 +1355,8 @@ textarea::placeholder{color:var(--mid)}
           <span class="ie-kind" id="itemEditTitle"></span>
         </div>
         <div class="ie-pane active" id="iePaneText">
-          <div id="itemEditNoteView" class="note-view md" onpointerdown="noteViewPointerDown(event)"
-            onclick="noteViewClick(event)" title="tap a line to edit it"></div>
+          <div id="itemEditNoteView" class="note-view note-rows md" onpointerdown="noteViewPointerDown(event)"
+            onmousedown="noteViewMouseDown(event)" onclick="noteViewClick(event)" title="tap a line to edit it · ⠿ drags it"></div>
           <textarea id="itemEditNote" rows="7" data-nocap placeholder="More text — description, notes, subtasks…"
             oninput="autoGrowTextarea(this);renderChkList()" onkeydown="noteKeydown(event,this)"></textarea>
           <div class="ie-bar">
@@ -2963,6 +2994,7 @@ function openItemEdit(ctx, idx) {
   _ieNextTab = null;                         // one-shot, also when there is nothing to open
   if (!item) return;
   _itemEditCtx = ctx; _itemEditItem = item;
+  _noteUndo = [];                            // deleted / moved lines belong to the note they came from
   const type = item.isSubtask ? 'task' : (item.isEvent ? 'event' : ((item.blockType && item.blockType !== 'TASK') ? 'block' : 'item'));
   el('itemEditTitle').textContent = type;   // small tag at the end of the tab strip
   el('itemEditName').value = ieNameValue(item);
@@ -3358,6 +3390,8 @@ let _noteEditing = false;    // source mode
 let _lineEdit = null;        // live mode: { start, end, span0, box } — the part opened as source
 let _lineClosing = false;    // guard: removing the focused box must not re-enter through blur
 let _noteTapLoc = null;      // target recorded on pointerdown, used by the click that follows
+let _noteUndo = [];          // deleted / moved lines, newest last (see LINES: MOVE, DELETE ⇄ RESTORE)
+const NOTE_UNDO_MAX = 50;
 
 // the field the toolbar and the shortcuts act on: the open line, else the whole-text field
 function noteField() { return _lineEdit ? _lineEdit.box : (_noteEditing ? el('itemEditNote') : null); }
@@ -3376,8 +3410,16 @@ function renderNoteView() {
   if (!view || !ta) return;
   _lineEdit = null;                        // whatever was open lives in the DOM about to be replaced
   // the placeholder carries data-ln too, so tapping an empty description starts line 0
-  view.innerHTML = ta.value.trim() ? noteDisplay(ta.value)
-    : '<span class="md-ln" data-ln="0"><span class="note-view-empty">More text — description, notes, subtasks…</span></span>';
+  const rows = ta.value.trim() ? noteRows(ta.value) : [{ start: 0, html: NOTE_EMPTY_ROW }];
+  // the last deleted line leaves a "↶ restore" strip where it was
+  const gone = noteLastGone();
+  if (gone) {
+    const at = noteGapAt(gone, noteLinesOf(ta.value));
+    const k = rows.findIndex(r => r.start >= at);
+    rows.splice(k < 0 ? rows.length : k, 0, { html: noteGoneHtml(gone) });
+  }
+  view.innerHTML = rows.map(r => r.html).join('');
+  initNoteDnd();
   updateNoteTools();
 }
 
@@ -3416,13 +3458,16 @@ function toggleNoteSrcMode() {
 }
 
 function noteLineStart(lines, idx) { let s = 0; for (let i = 0; i < idx; i++) s += lines[i].length + 1; return s; }
-// which rendered part covers this source line — a table covers all of its rows
+// which rendered part covers this source line — a table covers all of its rows.
+// el = the row's body (what the line editor replaces), row = the whole row around it
 function partAt(lineIdx) {
   const view = el('itemEditNoteView'); if (!view) return null;
-  for (const p of view.children) {
-    if (!p.dataset || p.dataset.ln == null) continue;
-    const a = +p.dataset.ln, b = p.dataset.lnEnd != null ? +p.dataset.lnEnd : a;
-    if (lineIdx >= a && lineIdx <= b) return { el: p, start: a, end: b, block: p.dataset.block === '1' };
+  for (const row of view.children) {
+    if (!row.classList.contains('note-row')) continue;
+    const a = +row.dataset.idx, b = +row.dataset.end;
+    if (!(lineIdx >= a && lineIdx <= b)) continue;
+    const body = row.querySelector(':scope > [data-ln]');
+    return body ? { el: body, row, start: a, end: b, block: body.dataset.block === '1' } : null;
   }
   return null;
 }
@@ -3441,13 +3486,15 @@ function startLineEdit(lineIdx, col) {
   box.rows = 1;
   const partLines = lines.slice(part.start, part.end + 1);
   box.value = partLines.join('\n');
-  // The span being replaced carries the line break that ends it (see noteDisplay). Taking it out
-  // with the span would swallow the row after it — an empty line behind the tapped one collapsed
-  // for as long as it was open — so the break is put back as a text node after the field.
-  const keepBreak = !part.block && /\n$/.test(part.el.textContent || '');
+  // the body goes, the row stays: its grip, and the ▲▼ × that only the open row shows
   part.el.replaceWith(box);
-  if (keepBreak) box.insertAdjacentText('afterend', '\n');
-  _lineEdit = { start: part.start, end: part.end, span0: part.end - part.start + 1, box };
+  part.row.classList.add('open');
+  // orig: while the box still holds what it opened with, Ctrl+Z has nothing of its own to undo
+  // and reaches for the note's (a deleted or moved line)
+  _lineEdit = { start: part.start, end: part.end, span0: part.end - part.start + 1, box, row: part.row, orig: box.value };
+  const all = noteLinesOf(ta.value), up = part.row.querySelector('.note-up'), dn = part.row.querySelector('.note-down');
+  if (up) up.disabled = part.start === 0;
+  if (dn) dn.disabled = noteGroupEnd(all, part.start, part.end) >= all.length - 1;
   box.addEventListener('input', () => { syncLineEdit(); growLineEdit(); });
   box.addEventListener('keydown', lineEditKeydown);
   box.addEventListener('blur', () => closeLineEdit(true));
@@ -3477,9 +3524,9 @@ function closeLineEdit(rerender) {
   if (!_lineEdit || _lineClosing) return;
   _lineClosing = true;
   try {
-    const box = _lineEdit.box;
+    const box = _lineEdit.box, row = _lineEdit.row;
     _lineEdit = null;
-    if (rerender) renderNoteView(); else box.remove();
+    if (rerender) renderNoteView(); else { box.remove(); if (row) row.classList.remove('open'); }
     updateNoteTools();
   } finally { _lineClosing = false; }
 }
@@ -3488,6 +3535,18 @@ function lineEditKeydown(e) {
   const box = e.currentTarget;
   if (mdShortcut(e, box)) return;
   if (e.key === 'Escape') { e.stopPropagation(); closeLineEdit(true); return; }   // don't close the dialog
+  const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
+  if (e.key === 'Backspace' && e.shiftKey && plain) { e.preventDefault(); lineEditDeleteLine(box); return; }
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault(); noteMoveOpen(e.key === 'ArrowUp' ? -1 : 1); return;
+  }
+  // nothing typed in this line yet → its own undo is empty, so Ctrl+Z takes back the last delete / move
+  if (isUndoKey(e) && _lineEdit && box.value === _lineEdit.orig && _noteUndo.length) {
+    e.preventDefault();
+    const at = noteUndo();
+    if (at != null) startLineEdit(at, null);
+    return;
+  }
   if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
     if (_lineEdit && _lineEdit.box.classList.contains('block')) return;           // table: Enter = a new row
     e.preventDefault(); lineEditEnter(box); return;
@@ -3554,6 +3613,307 @@ function lineEditEnter(box) {
   startLineEdit(start + before.split('\n').length, prefix.length);
 }
 
+// ── LINES: MOVE, DELETE ⇄ RESTORE ────────────────────────────────────────────
+// A line takes along what belongs under it when it is dragged by ⠿ or moved with ▲▼ / Alt+↑↓ (see
+// noteGroupEnd). A delete (× on the open line, Shift+Backspace) takes only the line itself and leaves
+// a "↶ restore" strip where it was; Ctrl+Z takes back the last delete or move. All of it only rewrites
+// the note text, like every other edit here — nothing new is stored.
+// _noteUndo entries: { kind:'del', lines, at, prev, next, after } | { kind:'move', before, after, from }
+function noteLinesOf(v) { return v ? v.split('\n') : []; }   // '' = no lines at all, not one empty line
+function noteIndent(ln) { return /^[ \t]*/.exec(ln || '')[0].replace(/\t/g, '    ').length; }
+const NOTE_NUM_RE = /^\s*\d+[.)]\s+\S/;
+// a list line: checklist item, bullet, or "1." numbered
+function noteIsList(ln) { return !!ln && (!!parseChkLine(ln) || MD_BULLET_RE.test(ln) || NOTE_NUM_RE.test(ln)); }
+// The last line that goes along with lines[start..end]:
+//   a heading    — its whole section, up to the next heading of the same level or above;
+//   a list line  — everything after it indented deeper (its sub-items);
+//   a plain line — the same, plus the list right under it at its own depth ("Shopping" + "- milk").
+// A blank line inside the run doesn't end it, but one after it is never taken along.
+function noteGroupEnd(lines, start, end) {
+  const head = lines[start] || '';
+  if (!head.trim()) return end;
+  let last = end;
+  const h = MD_HEAD_RE.exec(head);
+  if (h) {
+    for (let j = end + 1; j < lines.length; j++) {
+      const hj = MD_HEAD_RE.exec(lines[j]);
+      if (hj && hj[2].length <= h[2].length) break;
+      if (lines[j].trim()) last = j;
+    }
+    return last;
+  }
+  const base = noteIndent(head);
+  const owner = !noteIsList(head) && !MD_ROW_RE.test(head);   // a plain line (not a table) owns the list under it
+  for (let j = end + 1; j < lines.length; j++) {
+    const ln = lines[j];
+    if (!ln.trim()) continue;
+    const ind = noteIndent(ln);
+    if (ind > base) { last = j; continue; }
+    // the list has to start right under the line — a blank line between them keeps them apart
+    if (owner && ind === base && noteIsList(ln) && (last > end || j === end + 1)) { last = j; continue; }
+    break;
+  }
+  return last;
+}
+// A list line keeps its depth where it lands when that depth fits there, and only then is it changed
+// (the lines under it keep theirs relative to it): never shallower than a list line right after it —
+// an item dropped between a parent and its sub-items becomes the first of them instead of taking them
+// over — and never deeper than the line before it — a sub-item dropped between top items becomes one
+// of them. Headings and plain lines keep their indentation.
+function noteReindent(run, lines, at) {
+  if (!noteIsList(run[0])) return run;
+  let p = at - 1; while (p >= 0 && !lines[p].trim()) p--;
+  let n = at;     while (n < lines.length && !lines[n].trim()) n++;
+  const lo = n < lines.length && noteIsList(lines[n]) ? noteIndent(lines[n]) : 0;
+  const hi = Math.max(lo, p >= 0 ? noteIndent(lines[p]) : 0);
+  const d = noteIndent(run[0]);
+  return noteShift(run, Math.min(Math.max(d, lo), hi) - d);
+}
+// the whole run d columns deeper (or shallower), blank lines untouched
+function noteShift(run, d) {
+  if (!d) return run;
+  return run.map(l => l.trim() ? ' '.repeat(Math.max(0, noteIndent(l) + d)) + l.replace(/^[ \t]*/, '') : l);
+}
+// lines[start..last] → insertion line `at` (counted before the move) → { lines, at = their new start }.
+// depth: the depth the run's first line gets (default: from where it lands, see noteReindent)
+function noteMovedLines(lines, start, last, at, depth) {
+  const out = lines.slice();
+  let run = out.splice(start, last - start + 1);
+  if (at > start) at -= run.length;
+  run = depth != null && noteIsList(run[0]) ? noteShift(run, depth - noteIndent(run[0])) : noteReindent(run, out, at);
+  out.splice(at, 0, ...run);
+  return { lines: out, at };
+}
+// A row's source lines right now. Rows are numbered when the view is drawn; the open line may have
+// gained or lost lines since (Shift+Enter, a paste), and the rows below it are off by exactly that.
+function noteRowRange(row) {
+  if (_lineEdit && row === _lineEdit.row) return { start: _lineEdit.start, end: _lineEdit.end };
+  let a = +row.dataset.idx, b = +row.dataset.end;
+  if (_lineEdit && a > _lineEdit.start) {
+    const d = (_lineEdit.end - _lineEdit.start + 1) - _lineEdit.span0;
+    a += d; b += d;
+  }
+  return { start: a, end: b };
+}
+// every move / delete / restore lands here: the open line closes (its text is in the master already)
+function noteSetText(v) {
+  const ta = el('itemEditNote');
+  closeLineEdit(false);
+  ta.value = v;
+  if (_noteEditing) autoGrowTextarea(ta); else renderNoteView();
+  renderChkList();
+}
+function noteUndoPush(rec) {
+  _noteUndo.push(rec);
+  if (_noteUndo.length > NOTE_UNDO_MAX) _noteUndo.shift();
+}
+function isUndoKey(e) { return (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'z' || e.key === 'Z'); }
+
+// a move / reorder of the note's lines: undoable with Ctrl+Z, then the view and the checklist redrawn
+function noteApplyMove(before, after, from) {
+  if (after === before) return false;
+  noteUndoPush({ kind: 'move', before, after, from });
+  noteSetText(after);
+  return true;
+}
+// lines[start..last] to insertion line `at` (counted in the text as it is now) → their new start, -1 = no move.
+// inPlace: the same spot is allowed (▼ out of a sub-list only changes the depth); depth: see noteMovedLines
+function noteMoveRun(start, last, at, inPlace, depth) {
+  const before = el('itemEditNote').value, lines = noteLinesOf(before);
+  if (start < 0 || last >= lines.length) return -1;
+  if (!inPlace && at >= start && at <= last + 1) return -1;                 // dropped onto itself
+  const m = noteMovedLines(lines, start, last, at, depth);
+  return noteApplyMove(before, m.lines.join('\n'), start) ? m.at : -1;
+}
+// line → first / last line of the piece it belongs to (a table is one piece)
+function notePartBounds(text) {
+  const ps = [], pe = [];
+  noteParts(text).forEach(p => { for (let i = p.line; i <= p.end; i++) { ps[i] = p.line; pe[i] = p.end; } });
+  return { ps, pe };
+}
+// ▲▼ / Alt+↑↓: the open line (with what belongs under it) steps over the neighbouring line together
+// with what belongs under THAT one, so it never lands inside another line's sub-list or section.
+// The first sub-item going ▲ steps out above its parent, the last one going ▼ steps out right after
+// the parent's list (both take the parent's depth). A blank line is one step.
+function noteMoveOpen(dir) {
+  if (!_lineEdit) return;
+  const { start, end, box } = _lineEdit;
+  const caret = box.selectionStart;
+  const text = el('itemEditNote').value, lines = noteLinesOf(text);
+  if (!lines.length) return;
+  const last = noteGroupEnd(lines, start, end);
+  const { ps, pe } = notePartBounds(text);
+  const solid = !!lines[start].trim(), isList = noteIsList(lines[start]), base = noteIndent(lines[start]);
+  let at, inPlace = false, depth = null;
+  if (dir < 0) {
+    if (start <= 0) return;
+    at = ps[start - 1];
+    if (solid && lines[at].trim()) {
+      // the unit right above = the outermost line whose run ends just above this one
+      let unit = -1;
+      for (let i = 0; i < start && unit < 0; i++) {
+        if (ps[i] === i && lines[i].trim() && noteGroupEnd(lines, i, pe[i]) === start - 1) unit = i;
+      }
+      if (unit >= 0) at = unit;
+      else if (isList && noteIndent(lines[at]) < base) depth = noteIndent(lines[at]);   // first under its parent → above it
+    }
+  } else {
+    if (last >= lines.length - 1) return;
+    const j = last + 1;
+    if (!solid || !lines[j].trim()) at = pe[j] + 1;
+    else if (isList && noteIndent(lines[j]) < base) {
+      // last under its parent → out, right after the parent's list, at the parent's depth
+      at = j; inPlace = true;
+      let p = start - 1;
+      while (p >= 0 && (!lines[p].trim() || noteIndent(lines[p]) >= base)) p--;
+      depth = p >= 0 ? noteIndent(lines[p]) : noteIndent(lines[j]);
+    }
+    else at = noteGroupEnd(lines, j, pe[j]) + 1;
+  }
+  const ns = noteMoveRun(start, last, at, inPlace, depth);
+  if (ns >= 0) startLineEdit(ns, caret);
+}
+// ⠿ drags a row; the rows indented under it dim and go along. A drop that misses every row (the
+// padding, the restore strip) takes the nearest one.
+function initNoteDnd() {
+  const view = el('itemEditNoteView');
+  if (!view || view._noteDnd) return;          // the view survives every re-render → attach once
+  view._noteDnd = true;
+  let along = [];
+  initDnd(view, (_s, _f, _raw, d) => noteRowDrop(d), {
+    grip: '.note-grip', nearest: true,
+    onBegin(src) {
+      const r = noteRowRange(src), last = noteGroupEnd(noteLinesOf(el('itemEditNote').value), r.start, r.end);
+      along = [...view.querySelectorAll('.note-row')].filter(x => {
+        if (x === src) return false;
+        const q = noteRowRange(x);
+        return q.start > r.end && q.start <= last;
+      });
+      dndAlong(along, true);
+    },
+    onEnd() { dndAlong(along, false); along = []; },
+  });
+}
+function noteRowDrop(d) {
+  if (!d || !d.src || !d.dst) return;
+  const lines = noteLinesOf(el('itemEditNote').value);
+  const s = noteRowRange(d.src), t = noteRowRange(d.dst);
+  noteMoveRun(s.start, noteGroupEnd(lines, s.start, s.end), d.before ? t.start : t.end + 1);
+}
+
+// lines[start..end] out of the note, kept for "↶ restore". A delete right next to the last deleted run
+// (the line that slid up into its place, or the one above it) joins that run: one strip, one restore.
+function noteDeleteLines(start, end) {
+  const before = el('itemEditNote').value, lines = noteLinesOf(before);
+  if (start < 0 || start >= lines.length) return false;
+  const gone = lines.splice(start, Math.min(end, lines.length - 1) - start + 1);
+  const top = _noteUndo[_noteUndo.length - 1];
+  let rec = (top && top.kind === 'del' && top.after === before) ? top : null;
+  if (rec) {
+    const gap = noteGapAt(rec, noteLinesOf(before));
+    if (gap === start) rec.lines = rec.lines.concat(gone);
+    else if (gap === start + gone.length) rec.lines = gone.concat(rec.lines);
+    else rec = null;
+  }
+  if (!rec) { rec = { kind: 'del', lines: gone }; noteUndoPush(rec); }
+  const after = lines.join('\n');
+  Object.assign(rec, { at: start, prev: start > 0 ? lines[start - 1] : null, next: start < lines.length ? lines[start] : null, after });
+  noteSetText(after);
+  return true;
+}
+// Where a deleted run goes back: between the line it came after and the line it came before, found by
+// their text — so typing or moving elsewhere in the meantime doesn't send it to the wrong place. The
+// spot it left wins when it still fits; otherwise the best fit nearest to it.
+function noteGapAt(rec, lines) {
+  const n = lines.length, hint = Math.max(0, Math.min(rec.at || 0, n));
+  const fit = i => ((rec.prev == null ? i === 0 : i > 0 && lines[i - 1] === rec.prev) ? 2 : 0)
+                 + ((rec.next == null ? i === n : i < n && lines[i] === rec.next) ? 1 : 0);
+  if (fit(hint) === 3) return hint;
+  let best = hint, score = 0, dist = Infinity;
+  for (let i = 0; i <= n; i++) {
+    const f = fit(i); if (!f) continue;
+    const d = Math.abs(i - hint);
+    if (f > score || (f === score && d < dist)) { best = i; score = f; dist = d; }
+  }
+  return best;
+}
+function noteRestoreRec(rec) {
+  const lines = noteLinesOf(el('itemEditNote').value);
+  const at = noteGapAt(rec, lines);
+  lines.splice(at, 0, ...rec.lines);
+  noteSetText(lines.join('\n'));
+  return at;
+}
+function noteLastGone() {
+  for (let i = _noteUndo.length - 1; i >= 0; i--) if (_noteUndo[i].kind === 'del') return _noteUndo[i];
+  return null;
+}
+// the strip's button: the last delete — also when a move was made after it
+function noteRestoreGone() {
+  const rec = noteLastGone(); if (!rec) return;
+  _noteUndo.splice(_noteUndo.indexOf(rec), 1);
+  noteRestoreRec(rec);
+}
+// Ctrl+Z: takes back the last delete or move → the line to open again, or null
+function noteUndo() {
+  const rec = _noteUndo.pop();
+  if (!rec) return null;
+  if (rec.kind === 'del') return noteRestoreRec(rec);
+  if (el('itemEditNote').value !== rec.after) {         // typed since — the old text back would lose that
+    showStatusMsg('↶ the move can’t be undone — the text has changed since', 3000);
+    return null;
+  }
+  noteSetText(rec.before);
+  return rec.from;
+}
+function noteGoneHtml(rec) {
+  const first = (rec.lines.find(l => l.trim()) || '').trim();
+  const what = first ? '“' + esc(first.length > 80 ? first.slice(0, 80) + '…' : first) + '”' : 'an empty line';
+  const more = rec.lines.length > 1 ? ' + ' + (rec.lines.length - 1) + ' more' : '';
+  return '<div class="note-gone note-ctl"><span class="note-gone-txt">deleted ' + what + more + '</span>'
+    + '<button class="btn-io" onmousedown="event.preventDefault()" onclick="noteRestoreGone()" title="put it back where it was (Ctrl+Z)">↶ restore</button></div>';
+}
+// × at the end of the open line: the whole piece goes (a table: all of it), nothing stays open
+function noteDelOpenPart() {
+  if (!_lineEdit) return;
+  const { start, end } = _lineEdit;
+  closeLineEdit(false);
+  if (!noteDeleteLines(start, end)) renderNoteView();
+}
+// Shift+Backspace in the open line: the line goes and the one above opens at its end, as after a
+// Backspace. In a table, or a line holding Shift+Enter breaks, only the line the caret is on goes —
+// through the box itself, so the box's own Ctrl+Z still has it.
+function lineEditDeleteLine(box) {
+  if (!_lineEdit) return;
+  if (box.value.includes('\n')) { if (taDeleteLines(box)) noteFieldChanged(box); return; }
+  const { start, end } = _lineEdit;
+  closeLineEdit(false);
+  if (!noteDeleteLines(start, end)) renderNoteView();
+  if (start > 0) startLineEdit(start - 1, null);
+  else startLineEdit(0, 0);                             // the first line went: carry on in the new first one
+}
+// Shift+Backspace in a raw field: the line(s) under the caret / selection go, the caret ends at the end
+// of the line above. Through execCommand, so the field's own Ctrl+Z brings them back.
+function taDeleteLines(ta) {
+  const v = ta.value, a = ta.selectionStart;
+  let b = ta.selectionEnd;
+  if (b > a && v[b - 1] === '\n') b--;                  // a selection ending at a line start leaves that line alone
+  const from = v.lastIndexOf('\n', a - 1) + 1;
+  let to = v.indexOf('\n', b); if (to < 0) to = v.length;
+  let dFrom = from, dTo = to;
+  if (to < v.length) dTo = to + 1;                      // the line and the break after it…
+  else if (from > 0) dFrom = from - 1;                  // …or, for the last line, the break before it
+  if (dFrom === dTo) return false;                      // an empty field: nothing to take
+  ta.focus();
+  ta.setSelectionRange(dFrom, dTo);
+  let ok = false;
+  try { ok = document.execCommand('delete'); } catch (_) {}
+  if (!ok) ta.setRangeText('', dFrom, dTo, 'start');
+  const c = from > 0 ? from - 1 : 0;
+  ta.setSelectionRange(c, c);
+  return true;
+}
+
 // A tap is read on pointerdown — that is the last moment the rendered DOM still matches what the
 // user is looking at (the blur of an open line rebuilds it) — and acted on in the click, which
 // only comes for a real tap and not for a drag that scrolled the note.
@@ -3563,13 +3923,23 @@ function noteViewPointerDown(e) {
   _noteTapLoc = null;
   if (_noteEditing) return;
   if (_lineEdit && _lineEdit.box.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('.note-ctl')) return;   // grip, ▲▼ ×, the restore strip — not a tap into the text
   if (mdLinkTapped(e)) { _noteTapLoc = { link: e.target.closest('a[href]').href }; return; }
   const loc = srcLocFromPoint(e);
   _noteTapLoc = loc || { line: -1, col: 0 };         // tapped the padding → the end of the text
 }
+// With a line open, a press elsewhere in the view must not blur it: the blur redraws the view, the
+// element under the pointer is replaced, and the browser then drops the click (its press started on an
+// element that is gone) — the tapped line would never open. The click does it instead: opening the
+// tapped line closes the open one first. A press that turns into a scroll leaves the line open.
+function noteViewMouseDown(e) {
+  if (_noteEditing || !_lineEdit || _lineEdit.box.contains(e.target)) return;
+  e.preventDefault();
+}
 function noteViewClick(e) {
   if (_noteEditing) return;
   if (_lineEdit && _lineEdit.box.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('.note-ctl')) { _noteTapLoc = null; return; }
   const t = _noteTapLoc; _noteTapLoc = null;
   if (!t) return;
   if (t.link) { e.preventDefault(); openLinkNewTab(t.link); return; }
@@ -3640,7 +4010,9 @@ function srcLocFromPoint(e) {
     if (p) { node = p.offsetNode; off = p.offset; }
   }
   const host = node && (node.nodeType === 3 ? node.parentElement : node);
-  const lnEl = host && host.closest && host.closest('[data-ln]');
+  // a caret position on the row itself (next to the line's box) still means that row's line
+  const rowOf = host && host.closest && host.closest('.note-row');
+  const lnEl = host && host.closest && (host.closest('[data-ln]') || (rowOf && rowOf.querySelector(':scope > [data-ln]')));
   if (!lnEl || !view.contains(lnEl)) return null;                 // padding, or outside → caller decides
   const lines = ta.value.split('\n');
   let lineIdx = +lnEl.dataset.ln;
@@ -3746,20 +4118,20 @@ function buildChkRows(box) {
   }
   const vis = chkVisibleIdxs(lines);
   const trows = ieTaskRows(lines);             // a block's list = its tasks → each shows the length it has / will get
+  const depth = noteDepths(lines);             // a nested item is shown indented, like on the Text tab
   box.innerHTML = lines.map((ln, i) => {
     const it = parseChkLine(ln);
     if (!it) return ln.trim() ? `<div class="chk-plain md">${noteDisplay(ln.trim())}</div>` : '';   // heading / prose — editable on the Text tab
     if (chkHideDone && it.done) return '';
-    const pos = vis.indexOf(i);
-    return `<div class="chk-row" draggable="true" data-idx="${i}">
-      <span class="chk-grip" title="drag to reorder">⠿</span>
+    return `<div class="chk-row${depth[i] ? ' lv' + Math.min(depth[i], 3) : ''}" draggable="true" data-idx="${i}">
+      <span class="chk-grip" title="drag to reorder — the items under it go along">⠿</span>
       <input type="checkbox" class="chk-box" ${it.done ? 'checked' : ''} onchange="toggleChkItem(${i})">
       <span class="chk-text md${it.done ? ' done' : ''}${it.text.trim() ? '' : ' blank'}" onclick="mdLinkTapped(event)||startChkEdit(${i},this)"
         title="edit the text">${it.text.trim() ? mdInline(it.text) : 'empty'}</span>
       ${trows[i] ? chkDurHtml(i, trows[i]) : ''}
       <div class="chk-move">
-        <button onclick="moveChkItem(${i},-1)" ${pos === 0 ? 'disabled' : ''} title="move up">▲</button>
-        <button onclick="moveChkItem(${i},1)" ${pos === vis.length - 1 ? 'disabled' : ''} title="move down">▼</button>
+        <button onclick="moveChkItem(${i},-1)" ${chkSibling(lines, i, -1) < 0 ? 'disabled' : ''} title="move up, with the items under it">▲</button>
+        <button onclick="moveChkItem(${i},1)" ${chkSibling(lines, i, 1) < 0 ? 'disabled' : ''} title="move down, with the items under it">▼</button>
       </div>
       <button class="chk-del" onclick="deleteChkItem(${i})" title="delete the item">
         <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
@@ -3785,30 +4157,71 @@ function setAllChkItems(done) {
   });
   if (n) ieSetNoteLines(lines);
 }
-// ↑/↓ swaps with the neighbouring ITEM — headings and prose between them stay where they are
-function moveChkItem(lineIdx, dir) {
-  const lines = ieNoteLines(), idxs = chkVisibleIdxs(lines);
-  const pos = idxs.indexOf(lineIdx);
-  if (pos < 0) return;
-  const other = idxs[pos + dir];
-  if (other == null) return;
-  [lines[lineIdx], lines[other]] = [lines[other], lines[lineIdx]];
-  ieSetNoteLines(lines);
+// how deep every line sits under the lines above it (by indentation) — the Checklist tab's indent
+function noteDepths(lines) {
+  const out = [], stack = [];
+  lines.forEach((ln, i) => {
+    if (!ln.trim()) { out[i] = 0; return; }
+    const ind = noteIndent(ln);
+    while (stack.length && stack[stack.length - 1] >= ind) stack.pop();
+    out[i] = stack.length;
+    stack.push(ind);
+  });
+  return out;
 }
-// drag: a true line move (the item can cross a heading), raw = insertion line from initDnd
+// ▲▼ swap the item with its neighbouring sibling — the next item at the same depth under the same
+// parent — each with the items under it, so a move never tears a sub-list apart. Headings and prose
+// between them stay where they are, and so do ticked-off siblings while "hide" is on (a move is always
+// a visible one). -1 = no sibling that way (the button is greyed out).
+function chkSibling(lines, i, dir) {
+  const base = noteIndent(lines[i]);
+  for (let k = dir < 0 ? i - 1 : noteGroupEnd(lines, i, i) + 1; k >= 0 && k < lines.length; k += dir) {
+    const ln = lines[k];
+    if (!ln.trim()) continue;
+    const ind = noteIndent(ln);
+    if (ind < base) return -1;                 // the parent / the end of its list: no sibling beyond it
+    if (ind > base) continue;                  // under another sibling
+    const it = parseChkLine(ln);
+    if (it && !(chkHideDone && it.done)) return k;
+  }
+  return -1;
+}
+function moveChkItem(lineIdx, dir) {
+  const lines = ieNoteLines();
+  if (!parseChkLine(lines[lineIdx])) return;
+  const k = chkSibling(lines, lineIdx, dir);
+  if (k < 0) return;
+  const a = Math.min(k, lineIdx), b = Math.max(k, lineIdx);
+  const aEnd = noteGroupEnd(lines, a, a), bEnd = noteGroupEnd(lines, b, b);
+  const out = [...lines.slice(0, a), ...lines.slice(b, bEnd + 1), ...lines.slice(aEnd + 1, b),
+               ...lines.slice(a, aEnd + 1), ...lines.slice(bEnd + 1)];
+  noteApplyMove(lines.join('\n'), out.join('\n'), lineIdx);
+}
+// drag: a true line move (the item can cross a heading) together with the items under it,
+// raw = insertion line from initDnd
 function moveChkLineTo(fromLine, rawLine) {
   const lines = ieNoteLines();
   if (fromLine < 0 || fromLine >= lines.length) return;
-  const [ln] = lines.splice(fromLine, 1);
-  let at = rawLine; if (fromLine < at) at--;
-  lines.splice(Math.max(0, Math.min(at, lines.length)), 0, ln);
-  ieSetNoteLines(lines);
+  noteMoveRun(fromLine, noteGroupEnd(lines, fromLine, fromLine), rawLine);
+}
+// rows that go along with a dragged one: dimmed, and not a drop target either
+function dndAlong(rows, on) {
+  rows.forEach(r => { r.classList.toggle('dragging', on); r.style.pointerEvents = on ? 'none' : ''; });
 }
 function initChkDnd() {
   const box = el('ieChkList');
   if (!box || box._chkDnd) return;    // the container survives every re-render → attach once
   box._chkDnd = true;
-  initDnd(box, (src, _final, raw) => moveChkLineTo(src, raw));
+  let along = [];
+  initDnd(box, (src, _final, raw) => moveChkLineTo(src, raw), {
+    nearest: true,
+    onBegin(row) {
+      const i = +row.dataset.idx, last = noteGroupEnd(ieNoteLines(), i, i);
+      along = [...box.querySelectorAll('.chk-row')].filter(r => +r.dataset.idx > i && +r.dataset.idx <= last);
+      dndAlong(along, true);
+    },
+    onEnd() { dndAlong(along, false); along = []; },
+  });
 }
 function deleteChkItem(lineIdx) {
   const lines = ieNoteLines();
@@ -3993,17 +4406,22 @@ function mdTable(rows, lineIdx) {
 // A table is a block: it swallows the newlines around it, so no empty line appears next to it.
 // Every piece carries data-ln = the line it came from, which is how a click in the rendered
 // view finds its place in the source (see srcPosFromView).
-function noteDisplay(s) {
+// the pieces of a note: one per source line, a table one piece over all of its rows (line..end)
+function noteParts(s) {
   const lines = (s || '').split('\n'), parts = [];
   for (let i = 0; i < lines.length; i++) {
     if (MD_ROW_RE.test(lines[i]) && MD_DIV_RE.test(lines[i + 1] || '')) {
       const rows = [lines[i], lines[i + 1]];
       let j = i + 2;
       while (j < lines.length && MD_ROW_RE.test(lines[j])) rows.push(lines[j++]);
-      parts.push({ block: true, html: mdTable(rows, i) });
+      parts.push({ block: true, line: i, end: j - 1, html: mdTable(rows, i) });
       i = j - 1;
-    } else parts.push({ block: false, line: i, html: mdLine(lines[i]) });
+    } else parts.push({ block: false, line: i, end: i, blank: !lines[i].trim(), html: mdLine(lines[i]) });
   }
+  return parts;
+}
+function noteDisplay(s) {
+  const parts = noteParts(s);
   // The line break belongs INSIDE the line's own span. An empty line has nothing else to hit, so
   // with the breaks sitting between the spans a tap on it landed on no [data-ln] at all and could
   // not be opened (the only way to delete one was the raw mode). A table is a block: it swallows
@@ -4011,6 +4429,27 @@ function noteDisplay(s) {
   return parts.map((p, i) => p.block ? p.html
     : `<span class="md-ln" data-ln="${p.line}">${p.html}`
       + (parts[i + 1] && !parts[i + 1].block ? '\n' : '') + '</span>').join('');
+}
+// The dialog's own view: the same pieces as rows — ⠿ to drag, ▲▼ × shown on the open one. A row knows
+// its source lines (data-idx..data-end); the body inside keeps data-ln for the tap → source mapping.
+// No whitespace between the tags: the view is pre-wrap, so any would show up as text.
+const NOTE_GRIP = '<span class="note-grip note-ctl" onmousedown="event.preventDefault()" title="drag to move the line — what belongs under it goes along (its sub-items, the list right under it, a heading’s section)">⠿</span>';
+const NOTE_ROW_CTL = '<span class="note-row-ctl note-ctl">'
+  + '<span class="note-mv"><button class="note-up" onmousedown="event.preventDefault()" onclick="noteMoveOpen(-1)" title="move the line up, with what belongs under it (Alt+↑)">▲</button>'
+  + '<button class="note-down" onmousedown="event.preventDefault()" onclick="noteMoveOpen(1)" title="move the line down, with what belongs under it (Alt+↓)">▼</button></span>'
+  + '<button class="note-del" onmousedown="event.preventDefault()" onclick="noteDelOpenPart()" title="delete the line (Shift+Backspace) — ↶ restore or Ctrl+Z brings it back">'
+  + '<svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg></button></span>';
+const NOTE_EMPTY_ROW = '<div class="note-row empty" data-idx="0" data-end="0">' + NOTE_GRIP
+  + '<div class="md-ln" data-ln="0"><span class="note-view-empty">More text — description, notes, subtasks…</span></div>'
+  + NOTE_ROW_CTL + '</div>';
+function noteRows(s) {
+  // an empty line gets a zero-width space: a real text node keeps its height AND gives a tap on it a
+  // caret position inside the line (see srcLocFromPoint), not on the row around it
+  return noteParts(s).map(p => ({
+    start: p.line,
+    html: `<div class="note-row${p.blank ? ' blank' : ''}" draggable="true" data-idx="${p.line}" data-end="${p.end}">`
+      + NOTE_GRIP + (p.block ? p.html : `<div class="md-ln" data-ln="${p.line}">${p.html || '​'}</div>`) + NOTE_ROW_CTL + '</div>',
+  }));
 }
 
 // Text tab: Ctrl/⌘+B and Ctrl/⌘+I wrap the selection in the mark — pressing the same
@@ -4076,9 +4515,15 @@ function mdShortcut(e, f) {
   return false;
 }
 
-// Source mode: Enter on an item line continues the list (an empty item ends it)
+// Source mode: Enter on an item line continues the list (an empty item ends it); Shift+Backspace
+// deletes the whole line, as in the formatted view
 function noteKeydown(e, ta) {
   if (mdShortcut(e, ta)) return;
+  if (e.key === 'Backspace' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
+    if (taDeleteLines(ta)) noteFieldChanged(ta);
+    return;
+  }
   if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
   const pos = ta.selectionStart;
   if (pos !== ta.selectionEnd) return;                       // a selection → plain Enter
@@ -7397,13 +7842,17 @@ document.addEventListener('keydown', e => {
     }
   }
   if (chkAddShortcut(e)) return;
+  // with an item's dialog on top, Ctrl+Z belongs to its note (a deleted / moved line) — the app's own
+  // undo would change the day underneath the open dialog
+  const openBg = document.querySelectorAll('.modal-bg.open');
+  const itemDlg = !!openBg.length && openBg[openBg.length - 1].id === 'itemEditModal';
   if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
     const a = document.activeElement;
-    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); if (!itemDlg) redo(); }
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) {
     const a = document.activeElement;
-    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); undo(); }
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); if (itemDlg) noteUndo(); else undo(); }
   }
 });
 
@@ -10417,6 +10866,9 @@ function dndScroller(container, onStep) {
 // opts.grip = selector of a dedicated drag handle. Without it the whole row is draggable (a tap on a
 // control never starts a drag) and touch needs a long-press; with a grip the drag can only start there,
 // so on touch it begins immediately — the row itself stays scrollable and its fields stay editable.
+// opts.nearest = off every row but within the list's width → the row nearest in height is the target.
+// opts.onBegin(srcRow) / opts.onEnd() = around an actual drag (e.g. to dim rows that go along).
+// onDrop(src, final, raw, { src, dst, before }) — the last argument has the rows themselves.
 function initDnd(container, onDrop, opts = {}) {
   const gripSel = opts.grip || null;
   container.addEventListener('dragstart', e => e.preventDefault());   // suppress native drag
@@ -10428,10 +10880,23 @@ function initDnd(container, onDrop, opts = {}) {
   const SCROLL_THRESHOLD = 12;  // px of movement before long-press (touch) → scroll, cancel
   const TOUCH_HOLD = 180;       // ms hold (touch/pen) → drag
 
+  const nearestRow = (x, y) => {
+    const cr = container.getBoundingClientRect();
+    if (x < cr.left || x > cr.right) return null;
+    let best = null, bd = Infinity;
+    container.querySelectorAll('[draggable="true"]').forEach(r => {
+      if (r === srcRow || r.style.pointerEvents === 'none') return;   // the dragged row and what goes along
+      const b = r.getBoundingClientRect();
+      const d = y < b.top ? b.top - y : (y > b.bottom ? y - b.bottom : 0);
+      if (d < bd) { bd = d; best = r; }
+    });
+    return best;
+  };
   const rowAt = (x, y) => {
     const t = document.elementFromPoint(x, y);
     const r = t && t.closest('[draggable="true"]');
-    return (r && container.contains(r)) ? r : null;
+    if (r && container.contains(r)) return r;
+    return opts.nearest ? nearestRow(x, y) : null;
   };
   const beginDrag = () => {
     if (dragging || !srcRow) return;
@@ -10439,6 +10904,7 @@ function initDnd(container, onDrop, opts = {}) {
     srcRow.classList.add('dragging');
     srcRow.style.pointerEvents = 'none';            // so elementFromPoint sees the row under the finger
     document.body.style.userSelect = 'none';
+    if (opts.onBegin) opts.onBegin(srcRow);
   };
   // indicator for the row under the last known pointer position (also called while auto-scrolling)
   const markTarget = () => {
@@ -10453,6 +10919,7 @@ function initDnd(container, onDrop, opts = {}) {
     autoScroll.stop();
     _dndClearIndicators(container);
     if (srcRow) { srcRow.classList.remove('dragging'); srcRow.style.pointerEvents = ''; }
+    if (dragging && opts.onEnd) opts.onEnd();
     document.body.style.userSelect = '';
     document.removeEventListener('pointermove', onMove, true);
     document.removeEventListener('pointerup', onUp, true);
@@ -10483,13 +10950,13 @@ function initDnd(container, onDrop, opts = {}) {
       container.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(r => {
         insertBefore = r.classList.contains('drag-over-top'); dstRow = r;
       });
-      const s = srcIdx;
+      const s = srcIdx, sRow = srcRow;
       if (dstRow && s !== null) {
         const dstIdx = parseInt(dstRow.dataset.idx);
         const rawIdx = insertBefore ? dstIdx : dstIdx + 1;
         let finalIdx = rawIdx; if (s < finalIdx) finalIdx--;
         end();
-        if (finalIdx !== s) onDrop(s, finalIdx, rawIdx);
+        if (finalIdx !== s) onDrop(s, finalIdx, rawIdx, { src: sRow, dst: dstRow, before: insertBefore });
         return;
       }
     }
@@ -12187,7 +12654,7 @@ window.addEventListener('resize', updateAppGrid);
   <div class="modal" style="max-width:620px;gap:.6rem;max-height:90vh;overflow:hidden">
     <h2>Formatting a description</h2>
     <p>The description stays plain text — the marks below only change how it is <b>shown</b>. Nothing extra is stored, so sync, export and an older version of the app see the same note as always.</p>
-    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. The <b>⟨⟩ source</b> button puts the whole description into one raw field. Every item remembers on its own how it was left — formatted or source, ticked-off items hidden or shown, Text or Checklist tab (on this device).</p>
+    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. <b>⠿</b> in front of a line drags it somewhere else, and what belongs under it goes along: the lines indented deeper under it, the list right under a plain line (<code>Shopping</code> + <code>- milk</code>), a heading’s whole section up to the next heading of its level. A list item dropped into another list takes its depth. The open line also has <b>▲▼</b> (Alt+↑/↓) and <b>×</b>; on the Checklist tab ⠿ and ▲▼ also move an item with the items under it. <b>Shift+Backspace</b> deletes the whole line (in the source field too); a deleted line leaves a <b>↶ restore</b> strip where it was, and Ctrl+Z brings it back as well. The <b>⟨⟩ source</b> button puts the whole description into one raw field. Every item remembers on its own how it was left — formatted or source, ticked-off items hidden or shown, Text or Checklist tab (on this device).</p>
     <div class="modal-scroll">
       <div class="sc-legend">
         <h3>Inside a line</h3>
