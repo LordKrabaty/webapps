@@ -517,6 +517,35 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.notes-tab:not(.active):hover{color:var(--black)}}
 .notes-pane{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;gap:calc(.35rem/var(--pzc,1))}
 .notes-pane.active{display:flex}
+/* ── UPKEEP card: replace every N / stock — most urgent first ── */
+.up-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:calc(.5rem/var(--pzc,1))}
+.up-list{display:flex;flex-direction:column;gap:calc(.3rem/var(--pzc,1));flex-shrink:0}
+.up-row{display:flex;flex-direction:column;gap:calc(.22rem/var(--pzc,1));flex-shrink:0;min-width:0;padding:calc(.4rem/var(--pzc,1)) calc(.45rem/var(--pzc,1));border:var(--b);border-radius:var(--r)}
+.up-row.attn{border:var(--bh)}
+.up-line{display:flex;align-items:center;gap:.35rem;min-width:0}
+.up-name{flex:1 1 5rem;min-width:0;font-size:.9rem;color:var(--black);cursor:pointer;overflow-wrap:anywhere;line-height:1.3}
+.up-row.attn .up-name{font-weight:600}
+@media(hover:hover){.up-name:hover{text-decoration:underline}}
+.up-tag{flex:0 0 auto;font-size:.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--black);border:var(--bh);border-radius:var(--r);padding:0 .3rem;line-height:1.5}
+.up-when{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:.74rem;color:var(--muted);white-space:nowrap}
+.up-row.attn .up-when{color:var(--black);font-weight:600}
+.up-btn{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:.85rem;padding:.3rem .6rem;line-height:1.1}
+.up-bar{height:3px;background:var(--light);border-radius:2px;overflow:hidden}
+.up-bar>i{display:block;height:100%;background:var(--dark)}
+.up-row.over .up-bar>i{background:var(--black)}
+.up-meta{font-size:.72rem;color:var(--muted);line-height:1.45}
+.up-stock{color:var(--dark);cursor:pointer;border-bottom:1px dashed var(--mid)}
+@media(hover:hover){.up-stock:hover{color:var(--black);border-bottom-color:var(--black)}}
+.up-note{font-size:.72rem;color:var(--muted);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.up-empty{color:var(--muted);font-size:.82rem;font-style:italic;line-height:1.5;padding:.5rem 0}
+.up-empty code{font-family:'DM Mono',monospace;font-style:normal;color:var(--black)}
+.up-foot{display:flex;gap:.3rem;flex-shrink:0}
+.up-step-row{display:flex;align-items:center;gap:.3rem;min-width:0}
+.up-step-row input,.up-step-row select{flex:1 1 auto;min-width:0}
+.up-step{flex:0 0 auto;font-family:'DM Mono',monospace;padding:.38rem .7rem}
+.up-hist{font-size:.74rem;color:var(--muted);line-height:1.5}
+.up-hint{font-size:.72rem;color:var(--muted);line-height:1.45}
+#upNote{flex:0 0 auto;resize:none;overflow:hidden}
 /* day windows (profiles) — row above the task tabs */
 .win-tabs{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.45rem;flex-shrink:0;align-items:center}
 .win-tab{display:inline-flex;align-items:center;gap:.28rem;font-family:'DM Sans',sans-serif;font-size:.74rem;padding:.24rem .5rem;background:var(--w);color:var(--black);border:var(--b);border-radius:var(--r);cursor:pointer;line-height:1.2;max-width:170px}
@@ -851,6 +880,7 @@ textarea::placeholder{color:var(--mid)}
       <button class="notes-tab" id="tab-pristi" onclick="switchNotesTab('pristi')">Next</button>
       <button class="notes-tab" id="tab-pozdeji" onclick="switchNotesTab('pozdeji')">Later</button>
       <button class="notes-tab" id="tab-inbox" onclick="switchNotesTab('inbox')">Inbox</button>
+      <button class="notes-tab" id="tab-upkeep" onclick="switchNotesTab('upkeep')" title="things to replace or restock — toothbrush, filters, flea treatment, supplies">Upkeep <span class="ie-tab-count" id="upkeepCount"></span></button>
       <button class="notes-tab" id="tab-hotovo" onclick="switchNotesTab('hotovo')">Done</button>
     </div>
     <!-- shared add field — same for Week / Next / Inbox / Later (target by active card) -->
@@ -892,6 +922,25 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div id="pane-inbox" class="notes-pane">
       <div id="inbox-list" style="overflow-y:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:.1rem"></div>
+    </div>
+    <div id="pane-upkeep" class="notes-pane">
+      <div class="up-scroll">
+        <div id="upkeep-list" class="up-list"></div>
+        <div class="up-foot"><button class="btn-add" onclick="openUpkeepEdit(null)">+ new item</button></div>
+        <details class="recur-legend">
+          <summary>Shortcuts — how to add an item</summary>
+          <p style="margin:.35rem 0 0">Type into the field above, one item per line, and press Enter. The words that are not a shortcut make the name.</p>
+          <table>
+            <tr><td><code>toothbrush 2m</code></td><td>replace every 2 months (<code>d</code> <code>w</code> <code>m</code> <code>y</code>), counting from today</td></tr>
+            <tr><td><code>filter 4w 1.11.</code></td><td>… last replaced on 1.11.</td></tr>
+            <tr><td><code>#3</code></td><td>3 in stock (spares)</td></tr>
+            <tr><td><code>+4</code></td><td>a pack has 4 — the +4 button adds it to the stock</td></tr>
+            <tr><td><code>pouches 2/d +24</code></td><td>used up by itself, 2 a day (<code>/d</code> <code>/w</code> <code>/m</code>) — the stock counts down on its own</td></tr>
+            <tr><td><code>batteries #6 +4</code></td><td>stock only — −1 when you take one</td></tr>
+          </table>
+          <p style="margin:.4rem 0 0"><b>↻</b> = replaced today: restarts the countdown and takes one spare from the stock. <b>+N</b> = a pack bought. Tap a name to edit it, tap the stock to set what you counted. The number on the tab = items due now or to buy (within the warning days before the supply runs out).</p>
+        </details>
+      </div>
     </div>
     <div id="pane-pozdeji" class="notes-pane">
       <div class="later-add-row" style="align-items:center">
@@ -1336,7 +1385,8 @@ textarea::placeholder{color:var(--mid)}
 //     from its own payload, so older builds must stop pushing.
 // 5 = evaluations carry 1–5 ratings: one with ratings but no text is a real record now, which an older
 //     build treats as empty and drops from its payload; plus the rating-metric config in `settings`.
-const APP_SCHEMA = 5;
+// 6 = upkeep (`upkeep`): a new collection an older build would drop from its own payload.
+const APP_SCHEMA = 6;
 // ── STORAGE KEYS ─────────────────────────────────────────────────────────────
 const SESSION_KEY   = 'todo-app-v1-session';
 const LIBRARY_KEY   = 'todo-app-v1-library';
@@ -1382,6 +1432,7 @@ let weekPlans = [];
 let workingDaysByWeek = {}; // { 'YYYY-MM-DD': [dayNums] } keyed by Monday ISO date
 let undoStack = [], redoStack = [], savedSnapshot = null;
 let laterUndoStack = [], laterRedoStack = [];   // separate undo stack for the Later card (declared early because of undo()/updateUndoBtn())
+let upkeepUndoStack = [], upkeepRedoStack = [];   // … and for the Upkeep card (dtto)
 let autoSave = false;
 const UNDO_MAX = 40;
 
@@ -1408,7 +1459,7 @@ function cleanIncoming(rec) {
   const keep = (k, f, optional) => { if (out[k] != null) out[k] = okRecs(out[k], f, optional); };
   keep('items'); keep('teas'); keep('archive');
   keep('weekDays', 'date'); keep('weekPlans', 'date'); keep('weekDays', 'id', true); keep('weekPlans', 'id', true);
-  keep('recurrences', 'id', true); keep('weekNotes', 'key'); keep('evals', 'id', true);
+  keep('recurrences', 'id', true); keep('weekNotes', 'key'); keep('evals', 'id', true); keep('upkeep');
   keep('inbox', 'id', true); keep('later', 'ym');
   if (out.settings && typeof out.settings === 'object' && out.settings.blockTypes != null)
     out.settings = { ...out.settings, blockTypes: okRecs(out.settings.blockTypes, 'key') };
@@ -5003,13 +5054,13 @@ function pushRegistry() { try { if (typeof window.pushWindowRegistry === 'functi
 // does the active window have any data at all? (decides whether autosync creates a gist for a window without a Gist ID)
 function windowHasData() {
   return !!(library.length || archive.length || weekDays.length || weekPlans.length || inbox.length || cleanLater().length
-    || recurrences.length || weekNotes.length || evals.length || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
+    || recurrences.length || weekNotes.length || evals.length || upkeep.length || items.length || Object.keys(BLOCK_TYPES).some(k => !DEFAULT_BLOCK_TYPES[k]));
 }
 
 // per-window keys (for deleting a window) — incl. sync keys from the IIFE (values are stable)
 function winKeyBases() {
   return [SESSION_KEY, LIBRARY_KEY, ARCHIVE_KEY, BLOCKTYPES_KEY, BLOCKTYPES_ORDER_KEY, BLOCKTYPES_DELETED_KEY,
-    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, WEEKNOTES_KEY, EVALS_KEY, EVAL_METRICS_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_YEAR_COLLAPSE_KEY, LATER_HORIZON_KEY,
+    WEEKPLANS_KEY, WORKDAYS_KEY, WEEK_KEY, WEEKNOTES_KEY, EVALS_KEY, EVAL_METRICS_KEY, INBOX_KEY, LATER_KEY, LATER_COLLAPSE_KEY, LATER_YEAR_COLLAPSE_KEY, LATER_HORIZON_KEY, UPKEEP_KEY,
     'todo-app-gist-id', 'todo-app-tombstones', 'todo-app-syncknown'];
 }
 
@@ -5044,10 +5095,10 @@ function activateWindow(id) {
   if (typeof window.adoptWindowSyncState === 'function') { try { window.adoptWindowSyncState(); } catch(e) {} }
   try { localStorage.setItem(ACTIVE_WIN_KEY, id); } catch(e) {}
   activeLibId = null; savedSnapshot = null;
-  undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; highlightedId = null; planWeekOffset = 0;
+  undoStack = []; redoStack = []; laterUndoStack = []; laterRedoStack = []; upkeepUndoStack = []; upkeepRedoStack = []; highlightedId = null; planWeekOffset = 0;
   BLOCK_TYPES = { ...DEFAULT_BLOCK_TYPES }; blockTypeOrder = [];
   laterCollapsed = null; laterYearCollapsed = null; doneCollapsed = null;   // reload Later / Done collapse state under WK() of the new window
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes(); loadEvals(); loadEvalMetrics();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes(); loadEvals(); loadEvalMetrics(); loadUpkeep();
   if (typeof window.setWindowLoading === 'function') { try { window.setWindowLoading(false); } catch(e) {} }   // all collections belong to `id` from here on
   migrateWeekNotesToEvals();
   activePlanDate = todayIso();
@@ -5057,10 +5108,10 @@ function activateWindow(id) {
     items = []; windowStart = '6:00'; windowEnd = '14:00'; dayNote = '';
   }
   renderWindowTabs(); renderLibrary(); renderBlockTypeList(); renderWorkDayPicker();
-  renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
+  renderAll(); renderWeekTab(); renderDayButtons(); renderInbox(); renderUpkeep();
   populateLaterAddMonth(); renderLater(); updateUndoBtn(); updateQuickInputPlaceholder();
   // keep the currently open card when switching windows (e.g. stay on "Later", do not jump back to "Week")
-  const keepTab = ['tyden','pristi','pozdeji','inbox','hotovo'].find(n => el('tab-' + n)?.classList.contains('active')) || 'tyden';
+  const keepTab = ['tyden','pristi','pozdeji','inbox','upkeep','hotovo'].find(n => el('tab-' + n)?.classList.contains('active')) || 'tyden';
   switchNotesTab(keepTab);
   // one reconcile now that everything belongs to this window (the saves during the load were frozen);
   // any push it schedules waits for the cloud check below (pull-before-push gate)
@@ -5158,7 +5209,7 @@ function quickAddPlaceholder() {
 function updateQuickInputPlaceholder() {
   const ta = el('quickInput');
   if (!ta) return;
-  ta.placeholder = quickAddPlaceholder();
+  if (!isUpkeepTabActive()) ta.placeholder = quickAddPlaceholder();   // Upkeep keeps its own (set in switchNotesTab)
   updateAbbrevHint();
 }
 
@@ -5185,7 +5236,7 @@ function presentBlockAbbrevs(list) {
 function updateAbbrevHint() {
   const hint = el('abbrevHint');
   if (!hint) return;
-  if (!addCtx || addCtx.kind !== 'day') { hint.innerHTML = ''; return; }   // block abbreviations only on a Day (Week/Next)
+  if (!addCtx || addCtx.kind !== 'day' || isUpkeepTabActive()) { hint.innerHTML = ''; return; }   // block abbreviations only on a Day (Week/Next)
   const list = addCtx.list || [];
   const { blocks } = presentBlockAbbrevs(list);
   hint.innerHTML = blocks.map(b =>
@@ -6419,6 +6470,7 @@ function pushUndo() {
 }
 function undo() {
   if (typeof isLaterTabActive === 'function' && isLaterTabActive()) { laterUndo(); return; }   // the Later card has its own undo
+  if (isUpkeepTabActive()) { upkeepUndo(); return; }                                            // … and so does Upkeep
   if (!undoStack.length) return;
   redoStack.push(sessionSnap());
   const d = JSON.parse(undoStack.pop());
@@ -6428,6 +6480,7 @@ function undo() {
 }
 function redo() {
   if (typeof isLaterTabActive === 'function' && isLaterTabActive()) { laterRedo(); return; }
+  if (isUpkeepTabActive()) { upkeepRedo(); return; }
   if (!redoStack.length) return;
   undoStack.push(sessionSnap());
   if (undoStack.length > UNDO_MAX) undoStack.shift();
@@ -6437,8 +6490,8 @@ function redo() {
   schedSave(); updateUndoBtn(); renderLibrary(); renderAll(); renderDayButtons();
 }
 function updateUndoBtn() {
-  const onLater = (typeof isLaterTabActive === 'function') && isLaterTabActive();
-  const us = onLater ? laterUndoStack : undoStack, rs = onLater ? laterRedoStack : redoStack;
+  const onLater = (typeof isLaterTabActive === 'function') && isLaterTabActive(), onUp = isUpkeepTabActive();
+  const us = onLater ? laterUndoStack : onUp ? upkeepUndoStack : undoStack, rs = onLater ? laterRedoStack : onUp ? upkeepRedoStack : redoStack;
   const u = el('undoBtn');
   if (u) { u.disabled = !us.length; u.title = us.length ? 'undo ' + us.length + ' (Ctrl+Z)' : 'nothing to undo'; }
   const r = el('redoBtn');
@@ -7002,6 +7055,7 @@ function doExport() {
   if (rec.length) payload.recurrences = rec;   // recurrence rules (otherwise ghosts will not be generated on another device)
   const wn = weekNotes.filter(n => n && n.key && n.text); if (wn.length) payload.weekNotes = wn;   // legacy week notes
   const evx = evals.filter(e => e && e.id != null && evalHasContent(e)); if (evx.length) payload.evals = evx;   // evaluations
+  if (upkeep.length) payload.upkeep = upkeep;   // upkeep items
   attachEvalMetrics(payload);
   payload.schema = APP_SCHEMA;
   const json = JSON.stringify(payload, null, 2);
@@ -7038,7 +7092,7 @@ window._importWeekDays = []; window._importWeekPlans = [];
 function openImportModal() {
   importForceRestore = false;
   importData = []; importSelected = new Set();
-  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importInboxMt = 0; window._importLater = []; window._importRecur = []; window._importWeekNotes = []; window._importEvals = [];
+  window._importWeekDays = []; window._importWeekPlans = []; window._importSettings = null; window._importInbox = []; window._importInboxMt = 0; window._importLater = []; window._importRecur = []; window._importWeekNotes = []; window._importEvals = []; window._importUpkeep = [];
   const recurRow = el('impRecurRow'); if (recurRow) recurRow.style.display = 'none';
   el('importModal').classList.remove('from-cloud');
   el('importModal').querySelector('h2').textContent = 'Import';
@@ -7068,7 +7122,8 @@ function parseImportJson(text) {
     const hasInbox = parsed.inbox && parsed.inbox.length > 0;
     const hasLater = parsed.later && parsed.later.length > 0;
     const hasRecur = parsed.recurrences && parsed.recurrences.length > 0;
-    if (!its.length && !hasDays && !hasPlans && !hasInbox && !hasLater && !hasRecur) throw new Error('No items in the file');
+    const hasUpkeep = Array.isArray(parsed.upkeep) && parsed.upkeep.length > 0;
+    if (!its.length && !hasDays && !hasPlans && !hasInbox && !hasLater && !hasRecur && !hasUpkeep) throw new Error('No items in the file');
     importData = its; importSelected = new Set(its.map(x => x.id));
     if (its.length) {
       el('importList').innerHTML = its.map(x => `<label class="modal-item sel" id="ii-${esc(x.id)}"><input type="checkbox" checked onchange="toggleImportSel(${jsArg(x.id)},this.checked)" />${esc(x.name||String(x.id))}</label>`).join('');
@@ -7084,6 +7139,7 @@ function parseImportJson(text) {
     window._importRecur = (parsed.recurrences || []).map(normRecur).filter(Boolean);
     window._importWeekNotes = (parsed.weekNotes || []).filter(n => n && n.key && n.text);
     window._importEvals = (parsed.evals || []).map(normEval).filter(evalHasContent);
+    window._importUpkeep = (Array.isArray(parsed.upkeep) ? parsed.upkeep : []).map(normUpkeep).filter(Boolean);
     // later: convert the old flat form to monthly buckets right away so the tree groups correctly by years
     let impLater = parsed.later || [];
     if (impLater.length && impLater[0] && impLater[0].ym && !Array.isArray(impLater[0].items)) impLater = migrateFlatLater(impLater);
@@ -7167,7 +7223,7 @@ function doImport() {
   const addInbox = el('impInbox')?.checked && window._importInbox?.length;
   const addLater = laterSrc.length;
   const addRecur = el('impRecur')?.checked && window._importRecur?.length;
-  if (!toAdd.length && !addWdays && !addWplans && !addBlocks && !addWorkDays && !addInbox && !addLater && !addRecur) { customAlert('Nothing is selected.'); return; }
+  if (!toAdd.length && !addWdays && !addWplans && !addBlocks && !addWorkDays && !addInbox && !addLater && !addRecur && !(window._importUpkeep || []).length) { customAlert('Nothing is selected.'); return; }
   let tplAdded = 0, tplUpdated = 0;
   if (toAdd.length) {
     // dedup by id — update an existing template in place, do not duplicate (same behavior as blocks/days)
@@ -7278,6 +7334,14 @@ function doImport() {
     else { n.mt = importStamp(n.mt); evals.push(n); evAdded++; }
   });
   if (evAdded || evUpdated) saveEvals();
+  // upkeep — LWW by id (no separate selection UI either; carried with the import / restore)
+  let upAdded = 0, upUpdated = 0;
+  (window._importUpkeep || []).forEach(n => {
+    const i = upkeep.findIndex(x => String(x.id) === String(n.id));
+    if (i >= 0) { if (!importRecordWins(n.mt, upkeep[i].mt)) return; n.mt = importStamp(n.mt); upkeep[i] = n; upUpdated++; }
+    else { n.mt = importStamp(n.mt); upkeep.push(n); upAdded++; }
+  });
+  if (upAdded || upUpdated) { saveUpkeep(); renderUpkeep(); }
   // rating metrics — one whole record, plain LWW (not forced by a restore: it is config, not content)
   const imEm = s && s.evalMetrics;
   const emUpdated = !!(imEm && Array.isArray(imEm.list) && (+imEm.mt || 0) > evalMetrics.mt);
@@ -7301,6 +7365,7 @@ function doImport() {
   if (laterAdded) msgs.push(laterAdded + ' months to Later');
   if (recurAdded + recurUpdated) msgs.push((recurAdded + recurUpdated) + ' recurrences' + (recurUpdated ? ' (' + recurUpdated + ' updated)' : ''));
   if (wnAdded + wnUpdated) msgs.push((wnAdded + wnUpdated) + ' week notes');
+  if (upAdded + upUpdated) msgs.push((upAdded + upUpdated) + ' upkeep' + (upUpdated ? ' (' + upUpdated + ' updated)' : ''));
   closeModal('importModal');
   if (importForceRestore) showSave('↩ restored: ' + (msgs.length ? msgs.join(', ') : 'nothing selected'));
   else showSave('↓ imported: ' + (msgs.length ? msgs.join(', ') : 'no change (local version is newer)'));
@@ -7308,7 +7373,7 @@ function doImport() {
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────────
 el('quickInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addQuickItems('TASK'); }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (isUpkeepTabActive()) addUpkeepFromInput(); else addQuickItems('TASK'); }
 });
 
 document.addEventListener('keydown', e => {
@@ -8023,6 +8088,360 @@ function renderInbox() {
 
 // inline edit + move for inbox rows
 function iSendToField(idx) { sendItemToField(INBOXCTX, idx); }
+
+// ── UPKEEP ────────────────────────────────────────────────────────
+// Things that wear out or run out: replace every N days / weeks / months / years (toothbrush, fountain
+// filter, flea treatment) and / or a supply in stock (spares, cat pouches). One tap ↻ = "replaced today"
+// (restarts the countdown, takes one spare from the stock), one tap +N = a pack bought. A consumable with a
+// use rate ("2/d") is never tapped per use: its stock is estimated from the last count
+// (stock − rate × days since stockAt) and the list says when it runs out.
+// Sync: its own collection, LWW over the whole item by `id` (tombstones "up:"), per day window like the rest.
+const UPKEEP_KEY = 'todo-app-v1-upkeep';
+// [{ id, name, every:{n,u}|null, last:'YYYY-MM-DD'|'', stock:number|null, stockAt:'YYYY-MM-DD'|'',
+//    use:{n,u}|null, pack, lead, note, hist:['YYYY-MM-DD', …], mt }]
+let upkeep = [];
+const UP_UNITS = { d: ['day', 'days'], w: ['week', 'weeks'], m: ['month', 'months'], y: ['year', 'years'] };
+const UP_USE_DAYS = { d: 1, w: 7, m: 30.44 };   // a use rate "n per unit" → per day
+const UP_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UP_HIST_MAX = 12;
+const UP_UNDO_MAX = 40;
+
+function upNum(v, min, max) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = +v; return isFinite(n) ? Math.min(max, Math.max(min, n)) : null;
+}
+function upRound(x) { return Math.round(x * 100) / 100; }
+// { n, u } with a known unit and n > 0 → normalized copy, otherwise null
+function upPeriod(p, units, intOnly) {
+  if (!p || typeof p !== 'object' || !Object.prototype.hasOwnProperty.call(units, p.u)) return null;
+  const v = upNum(p.n, 0, 999); if (v == null) return null;
+  const n = intOnly ? Math.round(v) : upRound(v);
+  return n > 0 ? { n, u: p.u } : null;
+}
+function newUpkeepId() { return 'up' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }   // passes idOk
+function normUpkeep(u) {
+  if (!u || typeof u !== 'object') return null;
+  const stock = upNum(u.stock, 0, 1e6), lead = upNum(u.lead, 0, 365);
+  return {
+    ...u,                                                    // preserve-unknown: fields a newer build added survive the round-trip
+    id: u.id != null ? u.id : newUpkeepId(),
+    name: String(u.name || ''),
+    every: upPeriod(u.every, UP_UNITS, true),               // replace every n units (null = no interval)
+    last: (typeof u.last === 'string' && UP_ISO_RE.test(u.last)) ? u.last : '',            // last replaced
+    stock: stock == null ? null : upRound(stock),            // spares / supply in stock — null = not tracked
+    stockAt: (typeof u.stockAt === 'string' && UP_ISO_RE.test(u.stockAt)) ? u.stockAt : '', // the day that stock was right
+    use: upPeriod(u.use, UP_USE_DAYS, false),                // used up by itself: n per day / week / month (null = no)
+    pack: Math.max(1, Math.round(upNum(u.pack, 1, 1e5) || 1)),                            // what +N adds
+    lead: lead == null ? 7 : Math.round(lead),               // warn this many days before the supply runs out
+    note: String(u.note || ''),
+    hist: Array.isArray(u.hist) ? u.hist.filter(d => typeof d === 'string' && UP_ISO_RE.test(d)).slice(0, UP_HIST_MAX) : [],
+    mt: +u.mt || 0,
+  };
+}
+function loadUpkeep() {
+  let raw = []; try { raw = JSON.parse(localStorage.getItem(WK(UPKEEP_KEY)) || '[]'); } catch(e) {}
+  upkeep = (Array.isArray(raw) ? raw : []).map(normUpkeep).filter(Boolean);
+}
+function saveUpkeep() { try { localStorage.setItem(WK(UPKEEP_KEY), JSON.stringify(upkeep)); } catch(e) {} }
+window.dumpUpkeep = () => upkeep;   // console: dumpUpkeep()
+
+// dates — local calendar days; differences via UTC of the two dates, so a DST change never shifts them by an hour
+function upDate(iso) { const p = String(iso).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function upDays(aIso, bIso) {   // b − a in days
+  const a = upDate(aIso), b = upDate(bIso);
+  return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 864e5);
+}
+function upAddDays(iso, n) { const d = upDate(iso); d.setDate(d.getDate() + n); return isoOfDate(d); }
+// iso + k intervals; months / years always from the same base, clamped to the month end (31.1. + 1 month = 28./29.2.)
+function upAddEvery(iso, ev, k) {
+  const d = upDate(iso), n = ev.n * (k == null ? 1 : k);
+  if (ev.u === 'd' || ev.u === 'w') { d.setDate(d.getDate() + n * (ev.u === 'w' ? 7 : 1)); return isoOfDate(d); }
+  const day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + n * (ev.u === 'y' ? 12 : 1));
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+  return isoOfDate(d);
+}
+// "D.M." / "D.M.YYYY" → ISO; without a year the last such day not after today (a replacement lies in the past)
+function upDmToIso(d, m, y, today) {
+  const mk = yy => { const dt = new Date(yy, m - 1, d); return (dt.getMonth() === m - 1 && dt.getDate() === d) ? isoOfDate(dt) : null; };
+  if (y) return mk(y);
+  const ty = +today.slice(0, 4), iso = mk(ty);
+  return (!iso || iso > today) ? mk(ty - 1) : iso;
+}
+
+// labels
+function upDM(iso) {
+  if (!iso) return '';
+  const d = upDate(iso);
+  return d.getDate() + '.' + (d.getMonth() + 1) + '.' + (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() : '');
+}
+function upNumLabel(x) { return String(upRound(+x || 0)); }
+function upEveryLabel(ev) { return !ev ? '' : ev.n === 1 ? 'every ' + UP_UNITS[ev.u][0] : 'every ' + ev.n + ' ' + UP_UNITS[ev.u][1]; }
+function upUseLabel(use) { return use ? upNumLabel(use.n) + '/' + UP_UNITS[use.u][0] : ''; }   // "2/day"
+function upSpan(n) {   // a number of days as a short distance: 5 d · 3 wk · 4 mo · 2 y
+  const a = Math.abs(n);
+  return a < 14 ? a + ' d' : a < 60 ? Math.round(a / 7) + ' wk' : a < 730 ? Math.round(a / 30.44) + ' mo' : Math.round(a / 365.25) + ' y';
+}
+function upWhenLabel(left) { return left === 0 ? 'today' : left === 1 ? 'tomorrow' : left < 0 ? upSpan(left) + ' over' : 'in ' + upSpan(left); }
+function upRate(u) { return u && u.use ? u.use.n / UP_USE_DAYS[u.use.u] : 0; }
+
+// everything the list needs about one item on `today`:
+//  due / left  — next replacement and the days to it (negative = overdue); frac = how far into the interval
+//  est         — stock now (a use-rate item: estimated from the last count)
+//  outIso / supply — when the supply runs out (the one in use + the spares) and the days until then
+//  buy         — it runs out within `lead` days (a stock-only item: when it hits 0)
+//  act         — days until something needs doing (replace, or buy `lead` days ahead) → the sort key
+//  attn        — due / overdue or to buy → counts on the tab
+function upStatus(u, today) {
+  const s = { due: null, left: null, frac: 0, est: null, outIso: null, supply: null, buy: false, act: Infinity, attn: false };
+  if (u.every && u.last) {
+    s.due = upAddEvery(u.last, u.every, 1);
+    s.left = upDays(today, s.due);
+    const span = Math.max(1, upDays(u.last, s.due));
+    s.frac = Math.min(1, Math.max(0, (span - s.left) / span));
+  }
+  const rate = upRate(u);
+  if (u.stock != null) {
+    if (rate > 0) {
+      const since = u.stockAt ? Math.max(0, upDays(u.stockAt, today)) : 0;
+      s.est = Math.max(0, u.stock - rate * since);
+      s.supply = Math.floor(s.est / rate + 1e-9);
+      s.outIso = upAddDays(today, s.supply);
+    } else {
+      s.est = u.stock;
+      if (s.due) { s.outIso = upAddEvery(u.last, u.every, 1 + Math.floor(u.stock)); s.supply = upDays(today, s.outIso); }
+    }
+    s.buy = s.supply != null ? s.supply <= u.lead : s.est <= 0;
+  }
+  if (s.left != null) s.act = s.left;
+  if (s.supply != null) s.act = Math.min(s.act, s.supply - u.lead);
+  else if (s.buy) s.act = Math.min(s.act, 0);
+  s.attn = (s.left != null && s.left <= 0) || s.buy;
+  return s;
+}
+
+function isUpkeepTabActive() { try { return !!el('pane-upkeep')?.classList.contains('active'); } catch(e) { return false; } }
+function updateUpkeepBadge() {
+  const b = el('upkeepCount'); if (!b) return;
+  const today = todayIso();
+  const n = upkeep.reduce((k, u) => k + (upStatus(u, today).attn ? 1 : 0), 0);
+  b.textContent = n ? String(n) : '';
+}
+let _upLastHtml = null;   // the last list markup written (re-rendered every 10 min — skip when nothing changed)
+function renderUpkeep() {
+  updateUpkeepBadge();
+  const c = el('upkeep-list'); if (!c) return;
+  const today = todayIso();
+  const html = !upkeep.length
+    ? '<div class="up-empty">Nothing yet. Type e.g. <code>toothbrush 2m</code> into the field above and press Enter — more in the shortcuts below.</div>'
+    : upkeep.map(u => ({ u, s: upStatus(u, today) }))
+        .sort((a, b) => (a.s.act - b.s.act) || a.u.name.localeCompare(b.u.name))   // most urgent first; Infinity − Infinity = NaN → by name
+        .map(r => upkeepRowHtml(r.u, r.s)).join('');
+  if (html !== _upLastHtml) { c.innerHTML = html; _upLastHtml = html; }
+}
+function upkeepRowHtml(u, s) {
+  const id = jsArg(String(u.id)), rate = upRate(u);
+  const cls = 'up-row' + (s.attn ? ' attn' : '') + (s.left != null && s.left < 0 ? ' over' : '');
+  // right side: the next replacement, or how long a use-rate supply lasts (the count itself is in the meta line)
+  const when = s.left != null ? upWhenLabel(s.left)
+    : (u.every && !u.last) ? 'no date'
+    : (rate && s.supply != null) ? (s.supply <= 0 ? 'empty' : upSpan(s.supply) + ' left')
+    : '';
+  const btns = [];
+  if (u.every) btns.push(`<button class="btn-sm up-btn" onclick="upReset(${id})" title="replaced today — restarts the countdown${u.stock != null && !rate ? ' and takes 1 from the stock' : ''}">↻</button>`);
+  if (!u.every && !rate && u.stock != null) btns.push(`<button class="btn-sm up-btn" onclick="upUseOne(${id})" title="took one — 1 less in stock">−1</button>`);
+  if (u.stock != null || rate) btns.push(`<button class="btn-sm up-btn" onclick="upRestock(${id})" title="bought a pack — adds ${esc(u.pack)} to the stock">+${esc(u.pack)}</button>`);
+  const meta = [];
+  if (u.every) meta.push(esc(upEveryLabel(u.every)) + (u.last ? ' · ' + esc(upDM(u.last)) + ' → ' + esc(upDM(s.due)) : ''));
+  if (rate) meta.push(esc(upUseLabel(u.use)));
+  const stockLink = txt => `<span class="up-stock" onclick="openUpkeepEdit(${id},'stock')" title="set the stock you counted">${esc(txt)}</span>`;
+  if (u.stock != null) {
+    meta.push(stockLink((rate ? '~' + Math.round(s.est) : upNumLabel(s.est)) + ' in stock'));
+    if (rate && s.outIso) meta.push('runs out ~' + esc(upDM(s.outIso)));
+  } else if (rate) meta.push(stockLink('count the stock'));
+  return `<div class="${cls}" data-id="${esc(u.id)}">`
+    + `<div class="up-line"><span class="up-name" onclick="openUpkeepEdit(${id})" title="edit">${esc(u.name || '(untitled)')}</span>`
+    + (s.buy ? '<span class="up-tag" title="the supply runs out soon — buy more">buy</span>' : '')
+    + (when ? `<span class="up-when">${esc(when)}</span>` : '') + btns.join('') + '</div>'
+    + (s.due ? `<div class="up-bar"><i style="width:${Math.round(s.frac * 100)}%"></i></div>` : '')
+    + (meta.length ? `<div class="up-meta">${meta.join(' · ')}</div>` : '')
+    + (u.note ? `<div class="up-note">${esc(u.note)}</div>` : '')
+    + '</div>';
+}
+
+// undo / redo — the Upkeep card has its own stack (↩/↪ in the header switch to it while the card is open)
+function upkeepSnap() { return JSON.stringify(upkeep); }
+function applyUpkeepSnap(json) {
+  let arr; try { arr = JSON.parse(json); } catch(e) { return; }
+  if (!Array.isArray(arr)) return;
+  const sig = u => { const c = { ...u }; delete c.mt; return JSON.stringify(c); };
+  const cur = new Map(upkeep.map(u => [String(u.id), sig(u)]));
+  const now = Date.now();
+  // an item the undo really changes gets a fresh stamp — otherwise the version already pushed to the cloud
+  // would win the next merge (LWW) and quietly redo what was undone
+  upkeep = arr.map(normUpkeep).filter(Boolean).map(u => { if (cur.get(String(u.id)) !== sig(u)) u.mt = now; return u; });
+  saveUpkeep(); renderUpkeep();
+}
+function pushUpUndo() { upkeepUndoStack.push(upkeepSnap()); if (upkeepUndoStack.length > UP_UNDO_MAX) upkeepUndoStack.shift(); upkeepRedoStack = []; updateUndoBtn(); }
+function upkeepUndo() { if (!upkeepUndoStack.length) return; upkeepRedoStack.push(upkeepSnap()); applyUpkeepSnap(upkeepUndoStack.pop()); updateUndoBtn(); showStatusMsg('↩ undone', 1500); }
+function upkeepRedo() { if (!upkeepRedoStack.length) return; upkeepUndoStack.push(upkeepSnap()); applyUpkeepSnap(upkeepRedoStack.pop()); updateUndoBtn(); }
+
+// one-tap actions
+function upFind(id) { return upkeep.find(u => String(u.id) === String(id)); }
+function upReset(id) {
+  const u = upFind(id); if (!u || !u.every) return;
+  const today = todayIso();
+  // a second tap the same day is almost always a double tap (slow e-ink refresh) — it would eat another spare
+  if (u.last === today) { showStatusMsg('↻ ' + u.name + ' — already replaced today (↩ undoes it)', 2600); return; }
+  pushUpUndo();
+  u.last = today;
+  u.hist = [today, ...(u.hist || []).filter(d => d !== today)].slice(0, UP_HIST_MAX);
+  let msg = '↻ ' + u.name + ' — next ' + upDM(upAddEvery(today, u.every, 1));
+  if (u.stock != null && !upRate(u)) {   // a use-rate item counts down by itself
+    if (u.stock >= 1) { u.stock = upRound(u.stock - 1); msg += ' · ' + upNumLabel(u.stock) + ' left in stock'; }
+    else msg += ' · the stock was already empty';
+  }
+  u.mt = Date.now();
+  saveUpkeep(); renderUpkeep();
+  showStatusMsg(msg, 2600);
+}
+function upRestock(id) {
+  const u = upFind(id); if (!u) return;
+  pushUpUndo();
+  const today = todayIso(), s = upStatus(u, today);
+  u.stock = upRound((s.est || 0) + u.pack); u.stockAt = today;   // a use-rate item: from today's estimate on
+  u.mt = Date.now();
+  saveUpkeep(); renderUpkeep();
+  showStatusMsg('+' + u.pack + ' ' + u.name + ' — ' + (upRate(u) ? '~' + Math.round(u.stock) : upNumLabel(u.stock)) + ' in stock', 2200);
+}
+function upUseOne(id) {
+  const u = upFind(id); if (!u || u.stock == null) return;
+  if (u.stock <= 0) { showStatusMsg(u.name + ' — the stock is already empty', 2200); return; }
+  pushUpUndo();
+  u.stock = Math.max(0, upRound(u.stock - 1)); u.stockAt = todayIso();
+  u.mt = Date.now();
+  saveUpkeep(); renderUpkeep();
+  showStatusMsg('−1 ' + u.name + ' — ' + upNumLabel(u.stock) + ' left', 2200);
+}
+
+// quick add — one line = one item; the words that are not a shortcut make the name:
+//   2m 4w 30d 1y (also r2m) = interval · 2/d 3/w 1/m = use rate · #3 = in stock · +4 = pack · 1.11. = last replaced
+function parseUpkeepLine(line, today) {
+  let every = null, use = null, stock = null, pack = null, last = '';
+  const name = [];
+  line.split(/\s+/).forEach(tok => {
+    const t = tok.toLowerCase(); let m;
+    if (!every && (m = t.match(/^r?(\d{1,3})([dwmy])$/)) && +m[1] >= 1) { every = { n: +m[1], u: m[2] }; return; }
+    if (!use && (m = t.match(/^(\d{1,4}(?:[.,]\d{1,2})?)\/([dwm])$/))) {
+      const n = parseFloat(m[1].replace(',', '.'));
+      if (n > 0) { use = { n, u: m[2] }; return; }
+    }
+    if (stock == null && (m = t.match(/^#(\d{1,6})$/))) { stock = +m[1]; return; }
+    if (pack == null && (m = t.match(/^\+(\d{1,5})$/)) && +m[1] >= 1) { pack = +m[1]; return; }
+    if (!last && (m = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?$/))) {
+      const iso = upDmToIso(+m[1], +m[2], m[3] ? +m[3] : 0, today);
+      if (iso) { last = iso; return; }
+    }
+    name.push(tok);
+  });
+  const nm = name.join(' ').trim();
+  if (!nm) return null;
+  if (pack != null && stock == null) stock = 0;   // a pack size means the stock is tracked — empty until +N
+  return normUpkeep({ id: newUpkeepId(), name: nm, every, last: every ? (last || today) : last, stock, stockAt: today,
+    use, pack: pack || 1, lead: 7, note: '', hist: [], mt: Date.now() });
+}
+function addUpkeepFromInput() {
+  const ta = el('quickInput'); if (!ta) return;
+  const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  const today = todayIso(), added = [], left = [];
+  lines.forEach(l => { const u = parseUpkeepLine(l, today); if (u) added.push(u); else left.push(l); });
+  if (!added.length) { showStatusMsg('⚠ a name is missing — e.g. "toothbrush 2m"', 3000); return; }
+  pushUpUndo();
+  upkeep.push(...added);
+  saveUpkeep();
+  ta.value = left.join('\n');   // a line without a name stays in the field
+  renderUpkeep();
+  const bare = added.some(u => !u.every && !u.use && u.stock == null);
+  showStatusMsg('+ ' + added.map(u => u.name).join(', ') + (bare ? ' — tap the name to set an interval or a stock' : ''), bare ? 3500 : 2200);
+}
+
+// editor (also "+ new item")
+let upEditId = null, upEditStockShown = '';
+function openUpkeepEdit(id, focus) {
+  const u = id != null ? upFind(id) : null;
+  if (id != null && !u) return;
+  upEditId = u ? u.id : null;
+  const today = todayIso(), s = u ? upStatus(u, today) : null;
+  el('upTitle').textContent = u ? 'Upkeep item' : 'New upkeep item';
+  el('upName').value = u ? u.name : '';
+  el('upEveryN').value = u && u.every ? u.every.n : '';
+  el('upEveryU').value = u && u.every ? u.every.u : 'm';
+  el('upLast').value = u ? u.last : today;
+  // a use-rate item shows its estimated stock; saving it untouched keeps the original count and its date
+  upEditStockShown = (u && u.stock != null) ? (upRate(u) ? String(Math.round(s.est)) : upNumLabel(s.est)) : '';
+  el('upStock').value = upEditStockShown;
+  el('upPack').value = u ? u.pack : 1;
+  el('upLead').value = u ? u.lead : 7;
+  el('upUseN').value = u && u.use ? u.use.n : '';
+  el('upUseU').value = u && u.use ? u.use.u : 'd';
+  el('upNote').value = u ? u.note : '';
+  el('upHist').innerHTML = (u && u.hist.length) ? 'Replaced: ' + u.hist.map(d => esc(upDM(d))).join(' · ') : '';
+  el('upDelBtn').style.display = u ? '' : 'none';
+  el('upkeepModal').classList.add('open');
+  autoGrowTextarea(el('upNote'));
+  // focus only with a mouse — on a phone / e-ink the keyboard would cover the steppers
+  const f = focus === 'stock' ? el('upStock') : (!u ? el('upName') : null);
+  if (f && window.matchMedia && matchMedia('(hover:hover)').matches) setTimeout(() => { try { f.focus(); if (f.select) f.select(); } catch(e) {} }, 30);
+}
+// − / + next to a number field (empty + "+" starts at 1, empty + "−" stays empty)
+function upStep(inputId, delta, min) {
+  const inp = el(inputId); if (!inp) return;
+  const v = String(inp.value).trim(), cur = v === '' ? NaN : +v.replace(',', '.');
+  if (!isFinite(cur)) { if (delta > 0) inp.value = String(Math.max(min, 1)); return; }
+  inp.value = String(Math.max(min, upRound(cur + delta)));
+}
+function saveUpkeepEdit() {
+  const name = el('upName').value.trim();
+  if (!name) { showStatusMsg('⚠ the name is empty', 2200); el('upName').focus(); return; }
+  const today = todayIso();
+  const old = upEditId != null ? upFind(upEditId) : null;
+  if (upEditId != null && !old) { closeModal('upkeepModal'); showStatusMsg('the item was deleted meanwhile', 2200); return; }   // e.g. by sync
+  const lastIn = el('upLast').value;
+  const draft = { ...(old || { id: newUpkeepId(), hist: [], stock: null, stockAt: '' }),
+    name,
+    every: { n: el('upEveryN').value, u: el('upEveryU').value },
+    use: { n: String(el('upUseN').value).replace(',', '.'), u: el('upUseU').value },
+    last: UP_ISO_RE.test(lastIn) ? lastIn : '',
+    pack: el('upPack').value, lead: el('upLead').value, note: el('upNote').value };
+  const next = normUpkeep(draft);
+  if (next.every && !next.last) next.last = today;   // an interval needs a start — today unless set
+  const stockIn = String(el('upStock').value).trim();
+  const useChanged = !!old && JSON.stringify(old.use) !== JSON.stringify(next.use);
+  if (stockIn === '') next.stock = null;                                          // not tracked
+  else if (!old || stockIn !== upEditStockShown) {                                // typed / stepped = counted today
+    next.stock = upRound(Math.min(1e6, Math.max(0, +stockIn.replace(',', '.') || 0))); next.stockAt = today;
+  } else if (useChanged) {                                                        // new rate applies from today on
+    next.stock = upRound(upStatus(old, today).est); next.stockAt = today;
+  }
+  const sig = x => { const c = { ...x }; delete c.mt; return JSON.stringify(c); };
+  if (old && sig(old) === sig(next)) { closeModal('upkeepModal'); return; }      // nothing changed → no new stamp
+  pushUpUndo();
+  next.mt = Date.now();
+  if (old) upkeep[upkeep.indexOf(old)] = next; else upkeep.push(next);
+  saveUpkeep(); closeModal('upkeepModal'); renderUpkeep();
+  showStatusMsg(old ? '✓ saved' : '+ ' + next.name, 1800);
+}
+async function deleteUpkeepItem() {
+  const u = upEditId != null ? upFind(upEditId) : null;
+  closeModal('upkeepModal');   // the shared confirm dialog would open UNDER this one
+  if (!u) return;
+  if (!await customConfirm('Delete "' + u.name + '"?', 'delete')) { el('upkeepModal').classList.add('open'); return; }
+  pushUpUndo();
+  upkeep = upkeep.filter(x => x !== u);
+  saveUpkeep(); renderUpkeep();
+  showStatusMsg('✕ ' + u.name + ' deleted (↩ undoes it)', 2400);
+}
 
 // ── LATER ─────────────────────────────────────────────────────────
 // Future plans sorted by month. Each month = bucket { ym, items:[…], mt }
@@ -8970,7 +9389,8 @@ function switchNotesTab(name) {
   el('pane-hotovo')?.classList.toggle('active', name === 'hotovo');
   el('pane-inbox')?.classList.toggle('active', name === 'inbox');
   el('pane-pozdeji')?.classList.toggle('active', name === 'pozdeji');
-  ['tyden','pristi','pozdeji','inbox','hotovo'].forEach(n => el('tab-' + n)?.classList.toggle('active', n === name));
+  el('pane-upkeep')?.classList.toggle('active', name === 'upkeep');
+  ['tyden','pristi','pozdeji','inbox','upkeep','hotovo'].forEach(n => el('tab-' + n)?.classList.toggle('active', n === name));
   // hide the shared add field only on Done
   const addArea = el('notes-add'); if (addArea) addArea.style.display = (name === 'hotovo') ? 'none' : '';
   // add target (addCtx) by the active card
@@ -8984,6 +9404,7 @@ function switchNotesTab(name) {
     if (isPlan) updateQuickInputPlaceholder();
     else if (name === 'inbox') qta.placeholder = 'task…';
     else if (name === 'pozdeji') qta.placeholder = '15.6. task  ·  15.-18.6. multi-day  ·  15.6. 9:00-10:00 event';
+    else if (name === 'upkeep') qta.placeholder = 'toothbrush 2m  ·  filter 4w #2 +6  ·  cat pouches 2/d +24';
   }
   // week selector + plan-ahead note only on the Next card
   const nwRow = el('nextWeekRow');
@@ -9014,6 +9435,8 @@ function switchNotesTab(name) {
     renderWeekTab();
   } else if (name === 'inbox') {
     renderInbox();
+  } else if (name === 'upkeep') {
+    renderUpkeep();
   } else if (name === 'pozdeji') {
     populateLaterAddMonth();
     setAddCtxLater();
@@ -10394,7 +10817,7 @@ function init() {
   // day windows — first the registry + active window, then everything runs WK-namespaced
   loadWindows(); loadWinTomb();
   try { const a = localStorage.getItem(ACTIVE_WIN_KEY); if (a && dayWindows.some(w => w.id === a)) activeWin = a; } catch(e) {}
-  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes(); loadEvals(); loadEvalMetrics(); migrateWeekNotesToEvals();
+  loadLibrary(); loadArchive(); loadBlockTypes(); loadWeek(); loadWeekPlans(); loadWorkingDays(); loadInbox(); loadLater(); loadRecur(); loadWeekNotes(); loadEvals(); loadEvalMetrics(); loadUpkeep(); migrateWeekNotesToEvals();
 
   const today = todayIso();
   activePlanDate = today;
@@ -10452,7 +10875,7 @@ function init() {
   }
 
   renderWindowTabs();
-  renderLibrary(); renderBlockTypeList(); renderWorkDayPicker(); renderAll(); renderWeekTab(); renderDayButtons(); renderInbox();
+  renderLibrary(); renderBlockTypeList(); renderWorkDayPicker(); renderAll(); renderWeekTab(); renderDayButtons(); renderInbox(); renderUpkeep();
   populateLaterAddMonth(); renderLater();
   if (activeLibId) markSaved();
   updateUndoBtn();
@@ -10460,6 +10883,9 @@ function init() {
   if (staleArchived) showSave('↓ archived: ' + formatDateCz(staleArchived));
   else if (rawSession) showSave('↓ restored');
   setInterval(() => renderTimeline(), 60000);
+  // Upkeep counts days → refresh the list + the tab number when the date may have changed (app left open overnight)
+  setInterval(() => renderUpkeep(), 10 * 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderUpkeep(); });
   updateQuickInputPlaceholder();
   loadHolidays();   // async, without await — must not block startup; after loading it re-renders affected views
 }
@@ -10643,6 +11069,7 @@ window.addEventListener('resize', updateAppGrid);
     if (wantRc) payload.recurrences = recurrences;   // recurrence rules (otherwise this upload would remove them from the cloud)
     { const wn = weekNotes.filter(n => n && n.key && n.text); if (wn.length) payload.weekNotes = wn; }   // legacy week notes (otherwise this upload would remove them)
     { const ev = evals.filter(e => e && e.id != null && evalHasContent(e)); if (ev.length) payload.evals = ev; }   // evaluations (dtto)
+    if (upkeep.length) payload.upkeep = upkeep;   // upkeep items (dtto)
     attachEvalMetrics(payload);
     payload.schema = APP_SCHEMA;
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }   // registr oken (hybrid)
@@ -10847,6 +11274,7 @@ window.addEventListener('resize', updateAppGrid);
     recurrences.forEach(e => { if (e && e.id != null)  s.add('rec:' + e.id); });
     weekNotes.forEach(n => { if (n && n.key && n.text)  s.add('wn:' + n.key); });   // empty notes do not count
     evals.forEach(e     => { if (e && e.id != null && evalHasContent(e)) s.add('ev:' + e.id); });
+    upkeep.forEach(u    => { if (u && u.id != null) s.add('up:' + u.id); });
     Object.keys(BLOCK_TYPES).forEach(k => { if (!DEFAULT_BLOCK_TYPES[k]) s.add('bt:' + k); });
     return s;
   }
@@ -10877,7 +11305,7 @@ window.addEventListener('resize', updateAppGrid);
   }
   // summary signature of the state (incl. tombstones) to detect a cloud↔local difference
   // mt is part of the signature → it also detects editing an existing item (same id/date, different content)
-  function sigOf(items, arch, inb, wd, wp, tomb, bt, lat, rec, wn, ev, em) {
+  function sigOf(items, arch, inb, wd, wp, tomb, bt, lat, rec, wn, ev, em, up) {
     const idS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
     const inS = arr => arr.map(x => String((x && x.id) || '') + '@' + ((x && x.mt) || 0)).sort().join('|') + ':' + arr.length;
     const dS  = arr => arr.map(x => String((x && x.date) || '') + '@' + ((x && x.mt) || 0)).sort().join(',') + ':' + arr.length;
@@ -10890,10 +11318,10 @@ window.addEventListener('resize', updateAppGrid);
     const evS = arr => { const a = (arr || []).filter(e => e && e.id != null && evalHasContent(e));
       return a.map(e => String(e.id) + '@' + (e.mt || 0)).sort().join(',') + ':' + a.length; };
     // rating-metric config = one whole record → its mt alone
-    return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || []), idS(rec || []), wnS(wn || []), evS(ev || []), String(+em || 0)].join('||');
+    return [idS(items), idS(arch), ibS(inb), dS(wd), dS(wp), tS(tomb), btS(bt), ymS(lat || []), idS(rec || []), wnS(wn || []), evS(ev || []), String(+em || 0), idS(up || [])].join('||');
   }
-  function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, cleanLater(), recurrences, weekNotes, evals, evalMetrics.mt); }
-  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], { items: r.inbox || [], mt: +r.inboxMt || 0 }, r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || [], r.recurrences || [], r.weekNotes || [], r.evals || [], r.settings && r.settings.evalMetrics && r.settings.evalMetrics.mt); }
+  function localSig() { return sigOf(library, archive, { items: inbox, mt: inboxMt }, weekDays, weekPlans, tombstones, buildSettingsExport().blockTypes, cleanLater(), recurrences, weekNotes, evals, evalMetrics.mt, upkeep); }
+  function cloudSig(r) { return sigOf(r.items || r.teas || [], r.archive || [], { items: r.inbox || [], mt: +r.inboxMt || 0 }, r.weekDays || [], r.weekPlans || [], r.tombstones || {}, (r.settings && r.settings.blockTypes) || [], r.later || [], r.recurrences || [], r.weekNotes || [], r.evals || [], r.settings && r.settings.evalMetrics && r.settings.evalMetrics.mt, Array.isArray(r.upkeep) ? r.upkeep : []); }
 
   // the toolbar button also serves as a status indicator
   function updateAutoSyncBtn() {
@@ -10942,6 +11370,7 @@ window.addEventListener('resize', updateAppGrid);
     payload.recurrences = recurrences;                  // recurrence rules (always, even empty — deletion propagation)
     payload.weekNotes = weekNotes.filter(n => n && n.key && n.text);   // legacy week notes — carried unchanged for older builds
     payload.evals = evals.filter(e => e && e.id != null && evalHasContent(e));   // evaluations (always, even empty — deletion propagation)
+    payload.upkeep = upkeep;                            // upkeep items (always, even empty — deletion propagation)
     const cl = cleanLater(); if (cl.length) payload.later = cl;   // ghosts are not synced
     // the window registry travels only in the main bin (other windows data is in their own bins)
     if (activeWin === 'main') { payload.windows = registryForPush(); payload.winTomb = winTombstones; }
@@ -11231,6 +11660,9 @@ window.addEventListener('resize', updateAppGrid);
     // evaluations — LWW by id (the whole record wins: text, day and period travel together)
     const evR = lwwMerge(evals, (record.evals || []).map(normEval).filter(Boolean), 'ev', x => x.id, c => c);
     evals = evR.arr; added += evR.added; updated += evR.updated; removed += evR.removed;
+    // upkeep — LWW by id (the whole item wins: interval, last replacement, stock and its count date travel together)
+    const upR = lwwMerge(upkeep, (Array.isArray(record.upkeep) ? record.upkeep : []).map(normUpkeep).filter(Boolean), 'up', x => x.id, c => c);
+    upkeep = upR.arr; added += upR.added; updated += upR.updated; removed += upR.removed;
     // archive — only add missing (append-only)
     const arcIds = new Set(archive.map(x => String(x.id)));
     (record.archive || []).forEach(it => {
@@ -11279,7 +11711,8 @@ window.addEventListener('resize', updateAppGrid);
       }
     }
     if (added || updated || removed) {
-      saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans(); saveRecur(); saveWeekNotes(); saveEvals();
+      saveLibrary(); saveArchive(); saveWeek(); saveWeekPlans(); saveRecur(); saveWeekNotes(); saveEvals(); saveUpkeep();
+      if (typeof renderUpkeep === 'function') renderUpkeep();
       if (typeof saveInbox === 'function') saveInbox();
       if (typeof saveLater === 'function') saveLater();
       if (typeof renderLibrary === 'function') renderLibrary();
@@ -11477,6 +11910,7 @@ window.addEventListener('resize', updateAppGrid);
     const lt = (rec.later || []).length;                         if (lt) parts.push(lt + ' later');
     const wn = (rec.weekNotes || []).length;                     if (wn) parts.push(wn + ' notes');
     const ev = (rec.evals || []).length;                         if (ev) parts.push(ev + ' eval');
+    const up = Array.isArray(rec.upkeep) ? rec.upkeep.length : 0; if (up) parts.push(up + ' upkeep');
     const b  = ((rec.settings && rec.settings.blockTypes) || []).length; if (b) parts.push(b + ' blk');
     const ar = (rec.archive || []).length;                       if (ar) parts.push(ar + ' arch');
     return parts.join(' · ');
@@ -11634,7 +12068,7 @@ window.addEventListener('resize', updateAppGrid);
   };
   loadTombstones(); loadKnownIds();
   // wrap the persistent save functions so deletions outside schedSave (inbox, blocks, plans…) also trigger sync
-  ['saveInbox','saveLater','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive','saveRecur','saveWeekNotes','saveEvals','saveEvalMetrics'].forEach(fn => {
+  ['saveInbox','saveLater','saveBlockTypes','saveWorkingDays','saveWeek','saveWeekPlans','saveLibrary','saveArchive','saveRecur','saveWeekNotes','saveEvals','saveEvalMetrics','saveUpkeep'].forEach(fn => {
     const orig = window[fn];
     if (typeof orig === 'function') window[fn] = function() { const r = orig.apply(this, arguments); try { autoSyncOnSave(); } catch(e) {} return r; };
   });
@@ -11878,6 +12312,89 @@ window.addEventListener('resize', updateAppGrid);
     <div class="modal-row" style="margin-top:.1rem">
       <button class="modal-btn primary" onclick="submitAddRecur()">add</button>
       <button class="modal-btn" onclick="cancelAddRecur()">cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upkeep item — edit / new (Upkeep card) -->
+<div class="modal-bg" id="upkeepModal">
+  <div class="modal" style="max-width:420px;gap:.6rem">
+    <h2 id="upTitle">Upkeep item</h2>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="upName" placeholder="e.g. Toothbrush" onkeydown="if(event.key==='Enter'){event.preventDefault();saveUpkeepEdit();}">
+    </div>
+    <div class="field">
+      <label>Replace every</label>
+      <div class="up-step-row">
+        <button type="button" class="btn-sm up-step" onclick="upStep('upEveryN',-1,1)">−</button>
+        <input type="number" id="upEveryN" min="1" max="999" inputmode="numeric" placeholder="—">
+        <button type="button" class="btn-sm up-step" onclick="upStep('upEveryN',1,1)">+</button>
+        <select id="upEveryU">
+          <option value="d">days</option>
+          <option value="w">weeks</option>
+          <option value="m">months</option>
+          <option value="y">years</option>
+        </select>
+      </div>
+      <div class="up-hint">Empty = no interval (a stock-only item).</div>
+    </div>
+    <div class="field">
+      <label>Last replaced</label>
+      <div class="up-step-row">
+        <input type="date" id="upLast">
+        <button type="button" class="btn-sm" onclick="el('upLast').value=todayIso()">today</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>In stock</label>
+      <div class="up-step-row">
+        <button type="button" class="btn-sm up-step" onclick="upStep('upStock',-1,0)">−</button>
+        <input type="number" id="upStock" min="0" step="any" inputmode="decimal" placeholder="not tracked">
+        <button type="button" class="btn-sm up-step" onclick="upStep('upStock',1,0)">+</button>
+        <button type="button" class="btn-sm" onclick="el('upStock').value=''" title="stop tracking the stock">✕</button>
+      </div>
+      <div class="up-hint">What you have now — a changed number counts as counted today.</div>
+    </div>
+    <div class="setup-grid">
+      <div class="field">
+        <label>Pack size (+N)</label>
+        <div class="up-step-row">
+          <button type="button" class="btn-sm up-step" onclick="upStep('upPack',-1,1)">−</button>
+          <input type="number" id="upPack" min="1" inputmode="numeric">
+          <button type="button" class="btn-sm up-step" onclick="upStep('upPack',1,1)">+</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Warn days ahead</label>
+        <div class="up-step-row">
+          <button type="button" class="btn-sm up-step" onclick="upStep('upLead',-1,0)">−</button>
+          <input type="number" id="upLead" min="0" max="365" inputmode="numeric">
+          <button type="button" class="btn-sm up-step" onclick="upStep('upLead',1,0)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Used up by itself</label>
+      <div class="up-step-row">
+        <input type="number" id="upUseN" min="0" step="any" inputmode="decimal" placeholder="—">
+        <select id="upUseU">
+          <option value="d">per day</option>
+          <option value="w">per week</option>
+          <option value="m">per month</option>
+        </select>
+      </div>
+      <div class="up-hint">E.g. 2 per day for cat pouches — the stock then counts down on its own and the list says when it runs out.</div>
+    </div>
+    <div class="field">
+      <label>Note</label>
+      <textarea id="upNote" rows="1" placeholder="brand, size, where to buy…" oninput="autoGrowTextarea(this)"></textarea>
+    </div>
+    <div id="upHist" class="up-hist"></div>
+    <div class="modal-row" style="margin-top:.1rem">
+      <button class="modal-btn primary" onclick="saveUpkeepEdit()">save</button>
+      <button class="modal-btn" onclick="closeModal('upkeepModal')">cancel</button>
+      <button class="modal-btn danger" id="upDelBtn" onclick="deleteUpkeepItem()">delete</button>
     </div>
   </div>
 </div>
