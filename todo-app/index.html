@@ -124,7 +124,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 /* Text tab: the tool row stays put at the bottom of the scrolling dialog — with the note scrolled
    (or the soft keyboard up) the buttons are still where the thumb expects them. Icons only, so it
    fits one line on a phone; what each one does is in its tooltip and in "? formatting". */
-#iePaneText .ie-bar{position:sticky;bottom:0;z-index:2;background:var(--w);border-top:1px solid var(--light);padding-top:calc(.35rem/var(--pzc,1));margin-top:calc(.1rem/var(--pzc,1))}
+#iePaneText .ie-bar,#iePaneList .ie-bar{position:sticky;bottom:0;z-index:2;background:var(--w);border-top:1px solid var(--light);padding-top:calc(.35rem/var(--pzc,1));margin-top:calc(.1rem/var(--pzc,1))}
 #iePaneText .ie-bar .btn-io{min-width:1.9rem;padding:.28rem .42rem}
 /* Checklist tab: the same tight row — four short buttons that still fit one line on a phone;
    the count gives up its space first (it is the one thing that may be cut) */
@@ -134,7 +134,8 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .btn-io.on{background:var(--black);color:var(--w);border-color:var(--black)}   /* source mode is on */
 .ie-bar-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-right:auto}
 .ie-tools{display:flex;gap:.35rem;flex:0 0 auto}
-#ieSrcBtn{margin-left:auto;flex:0 0 auto}
+#iePaneText .ie-toc-btn{margin-left:auto}   /* contents starts the right-hand group (with ⟨⟩ ? pin) */
+#ieSrcBtn{flex:0 0 auto}
 #ieHelpBtn{flex:0 0 auto}
 .ie-tab-count{font-family:'DM Mono',monospace;font-size:.7rem;opacity:.7}
 .ie-kind{margin-left:auto;align-self:center;font-size:.66rem;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 .1rem .2rem}
@@ -220,6 +221,35 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .note-row.dragging{opacity:.3}
 .note-row.drag-over-top{box-shadow:0 -2px 0 var(--black)}
 .note-row.drag-over-bottom{box-shadow:0 2px 0 var(--black)}
+/* Headings: ▾/▸ collapses the section on either tab; a collapsed one shows how many of its items are ticked off */
+.note-fold{flex:0 0 auto;width:1.05rem;border:none;background:none;padding:0;margin:0;cursor:pointer;color:var(--dark);font:inherit;line-height:inherit;text-align:center}
+@media(hover:hover){.note-fold:hover{color:var(--black)}}
+.note-fold-count{flex:0 0 auto;align-self:center;font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-left:.45rem}
+/* the count follows the heading text (a tap right of it still lands on the row → the heading's line) */
+.note-row.folded > .md-ln{flex:0 1 auto}
+.note-row.folded > .note-fold-count{margin-right:auto}
+/* one row of tools on a phone, also with the contents button in it */
+@media(max-width:480px){#iePaneText .ie-bar{gap:.22rem}#iePaneText .ie-bar .btn-io{min-width:1.7rem;padding:.28rem .3rem}}
+.chk-head{display:flex;align-items:center;gap:.35rem;padding:calc(.45rem/var(--pzc,1)) .1rem calc(.22rem/var(--pzc,1));border-bottom:1px solid var(--light)}
+.chk-head .note-fold{width:15px;font-size:.86rem;line-height:1.4}
+.chk-head-gap{flex:0 0 auto;width:15px}
+.chk-head-text{flex:1;min-width:0;font-size:.86rem;line-height:1.4;word-break:break-word}
+/* contents: the note's headings, above the tool bar it was opened from */
+.ie-toc{position:fixed;z-index:400;width:min(340px,calc(100vw - 16px));overflow-y:auto;background:var(--w);border:var(--bh);border-radius:var(--r);padding:calc(.35rem/var(--pzc,1));display:flex;flex-direction:column}
+.ie-toc-top{display:flex;align-items:center;gap:.3rem;padding:0 .1rem calc(.3rem/var(--pzc,1));border-bottom:1px solid var(--light);margin-bottom:calc(.2rem/var(--pzc,1))}
+.ie-toc-title{flex:1;min-width:0;font-size:.66rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ie-toc-top .btn-io{flex:0 0 auto;padding:.2rem .45rem}
+.ie-toc-item{display:flex;align-items:baseline;gap:.35rem;width:100%;border:none;background:none;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.84rem;color:var(--black);padding:calc(.32rem/var(--pzc,1)) .35rem;border-radius:var(--r)}
+@media(hover:hover){.ie-toc-item:hover{background:var(--off)}}
+.ie-toc-item.lv1{font-weight:600}
+.ie-toc-item.lv2{padding-left:1.15rem}
+.ie-toc-item.lv3{padding-left:1.95rem;font-size:.8rem}
+.ie-toc-fold{flex:0 0 auto;width:.75rem;color:var(--muted);font-size:.72rem}
+.ie-toc-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ie-toc-count{flex:0 0 auto;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);font-weight:400}
+.ie-toc-empty{font-size:.78rem;color:var(--muted);font-style:italic;padding:.3rem}
+.ie-toc-text a{pointer-events:none}                 /* a link in a heading: the tap still jumps */
+.chk-head-text[onclick]{cursor:pointer}
 /* where a deleted line was: what went, and the way back */
 .note-gone{display:flex;align-items:center;gap:.5rem;margin:calc(.15rem/var(--pzc,1)) 0 calc(.15rem/var(--pzc,1)) .95rem;padding:calc(.12rem/var(--pzc,1)) calc(.2rem/var(--pzc,1)) calc(.12rem/var(--pzc,1)) calc(.45rem/var(--pzc,1));border:1px dashed var(--mid);border-radius:var(--r);font-size:.76rem;line-height:1.4;color:var(--muted);cursor:default}
 .note-gone-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -599,7 +629,7 @@ textarea::placeholder{color:var(--mid)}
 .pin-chip.is-done .pin-chip-text{text-decoration:line-through;color:var(--muted)}
 .pin-chip-win{font-size:.66rem;color:var(--muted);white-space:nowrap;flex-shrink:0}
 .pin-chip-cnt{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);flex-shrink:0}
-.pin-ico{width:.95em;height:.95em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.pin-ico,.bar-ico{width:.95em;height:.95em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .ie-bar .ie-pin{display:inline-flex;align-items:center;justify-content:center}   /* icon only — sits with the note tools */
 /* ── DAY BUTTONS ── */
 .day-buttons{display:flex;gap:.3rem;margin-bottom:.35rem;flex-shrink:0}
@@ -1363,10 +1393,11 @@ textarea::placeholder{color:var(--mid)}
             <span class="ie-tools" id="ieEditTools">
               <button class="btn-io" id="ieBtnH1" onmousedown="event.preventDefault()" onclick="mdHeadingLine(noteField(),1)" title="heading — # text (press again to take it off; Ctrl+H steps # → ## → off)">H1</button>
               <button class="btn-io" id="ieBtnH2" onmousedown="event.preventDefault()" onclick="mdHeadingLine(noteField(),2)" title="sub-heading — ## text (press again to take it off; Ctrl+H steps # → ## → off)">H2</button>
-              <button class="btn-io" id="ieBtnChk" onmousedown="event.preventDefault()" onclick="toggleChkOnSelection()" title="checklist item — - [ ] text, on the current line or the selected ones (Ctrl+L)">☑</button>
+              <button class="btn-io" id="ieBtnChk" onmousedown="event.preventDefault()" onclick="toggleChkOnSelection()" title="checklist item — - [ ] text, on the current line or the selected ones (Ctrl+L); Ctrl+Enter ticks it off / back">☑</button>
               <button class="btn-io" id="ieBtnBold" onmousedown="event.preventDefault()" onclick="mdWrapSelection(noteField(),'**')" title="bold — **text** (Ctrl+B)"><strong>B</strong></button>
               <button class="btn-io" id="ieBtnItal" onmousedown="event.preventDefault()" onclick="mdWrapSelection(noteField(),'_')" title="italic — _text_ (Ctrl+I)"><em>I</em></button>
             </span>
+            <button class="btn-io ie-toc-btn" onmousedown="event.preventDefault()" onclick="toggleNoteToc(this)" title="contents — jump to a heading, collapse / expand them all"><svg class="bar-ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/></svg></button>
             <button class="btn-io" id="ieSrcBtn" onmousedown="event.preventDefault()" onclick="toggleNoteSrcMode()" title="show the whole description as raw markdown">⟨⟩</button>
             <button class="btn-io" id="ieHelpBtn" onmousedown="event.preventDefault()" onclick="openMdHelp()" title="how to format a description">?</button>
             <button class="btn-io ie-pin" onmousedown="event.preventDefault()" onclick="toggleItemPin()"><svg class="pin-ico" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 4H7l3-4z"/><line x1="12" y1="13" x2="12" y2="21"/></svg></button>
@@ -1374,16 +1405,18 @@ textarea::placeholder{color:var(--mid)}
           </div>
         </div>
         <div class="ie-pane" id="iePaneList">
+          <div class="chk-list" id="ieChkList"></div>
+          <!-- at the bottom and sticky, like the Text tab's: still at hand at the end of a long list -->
           <div class="ie-bar">
             <span class="ie-bar-count" id="ieChkCount"></span>
             <button class="btn-io" onclick="setAllChkItems(true)" title="tick off every item">☑ all</button>
             <button class="btn-io" onclick="setAllChkItems(false)" title="untick every item">☐ none</button>
             <button class="btn-io" id="ieChkHideBtn" onclick="toggleChkHideDone()" title="hide the items that are already ticked off">hide</button>
             <button class="btn-io" onclick="addChkItem()" title="add a checklist item (Ctrl+L)">+</button>
+            <button class="btn-io ie-toc-btn" onclick="toggleNoteToc(this)" title="contents — jump to a heading, collapse / expand them all"><svg class="bar-ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/></svg></button>
             <button class="btn-io ie-pin" onclick="toggleItemPin()"><svg class="pin-ico" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 4H7l3-4z"/><line x1="12" y1="13" x2="12" y2="21"/></svg></button>
             <button class="btn-io ie-pin-all" onclick="toggleItemPinScope()">all</button>
           </div>
-          <div class="chk-list" id="ieChkList"></div>
         </div>
       </div>
       <div class="modal-row" id="itemEditWinRow" style="display:none;justify-content:flex-start;gap:.4rem">
@@ -3019,6 +3052,8 @@ function openItemEdit(ctx, idx) {
   // already holds a checklist opens on the list (that's what you came to tick off).
   const view = itemViewGet(item);
   chkHideDone = !!view.hide;
+  _noteFold = new Set(Array.isArray(view.fold) ? view.fold.filter(k => typeof k === 'string') : []);
+  closeNoteToc();
   setNoteMode(!!view.src);
   if (tab) switchItemEditTab(tab, true);     // the "2/6" badge asks for the checklist
   else switchItemEditTab(view.tab === 'list' || view.tab === 'text' ? view.tab : (noteHasChkItems() ? 'list' : 'text'));
@@ -3392,6 +3427,7 @@ let _lineClosing = false;    // guard: removing the focused box must not re-ente
 let _noteTapLoc = null;      // target recorded on pointerdown, used by the click that follows
 let _noteUndo = [];          // deleted / moved lines, newest last (see LINES: MOVE, DELETE ⇄ RESTORE)
 const NOTE_UNDO_MAX = 50;
+let _noteFold = new Set();   // keys of the collapsed headings of the open item (see HEADINGS: CONTENTS, COLLAPSE)
 
 // the field the toolbar and the shortcuts act on: the open line, else the whole-text field
 function noteField() { return _lineEdit ? _lineEdit.box : (_noteEditing ? el('itemEditNote') : null); }
@@ -3410,7 +3446,7 @@ function renderNoteView() {
   if (!view || !ta) return;
   _lineEdit = null;                        // whatever was open lives in the DOM about to be replaced
   // the placeholder carries data-ln too, so tapping an empty description starts line 0
-  const rows = ta.value.trim() ? noteRows(ta.value) : [{ start: 0, html: NOTE_EMPTY_ROW }];
+  const rows = ta.value.trim() ? noteRows(ta.value, noteFoldInfo(noteLinesOf(ta.value))) : [{ start: 0, html: NOTE_EMPTY_ROW }];
   // the last deleted line leaves a "↶ restore" strip where it was
   const gone = noteLastGone();
   if (gone) {
@@ -3477,7 +3513,9 @@ function startLineEdit(lineIdx, col) {
   const view = el('itemEditNoteView'), ta = el('itemEditNote');
   if (!view || !ta || _noteEditing || !el('iePaneText')?.classList.contains('active')) return;
   closeLineEdit(true);                       // rebuild from the master, then find the part in it
-  const part = partAt(Math.max(0, lineIdx));
+  let part = partAt(Math.max(0, lineIdx));
+  // a line under a collapsed heading (Enter on a collapsed heading, a jump) → its sections open first
+  if (!part && noteUnfoldTo(lineIdx)) { renderNoteView(); part = partAt(Math.max(0, lineIdx)); }
   if (!part) return;
   const lines = ta.value.split('\n');
   const box = document.createElement('textarea');
@@ -3495,6 +3533,9 @@ function startLineEdit(lineIdx, col) {
   const all = noteLinesOf(ta.value), up = part.row.querySelector('.note-up'), dn = part.row.querySelector('.note-down');
   if (up) up.disabled = part.start === 0;
   if (dn) dn.disabled = noteGroupEnd(all, part.start, part.end) >= all.length - 1;
+  // a collapsed heading being retyped stays collapsed under its new text (see syncLineEdit)
+  const hd = noteHeads(all).find(h => h.line === part.start);
+  _lineEdit.foldKey = hd && _noteFold.has(hd.key) ? hd.key : null;
   box.addEventListener('input', () => { syncLineEdit(); growLineEdit(); });
   box.addEventListener('keydown', lineEditKeydown);
   box.addEventListener('blur', () => closeLineEdit(true));
@@ -3517,6 +3558,15 @@ function syncLineEdit() {
   lines.splice(_lineEdit.start, _lineEdit.end - _lineEdit.start + 1, ...repl);
   _lineEdit.end = _lineEdit.start + repl.length - 1;
   ta.value = lines.join('\n');
+  if (_lineEdit.foldKey) {
+    const hd = noteHeads(lines).find(h => h.line === _lineEdit.start), nk = hd ? hd.key : null;
+    if (nk !== _lineEdit.foldKey) {
+      _noteFold.delete(_lineEdit.foldKey);
+      if (nk) _noteFold.add(nk);                 // no longer a heading → nothing left to keep collapsed
+      _lineEdit.foldKey = nk;
+      itemViewSet({ fold: [..._noteFold] });
+    }
+  }
   renderChkList();
 }
 function growLineEdit() { if (_lineEdit) { autoGrowTextarea(_lineEdit.box); noteKeepVisible(_lineEdit.box); } }
@@ -3536,6 +3586,11 @@ function lineEditKeydown(e) {
   if (mdShortcut(e, box)) return;
   if (e.key === 'Escape') { e.stopPropagation(); closeLineEdit(true); return; }   // don't close the dialog
   const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
+  if (isChkToggleKey(e)) {                   // tick off ⇄ back; the line stays open
+    e.preventDefault();
+    if (taToggleChk(box)) noteFieldChanged(box); else showStatusMsg(CHK_TOGGLE_NONE, 2200);
+    return;
+  }
   if (e.key === 'Backspace' && e.shiftKey && plain) { e.preventDefault(); lineEditDeleteLine(box); return; }
   if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
     e.preventDefault(); noteMoveOpen(e.key === 'ArrowUp' ? -1 : 1); return;
@@ -3558,12 +3613,14 @@ function lineEditKeydown(e) {
   // any editor does — and that is what removes an empty line without leaving the formatted view.
   if (e.key === 'Backspace' && atStart) { if (lineEditJoin(-1)) e.preventDefault(); return; }
   if (e.key === 'Delete'    && atEnd)   { if (lineEditJoin(1))  e.preventDefault(); return; }
-  // stepping out of the line with the arrows — the previous/next line opens instead
+  // stepping out of the line with the arrows — the previous/next line opens instead (a collapsed
+  // section is stepped over, it stays collapsed)
   if (e.key === 'ArrowUp' && atStart && _lineEdit.start > 0) {
-    e.preventDefault(); startLineEdit(_lineEdit.start - 1, null);
+    const to = noteVisibleLine(_lineEdit.start - 1, -1);
+    if (to >= 0) { e.preventDefault(); startLineEdit(to, null); }
   } else if (e.key === 'ArrowDown' && atEnd) {
-    const last = el('itemEditNote').value.split('\n').length - 1;
-    if (_lineEdit.end < last) { e.preventDefault(); startLineEdit(_lineEdit.end + 1, 0); }
+    const to = noteVisibleLine(_lineEdit.end + 1, 1);
+    if (to < el('itemEditNote').value.split('\n').length) { e.preventDefault(); startLineEdit(to, 0); }
   }
 }
 // Joins the open part with the line above (dir -1) or below (+1) and keeps editing at the seam.
@@ -3574,6 +3631,8 @@ function lineEditJoin(dir) {
   const lines = ta.value.split('\n');
   const { start, end } = _lineEdit;
   const part = lines.slice(start, end + 1);
+  // a neighbour hidden in a collapsed section is not joined into — the keys do nothing there
+  if (noteFoldInfo(lines).hidden[dir < 0 ? start - 1 : end + 1]) return true;
   let at, col;
   if (dir < 0) {
     if (start === 0) return false;
@@ -3618,7 +3677,7 @@ function lineEditEnter(box) {
 // noteGroupEnd). A delete (× on the open line, Shift+Backspace) takes only the line itself and leaves
 // a "↶ restore" strip where it was; Ctrl+Z takes back the last delete or move. All of it only rewrites
 // the note text, like every other edit here — nothing new is stored.
-// _noteUndo entries: { kind:'del', lines, at, prev, next, after } | { kind:'move', before, after, from }
+// _noteUndo entries: { kind:'del', lines, at, prev, next, after } | { kind:'edit', before, after, from } (a move, a tick-all)
 function noteLinesOf(v) { return v ? v.split('\n') : []; }   // '' = no lines at all, not one empty line
 function noteIndent(ln) { return /^[ \t]*/.exec(ln || '')[0].replace(/\t/g, '    ').length; }
 const NOTE_NUM_RE = /^\s*\d+[.)]\s+\S/;
@@ -3686,14 +3745,15 @@ function noteMovedLines(lines, start, last, at, depth) {
 }
 // A row's source lines right now. Rows are numbered when the view is drawn; the open line may have
 // gained or lost lines since (Shift+Enter, a paste), and the rows below it are off by exactly that.
+// foldEnd: a collapsed heading's last hidden line (null otherwise).
 function noteRowRange(row) {
-  if (_lineEdit && row === _lineEdit.row) return { start: _lineEdit.start, end: _lineEdit.end };
+  const d = _lineEdit ? (_lineEdit.end - _lineEdit.start + 1) - _lineEdit.span0 : 0;
+  let fe = row.dataset.foldEnd != null ? +row.dataset.foldEnd : null;
+  if (fe != null && _lineEdit && fe > _lineEdit.start) fe += d;
+  if (_lineEdit && row === _lineEdit.row) return { start: _lineEdit.start, end: _lineEdit.end, foldEnd: fe };
   let a = +row.dataset.idx, b = +row.dataset.end;
-  if (_lineEdit && a > _lineEdit.start) {
-    const d = (_lineEdit.end - _lineEdit.start + 1) - _lineEdit.span0;
-    a += d; b += d;
-  }
-  return { start: a, end: b };
+  if (_lineEdit && a > _lineEdit.start) { a += d; b += d; }
+  return { start: a, end: b, foldEnd: fe };
 }
 // every move / delete / restore lands here: the open line closes (its text is in the master already)
 function noteSetText(v) {
@@ -3709,10 +3769,11 @@ function noteUndoPush(rec) {
 }
 function isUndoKey(e) { return (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'z' || e.key === 'Z'); }
 
-// a move / reorder of the note's lines: undoable with Ctrl+Z, then the view and the checklist redrawn
-function noteApplyMove(before, after, from) {
+// a move / reorder / tick-all of the note's lines: undoable with Ctrl+Z, then the view and the checklist
+// redrawn. from = the line to open again after the undo
+function noteApplyEdit(before, after, from) {
   if (after === before) return false;
-  noteUndoPush({ kind: 'move', before, after, from });
+  noteUndoPush({ kind: 'edit', before, after, from });
   noteSetText(after);
   return true;
 }
@@ -3723,7 +3784,7 @@ function noteMoveRun(start, last, at, inPlace, depth) {
   if (start < 0 || last >= lines.length) return -1;
   if (!inPlace && at >= start && at <= last + 1) return -1;                 // dropped onto itself
   const m = noteMovedLines(lines, start, last, at, depth);
-  return noteApplyMove(before, m.lines.join('\n'), start) ? m.at : -1;
+  return noteApplyEdit(before, m.lines.join('\n'), start) ? m.at : -1;
 }
 // line → first / last line of the piece it belongs to (a table is one piece)
 function notePartBounds(text) {
@@ -3798,7 +3859,8 @@ function noteRowDrop(d) {
   if (!d || !d.src || !d.dst) return;
   const lines = noteLinesOf(el('itemEditNote').value);
   const s = noteRowRange(d.src), t = noteRowRange(d.dst);
-  noteMoveRun(s.start, noteGroupEnd(lines, s.start, s.end), d.before ? t.start : t.end + 1);
+  // "below" a collapsed heading = after its hidden section, not in the middle of it
+  noteMoveRun(s.start, noteGroupEnd(lines, s.start, s.end), d.before ? t.start : (t.foldEnd != null ? t.foldEnd : t.end) + 1);
 }
 
 // lines[start..end] out of the note, kept for "↶ restore". A delete right next to the last deleted run
@@ -3860,7 +3922,7 @@ function noteUndo() {
   if (!rec) return null;
   if (rec.kind === 'del') return noteRestoreRec(rec);
   if (el('itemEditNote').value !== rec.after) {         // typed since — the old text back would lose that
-    showStatusMsg('↶ the move can’t be undone — the text has changed since', 3000);
+    showStatusMsg('↶ can’t undo that — the text has changed since', 3000);
     return null;
   }
   noteSetText(rec.before);
@@ -3889,7 +3951,7 @@ function lineEditDeleteLine(box) {
   const { start, end } = _lineEdit;
   closeLineEdit(false);
   if (!noteDeleteLines(start, end)) renderNoteView();
-  if (start > 0) startLineEdit(start - 1, null);
+  if (start > 0) startLineEdit(Math.max(0, noteVisibleLine(start - 1, -1)), null);   // over a collapsed section, to its heading
   else startLineEdit(0, 0);                             // the first line went: carry on in the new first one
 }
 // Shift+Backspace in a raw field: the line(s) under the caret / selection go, the caret ends at the end
@@ -3912,6 +3974,197 @@ function taDeleteLines(ta) {
   const c = from > 0 ? from - 1 : 0;
   ta.setSelectionRange(c, c);
   return true;
+}
+
+// ── HEADINGS: CONTENTS, COLLAPSE ─────────────────────────────────────────────
+// A heading's section (up to the next heading of its level or above — noteGroupEnd) collapses with ▾/▸
+// on either tab; a collapsed one shows how many of its checklist items are ticked off. Which headings
+// are collapsed is a way of looking at the note, like the tab or "hide": remembered per item on this
+// device (itemViewSet `fold`), never written into the note and never synced. A heading is known by its
+// level and text (+ which of several equal ones it is), so it stays collapsed when lines around it move.
+// The contents button (both tabs) lists the headings: a tap jumps there; it collapses / expands them all.
+function noteHeads(lines) {
+  const seen = {}, out = [];
+  lines.forEach((ln, i) => {
+    const m = MD_HEAD_RE.exec(ln);
+    if (!m) return;
+    const base = m[2].length + ':' + m[3].trim();
+    seen[base] = (seen[base] || 0) + 1;
+    const end = noteGroupEnd(lines, i, i);
+    let done = 0, total = 0;
+    for (let j = i + 1; j <= end; j++) { const it = parseChkLine(lines[j]); if (it) { total++; if (it.done) done++; } }
+    out.push({ line: i, level: m[2].length, text: m[3], key: base + '#' + seen[base], end, done, total });
+  });
+  return out;
+}
+// the headings with .folded, hidden[line] for every line under a collapsed one, byLine: line → heading
+function noteFoldInfo(lines) {
+  const heads = noteHeads(lines), hidden = [];
+  heads.forEach(h => {
+    h.folded = h.end > h.line && _noteFold.has(h.key);
+    if (h.folded) for (let j = h.line + 1; j <= h.end; j++) hidden[j] = true;
+  });
+  return { heads, hidden, byLine: new Map(heads.map(h => [h.line, h])) };
+}
+// idx, or the nearest line from it going dir that isn't hidden in a collapsed section
+function noteVisibleLine(idx, dir) {
+  const lines = noteLinesOf(el('itemEditNote').value), { hidden } = noteFoldInfo(lines);
+  while (idx >= 0 && idx < lines.length && hidden[idx]) idx += dir;
+  return idx;
+}
+// remembered for this item; headings that are gone (deleted, retyped elsewhere) are forgotten on the way
+function noteFoldSave(lines) {
+  const keys = new Set(noteHeads(lines).map(h => h.key));
+  [..._noteFold].forEach(k => { if (!keys.has(k)) _noteFold.delete(k); });
+  itemViewSet({ fold: [..._noteFold] });
+}
+function noteFoldRedraw() {
+  if (_lineEdit) closeLineEdit(true); else if (!_noteEditing) renderNoteView();
+  renderChkList();
+  if (_tocEl) fillNoteToc();
+}
+function noteToggleFold(lineIdx) {
+  const lines = noteLinesOf(el('itemEditNote').value);
+  const h = noteHeads(lines).find(x => x.line === lineIdx);
+  if (!h) return;
+  if (_noteFold.has(h.key)) _noteFold.delete(h.key); else _noteFold.add(h.key);
+  noteFoldSave(lines);
+  noteFoldRedraw();
+}
+// ▾/▸ on a Text-tab row (its line may have moved since it was drawn), or on a Checklist heading
+function noteFoldTap(btn) {
+  const row = btn.closest('.note-row'), hd = btn.closest('.chk-head');
+  if (row) noteToggleFold(noteRowRange(row).start);
+  else if (hd) noteToggleFold(+hd.dataset.ln);
+}
+function noteFoldAll(on) {
+  const lines = noteLinesOf(el('itemEditNote').value);
+  _noteFold = new Set(on ? noteHeads(lines).filter(h => h.end > h.line).map(h => h.key) : []);
+  noteFoldSave(lines);
+  noteFoldRedraw();
+}
+// a line under collapsed headings is about to be shown (opened, jumped to) → those sections open.
+// true = something opened
+function noteUnfoldTo(lineIdx) {
+  const lines = noteLinesOf(el('itemEditNote').value);
+  let changed = false;
+  noteHeads(lines).forEach(h => { if (lineIdx > h.line && lineIdx <= h.end && _noteFold.delete(h.key)) changed = true; });
+  if (changed) noteFoldSave(lines);
+  return changed;
+}
+// onclick = a fixed call, never data. A heading with nothing under it gets an empty slot (keeps the alignment).
+function noteFoldBtn(h, onclick) {
+  if (!(h.end > h.line)) return '<span class="note-fold note-ctl"></span>';
+  return `<button class="note-fold note-ctl" onmousedown="event.preventDefault()" onclick="${onclick}" title="${h.folded ? 'expand the section' : 'collapse the section'}">${h.folded ? '▸' : '▾'}</button>`;
+}
+function noteFoldCount(h) {
+  return h.folded && h.total
+    ? `<span class="note-fold-count note-ctl" title="${h.done} of ${h.total} items under it ticked off">${h.done}/${h.total}</span>` : '';
+}
+// a heading on the Checklist tab: ▾/▸, a box for everything under it (half-filled when only some are
+// ticked off), its text — a tap on it collapses / expands too (headings are edited on the Text tab)
+function chkHeadHtml(h, ln) {
+  const all = h.total > 0 && h.done === h.total, some = h.done > 0 && !all;
+  const box = h.total
+    ? `<input type="checkbox" class="chk-box" ${all ? 'checked' : ''}${some ? ' data-indet="1"' : ''} onchange="chkSetSection(${h.line}, this.checked)" title="${all ? 'untick everything under this heading' : 'tick off everything under this heading'}">`
+    : '<span class="chk-head-gap"></span>';
+  const tap = h.end > h.line ? ' onclick="mdLinkTapped(event)||noteFoldTap(this)"' : '';
+  return `<div class="chk-head${h.folded ? ' folded' : ''}" data-ln="${h.line}">${noteFoldBtn(h, 'noteFoldTap(this)')}${box}`
+    + `<span class="chk-head-text md"${tap}>${mdLine(ln.trim())}</span>${noteFoldCount(h)}</div>`;
+}
+// the heading's box: every item under it ticked off / unticked — also those in collapsed or hidden parts
+function chkSetSection(lineIdx, on) {
+  const before = el('itemEditNote').value, lines = noteLinesOf(before);
+  const h = noteHeads(lines).find(x => x.line === lineIdx);
+  if (!h) return;
+  for (let j = h.line + 1; j <= h.end; j++) {
+    const it = parseChkLine(lines[j]);
+    if (it && it.done !== on) lines[j] = chkLine(it.indent, on, it.text);
+  }
+  if (!noteApplyEdit(before, lines.join('\n'), lineIdx)) renderChkList();
+}
+
+// contents: a list of the headings above the tool bar it was opened from (fixed, so a short dialog never
+// clips it); outside tap / Esc closes it. Its mousedown is swallowed so an open line keeps its focus.
+let _tocEl = null, _tocBtn = null;
+function toggleNoteToc(btn) {
+  if (_tocEl) { const same = _tocBtn === btn; closeNoteToc(); if (same) return; }
+  _tocBtn = btn;
+  _tocEl = document.createElement('div');
+  _tocEl.className = 'ie-toc';
+  _tocEl.addEventListener('mousedown', e => e.preventDefault());
+  document.body.appendChild(_tocEl);
+  fillNoteToc();
+  document.addEventListener('pointerdown', noteTocOutside, true);
+  document.addEventListener('keydown', noteTocKey, true);
+  el('itemEditModal').querySelector('.modal-scroll')?.addEventListener('scroll', positionNoteToc, { passive: true });
+  window.addEventListener('resize', positionNoteToc);
+}
+function closeNoteToc() {
+  if (!_tocEl) return;
+  _tocEl.remove(); _tocEl = null; _tocBtn = null;
+  document.removeEventListener('pointerdown', noteTocOutside, true);
+  document.removeEventListener('keydown', noteTocKey, true);
+  el('itemEditModal')?.querySelector('.modal-scroll')?.removeEventListener('scroll', positionNoteToc);
+  window.removeEventListener('resize', positionNoteToc);
+}
+function noteTocOutside(e) { if (!(e.target.closest && e.target.closest('.ie-toc, .ie-toc-btn'))) closeNoteToc(); }
+// Esc closes the contents only — not the line being edited, not the dialog
+function noteTocKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeNoteToc(); } }
+function fillNoteToc() {
+  if (!_tocEl) return;
+  const { heads } = noteFoldInfo(noteLinesOf(el('itemEditNote').value));
+  const canFold = heads.some(h => h.end > h.line);
+  _tocEl.innerHTML = '<div class="ie-toc-top"><span class="ie-toc-title">Contents</span>'
+    + (canFold ? '<button class="btn-io" onclick="noteFoldAll(true)" title="collapse every heading">collapse all</button>'
+               + '<button class="btn-io" onclick="noteFoldAll(false)" title="expand every heading">expand all</button>' : '')
+    + '</div>'
+    + (heads.length
+      ? heads.map(h => `<button class="ie-toc-item lv${h.level}" onclick="noteJumpTo(${h.line})" title="jump to this heading">`
+          + `<span class="ie-toc-fold">${h.end > h.line ? (h.folded ? '▸' : '▾') : ''}</span>`
+          + `<span class="ie-toc-text md">${mdInline(h.text)}</span>`
+          + (h.total ? `<span class="ie-toc-count" title="${h.done} of ${h.total} ticked off">${h.done}/${h.total}</span>` : '')
+          + '</button>').join('')
+      : '<div class="ie-toc-empty">No headings yet — a line that starts with “# ” is one (the H1 / H2 buttons on the Text tab).</div>');
+  positionNoteToc();
+}
+// above the button when there is room (the bar sits at the bottom), else below it
+function positionNoteToc() {
+  if (!_tocEl || !_tocBtn) return;
+  const r = _tocBtn.getBoundingClientRect(), vv = window.visualViewport;
+  const vh = vv ? vv.offsetTop + vv.height : window.innerHeight, w = _tocEl.offsetWidth;
+  _tocEl.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+  const above = r.top - 12, below = vh - r.bottom - 12;
+  if (above >= 160 || above >= below) {
+    _tocEl.style.top = '';
+    _tocEl.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+    _tocEl.style.maxHeight = Math.max(100, Math.min(above, vh * 0.6)) + 'px';
+  } else {
+    _tocEl.style.bottom = '';
+    _tocEl.style.top = (r.bottom + 4) + 'px';
+    _tocEl.style.maxHeight = Math.max(100, Math.min(below, vh * 0.6)) + 'px';
+  }
+}
+// a tap in the contents: the sections around the heading open, and the tab scrolls it to the top
+function noteJumpTo(lineIdx) {
+  closeNoteToc();
+  noteUnfoldTo(lineIdx);
+  noteFoldRedraw();
+  const sc = el('itemEditModal').querySelector('.modal-scroll');
+  if (!sc) return;
+  let top = null;
+  if (el('iePaneList').classList.contains('active')) {
+    const t = el('ieChkList').querySelector(`.chk-head[data-ln="${lineIdx}"]`);
+    if (t) top = t.getBoundingClientRect().top;
+  } else if (_noteEditing) {                     // ⟨⟩ source: the caret goes to the heading's line
+    const ta = el('itemEditNote'), pos = noteLineStart(ta.value.split('\n'), lineIdx);
+    ta.focus(); ta.setSelectionRange(pos, pos);
+    top = ta.getBoundingClientRect().top + taCaretTop(ta, pos);
+  } else {
+    const t = el('itemEditNoteView').querySelector(`.note-row[data-idx="${lineIdx}"]`);
+    if (t) top = t.getBoundingClientRect().top;
+  }
+  if (top != null) sc.scrollTop += top - sc.getBoundingClientRect().top - 6;
 }
 
 // A tap is read on pointerdown — that is the last moment the rendered DOM still matches what the
@@ -4070,6 +4323,7 @@ function taCaretTop(ta, pos) {
 function switchItemEditTab(which, remember) {
   const isList = which === 'list';
   if (remember) itemViewSet({ tab: isList ? 'list' : 'text' });
+  closeNoteToc();                            // it belongs to the bar of the pane being left
   if (isList) closeLineEdit(false);          // an open line must not linger in a hidden pane
   el('ieTabList').classList.toggle('active', isList);
   el('ieTabText').classList.toggle('active', !isList);
@@ -4119,9 +4373,15 @@ function buildChkRows(box) {
   const vis = chkVisibleIdxs(lines);
   const trows = ieTaskRows(lines);             // a block's list = its tasks → each shows the length it has / will get
   const depth = noteDepths(lines);             // a nested item is shown indented, like on the Text tab
+  const fold = noteFoldInfo(lines);            // collapsed headings — the same ones as on the Text tab
   box.innerHTML = lines.map((ln, i) => {
+    if (fold.hidden[i]) return '';
     const it = parseChkLine(ln);
-    if (!it) return ln.trim() ? `<div class="chk-plain md">${noteDisplay(ln.trim())}</div>` : '';   // heading / prose — editable on the Text tab
+    if (!it) {
+      const h = fold.byLine.get(i);
+      if (h) return chkHeadHtml(h, ln);
+      return ln.trim() ? `<div class="chk-plain md">${noteDisplay(ln.trim())}</div>` : '';   // prose — editable on the Text tab
+    }
     if (chkHideDone && it.done) return '';
     return `<div class="chk-row${depth[i] ? ' lv' + Math.min(depth[i], 3) : ''}" draggable="true" data-idx="${i}">
       <span class="chk-grip" title="drag to reorder — the items under it go along">⠿</span>
@@ -4130,8 +4390,8 @@ function buildChkRows(box) {
         title="edit the text">${it.text.trim() ? mdInline(it.text) : 'empty'}</span>
       ${trows[i] ? chkDurHtml(i, trows[i]) : ''}
       <div class="chk-move">
-        <button onclick="moveChkItem(${i},-1)" ${chkSibling(lines, i, -1) < 0 ? 'disabled' : ''} title="move up, with the items under it">▲</button>
-        <button onclick="moveChkItem(${i},1)" ${chkSibling(lines, i, 1) < 0 ? 'disabled' : ''} title="move down, with the items under it">▼</button>
+        <button onclick="moveChkItem(${i},-1)" ${chkSibling(lines, i, -1, fold.hidden) < 0 ? 'disabled' : ''} title="move up, with the items under it">▲</button>
+        <button onclick="moveChkItem(${i},1)" ${chkSibling(lines, i, 1, fold.hidden) < 0 ? 'disabled' : ''} title="move down, with the items under it">▼</button>
       </div>
       <button class="chk-del" onclick="deleteChkItem(${i})" title="delete the item">
         <svg viewBox="0 0 8 8"><line x1="1" y1="1" x2="7" y2="7"/><line x1="7" y1="1" x2="1" y2="7"/></svg>
@@ -4139,6 +4399,7 @@ function buildChkRows(box) {
     </div>`;
   }).join('') + (vis.length ? '' : '<div class="chk-empty">Every item is ticked off — “show” brings them back.</div>')
     + CHK_ADD_ROW;
+  box.querySelectorAll('input[data-indet]').forEach(c => { c.indeterminate = true; });   // only some ticked off under it
   initChkDnd();
 }
 
@@ -4148,14 +4409,14 @@ function toggleChkItem(lineIdx) {
   lines[lineIdx] = chkLine(it.indent, !it.done, it.text);
   ieSetNoteLines(lines);
 }
-// all / none at once — only the lines that actually change are rewritten
+// all / none at once — only the lines that actually change are rewritten; Ctrl+Z takes it back
 function setAllChkItems(done) {
-  const lines = ieNoteLines(); let n = 0;
+  const before = el('itemEditNote').value, lines = noteLinesOf(before);
   lines.forEach((ln, i) => {
     const it = parseChkLine(ln);
-    if (it && it.done !== done) { lines[i] = chkLine(it.indent, done, it.text); n++; }
+    if (it && it.done !== done) lines[i] = chkLine(it.indent, done, it.text);
   });
-  if (n) ieSetNoteLines(lines);
+  noteApplyEdit(before, lines.join('\n'), 0);
 }
 // how deep every line sits under the lines above it (by indentation) — the Checklist tab's indent
 function noteDepths(lines) {
@@ -4171,9 +4432,9 @@ function noteDepths(lines) {
 }
 // ▲▼ swap the item with its neighbouring sibling — the next item at the same depth under the same
 // parent — each with the items under it, so a move never tears a sub-list apart. Headings and prose
-// between them stay where they are, and so do ticked-off siblings while "hide" is on (a move is always
-// a visible one). -1 = no sibling that way (the button is greyed out).
-function chkSibling(lines, i, dir) {
+// between them stay where they are, and so do ticked-off siblings while "hide" is on and those under a
+// collapsed heading (a move is always a visible one). -1 = no sibling that way (the button is greyed out).
+function chkSibling(lines, i, dir, hidden) {
   const base = noteIndent(lines[i]);
   for (let k = dir < 0 ? i - 1 : noteGroupEnd(lines, i, i) + 1; k >= 0 && k < lines.length; k += dir) {
     const ln = lines[k];
@@ -4182,20 +4443,20 @@ function chkSibling(lines, i, dir) {
     if (ind < base) return -1;                 // the parent / the end of its list: no sibling beyond it
     if (ind > base) continue;                  // under another sibling
     const it = parseChkLine(ln);
-    if (it && !(chkHideDone && it.done)) return k;
+    if (it && !(chkHideDone && it.done) && !(hidden && hidden[k])) return k;
   }
   return -1;
 }
 function moveChkItem(lineIdx, dir) {
   const lines = ieNoteLines();
   if (!parseChkLine(lines[lineIdx])) return;
-  const k = chkSibling(lines, lineIdx, dir);
+  const k = chkSibling(lines, lineIdx, dir, noteFoldInfo(lines).hidden);
   if (k < 0) return;
   const a = Math.min(k, lineIdx), b = Math.max(k, lineIdx);
   const aEnd = noteGroupEnd(lines, a, a), bEnd = noteGroupEnd(lines, b, b);
   const out = [...lines.slice(0, a), ...lines.slice(b, bEnd + 1), ...lines.slice(aEnd + 1, b),
                ...lines.slice(a, aEnd + 1), ...lines.slice(bEnd + 1)];
-  noteApplyMove(lines.join('\n'), out.join('\n'), lineIdx);
+  noteApplyEdit(lines.join('\n'), out.join('\n'), lineIdx);
 }
 // drag: a true line move (the item can cross a heading) together with the items under it,
 // raw = insertion line from initDnd
@@ -4242,6 +4503,56 @@ function chkAddShortcut(e) {
   e.preventDefault();
   const row = a && a.closest && a.closest('#ieChkList .chk-row');  // focus on a row's checkbox → add right under it
   addChkItem(row ? +row.dataset.idx : undefined);
+  return true;
+}
+// Ctrl+Enter (⌘+Enter) ticks off the checklist item the caret is on, and unticks a ticked one — in the open
+// line and the ⟨⟩ source field (Text tab), in an item being edited and on a focused row (Checklist tab).
+function isChkToggleKey(e) {
+  return (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key === 'Enter';
+}
+const CHK_TOGGLE_NONE = 'not a checklist line — Ctrl+L makes it one';
+// In a raw field: the item(s) under the caret / selection — several at once: any still open → all
+// ticked off, else all back. Through execCommand, so the field's own Ctrl+Z undoes it. The caret keeps
+// its place in the item's text. false = no checklist line there.
+function taToggleChk(ta) {
+  const v = ta.value, a = ta.selectionStart, b0 = ta.selectionEnd;
+  const b = (b0 > a && v[b0 - 1] === '\n') ? b0 - 1 : b0;       // a selection ending at a line start leaves that line out
+  const from = v.lastIndexOf('\n', a - 1) + 1;
+  let to = v.indexOf('\n', b); if (to < 0) to = v.length;
+  const seg = v.slice(from, to).split('\n'), items = seg.map(parseChkLine);
+  if (!items.some(Boolean)) return false;
+  const done = items.some(it => it && !it.done);
+  const outLines = seg.map((ln, i) => items[i] ? chkLine(items[i].indent, done, items[i].text) : ln);
+  const out = outLines.join('\n');
+  // where the caret goes: as far from the end of its line as before, but never into the "- [x] " mark
+  const k = v.slice(from, a).split('\n').length - 1;
+  const lineEnd = from + seg.slice(0, k + 1).join('\n').length, fromEnd = lineEnd - a;
+  const newStart = from + outLines.slice(0, k).reduce((s, l) => s + l.length + 1, 0);
+  const mark = items[k] ? outLines[k].length - items[k].text.length : 0;
+  const caret = Math.max(newStart + mark, newStart + outLines[k].length - fromEnd);
+  ta.focus();
+  ta.setSelectionRange(from, to);
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, out); } catch (_) {}
+  if (!ok) ta.setRangeText(out, from, to, 'end');
+  if (a === b0) ta.setSelectionRange(caret, caret);
+  else ta.setSelectionRange(from, from + out.length);
+  return true;
+}
+// Checklist tab, focus on a row (its box after a click, ▲▼, ×): that row's item; focus stays on the row
+function chkToggleShortcut(e) {
+  if (!isChkToggleKey(e) || !el('iePaneList')?.classList.contains('active')) return false;
+  const open = document.querySelectorAll('.modal-bg.open');
+  if (!open.length || open[open.length - 1].id !== 'itemEditModal') return false;
+  const a = document.activeElement;
+  if (a && a.classList.contains('chk-edit')) return false;       // the inline edit handles it itself
+  const row = a && a.closest && a.closest('#ieChkList .chk-row');
+  if (!row) return false;
+  e.preventDefault();
+  const idx = row.dataset.idx;
+  toggleChkItem(+idx);
+  const box = el('ieChkList').querySelector('.chk-row[data-idx="' + idx + '"] .chk-box');
+  if (box) box.focus();
   return true;
 }
 // new item under `afterLine` (default: under the last item, or at the end of the text)
@@ -4298,6 +4609,20 @@ function startChkEdit(lineIdx, span) {
   };
   inp.addEventListener('blur', () => finish(true));
   inp.addEventListener('keydown', e => {
+    // Ctrl+Enter: the item ticked off ⇄ back, the editing goes on (the text is written on finish, with this state)
+    if (isChkToggleKey(e)) {
+      e.preventDefault();
+      const lines = ieNoteLines(), cur = parseChkLine(lines[lineIdx]);
+      if (!cur) return;
+      lines[lineIdx] = chkLine(cur.indent, !cur.done, cur.text);
+      const ta = el('itemEditNote');
+      ta.value = lines.join('\n');
+      autoGrowTextarea(ta);
+      const cb = inp.closest('.chk-row')?.querySelector('.chk-box');
+      if (cb) cb.checked = !cur.done;
+      updateChkCounts();
+      return;
+    }
     if (e.key === 'Enter' || isChkAddKey(e)) { e.preventDefault(); addNext = true; finish(true); }
     else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }   // don't let the modal close
   });
@@ -4442,14 +4767,22 @@ const NOTE_ROW_CTL = '<span class="note-row-ctl note-ctl">'
 const NOTE_EMPTY_ROW = '<div class="note-row empty" data-idx="0" data-end="0">' + NOTE_GRIP
   + '<div class="md-ln" data-ln="0"><span class="note-view-empty">More text — description, notes, subtasks…</span></div>'
   + NOTE_ROW_CTL + '</div>';
-function noteRows(s) {
+// fold = noteFoldInfo(): the lines under a collapsed heading are left out; a heading row gets its ▾/▸,
+// and a collapsed one its ticked-off count plus data-fold-end (a drop "below" it lands after its section)
+function noteRows(s, fold) {
   // an empty line gets a zero-width space: a real text node keeps its height AND gives a tap on it a
   // caret position inside the line (see srcLocFromPoint), not on the row around it
-  return noteParts(s).map(p => ({
-    start: p.line,
-    html: `<div class="note-row${p.blank ? ' blank' : ''}" draggable="true" data-idx="${p.line}" data-end="${p.end}">`
-      + NOTE_GRIP + (p.block ? p.html : `<div class="md-ln" data-ln="${p.line}">${p.html || '​'}</div>`) + NOTE_ROW_CTL + '</div>',
-  }));
+  return noteParts(s).filter(p => !(fold && fold.hidden[p.line])).map(p => {
+    const h = fold && !p.block ? fold.byLine.get(p.line) : null;
+    const cls = (p.blank ? ' blank' : '') + (h ? ' head' + (h.folded ? ' folded' : '') : '');
+    return {
+      start: p.line,
+      html: `<div class="note-row${cls}" draggable="true" data-idx="${p.line}" data-end="${p.end}"${h && h.folded ? ` data-fold-end="${h.end}"` : ''}>`
+        + NOTE_GRIP + (h ? noteFoldBtn(h, 'noteFoldTap(this)') : '')
+        + (p.block ? p.html : `<div class="md-ln" data-ln="${p.line}">${p.html || '​'}</div>`)
+        + (h ? noteFoldCount(h) : '') + NOTE_ROW_CTL + '</div>',
+    };
+  });
 }
 
 // Text tab: Ctrl/⌘+B and Ctrl/⌘+I wrap the selection in the mark — pressing the same
@@ -4519,6 +4852,11 @@ function mdShortcut(e, f) {
 // deletes the whole line, as in the formatted view
 function noteKeydown(e, ta) {
   if (mdShortcut(e, ta)) return;
+  if (isChkToggleKey(e)) {
+    e.preventDefault();
+    if (taToggleChk(ta)) noteFieldChanged(ta); else showStatusMsg(CHK_TOGGLE_NONE, 2200);
+    return;
+  }
   if (e.key === 'Backspace' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
     e.preventDefault();
     if (taDeleteLines(ta)) noteFieldChanged(ta);
@@ -7211,7 +7549,7 @@ function askLoadConflict(conflicts, singular) {
 }
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
-function closeModal(id) { el(id).classList.remove('open'); }
+function closeModal(id) { el(id).classList.remove('open'); if (id === 'itemEditModal') closeNoteToc(); }
 document.addEventListener('click', e => {
   closeBlockMenu();
   closeNewMenu();
@@ -7842,6 +8180,7 @@ document.addEventListener('keydown', e => {
     }
   }
   if (chkAddShortcut(e)) return;
+  if (chkToggleShortcut(e)) return;
   // with an item's dialog on top, Ctrl+Z belongs to its note (a deleted / moved line) — the app's own
   // undo would change the day underneath the open dialog
   const openBg = document.querySelectorAll('.modal-bg.open');
@@ -12654,7 +12993,7 @@ window.addEventListener('resize', updateAppGrid);
   <div class="modal" style="max-width:620px;gap:.6rem;max-height:90vh;overflow:hidden">
     <h2>Formatting a description</h2>
     <p>The description stays plain text — the marks below only change how it is <b>shown</b>. Nothing extra is stored, so sync, export and an older version of the app see the same note as always.</p>
-    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. <b>⠿</b> in front of a line drags it somewhere else, and what belongs under it goes along: the lines indented deeper under it, the list right under a plain line (<code>Shopping</code> + <code>- milk</code>), a heading’s whole section up to the next heading of its level. A list item dropped into another list takes its depth. The open line also has <b>▲▼</b> (Alt+↑/↓) and <b>×</b>; on the Checklist tab ⠿ and ▲▼ also move an item with the items under it. <b>Shift+Backspace</b> deletes the whole line (in the source field too); a deleted line leaves a <b>↶ restore</b> strip where it was, and Ctrl+Z brings it back as well. The <b>⟨⟩ source</b> button puts the whole description into one raw field. Every item remembers on its own how it was left — formatted or source, ticked-off items hidden or shown, Text or Checklist tab (on this device).</p>
+    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. <b>⠿</b> in front of a line drags it somewhere else, and what belongs under it goes along: the lines indented deeper under it, the list right under a plain line (<code>Shopping</code> + <code>- milk</code>), a heading’s whole section up to the next heading of its level. A list item dropped into another list takes its depth. The open line also has <b>▲▼</b> (Alt+↑/↓) and <b>×</b>; on the Checklist tab ⠿ and ▲▼ also move an item with the items under it. <b>Shift+Backspace</b> deletes the whole line (in the source field too); a deleted line leaves a <b>↶ restore</b> strip where it was, and Ctrl+Z brings it back as well. <b>▾</b> next to a heading collapses everything under it, up to the next heading of its level (on both tabs, remembered for the item on this device); a collapsed heading shows how many of its items are ticked off, e.g. <code>2/5</code>. The <b>contents</b> button lists the headings — a tap jumps there — and collapses or expands them all. On the Checklist tab the box next to a heading ticks off / unticks everything under it. The <b>⟨⟩ source</b> button puts the whole description into one raw field. Every item remembers on its own how it was left — formatted or source, ticked-off items hidden or shown, Text or Checklist tab (on this device).</p>
     <div class="modal-scroll">
       <div class="sc-legend">
         <h3>Inside a line</h3>
@@ -12672,7 +13011,7 @@ window.addEventListener('resize', updateAppGrid);
           <tr><td><code>## Heading</code></td><td>sub-heading — a small spaced-out uppercase label (the <b>H2</b> button; <b>Ctrl+H</b> steps the line <code>#</code> → <code>##</code> → off)</td></tr>
           <tr><td><code>- text</code></td><td>bullet</td></tr>
           <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; <b>Ctrl+L</b> — or the “☑ checklist line” button — turns the current line (or the selected ones) into items and back. On the Checklist tab <b>Ctrl+L</b> adds a new item.</td></tr>
-          <tr><td><code>- [x] milk</code></td><td>a ticked item. Items are counted in the <code>2/6</code> badge on the row and can be ticked off, reordered and deleted on the <b>Checklist</b> tab.</td></tr>
+          <tr><td><code>- [x] milk</code></td><td>a ticked item. <b>Ctrl+Enter</b> ticks off the item the caret is on, and unticks a ticked one (several selected lines at once; also while editing an item, or with a row picked, on the Checklist tab). Items are counted in the <code>2/6</code> badge on the row and can be ticked off, reordered and deleted on the <b>Checklist</b> tab.</td></tr>
         </table>
         <h3>In a block</h3>
         <p>In a block (or any line with tasks under it) the list <b>is</b> the tasks under it: they show up as its checklist, and on save every list line — checklist item or bullet — becomes a task under the block, while ticking, renaming, deleting and reordering change the rows below it. Each task shows its length on the Checklist tab — click it to change it, just like on the row; a new task gets 30 min, and <code>nap 20m</code> typed into the item sets it too. A plain task keeps its checklist as a checklist.</p>
