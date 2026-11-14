@@ -156,7 +156,12 @@ Globální A± i per-panel ± zoom škálují přes `zoom` / `--fs`, ale bílé 
 `.check-item` `.check-box` `.check-mark` — toggle s vizuálním stavem
 
 ### Modaly
-`.modal-bg` `.modal` `.modal-row` `.modal-btn` `.modal-btn.primary` `.modal-btn.danger`
+`.modal-bg` `.modal` `.modal-row` `.modal-btn` `.modal-btn.primary` `.modal-btn.danger` `.modal-foot`
+
+**Dlouhý modal — tlačítka vždy na dosah** (hotové ve všech appkách i v `_template`): `.modal` má strop výšky (viditelná výška okna) a scrolluje a **poslední `.modal-row` je přilepený dole** (`position:sticky`). Potvrzovací tlačítka jsou tak vidět vždycky, i když je nad nimi spousta položek (export / import se stovkami záznamů) — dřív v některých appkách modal přetekl mimo obrazovku a k tlačítkům se nedalo dojet.
+- Nový modal: tlačítka dej jako **poslední** `.modal-row`.
+- Akční řádek, který není posledním prvkem (import: `#importActions` a `#importCancel` se střídají přes `display`), nebo akční blok, který není `.modal-row` (`finishModal` ve `workout-app`) → třída **`.modal-foot`**.
+- `.modal-list` má `flex-shrink:0` — seznamy si drží svou výšku a scrolluje celý modal; bez toho by je strop výšky smáčkl skoro na nulu.
 
 ---
 

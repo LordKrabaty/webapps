@@ -69,7 +69,7 @@ html.dark input[type="range"]::-webkit-slider-thumb{background:var(--w)}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
 html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-bg.open{display:flex}
-.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem}
+.modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:1.25rem 1.4rem;max-width:420px;width:90%;display:flex;flex-direction:column;gap:.75rem;max-height:calc(100% - 1.5rem);overflow-y:auto}
 .modal h2{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--black);letter-spacing:.03em}
 .tagmgr-sec{display:flex;flex-direction:column;gap:.28rem}
 .tagmgr-sec+.tagmgr-sec{margin-top:.35rem}
@@ -78,7 +78,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .tagmgr-input{flex:1;min-width:0;font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--black);background:var(--w);border:var(--bh);border-radius:var(--r);padding:.3rem .45rem;outline:none}
 .tagmgr-count{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);white-space:nowrap}
 .modal p{font-size:.82rem;color:var(--muted);line-height:1.5}
-.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto;flex-shrink:0}
 .gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
 .gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
 .gh-rev-date{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--black)}
@@ -105,6 +105,11 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-item.sel{background:var(--black);border-color:var(--black);color:var(--w)}
 .modal-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
 .modal-row{display:flex;gap:.5rem;flex-wrap:wrap}
+/* long modal: the action row stays pinned to the bottom edge while the rest scrolls, so the buttons
+   are always reachable (no scrolling past every list first); the white shadows cover the modal's
+   bottom padding and a thin band above the buttons, so scrolled content slides under them.
+   .modal-foot = the same for an action row that isn't the modal's last element */
+.modal>.modal-row:last-child,.modal>.modal-foot{position:sticky;bottom:0;z-index:5;background:var(--w);box-shadow:0 0 0 .3rem var(--w),0 1.5rem 0 var(--w)}
 .modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.82rem;padding:.45rem .7rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
 @media(hover:hover){.modal-btn:hover{background:var(--light)}}
 .modal-btn.primary{background:var(--black);color:var(--w)}
@@ -838,7 +843,7 @@ html.dark .btn-log{background:var(--black);color:var(--w)}
       <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Seller notes</p>
       <div class="modal-list" id="importSellerList"></div>
     </div>
-    <div class="modal-row" id="importActions" style="display:none">
+    <div class="modal-row modal-foot" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
       <button class="modal-btn primary" id="importApplyBtn" onclick="doImport()">import selected</button>
     </div>

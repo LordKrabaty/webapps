@@ -72,7 +72,7 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal{background:var(--w);border:var(--bh);border-radius:var(--r);padding:calc(1.25rem/var(--pzc,1)) calc(1.4rem/var(--pzc,1));max-width:34rem;width:92%;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column;gap:calc(.75rem/var(--pzc,1))}
 .modal h2{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;color:var(--black);letter-spacing:.03em}
 .modal p{font-size:.9rem;color:var(--muted);line-height:1.5}
-.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:min(55vh,24rem);overflow-y:auto}
+.modal-list{display:flex;flex-direction:column;gap:.3rem;max-height:min(55vh,24rem);overflow-y:auto;flex-shrink:0}
 .gh-rev{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem .55rem;border:var(--b);border-radius:var(--r);flex-wrap:wrap}
 .gh-rev-meta{display:flex;flex-direction:column;gap:.12rem;min-width:0}
 .gh-rev-date{font-family:'DM Mono',monospace;font-size:.84rem;color:var(--black)}
@@ -88,6 +88,11 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .modal-item.sel .lp-cnt{color:var(--w)}
 .modal-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--black);flex-shrink:0;cursor:pointer}
 .modal-row{display:flex;gap:calc(.5rem/var(--pzc,1));flex-wrap:wrap}
+/* long modal: the action row stays pinned to the bottom edge while the rest scrolls, so the buttons
+   are always reachable (no scrolling past every list first); the white shadows cover the modal's
+   bottom padding and a thin band above the buttons, so scrolled content slides under them.
+   .modal-foot = the same for an action row that isn't the modal's last element */
+.modal>.modal-row:last-child,.modal>.modal-foot{position:sticky;bottom:0;z-index:5;background:var(--w);box-shadow:0 0 0 .3rem var(--w),0 1.5rem 0 var(--w)}
 .modal-btn{flex:1;font-family:'DM Sans',sans-serif;font-size:.9rem;padding:.55rem .8rem;border:var(--bh);border-radius:var(--r);cursor:pointer;background:var(--w);color:var(--black)}
 @media(hover:hover){.modal-btn:hover{background:var(--light)}}
 .modal-btn.primary{background:var(--black);color:var(--w)}
@@ -919,7 +924,7 @@ textarea::placeholder{color:var(--mid)}
     </div>
     <div class="jb-field" style="margin-top:.2rem"><label>session note</label>
       <textarea id="finNote" rows="2" placeholder="how it went — HR, feel, adjustments… (saved with the logged workout, editable afterwards)" oninput="autoResizeTA(this)"></textarea></div>
-    <div style="display:flex;flex-direction:column;gap:.5rem">
+    <div class="modal-foot" style="display:flex;flex-direction:column;gap:.5rem">
       <button class="modal-btn primary" onclick="confirmFinish()">✓ finish &amp; log</button>
       <button class="modal-btn danger" onclick="discardWorkout()">✕ discard — log nothing</button>
       <button class="modal-btn" onclick="closeModal('finishModal')">cancel</button>
@@ -1073,7 +1078,7 @@ textarea::placeholder{color:var(--mid)}
       <p style="font-size:.78rem;color:var(--muted);margin:.4rem 0 .2rem">Items</p>
       <div class="modal-list" id="importList"></div>
     </div>
-    <div class="modal-row" id="importActions" style="display:none">
+    <div class="modal-row modal-foot" id="importActions" style="display:none">
       <button class="modal-btn" onclick="closeModal('importModal')">cancel</button>
       <button class="modal-btn primary" onclick="doImport()">import selected</button>
     </div>
