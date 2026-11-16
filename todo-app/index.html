@@ -234,7 +234,9 @@ html.dark .modal-bg{background:rgba(255,255,255,.25)}
 .note-row.folded > .md-ln{flex:0 1 auto}
 .note-row.folded > .note-fold-count{margin-right:auto}
 /* one row of tools on a phone, also with the contents button in it */
-@media(max-width:480px){#iePaneText .ie-bar{gap:.22rem}#iePaneText .ie-bar .btn-io{min-width:1.7rem;padding:.28rem .3rem}}
+@media(max-width:480px){#iePaneText .ie-bar,#iePaneList .ie-bar{gap:.2rem}#iePaneText .ie-bar .btn-io{min-width:1.5rem;padding:.28rem .2rem}#iePaneList .ie-bar .btn-io{padding:.26rem .3rem}
+  /* the "1/2 done" is on the tab itself ("Checklist 1/2") — on a phone its room goes to the buttons */
+  #ieChkCount{display:none}#iePaneList .ie-bar{justify-content:flex-end}}
 .chk-head{display:flex;align-items:center;gap:.35rem;padding:calc(.45rem/var(--pzc,1)) .1rem calc(.22rem/var(--pzc,1));border-bottom:1px solid var(--light)}
 .chk-head .note-fold{width:15px;font-size:.86rem;line-height:1.4}
 .chk-head-gap{flex:0 0 auto;width:15px}
@@ -1393,7 +1395,7 @@ textarea::placeholder{color:var(--mid)}
           <div id="itemEditNoteView" class="note-view note-rows md" onpointerdown="noteViewPointerDown(event)"
             onmousedown="noteViewMouseDown(event)" onclick="noteViewClick(event)" title="tap a line to edit it · ⠿ drags it"></div>
           <textarea id="itemEditNote" rows="7" data-nocap placeholder="More text — description, notes, subtasks…"
-            oninput="autoGrowTextarea(this);renderChkList()" onkeydown="noteKeydown(event,this)"></textarea>
+            oninput="if(!_histNoType)_histTypeTs=Date.now();autoGrowTextarea(this);renderChkList()" onkeydown="noteKeydown(event,this)"></textarea>
           <div class="ie-bar">
             <span class="ie-tools" id="ieEditTools">
               <button class="btn-io" id="ieBtnH1" onmousedown="event.preventDefault()" onclick="mdHeadingLine(noteField(),1)" title="heading — # text (press again to take it off; Ctrl+H steps # → ## → off)">H1</button>
@@ -1402,6 +1404,8 @@ textarea::placeholder{color:var(--mid)}
               <button class="btn-io" id="ieBtnBold" onmousedown="event.preventDefault()" onclick="mdWrapSelection(noteField(),'**')" title="bold — **text** (Ctrl+B)"><strong>B</strong></button>
               <button class="btn-io" id="ieBtnItal" onmousedown="event.preventDefault()" onclick="mdWrapSelection(noteField(),'_')" title="italic — _text_ (Ctrl+I)"><em>I</em></button>
             </span>
+            <button class="btn-io ie-undo" onmousedown="event.preventDefault()" onclick="noteHistGo(-1)" title="undo the last change of the description (Ctrl+Z)" disabled>↩</button>
+            <button class="btn-io ie-redo" onmousedown="event.preventDefault()" onclick="noteHistGo(1)" title="redo (Ctrl+Y)" disabled>↪</button>
             <button class="btn-io ie-toc-btn" onmousedown="event.preventDefault()" onclick="toggleNoteToc(this)" title="contents — jump to a heading, collapse / expand them all"><svg class="bar-ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/></svg></button>
             <button class="btn-io" id="ieSrcBtn" onmousedown="event.preventDefault()" onclick="toggleNoteSrcMode()" title="show the whole description as raw markdown">⟨⟩</button>
             <button class="btn-io" id="ieHelpBtn" onmousedown="event.preventDefault()" onclick="openMdHelp()" title="how to format a description">?</button>
@@ -1414,6 +1418,9 @@ textarea::placeholder{color:var(--mid)}
           <!-- at the bottom and sticky, like the Text tab's: still at hand at the end of a long list -->
           <div class="ie-bar">
             <span class="ie-bar-count" id="ieChkCount"></span>
+            <!-- no mousedown guard here: an item being edited is saved by the blur first, so ↩ takes that back too -->
+            <button class="btn-io ie-undo" onclick="noteHistGo(-1)" title="undo the last change of the description (Ctrl+Z)" disabled>↩</button>
+            <button class="btn-io ie-redo" onclick="noteHistGo(1)" title="redo (Ctrl+Y)" disabled>↪</button>
             <button class="btn-io" onclick="setAllChkItems(true)" title="tick off every item">☑ all</button>
             <button class="btn-io" onclick="setAllChkItems(false)" title="untick every item">☐ none</button>
             <button class="btn-io" id="ieChkHideBtn" onclick="toggleChkHideDone()" title="hide the items that are already ticked off">hide</button>
@@ -3038,6 +3045,7 @@ function openItemEdit(ctx, idx) {
   el('itemEditName').value = ieNameValue(item);
   _ieLink = linksTasks(ctx, item) ? openBlockLink(ctx, item) : null;   // a block lists its tasks in the note
   el('itemEditNote').value = _ieLink ? _ieLink.base : (item.note || '');
+  noteHistReset();                           // undo / redo start from the text the dialog opened with
   // another window's item (a pin): edited right here, but its rules, block types and the delete / move
   // belong to its own window → those stay there, one tap away
   const foreign = ctx.kind === 'foreign';
@@ -3430,8 +3438,11 @@ let _noteEditing = false;    // source mode
 let _lineEdit = null;        // live mode: { start, end, span0, box } — the part opened as source
 let _lineClosing = false;    // guard: removing the focused box must not re-enter through blur
 let _noteTapLoc = null;      // target recorded on pointerdown, used by the click that follows
-let _noteUndo = [];          // deleted / moved lines, newest last (see LINES: MOVE, DELETE ⇄ RESTORE)
+let _noteUndo = [];          // deleted lines, newest last — the "↶ restore" strip (see LINES: MOVE, DELETE ⇄ RESTORE)
 const NOTE_UNDO_MAX = 50;
+let _hist = { stack: [''], idx: 0, at: 0, group: null };   // ↶ ↷ of the description (see UNDO / REDO)
+let _histTypeTs = 0, _histNoType = false;                  // a keystroke just now / an edit that isn't one
+const NOTE_HIST_MAX = 300;
 let _noteFold = new Set();   // keys of the collapsed headings of the open item (see HEADINGS: CONTENTS, COLLAPSE)
 
 // the field the toolbar and the shortcuts act on: the open line, else the whole-text field
@@ -3532,16 +3543,14 @@ function startLineEdit(lineIdx, col) {
   // the body goes, the row stays: its grip, and the ▲▼ × that only the open row shows
   part.el.replaceWith(box);
   part.row.classList.add('open');
-  // orig: while the box still holds what it opened with, Ctrl+Z has nothing of its own to undo
-  // and reaches for the note's (a deleted or moved line)
-  _lineEdit = { start: part.start, end: part.end, span0: part.end - part.start + 1, box, row: part.row, orig: box.value };
+  _lineEdit = { start: part.start, end: part.end, span0: part.end - part.start + 1, box, row: part.row };
   const all = noteLinesOf(ta.value), up = part.row.querySelector('.note-up'), dn = part.row.querySelector('.note-down');
   if (up) up.disabled = part.start === 0;
   if (dn) dn.disabled = noteGroupEnd(all, part.start, part.end) >= all.length - 1;
   // a collapsed heading being retyped stays collapsed under its new text (see syncLineEdit)
   const hd = noteHeads(all).find(h => h.line === part.start);
   _lineEdit.foldKey = hd && _noteFold.has(hd.key) ? hd.key : null;
-  box.addEventListener('input', () => { syncLineEdit(); growLineEdit(); });
+  box.addEventListener('input', () => { if (!_histNoType) _histTypeTs = Date.now(); syncLineEdit(); growLineEdit(); });
   box.addEventListener('keydown', lineEditKeydown);
   box.addEventListener('blur', () => closeLineEdit(true));
   growLineEdit();
@@ -3591,6 +3600,8 @@ function lineEditKeydown(e) {
   if (mdShortcut(e, box)) return;
   if (e.key === 'Escape') { e.stopPropagation(); closeLineEdit(true); return; }   // don't close the dialog
   const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
+  // Tab / Shift+Tab nest the line (with what is indented under it) instead of leaving the field
+  if (e.key === 'Tab' && plain) { e.preventDefault(); lineEditIndent(e.shiftKey ? -1 : 1); return; }
   if (isChkToggleKey(e)) {                   // tick off ⇄ back; the line stays open
     e.preventDefault();
     if (taToggleChk(box)) noteFieldChanged(box); else showStatusMsg(CHK_TOGGLE_NONE, 2200);
@@ -3600,13 +3611,8 @@ function lineEditKeydown(e) {
   if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
     e.preventDefault(); noteMoveOpen(e.key === 'ArrowUp' ? -1 : 1); return;
   }
-  // nothing typed in this line yet → its own undo is empty, so Ctrl+Z takes back the last delete / move
-  if (isUndoKey(e) && _lineEdit && box.value === _lineEdit.orig && _noteUndo.length) {
-    e.preventDefault();
-    const at = noteUndo();
-    if (at != null) startLineEdit(at, null);
-    return;
-  }
+  // Ctrl+Z / Ctrl+Y: the dialog's own history (typing included) — the same steps as ↶ ↷
+  if (isUndoKey(e) || isRedoKey(e)) { e.preventDefault(); noteHistGo(isUndoKey(e) ? -1 : 1); return; }
   if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
     if (_lineEdit && _lineEdit.box.classList.contains('block')) return;           // table: Enter = a new row
     e.preventDefault(); lineEditEnter(box); return;
@@ -3680,9 +3686,10 @@ function lineEditEnter(box) {
 // ── LINES: MOVE, DELETE ⇄ RESTORE ────────────────────────────────────────────
 // A line takes along what belongs under it when it is dragged by ⠿ or moved with ▲▼ / Alt+↑↓ (see
 // noteGroupEnd). A delete (× on the open line, Shift+Backspace) takes only the line itself and leaves
-// a "↶ restore" strip where it was; Ctrl+Z takes back the last delete or move. All of it only rewrites
-// the note text, like every other edit here — nothing new is stored.
-// _noteUndo entries: { kind:'del', lines, at, prev, next, after } | { kind:'edit', before, after, from } (a move, a tick-all)
+// a "↶ restore" strip where it was (that one deletion back, even after other edits); ↶ / Ctrl+Z undoes
+// any of it step by step (see UNDO / REDO). All of it only rewrites the note text, like every other edit
+// here — nothing new is stored.
+// _noteUndo entries (the strip): { kind:'del', lines, at, prev, next, after }
 function noteLinesOf(v) { return v ? v.split('\n') : []; }   // '' = no lines at all, not one empty line
 function noteIndent(ln) { return /^[ \t]*/.exec(ln || '')[0].replace(/\t/g, '    ').length; }
 const NOTE_NUM_RE = /^\s*\d+[.)]\s+\S/;
@@ -3738,6 +3745,84 @@ function noteShift(run, d) {
   if (!d) return run;
   return run.map(l => l.trim() ? ' '.repeat(Math.max(0, noteIndent(l) + d)) + l.replace(/^[ \t]*/, '') : l);
 }
+// ── NESTING: Tab / Shift+Tab ─────────────────────────────────────────────────
+// A line goes one level deeper (Tab) or back (Shift+Tab) together with the lines indented under it,
+// like in an outliner. Deeper only as far as one level under the line above it — a line can't hang
+// under nothing (so the first line stays put). The step is the note's own: 4 when every indented line
+// is a multiple of 4 (pasted markdown), else 2 spaces.
+function noteIndentUnit(lines) {
+  const ind = lines.filter(l => l.trim()).map(noteIndent).filter(n => n > 0);
+  return ind.length && ind.every(n => n % 4 === 0) ? 4 : 2;
+}
+// the last line indented deeper under lines[start..end] (indentation only — not a heading's section)
+function noteIndentEnd(lines, start, end) {
+  if (!(lines[start] || '').trim()) return end;
+  const base = noteIndent(lines[start]);
+  let last = end;
+  for (let j = end + 1; j < lines.length; j++) {
+    if (!lines[j].trim()) continue;
+    if (noteIndent(lines[j]) <= base) break;
+    last = j;
+  }
+  return last;
+}
+// → { lines, d } (d = columns the run moved), or null when it can't go that way. An empty line moves
+// too — Tab on a fresh line sets the depth before typing.
+function noteIndentRun(lines, start, end, dir) {
+  if (start < 0 || start >= lines.length) return null;
+  const unit = noteIndentUnit(lines), cur = noteIndent(lines[start]);
+  let d;
+  if (dir > 0) {
+    let p = start - 1; while (p >= 0 && !lines[p].trim()) p--;
+    if (p < 0) return null;
+    d = Math.min(cur + unit, noteIndent(lines[p]) + unit) - cur;
+    if (d <= 0) return null;
+  } else {
+    d = -Math.min(unit, cur);
+    if (!d) return null;
+  }
+  const out = lines.slice(), last = noteIndentEnd(lines, start, end);
+  const put = (l, n) => ' '.repeat(Math.max(0, n)) + l.replace(/^[ \t]*/, '');
+  out[start] = put(lines[start], cur + d);
+  for (let j = start + 1; j <= last; j++) if (lines[j].trim()) out[j] = put(lines[j], noteIndent(lines[j]) + d);
+  return { lines: out, d };
+}
+const NEST_NONE = 'can’t go deeper — a line nests at most one level under the line above it';
+// Tab / Shift+Tab in the open line: the change is a note edit (Ctrl+Z takes it back), the line opens
+// again with the caret where it was in the text
+function lineEditIndent(dir) {
+  if (!_lineEdit) return;
+  const { start, end, box } = _lineEdit;
+  const before = el('itemEditNote').value;
+  const r = noteIndentRun(noteLinesOf(before), start, end, dir);
+  if (!r) { if (dir > 0) showStatusMsg(NEST_NONE, 2400); return; }
+  const caret = box.selectionStart, k = box.value.slice(0, caret).split('\n').length - 1;
+  const col = caret - (box.value.lastIndexOf('\n', caret - 1) + 1);
+  noteApplyEdit(before, r.lines.join('\n'), start);
+  startLineEdit(start + k, Math.max(0, col + r.d));
+}
+// The ⟨⟩ source field: the line(s) under the caret / selection, each one step — the way a code editor
+// indents a selection. Through execCommand, so the field's own Ctrl+Z undoes it.
+function taIndentLines(ta, dir) {
+  const v = ta.value, a = ta.selectionStart, b0 = ta.selectionEnd;
+  const b = (b0 > a && v[b0 - 1] === '\n') ? b0 - 1 : b0;
+  const from = v.lastIndexOf('\n', a - 1) + 1;
+  let to = v.indexOf('\n', b); if (to < 0) to = v.length;
+  const seg = v.slice(from, to).split('\n'), unit = noteIndentUnit(noteLinesOf(v));
+  const strip = new RegExp('^(?: {1,' + unit + '}|\\t)');
+  const outLines = seg.map(l => dir > 0 ? ((l.trim() || seg.length === 1) ? ' '.repeat(unit) + l : l) : l.replace(strip, ''));
+  const out = outLines.join('\n');
+  if (out === seg.join('\n')) return false;
+  const k = v.slice(from, a).split('\n').length - 1;               // the caret's line in the run
+  const lineStart = from + seg.slice(0, k).reduce((s, l) => s + l.length + 1, 0);
+  const newStart = from + outLines.slice(0, k).reduce((s, l) => s + l.length + 1, 0);
+  const caret = Math.max(newStart, newStart + (a - lineStart) + (outLines[k].length - seg[k].length));
+  taEdit(ta, from, to, out);
+  if (a === b0) ta.setSelectionRange(caret, caret);
+  else ta.setSelectionRange(from, from + out.length);
+  return true;
+}
+
 // lines[start..last] → insertion line `at` (counted before the move) → { lines, at = their new start }.
 // depth: the depth the run's first line gets (default: from where it lands, see noteReindent)
 function noteMovedLines(lines, start, last, at, depth) {
@@ -3773,14 +3858,78 @@ function noteUndoPush(rec) {
   if (_noteUndo.length > NOTE_UNDO_MAX) _noteUndo.shift();
 }
 function isUndoKey(e) { return (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'z' || e.key === 'Z'); }
+function isRedoKey(e) {
+  return (e.ctrlKey || e.metaKey) && !e.altKey
+    && (((e.key === 'y' || e.key === 'Y') && !e.shiftKey) || ((e.key === 'z' || e.key === 'Z') && e.shiftKey));
+}
 
-// a move / reorder / tick-all of the note's lines: undoable with Ctrl+Z, then the view and the checklist
-// redrawn. from = the line to open again after the undo
-function noteApplyEdit(before, after, from) {
+// a move / reorder / tick-all of the note's lines → the text, redrawn (the history makes it one step)
+function noteApplyEdit(before, after) {
   if (after === before) return false;
-  noteUndoPush({ kind: 'edit', before, after, from });
   noteSetText(after);
   return true;
+}
+
+// ── UNDO / REDO OF THE DESCRIPTION (↶ ↷ in both tool bars, Ctrl+Z / Ctrl+Y) ───
+// One history for the whole dialog, both tabs: the states the text went through. A change is picked
+// up where every edit passes — updateChkCounts() runs after each one (typing, Enter, a deleted or moved
+// line, Tab, a tick, ☑ all, the ⟨⟩ source field) — so no path has to remember to record. Typing in one
+// line within a moment of the last keystroke extends that step (a word is one step, not each letter);
+// anything else starts a new one. Undo / redo only swap the text: like every edit in the dialog, the
+// item itself changes on "save". Ctrl+Z in the open line and in the source field goes here as well,
+// so the keys and the buttons never disagree; only an item being edited on the Checklist tab keeps
+// the field's own undo for its unsaved text.
+function noteHistReset() {
+  _hist = { stack: [el('itemEditNote').value], idx: 0, at: 0, group: null };
+  noteHistUi();
+}
+function noteHistRecord() {
+  const ta = el('itemEditNote'); if (!ta) return;
+  const h = _hist, v = ta.value;
+  if (v === h.stack[h.idx]) return;
+  const now = Date.now();
+  const group = now - _histTypeTs < 40 ? (_lineEdit ? 'L' + _lineEdit.start : (_noteEditing ? 'S' : null)) : null;
+  if (group && group === h.group && now - h.at < 1500 && h.idx > 0) h.stack[h.idx] = v;
+  else {
+    h.stack.length = h.idx + 1;                      // a new change drops what could have been redone
+    h.stack.push(v);
+    if (h.stack.length > NOTE_HIST_MAX) h.stack.shift();
+    h.idx = h.stack.length - 1;
+  }
+  h.at = now; h.group = group;
+  noteHistUi();
+}
+function noteHistUi() {
+  const u = _hist.idx > 0, r = _hist.idx < _hist.stack.length - 1;
+  document.querySelectorAll('#itemEditModal .ie-undo').forEach(b => { b.disabled = !u; });
+  document.querySelectorAll('#itemEditModal .ie-redo').forEach(b => { b.disabled = !r; });
+}
+// ↶ (-1) / ↷ (+1). An open line stays open — on the place that changed; in the source field the caret goes there.
+function noteHistGo(step) {
+  noteHistRecord();                                  // a change not picked up yet becomes its own step first
+  const h = _hist, j = h.idx + step;
+  if (j < 0 || j >= h.stack.length) return false;
+  const ta = el('itemEditNote'), from = ta.value, to = h.stack[j];
+  h.idx = j; h.group = null; h.at = 0;
+  _noteUndo = [];                                    // the restore strip: the history has that deletion now
+  const reopen = !!_lineEdit;
+  noteSetText(to);                                   // the text = stack[idx] → nothing new is recorded
+  let p = 0; while (p < from.length && p < to.length && from[p] === to[p]) p++;
+  if (_noteEditing) ta.setSelectionRange(p, p);
+  else if (reopen) startLineEdit(to.slice(0, p).split('\n').length - 1, p - (to.lastIndexOf('\n', p - 1) + 1));
+  noteHistUi();
+  return true;
+}
+// replaces ta[from..to] by text through the browser's own editing; not a keystroke, so the history
+// makes it a step of its own
+function taEdit(ta, from, to, text) {
+  ta.focus();
+  ta.setSelectionRange(from, to);
+  let ok = false;
+  _histNoType = true;
+  try { ok = document.execCommand(text ? 'insertText' : 'delete', false, text); } catch (_) {}
+  finally { _histNoType = false; }
+  if (!ok) ta.setRangeText(text, from, to, 'end');
 }
 // lines[start..last] to insertion line `at` (counted in the text as it is now) → their new start, -1 = no move.
 // inPlace: the same spot is allowed (▼ out of a sub-list only changes the depth); depth: see noteMovedLines
@@ -3921,18 +4070,6 @@ function noteRestoreGone() {
   _noteUndo.splice(_noteUndo.indexOf(rec), 1);
   noteRestoreRec(rec);
 }
-// Ctrl+Z: takes back the last delete or move → the line to open again, or null
-function noteUndo() {
-  const rec = _noteUndo.pop();
-  if (!rec) return null;
-  if (rec.kind === 'del') return noteRestoreRec(rec);
-  if (el('itemEditNote').value !== rec.after) {         // typed since — the old text back would lose that
-    showStatusMsg('↶ can’t undo that — the text has changed since', 3000);
-    return null;
-  }
-  noteSetText(rec.before);
-  return rec.from;
-}
 function noteGoneHtml(rec) {
   const first = (rec.lines.find(l => l.trim()) || '').trim();
   const what = first ? '“' + esc(first.length > 80 ? first.slice(0, 80) + '…' : first) + '”' : 'an empty line';
@@ -3971,11 +4108,7 @@ function taDeleteLines(ta) {
   if (to < v.length) dTo = to + 1;                      // the line and the break after it…
   else if (from > 0) dFrom = from - 1;                  // …or, for the last line, the break before it
   if (dFrom === dTo) return false;                      // an empty field: nothing to take
-  ta.focus();
-  ta.setSelectionRange(dFrom, dTo);
-  let ok = false;
-  try { ok = document.execCommand('delete'); } catch (_) {}
-  if (!ok) ta.setRangeText('', dFrom, dTo, 'start');
+  taEdit(ta, dFrom, dTo, '');
   const c = from > 0 ? from - 1 : 0;
   ta.setSelectionRange(c, c);
   return true;
@@ -4340,6 +4473,7 @@ function switchItemEditTab(which, remember) {
 }
 
 function updateChkCounts() {
+  noteHistRecord();                          // every edit of the description passes here → one place to record it
   const lines = ieNoteLines(), idxs = ieChkIdxs(lines);
   const done = idxs.filter(i => parseChkLine(lines[i]).done).length;
   const badge = el('ieTabCount'); if (badge) badge.textContent = idxs.length ? done + '/' + idxs.length : '';
@@ -4535,11 +4669,7 @@ function taToggleChk(ta) {
   const newStart = from + outLines.slice(0, k).reduce((s, l) => s + l.length + 1, 0);
   const mark = items[k] ? outLines[k].length - items[k].text.length : 0;
   const caret = Math.max(newStart + mark, newStart + outLines[k].length - fromEnd);
-  ta.focus();
-  ta.setSelectionRange(from, to);
-  let ok = false;
-  try { ok = document.execCommand('insertText', false, out); } catch (_) {}
-  if (!ok) ta.setRangeText(out, from, to, 'end');
+  taEdit(ta, from, to, out);
   if (a === b0) ta.setSelectionRange(caret, caret);
   else ta.setSelectionRange(from, from + out.length);
   return true;
@@ -4575,7 +4705,8 @@ function addChkItem(afterLine) {
   if (span) startChkEdit(at + 1, span);
 }
 // inline edit of one item's text (Enter = confirm + next item, Esc = cancel, empty = delete)
-function startChkEdit(lineIdx, span) {
+// caret: where to put it (default: the whole text selected, ready to be retyped)
+function startChkEdit(lineIdx, span, caret) {
   const it = parseChkLine(ieNoteLines()[lineIdx]);
   if (!it) return;
   // a textarea, not an input: a long item wraps and the field grows with it, so the whole text stays
@@ -4587,7 +4718,8 @@ function startChkEdit(lineIdx, span) {
   inp.value = it.text;
   span.replaceWith(inp);
   autoGrowTextarea(inp);
-  inp.focus(); inp.select();
+  inp.focus();
+  if (caret == null) inp.select(); else inp.setSelectionRange(caret, caret);
   inp.addEventListener('input', () => autoGrowTextarea(inp));
   let closed = false, addNext = false;
   const finish = commit => {
@@ -4626,6 +4758,25 @@ function startChkEdit(lineIdx, span) {
       const cb = inp.closest('.chk-row')?.querySelector('.chk-box');
       if (cb) cb.checked = !cur.done;
       updateChkCounts();
+      return;
+    }
+    // Tab / Shift+Tab: the item (with the ones under it) one level deeper / back, and the typing goes on.
+    // The text so far rides along as it is — even empty, so "+ add item → Tab → type" makes a sub-item.
+    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      const lines = ieNoteLines(), cur = parseChkLine(lines[lineIdx]);
+      if (!cur) return;
+      const at = inp.selectionStart, text = inp.value.replace(/\s*\n\s*/g, ' ');
+      lines[lineIdx] = chkLine(cur.indent, cur.done, text);
+      const r = noteIndentRun(lines, lineIdx, lineIdx, e.shiftKey ? -1 : 1);
+      if (!r) { if (!e.shiftKey) showStatusMsg(NEST_NONE, 2400); return; }
+      closed = true;                          // no commit on the blur of the redraw — a new edit takes over
+      const ta = el('itemEditNote');
+      ta.value = r.lines.join('\n');
+      autoGrowTextarea(ta);
+      renderChkList();
+      const fresh = el('ieChkList').querySelector('.chk-row[data-idx="' + lineIdx + '"] .chk-text');
+      if (fresh) startChkEdit(lineIdx, fresh, at);
       return;
     }
     if (e.key === 'Enter' || isChkAddKey(e)) { e.preventDefault(); addNext = true; finish(true); }
@@ -4857,6 +5008,12 @@ function mdShortcut(e, f) {
 // deletes the whole line, as in the formatted view
 function noteKeydown(e, ta) {
   if (mdShortcut(e, ta)) return;
+  if (isUndoKey(e) || isRedoKey(e)) { e.preventDefault(); noteHistGo(isUndoKey(e) ? -1 : 1); return; }
+  if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {   // nest the line(s) deeper / back
+    e.preventDefault();
+    if (taIndentLines(ta, e.shiftKey ? -1 : 1)) noteFieldChanged(ta);
+    return;
+  }
   if (isChkToggleKey(e)) {
     e.preventDefault();
     if (taToggleChk(ta)) noteFieldChanged(ta); else showStatusMsg(CHK_TOGGLE_NONE, 2200);
@@ -8186,17 +8343,22 @@ document.addEventListener('keydown', e => {
   }
   if (chkAddShortcut(e)) return;
   if (chkToggleShortcut(e)) return;
-  // with an item's dialog on top, Ctrl+Z belongs to its note (a deleted / moved line) — the app's own
-  // undo would change the day underneath the open dialog
+  // with an item's dialog on top, Ctrl+Z / Ctrl+Y belong to its description (↶ ↷) — the app's own undo
+  // would change the day underneath the open dialog
   const openBg = document.querySelectorAll('.modal-bg.open');
   const itemDlg = !!openBg.length && openBg[openBg.length - 1].id === 'itemEditModal';
+  if (itemDlg && (isUndoKey(e) || isRedoKey(e))) {
+    const a = document.activeElement;
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); noteHistGo(isUndoKey(e) ? -1 : 1); }
+    return;
+  }
   if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z' && e.shiftKey))) {
     const a = document.activeElement;
-    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); if (!itemDlg) redo(); }
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); redo(); }
   }
   if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) {
     const a = document.activeElement;
-    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); if (itemDlg) noteUndo(); else undo(); }
+    if (!(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'))) { e.preventDefault(); undo(); }
   }
 });
 
@@ -12998,7 +13160,7 @@ window.addEventListener('resize', updateAppGrid);
   <div class="modal" style="max-width:620px;gap:.6rem;max-height:90vh;overflow:hidden">
     <h2>Formatting a description</h2>
     <p>The description stays plain text — the marks below only change how it is <b>shown</b>. Nothing extra is stored, so sync, export and an older version of the app see the same note as always.</p>
-    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. <b>⠿</b> in front of a line drags it somewhere else, and what belongs under it goes along: the lines indented deeper under it, the list right under a plain line (<code>Shopping</code> + <code>- milk</code>), a heading’s whole section up to the next heading of its level. A list item dropped into another list takes its depth. The open line also has <b>▲▼</b> (Alt+↑/↓) and <b>×</b>; on the Checklist tab ⠿ and ▲▼ also move an item with the items under it. <b>Shift+Backspace</b> deletes the whole line (in the source field too); a deleted line leaves a <b>↶ restore</b> strip where it was, and Ctrl+Z brings it back as well. <b>▾</b> next to a heading collapses everything under it, up to the next heading of its level (on both tabs, remembered for the item on this device); a collapsed heading shows how many of its items are ticked off, e.g. <code>2/5</code>. The <b>contents</b> button lists the headings — a tap jumps there — and collapses or expands them all. On the Checklist tab the box next to a heading ticks off / unticks everything under it. The <b>⟨⟩ source</b> button puts the whole description into one raw field. Every item remembers on its own how it was left — formatted or source, ticked-off items hidden or shown, Text or Checklist tab (on this device).</p>
+    <p>The text is shown formatted and <b>the line you tap turns into its own markdown</b>, the rest stays formatted; Enter finishes the line and opens the next one, ↑/↓ step between lines, Esc closes the line. <b>Tab</b> nests the line one level deeper under the line above it, <b>Shift+Tab</b> brings it back — the lines indented under it go along (in the ⟨⟩ source field Tab indents the line or every selected one; on the Checklist tab it works while editing an item). <b>⠿</b> in front of a line drags it somewhere else, and what belongs under it goes along: the lines indented deeper under it, the list right under a plain line (<code>Shopping</code> + <code>- milk</code>), a heading’s whole section up to the next heading of its level. A list item dropped into another list takes its depth. The open line also has <b>▲▼</b> (Alt+↑/↓) and <b>×</b>; on the Checklist tab ⠿ and ▲▼ also move an item with the items under it. <b>Shift+Backspace</b> deletes the whole line (in the source field too); a deleted line leaves a <b>↶ restore</b> strip where it was, and Ctrl+Z brings it back as well. <b>▾</b> next to a heading collapses everything under it, up to the next heading of its level (on both tabs, remembered for the item on this device); a collapsed heading shows how many of its items are ticked off, e.g. <code>2/5</code>. The <b>contents</b> button lists the headings — a tap jumps there — and collapses or expands them all. On the Checklist tab the box next to a heading ticks off / unticks everything under it. <b>↩ ↪</b> (Ctrl+Z / Ctrl+Y) undo and redo the changes of the description step by step — typing, deleted or moved lines, ticks, Tab — on both tabs, until the dialog is closed. The <b>⟨⟩ source</b> button puts the whole description into one raw field. Every item remembers on its own how it was left — formatted or source, ticked-off items hidden or shown, Text or Checklist tab (on this device).</p>
     <div class="modal-scroll">
       <div class="sc-legend">
         <h3>Inside a line</h3>
@@ -13014,7 +13176,7 @@ window.addEventListener('resize', updateAppGrid);
         <table>
           <tr><td><code># Heading</code></td><td>heading — larger, with a rule under it (the <b>H1</b> button, or <b>Ctrl+H</b>)</td></tr>
           <tr><td><code>## Heading</code></td><td>sub-heading — a small spaced-out uppercase label (the <b>H2</b> button; <b>Ctrl+H</b> steps the line <code>#</code> → <code>##</code> → off)</td></tr>
-          <tr><td><code>- text</code></td><td>bullet</td></tr>
+          <tr><td><code>- text</code></td><td>bullet. Indented under another line (<b>Tab</b>, back with <b>Shift+Tab</b>) it is a sub-item: it moves together with that line.</td></tr>
           <tr><td><code>[] milk</code> · <code>- [ ] milk</code></td><td>checklist item. Enter continues the list, an empty item ends it; <b>Ctrl+L</b> — or the “☑ checklist line” button — turns the current line (or the selected ones) into items and back. On the Checklist tab <b>Ctrl+L</b> adds a new item.</td></tr>
           <tr><td><code>- [x] milk</code></td><td>a ticked item. <b>Ctrl+Enter</b> ticks off the item the caret is on, and unticks a ticked one (several selected lines at once; also while editing an item, or with a row picked, on the Checklist tab). Items are counted in the <code>2/6</code> badge on the row and can be ticked off, reordered and deleted on the <b>Checklist</b> tab.</td></tr>
         </table>
