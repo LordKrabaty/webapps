@@ -45,7 +45,7 @@ V gistu je **jen šifrovaná obálka**, nikdy čitelná data. „Secret" gist ne
 
 Uživatel chce být **upozorněn předem**, když by nějaká změna v téhle appce mohla oslabit šifrování nebo usnadnit únik dat. Před implementací takové změny to **řekni a navrhni bezpečnější variantu** — i když o to výslovně nežádá. Týká se to hlavně:
 
-- **cizího JS / CDN knihoven** (jakýkoli `<script src>` — i v jiné appce na `lordkrabaty.github.io`: všechny appky sdílejí origin, tj. localStorage, IndexedDB s klíčem i GitHub token)
+- **cizího JS / CDN knihoven** (jakýkoli `<script src>` i knihovna zkopírovaná do repa — i v jiné appce na `lordkrabaty.github.io`: všechny appky sdílejí origin, tj. localStorage, IndexedDB s klíčem i GitHub token) — **znovu tím otevírá přesun na vlastní origin**, viz „Vlastní origin pro dip-app“ níže
 - **vkládání dat do HTML bez `esc()`**, nových inline handlerů s daty, ID, která nejsou čísla (`numId` / `refId` v normalizérech nesmí zmizet) — XSS = token + data + možnost dešifrovat
 - **posílání dat kamkoli dalšího** (jiné API, analytika, error reporting, AI služby, sdílecí odkazy s daty, data v URL, `console.log` dešifrovaných dat nebo klíčů) — jediné schválené volání mimo GitHub je stažení kurzu měn na kliknutí (`fetchFx`, viz „Měna zobrazení“): nenese žádná data a nesmí se z něj stát automatické
 - **ukládání hesla / záchranného klíče** (localStorage, IndexedDB, cookies, „zapamatovat heslo“), exportovatelného klíče, zmírnění `passWeakness` / `PASS_MIN` / iterací PBKDF2
@@ -55,13 +55,18 @@ Uživatel chce být **upozorněn předem**, když by nějaká změna v téhle ap
 
 Když si nejsi jistý, upozorni radši zbytečně. Drobné úpravy výpočtů / UI, které na tohle nesahají, hlásit netřeba.
 
-## ⏳ Otevřeno — vlastní origin pro dip-app (dořešit později)
+## Vlastní origin pro dip-app — odloženo, znovu se otevře při cizím kódu
 
-**Stav (2026-11-12):** uživatel sync v `dip-app` **zatím nepoužívá** — z bezpečnostních důvodů ho nezapnul a nezapne, dokud se tenhle bod nedořeší. Nepobízej k zapnutí syncu; kdykoli na sync v dip-app přijde řeč, tenhle bod připomeň.
+**Rozhodnutí (2026-11-18):** `dip-app` zůstává na `lordkrabaty.github.io` a sync se smí používat (uživatel ho začíná zkoušet). Přesun není podmínkou syncu: dipy a suroviny leží v localStorage nešifrovaně se syncem i bez něj, takže přesun chrání hlavně lokální data — šifrovaná kopie v gistu riziko sdíleného originu prakticky nezvyšuje. Žádná appka nenačítá cizí skript (ověřeno 2026-11-18) a díry „data z gistu do HTML“ jsou opravené (`7f99f55`), takže zbytkové riziko potřebuje současně únik GitHub tokenu **a** novou díru v jiné appce.
 
-**Problém:** dip-app běží na `lordkrabaty.github.io` spolu s ostatními appkami → sdílí s nimi localStorage (dipy a suroviny v něm leží **nešifrovaně**), IndexedDB se šifrovacím klíčem i GitHub token. Skript spuštěný v **kterékoli** appce (XSS, cizí knihovna) přečte firemní data bez ohledu na šifrování gistu. Audit 2026-11-12 našel v `todo-app`, `tea-app`, `vision-app`, `workout-app` i `_template` místa, kde data z (nešifrovaného) gistu šla do HTML bez ošetření: kdo získal GitHub token, mohl do gistu podstrčit data a spustit tak skript na společném originu. Ta místa jsou opravená (kořenový `CLAUDE.md` → „Data v HTML“), ale oprava zavírá jen nalezené díry — sdílený origin zůstává.
+**Kdy otázku přesunu znovu otevřít — POVINNĚ, upozorni uživatele ještě před implementací:**
+- **cizí JS v kterékoli appce** na `lordkrabaty.github.io`: `<script src>` z CDN, ale i knihovna zkopírovaná do repa (pevná verze a kód v gitu riziko snižují, přístup ke všemu má ale stejný);
+- **appka, která zobrazuje data od někoho jiného** než od uživatele (jiní lidé, cizí API, obsah z webu) — mnohem větší plocha pro XSS než vlastní data;
+- **GitHub token s širším oprávněním než `gist`** (např. `repo`) uložený v kterékoli appce — skript by s ním mohl trvale změnit kód appek včetně `dip-app`.
 
-**Řešení k rozhodnutí:** přesunout `dip-app` na **vlastní origin**. Jiný repozitář pod stejným účtem nestačí (pořád `lordkrabaty.github.io`) — musí to být jiný GitHub účet / organizace (`<jiný>.github.io`) nebo vlastní (sub)doména. Co s tím souvisí:
+**Problém (trvá):** dip-app běží na `lordkrabaty.github.io` spolu s ostatními appkami → sdílí s nimi localStorage (dipy a suroviny v něm leží **nešifrovaně**), IndexedDB se šifrovacím klíčem i GitHub token. Skript spuštěný v **kterékoli** appce (XSS, cizí knihovna) přečte firemní data bez ohledu na šifrování gistu. Audit 2026-11-12 našel v `todo-app`, `tea-app`, `vision-app`, `workout-app` i `_template` místa, kde data z (nešifrovaného) gistu šla do HTML bez ošetření: kdo získal GitHub token, mohl do gistu podstrčit data a spustit tak skript na společném originu. Ta místa jsou opravená (kořenový `CLAUDE.md` → „Data v HTML“), ale oprava zavírá jen nalezené díry — sdílený origin zůstává.
+
+**Jak přesun udělat (až se otázka otevře):** přesunout `dip-app` na **vlastní origin**. Jiný repozitář pod stejným účtem nestačí (pořád `lordkrabaty.github.io`) — musí to být jiný GitHub účet / organizace (`<jiný>.github.io`) nebo vlastní (sub)doména. Co s tím souvisí:
 
 - data se nepřenesou sama (jiný origin = prázdný localStorage / IndexedDB): export JSON (⇩) → import na novém místě, případně přes gist (token, Gist ID, heslo)
 - po přesunu smazat data dip-app ze starého originu (jinak tam nešifrovaná kopie zůstane)
