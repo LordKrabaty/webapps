@@ -852,7 +852,10 @@ textarea::placeholder{color:var(--mid)}
         <div class="jb-sub">5–100 · lower it under the beeps</div>
         <input id="musVol" type="text" inputmode="numeric" onchange="setMusVol(this.value)"></div>
     </div>
-    <div class="modal-row"><button class="modal-btn primary" onclick="closeModal('musicModal')">close</button></div>
+    <div class="modal-row" style="flex-wrap:wrap">
+      <button class="modal-btn" onclick="copyMusicLog()" title="copy what the music did during this session (downloads, pauses, reloads) — to send when it misbehaves">⧉ copy music log</button>
+      <button class="modal-btn primary" onclick="closeModal('musicModal')">close</button>
+    </div>
   </div>
 </div>
 
@@ -1870,6 +1873,7 @@ function renderMain() {
   </div>
   <div class="wk-runbar">
     <button class="btn-sm" id="musicBtn" onclick="openMusicModal()" title="sound &amp; music — music on/off, track selection, end countdown, halfway alert, rep pacer">${musicOn ? '♪' : '♪ off'}</button>
+    <button class="btn-sm" id="musicHoldBtn" onclick="resumeMusic()" title="music on hold — another app or the system paused it (audio focus, media notification, headphones). Tap to play it again"${musicHeld ? '' : ' style="display:none"'}>♪ ▶</button>
     ${wkHistoryFor().length ? `<button class="btn-sm" onclick="openWkHistory()" title="history of this workout — past sessions, ratings, time &amp; heart rate">⏱ history</button>` : ''}
     ${(wk.exercises || []).length ? `<button class="btn-sm" onclick="toggleAllCollapse()" title="${allCollapsed() ? 'expand' : 'collapse'} all ${wk.type === 'cardio' ? 'segments' : 'rounds'}">${allCollapsed() ? '▸ all' : '▾ all'}</button>` : ''}
     ${wkVolHtml()}
@@ -3798,13 +3802,26 @@ function phaseAlerts() {
 // ── MUSIC (repo-hosted MP3 loops) ───────────────────────────────────────────
 // one selectable track plays during exercises (work/manual), another during
 // pauses (rest/prep/srest). Files live in the repo's music/ folder next to
-// index.html → zero per-device setup, the browser caches them. Defaults are
+// index.html → zero per-device setup, the app caches them. Defaults are
 // work.mp3 / rest.mp3; extra files named work2…work9 / rest2…rest9 are
 // auto-discovered and pickable in the ♪ modal. The choice follows the same
 // general/per-workout scope as the alerts: general default in localStorage
 // (musicSelDev) or a per-workout override (wk.music) that syncs with it.
 // Each track keeps its position while the other plays, so it resumes where
 // it left off.
+// Playback is built to last a whole session on a phone / the e-ink reader:
+//  • every file is downloaded WHOLE into Cache Storage and plays from a local
+//    blob — nothing streams from GitHub Pages mid-workout. Every push to the
+//    repo re-deploys Pages and changes the ETag / Last-Modified of ALL files,
+//    so a streamed track's next range request (loop, resume after a rest)
+//    suddenly hit a "different" file and the element went silent for good.
+//    A file replaced in the repo (other size on the server) downloads again
+//    in the background and plays from the next start.
+//  • a watchdog reloads a track that errors or stops advancing, at the same spot
+//  • a pause the app didn't ask for (another app took the audio focus, ⏸ in the
+//    media notification, headphones unplugged) is RESPECTED: the music holds
+//    until ♪ ▶. Calling play() again on the next tick grabbed the focus straight
+//    back, so music from another app kept stopping until the workout ended.
 const MUSIC_KEY = 'workout-music';
 const MUSIC_SEL_KEY = 'workout-music-sel';
 let musicOn = true; try { musicOn = localStorage.getItem(MUSIC_KEY) !== '0'; } catch(e) {}
@@ -3819,20 +3836,170 @@ function musicStem(kind) {
   if (sndPerWorkout() && wk.music && wk.music[kind]) return wk.music[kind];   // per-workout override
   return musicSelDev[kind] || kind;                                          // general default
 }
+const MUSIC_CACHE = 'workout-music-v1';   // Cache Storage bucket holding the downloaded mp3 files
+const MUSIC_STALL_MS = 8000;              // a "playing" track whose position hasn't moved this long is reloaded
+const musicSrc = {};      // stem → { st: 'idle'|'loading'|'ready'|'missing'|'failed', url, tries, retryAt }
+let musicHeld = false;    // paused from outside (another app, the system) — no play() until the user resumes
+const musicLog = [];      // recent playback events — "copy music log" in the ♪ modal
+const MUSIC_LOG_MAX = 80;
+function mlog(msg) {
+  musicLog.push(new Date().toTimeString().slice(0, 8) + ' ' + msg);
+  if (musicLog.length > MUSIC_LOG_MAX) musicLog.shift();
+}
+function musicFileUrl(stem) { return 'music/' + stem + '.mp3'; }
+// "no music" choice for a track slot (work / rest / one exercise) — silence instead of a file.
+// An older build reads it as a missing none.mp3 → also silent, so no schema bump.
+const MUSIC_NONE = 'none';
+function musLabel(stem) { return stem === MUSIC_NONE ? 'no music' : stem + '.mp3'; }
+const kB = n => Math.round(n / 1024) + ' kB';
+// the whole file as a local blob URL — from Cache Storage, else downloaded (and cached).
+// Idempotent, safe from every tick; a failed download retries after a growing delay.
+function musicLoad(stem) {
+  const s = musicSrc[stem] || (musicSrc[stem] = { st: 'idle', url: null, tries: 0, retryAt: 0 });
+  if (s.st === 'loading' || s.st === 'ready' || s.st === 'missing') return s;
+  if (s.st === 'failed' && Date.now() < s.retryAt) return s;
+  if (location.protocol === 'file:') { s.url = musicFileUrl(stem); s.st = 'ready'; return s; }   // opened from disk — no fetch / Cache Storage
+  s.st = 'loading';
+  musicFetchBlob(stem).then(blob => {
+    s.url = URL.createObjectURL(blob); s.st = 'ready'; s.tries = 0;
+    updateMusic();
+  }).catch(e => {
+    if (e && e.status === 404) {
+      s.st = 'missing';
+      mlog(stem + ': not found');
+      showStatusMsg('⚠ music/' + stem + '.mp3 not found — add it to the repo', 4000);
+    } else {   // offline / server hiccup → try again later
+      s.tries++; s.st = 'failed';
+      s.retryAt = Date.now() + Math.min(60000, 5000 * s.tries);
+      mlog(stem + ': download failed (' + ((e && e.message) || e) + ') — retry in ' + Math.round((s.retryAt - Date.now()) / 1000) + ' s');
+    }
+  });
+  return s;
+}
+async function musicFetchBlob(stem) {
+  const url = musicFileUrl(stem);
+  let cache = null;
+  try { cache = await caches.open(MUSIC_CACHE); } catch (e) {}   // no Cache Storage (private window…) → a plain download every start
+  if (cache) {
+    try {
+      const hit = await cache.match(url);
+      const blob = hit && await hit.blob();
+      if (blob && blob.size) { mlog(stem + ': from cache, ' + kB(blob.size)); musicRevalidate(cache, url, blob.size); return blob; }
+    } catch (e) {}   // unreadable entry → download it again
+  }
+  const res = await fetch(url, { cache: 'no-cache' });
+  if (!res.ok) { const e = new Error('HTTP ' + res.status); e.status = res.status; throw e; }
+  const blob = await res.blob();
+  const len = res.headers.get('content-encoding') ? 0 : +res.headers.get('content-length') || 0;
+  if (!blob.size || (len && blob.size !== len)) throw new Error('incomplete download');
+  mlog(stem + ': downloaded, ' + kB(blob.size));
+  if (cache) { try { await cache.put(url, new Response(blob, { headers: { 'content-type': 'audio/mpeg' } })); } catch (e) {} }   // quota full → it still plays this time
+  return blob;
+}
+// once per session per file: the server's size differs from the cached copy → the file was
+// replaced in the repo; download the new one in the background (it plays from the next start).
+// Size, not ETag / Last-Modified — those change with every Pages deploy of the whole repo.
+const musicChecked = {};
+function musicRevalidate(cache, url, size) {
+  if (musicChecked[url] || !navigator.onLine) return;
+  musicChecked[url] = true;
+  fetch(url, { method: 'HEAD', cache: 'no-store' }).then(r => {
+    const len = r.headers.get('content-encoding') ? 0 : +r.headers.get('content-length') || 0;
+    if (!r.ok || !len || len === size) return;
+    return fetch(url, { cache: 'no-store' }).then(res => res.ok ? res.blob() : null).then(b => {
+      if (b && b.size === len) return cache.put(url, new Response(b, { headers: { 'content-type': 'audio/mpeg' } })).then(() => mlog(url + ': new version cached'));
+    });
+  }).catch(() => {});
+}
 const musicTracks = {};   // lazily created looping <audio> elements, keyed by file stem
 function musicAudio(stem) {
   let a = musicTracks[stem];
   if (!a) {
-    a = musicTracks[stem] = new Audio('music/' + stem + '.mp3');
-    a.loop = true; a.preload = 'none';
-    // missing/unreachable file → give up quietly until the ♪ toggle retries (load() below)
-    a.addEventListener('error', () => {
-      a._dead = true;
-      if (!a._deadMsg) { a._deadMsg = true; showStatusMsg('⚠ music/' + stem + '.mp3 not found — add it to the repo', 4000); }
+    a = musicTracks[stem] = new Audio();
+    a.loop = true; a.preload = 'auto';
+    a._stem = stem; a._want = false;   // _want = the app asked this element to play
+    a.addEventListener('loadedmetadata', () => {   // after a reload: back to where the track was
+      if (a._resumeAt > 0 && a.duration > 0 && isFinite(a.duration)) { try { a.currentTime = a._resumeAt % a.duration; } catch (e) {} }
+      a._resumeAt = 0; a._reloading = false;
     });
+    a.addEventListener('playing', () => { a._progAt = Date.now(); a._nagged = false; });
+    a.addEventListener('pause', () => musicPausedOutside(a));
+    a.addEventListener('play', () => musicPlayedOutside(a));
+    a.addEventListener('error', () => mlog(stem + ': error ' + (a.error ? a.error.code + ' ' + (a.error.message || '') : '')));
   }
   a.volume = (effSnd().mus || 100) / 100;   // refresh each fetch — the effective volume can change (scope toggle, load)
   return a;
+}
+// a pause the app didn't ask for — another app took the audio focus, ⏸ in the media
+// notification, headphones unplugged… → hold the music, so the other app can play
+function musicPausedOutside(a) {
+  if (!a._want || a._reloading || a.error) return;   // our own pause / a reload / an error (the watchdog reloads it)
+  a._want = false;
+  mlog(a._stem + ': paused from outside → music on hold');
+  if (!musicHeld) { musicHeld = true; renderMusicHold(); showStatusMsg('♪ music paused by another app or the system — ♪ ▶ resumes it', 6000); }
+}
+// …and a resume from outside (Chrome after a phone call, ▶ in the media notification) lifts the hold
+function musicPlayedOutside(a) {
+  if (a._want || !musicHeld) return;
+  mlog(a._stem + ': resumed from outside');
+  musicHeld = false; a._want = true;
+  renderMusicHold(); updateMusic();   // a phase may have changed meanwhile → switch to the right track
+}
+function resumeMusic() {
+  musicHeld = false;
+  Object.values(musicTracks).forEach(a => { a._recov = 0; a._retryAt = 0; });
+  mlog('♪ ▶ resumed by the user');
+  renderMusicHold(); updateMusic();
+  showStatusMsg('♪ music resumed');
+}
+function renderMusicHold() {
+  const b = el('musicHoldBtn'); if (b) b.style.display = musicHeld ? '' : 'none';
+  const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOnLabel();
+}
+function musicOnLabel() { return !musicOn ? '♪ music: off' : musicHeld ? '♪ music: on hold — tap to resume' : '♪ music: on'; }
+// reload a track that errored or got stuck, at the same position. After a few failed tries
+// in a row it stops on its own (every retry grabs the audio focus again) and waits for ♪ ▶
+function musicRecover(a, why) {
+  const now = Date.now();
+  if (now < (a._retryAt || 0)) return;
+  a._recov = (a._recov || 0) + 1; a._recovAt = now;
+  if (a._recov > 3) {
+    mlog(a._stem + ': still failing (' + why + ') → music on hold');
+    a._recov = 0; a._want = false;
+    if (a.error && a.error.code >= 3) {   // decode / format error → the stored copy may be bad, download it again
+      const s = musicSrc[a._stem]; if (s) s.st = 'idle';
+      if (window.caches) caches.open(MUSIC_CACHE).then(c => c.delete(musicFileUrl(a._stem))).catch(() => {});
+    }
+    musicHeld = true; renderMusicHold();
+    showStatusMsg('⚠ music keeps failing — ♪ ▶ tries again', 6000);
+    return;
+  }
+  a._retryAt = now + 2000 * a._recov;
+  mlog(a._stem + ': reload (' + why + ')');
+  a._resumeAt = a.currentTime || 0;
+  a._reloading = true;
+  a.load();   // pauses it; the next tick plays it again
+  a._progAt = now;
+}
+// a "playing" track must keep moving — no progress for a while = stuck (lost audio output…)
+function musicWatch(a) {
+  const now = Date.now(), ct = a.currentTime;
+  if (ct !== a._ct) { a._ct = ct; a._progAt = now; if (a._recov && now - a._recovAt > 30000) a._recov = 0; return; }
+  if (now - (a._progAt || now) > MUSIC_STALL_MS) musicRecover(a, 'stuck at ' + ct.toFixed(1) + ' s');
+}
+// once the current track is ready, the workout's other tracks download in the background,
+// so a phase switch never waits for the network
+function musicPrefetch() {
+  const stems = new Set([musicStem('work'), musicStem('rest')]);
+  (wk.exercises || []).forEach(ex => { if (ex.musTrack) stems.add(ex.musTrack); });
+  stems.forEach(st => { if (st !== MUSIC_NONE) musicLoad(st); });
+}
+document.addEventListener('visibilitychange', () => { if (wk && wk.run && wk.run.startedAt) mlog('page ' + document.visibilityState); });
+function copyMusicLog() {
+  const files = Object.entries(musicSrc).map(([k, s]) => k + ' ' + s.st).join(' · ') || '–';
+  const tracks = Object.entries(musicTracks).map(([k, a]) =>
+    `${k}: ${a.paused ? 'paused' : 'playing'} at ${(a.currentTime || 0).toFixed(1)} s · ready ${a.readyState}${a.error ? ' · error ' + a.error.code : ''}`).join('\n');
+  copyText(`music ${musicOn ? 'on' : 'off'}${musicHeld ? ' (on hold)' : ''} · files: ${files}\n${tracks}\n${musicLog.join('\n')}`, '✓ music log copied');
 }
 // writes to whichever scope is active: per-workout override (wk.music, syncs) or
 // the general device default (musicSelDev, localStorage)
@@ -3842,11 +4009,11 @@ function setMusicTrack(kind, stem) {
     wk.music = wk.music || {};
     wk.music[kind] = stem;
     schedSave();
-    showStatusMsg('♪ ' + kind + ' track of this workout → ' + stem + '.mp3');
+    showStatusMsg('♪ ' + kind + ' track of this workout → ' + musLabel(stem));
   } else {
     musicSelDev[kind] = stem;
     saveMusSelDev();
-    showStatusMsg('♪ general ' + kind + ' track → ' + stem + '.mp3');
+    showStatusMsg('♪ general ' + kind + ' track → ' + musLabel(stem));
   }
   updateMusic(); renderMusicModal();
   if (musicPrev && musicPrev.kind === kind) { stopMusicPreview(); previewMusic(kind); }   // audition follows the dropdown
@@ -3856,14 +4023,15 @@ function setExMusic(ei, stem) {
   const ex = wk.exercises[ei]; if (!ex) return;
   if (stem) ex.musTrack = stem; else delete ex.musTrack;
   schedSave(); updateMusic();
-  showStatusMsg(stem ? '♪ this exercise plays ' + stem + '.mp3' : '♪ exercise follows the workout track');
+  showStatusMsg(!stem ? '♪ exercise follows the workout track' : stem === MUSIC_NONE ? '♪ this exercise plays no music' : '♪ this exercise plays ' + stem + '.mp3');
 }
-// options for the exercise-settings dropdown: workout default + every discovered file
+// options for the exercise-settings dropdown: workout default + no music + every discovered file
 function exMusicOptions(ex) {
   const cur = (ex && ex.musTrack) || '';
   const stems = musicFiles ? [...musicFiles.work, ...musicFiles.rest] : ['work', 'rest'];
-  if (cur && !stems.includes(cur)) { stems.push(cur); stems.sort(); }
-  return `<option value="">workout default (${esc(musicStem('work'))}.mp3)</option>`
+  if (cur && cur !== MUSIC_NONE && !stems.includes(cur)) { stems.push(cur); stems.sort(); }
+  return `<option value="">workout default (${esc(musLabel(musicStem('work')))})</option>`
+    + `<option value="${MUSIC_NONE}"${cur === MUSIC_NONE ? ' selected' : ''}>— no music —</option>`
     + stems.map(s => `<option value="${esc(s)}"${s === cur ? ' selected' : ''}>${esc(s)}.mp3</option>`).join('');
 }
 // preview in the ♪… modal — audition the file picked in the dropdown; musicTarget()
@@ -3873,6 +4041,7 @@ function previewMusic(kind) {
   if (musicPrev && musicPrev.kind === kind) { stopMusicPreview(); return; }   // toggle off
   stopMusicPreview();
   const stem = el(kind === 'work' ? 'musWorkSel' : 'musRestSel').value;
+  if (stem === MUSIC_NONE) { showStatusMsg('♪ no music selected — nothing to preview'); return; }
   const a = new Audio('music/' + stem + '.mp3');
   a.loop = true;
   a.volume = (effSnd().mus || 100) / 100;
@@ -3922,7 +4091,7 @@ async function openMusicModal() {
   renderMusicModal();
 }
 function renderMusicModal() {
-  const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOn ? '♪ music: on' : '♪ music: off';
+  const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOnLabel();
   const per = sndPerWorkout(), c = effSnd();
   const sc = el('sndScope'); if (sc) sc.checked = per;
   const scr = el('sndScopeRow'); if (scr) scr.classList.toggle('sel', per);
@@ -3940,9 +4109,10 @@ function renderMusicModal() {
   ['work', 'rest'].forEach(kind => {
     const list = lists[kind].slice();
     const sel = musicStem(kind);
-    if (!list.includes(sel)) { list.push(sel); list.sort(); }   // keep the offline-selected file visible
+    if (sel !== MUSIC_NONE && !list.includes(sel)) { list.push(sel); list.sort(); }   // keep the offline-selected file visible
     el(kind === 'work' ? 'musWorkSel' : 'musRestSel').innerHTML =
-      list.map(s => `<option value="${esc(s)}"${s === sel ? ' selected' : ''}>${esc(s)}.mp3</option>`).join('')
+      `<option value="${MUSIC_NONE}"${sel === MUSIC_NONE ? ' selected' : ''}>— no music —</option>`
+      + list.map(s => `<option value="${esc(s)}"${s === sel ? ' selected' : ''}>${esc(s)}.mp3</option>`).join('')
       + (musicFiles ? '' : '<option disabled>scanning…</option>');
   });
 }
@@ -3963,30 +4133,46 @@ function toggleSetMusic(ei, si) {
 function musicTarget() {
   const r = wk && wk.run;
   if (musicPrev) return null;   // a ♪ modal preview is auditioning — main music yields
+  if (musicHeld) return null;   // another app / the system has the audio — wait for ♪ ▶
   if (!musicOn || !r || !r.startedAt || r.pausedLeft != null) return null;
+  let stem = null;
   if (r.phase === 'work' || r.phase === 'manual') {
     const ex = r.ei != null ? wk.exercises[r.ei] : null;
     const kind = setMusicKind(ex && (ex.sets || [])[r.si]);
-    if (kind === 'work' && ex && ex.musTrack) return ex.musTrack;   // per-exercise override
-    return musicStem(kind);
-  }
-  if (r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') return musicStem('rest');
-  return null;
+    stem = (kind === 'work' && ex && ex.musTrack) ? ex.musTrack : musicStem(kind);   // per-exercise override beats the workout track
+  } else if (r.phase === 'rest' || r.phase === 'prep' || r.phase === 'srest') stem = musicStem('rest');
+  return stem === MUSIC_NONE ? null : stem;   // "no music" slot → silence
 }
 // idempotent — safe to call from every tick; play() rejection (autoplay policy
 // before the first user gesture) is ignored, the next tap-driven call succeeds.
 // Paused tracks keep their position, so switching back resumes where they left off.
 function updateMusic() {
+  const r = wk && wk.run;
+  if (musicHeld && !(r && r.startedAt && r.phase && r.phase !== 'done')) { musicHeld = false; renderMusicHold(); }   // run over → the next one starts with music again
   const want = musicTarget();
-  Object.entries(musicTracks).forEach(([stem, a]) => { if (stem !== want && !a.paused) a.pause(); });
-  if (want) { const a = musicAudio(want); if (!a._dead && a.paused) a.play().catch(() => {}); }
+  Object.entries(musicTracks).forEach(([stem, a]) => { if (stem !== want) { a._want = false; if (!a.paused) a.pause(); } });
+  if (!want) return;
+  const s = musicLoad(want);
+  if (s.st !== 'ready') return;   // still downloading, missing, or offline (retried after a delay)
+  musicPrefetch();
+  const a = musicAudio(want);
+  if (a._url !== s.url) { a._url = s.url; a._reloading = true; a.src = s.url; }
+  if (a.error) { musicRecover(a, 'error ' + a.error.code); return; }
+  a._want = true;   // also when it already plays (resumed by Chrome) — its next outside pause must hold the music
+  if (a.paused) {
+    a._progAt = Date.now(); a._ct = a.currentTime;
+    a.play().catch(e => { if (e && e.name !== 'AbortError' && !a._nagged) { a._nagged = true; mlog(want + ': play() refused — ' + e.name); } });
+    return;
+  }
+  musicWatch(a);
 }
 function toggleMusic() {
+  if (musicOn && musicHeld) { resumeMusic(); return; }   // on hold → the button resumes instead of switching music off
   musicOn = !musicOn;
   try { localStorage.setItem(MUSIC_KEY, musicOn ? '1' : '0'); } catch(e) {}
-  if (musicOn) Object.values(musicTracks).forEach(a => { if (a._dead) { a._dead = false; a.load(); } });   // retry files added since
+  if (musicOn) Object.values(musicSrc).forEach(s => { if (s.st === 'missing' || s.st === 'failed') { s.st = 'idle'; s.retryAt = 0; } });   // retry files added since
+  musicHeld = false; renderMusicHold();
   const b = el('musicBtn'); if (b) b.textContent = musicOn ? '♪' : '♪ off';
-  const mb = el('musicOnBtn'); if (mb) mb.textContent = musicOn ? '♪ music: on' : '♪ music: off';
   showStatusMsg(musicOn ? '♪ music on' : '♪ music off');
   updateMusic();
 }
