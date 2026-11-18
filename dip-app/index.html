@@ -569,6 +569,9 @@ html.dark input[type="date"]{color-scheme:dark}
 .mf label{font-size:.6rem;font-weight:500;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mf input,.mf select{width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.28rem .45rem;outline:none}
 .mf input[inputmode="decimal"]{font-family:'DM Mono',monospace}
+/* computed line under a field of an alternative (€ / kg of solid, switch what-if) */
+.mf-sub{font-family:'DM Mono',monospace;font-size:.64rem;color:var(--muted);line-height:1.3}
+.mf-sub:empty{display:none}
 /* the note of an alternative grows with its text (auto-grow) — flex:0 0 auto, or the global textarea{flex:1} collapses it */
 .mf .alt-note{flex:0 0 auto;width:100%;min-width:0;min-height:0;resize:none;overflow:hidden;font-size:.82rem;line-height:1.4;padding:.28rem .45rem}
 .mf input:focus,.mf select:focus,.mf .alt-note:focus,.alt-name:focus{outline:2px solid var(--black);outline-offset:0}
@@ -3562,6 +3565,61 @@ function matConsHtml(m) {
   if (set.length && Math.abs(sum - 100) > 0.05) parts.push('<b>' + esc('shares add up to ' + fmtNum(+sum.toFixed(2)) + ' %, not 100') + '</b>');
   return parts;
 }
+// € per kg of SOLID (price as delivered ÷ its concentration) — compares alternatives with a different concentration
+function altDry(m, a) { return m.role !== 'water' && a && a.price != null && a.conc > 0 ? a.price * 100 / a.conc : null; }
+// the line under the price: "dry 2.468 · +5.2 % vs ●"
+function altDryText(m, a) {
+  if (m.role === 'water' || a.price == null) return '';
+  const p = altDry(m, a); if (p == null) return 'dry: needs conc.';
+  const act = actAlt(m), b = a === act ? null : altDry(m, act);
+  if (b == null) return 'dry ' + p.toFixed(3);
+  const d = (p / b - 1) * 100;
+  return 'dry ' + p.toFixed(3) + ' · ' + (Math.abs(d) < 0.05 ? 'same as ●' : (d > 0 ? '+' : '−') + Math.abs(d).toFixed(1) + ' % vs ●');
+}
+// the material now, as solid: { t: tonnes of solid / year, p: € / kg solid, sh: { <alt id>: share % } } — by the shares
+// when they add up to 100 %, else all of it from ●. A string = what is missing.
+function matDryNow(m) {
+  if (!(m.cons > 0)) return 'needs t / year';
+  const sh = m.alts.map(a => altShare(m, a)), set = sh.filter(x => x != null), sum = set.reduce((s, x) => s + x, 0);
+  const mix = set.length && Math.abs(sum - 100) <= 0.05 ? m.alts.map((a, i) => [a, sh[i] || 0]).filter(x => x[1] > 0) : [[actAlt(m), 100]];
+  let t = 0, cost = 0; const out = {};
+  for (const [a, s] of mix) {
+    const p = altDry(m, a); if (p == null) return mix.length > 1 ? 'needs prices + conc.' : 'needs ● price + conc.';
+    const ta = m.cons * s / 100 * a.conc / 100; t += ta; cost += ta * p; out[a.id] = s;
+  }
+  return t > 0 ? { t, p: cost / t, sh: out, mix: mix.length > 1 } : 'needs t / year';
+}
+// what-if: switch N % of the yearly consumption to an alternative (⚗ materials) — typed text per alternative id,
+// memory only (not saved, not synced); empty = 100 %
+let altSwitch = {};
+function moneyYr(n) {   // a yearly sum in the display currency, whole units, grouped: "12 345 €"
+  const k = dispCur();
+  return String(Math.round(Math.abs(n) * fxRate(k))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' ' + CUR_SYM[k];
+}
+// → [text, tooltip] of the line under "switch %"
+function altSwitchInfo(m, a) {
+  const raw = String(altSwitch[a.id] ?? '').trim(), k = raw === '' ? 100 : parseNum(raw);
+  const p = altDry(m, a); if (p == null) return ['needs price + conc.', ''];
+  const now = matDryNow(m); if (typeof now === 'string') return [now, ''];
+  if (!(k >= 0 && k <= 100)) return ['0–100 %', ''];
+  if ((now.sh[a.id] || 0) >= 99.95) return ['now 100 %', ''];
+  const t = now.t * k / 100, d = t * 1000 * (p - now.p);
+  const tip = fmtNum(k) + ' % of ' + fmtNum(m.cons) + ' t / year = ' + fmtNum(+t.toFixed(2)) + ' t solid · '
+    + p.toFixed(3) + ' vs ' + now.p.toFixed(3) + ' €/kg solid now (' + (now.mix ? 'the shares' : '●') + ')' + (dispCur() !== 'EUR' ? ' · ' + fxText() : '');
+  if (Math.round(Math.abs(d) * fxRate(dispCur())) < 1) return ['same cost', tip];
+  return [(d < 0 ? 'saves ' : 'costs ') + moneyYr(d) + '/yr' + (d < 0 ? '' : ' more'), tip];
+}
+function updateAltCalc(m) {
+  m.alts.forEach(a => {
+    setText('altD-' + a.id, altDryText(m, a));
+    const s = el('altS-' + a.id); if (!s) return;
+    const [t, tip] = altSwitchInfo(m, a); setText('altS-' + a.id, t); s.title = tip;
+  });
+}
+function onAltSwitch(mid, aid, val) {
+  if (String(val).trim() === '') delete altSwitch[aid]; else altSwitch[aid] = String(val);
+  const m = matById(mid); if (m) updateAltCalc(m);
+}
 function matInfoHtml(m) {
   const a = actAlt(m), w = matWork(m), p = workPrice(m, w), parts = [];
   if (m.role !== 'water' && a && a.conc != null && w != null && w < a.conc) parts.push(esc('pre-diluted ' + fmtNum(a.conc) + ' → ' + fmtNum(w) + '% with water'));
@@ -3643,7 +3701,11 @@ function altStatusOptions(a) {   // + the stored one, when a newer build knows a
 }
 function altHtml(m, a) {
   const on = a.id === m.act, water = m.role === 'water';
-  const f = (key, label, ph, tip) => `<div class="mf${key === 'card' ? ' mf-wide' : ''}"><label>${label}</label><input type="text"${ALT_TEXT.includes(key) ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},${jsArg(String(key))},this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off"></div>`;
+  const f = (key, label, ph, tip, sub = '') => `<div class="mf${key === 'card' ? ' mf-wide' : ''}"><label>${label}</label><input type="text"${ALT_TEXT.includes(key) ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},${jsArg(String(key))},this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off">${sub}</div>`;
+  // under the price: € / kg of solid; with more alternatives a what-if — switch N % of the consumption to this one
+  const dry = water ? '' : `<div class="mf-sub" id="altD-${esc(a.id)}" title="${esc('€ per kg of solid = € / kg ÷ conc. % — compares alternatives with a different concentration; % = vs ● (mixed in production now)')}">${esc(altDryText(m, a))}</div>`;
+  const [swT, swTip] = altSwitchInfo(m, a);
+  const sw = water || m.alts.length < 2 ? '' : `<div class="mf"><label>switch %</label><input type="text" inputmode="decimal" value="${esc(altSwitch[a.id] ?? '')}" placeholder="100" oninput="onAltSwitch(${jsArg(m.id)},${jsArg(a.id)},this.value)" title="${esc('what if this % of the yearly consumption (t / year, as solid) went to this alternative — the line below = change of the yearly cost vs now (● or the shares). Only a calculation, not saved.')}" autocomplete="off"><div class="mf-sub" id="altS-${esc(a.id)}" title="${esc(swTip)}">${esc(swT)}</div></div>`;
   return `<div class="alt${on ? ' on' : ''}${altApproved(a) ? '' : ' test'}">
       <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${jsArg(m.id)},${jsArg(a.id)})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>
         <input class="alt-name" type="text" value="${esc(a.name)}" placeholder="product name" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},'name',this.value)" autocomplete="off">
@@ -3653,8 +3715,9 @@ function altHtml(m, a) {
         ${f('producer', 'producer')}
         ${f('card', 'master card', 'item no.', 'kmenová karta — the item number of this product in the company stock system')}
         ${water ? '' : f('conc', 'conc. %', 'as delivered', 'concentration as delivered')}
-        ${f('price', '€ / kg', '', 'price per kg as delivered')}
+        ${f('price', '€ / kg', '', 'price per kg as delivered', dry)}
         ${f('share', 'share %', m.alts.length === 1 ? '100' : '', 'share of the material’s yearly consumption (t / year above) that this alternative takes — the tonnes are in the line at the bottom')}
+        ${sw}
         ${m.role === 'resin' ? f('fF', 'F in solid %', String(RESIN_F), 'formaldehyde share of the resin solid') + f('fR', 'R in solid %', String(RESIN_R), 'resorcinol share of the resin solid') : ''}
         ${m.role === 'latex-vp' ? f('vp', 'VP monomer %', '?', 'vinylpyridine share of the latex polymer') : ''}
       </div>
@@ -3671,6 +3734,7 @@ function touchMaterial(m, before) {
 function updateMatHead(m) {
   setText('matN-' + m.id, m.name || 'unnamed'); setText('matM-' + m.id, matMetaText(m));
   const i = el('matI-' + m.id); if (i) i.innerHTML = matInfoHtml(m);
+  updateAltCalc(m);
 }
 function matField(id, key, val) {
   const m = matById(id); if (!m) return;
