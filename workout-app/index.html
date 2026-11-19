@@ -3995,6 +3995,58 @@ function musicPrefetch() {
   stems.forEach(st => { if (st !== MUSIC_NONE) musicLoad(st); });
 }
 document.addEventListener('visibilitychange', () => { if (wk && wk.run && wk.run.startedAt) mlog('page ' + document.visibilityState); });
+
+// ── HEADSET / MEDIA KEYS ────────────────────────────────────────────────────
+// Once workout music has played, Chrome routes the headphone buttons (and the media
+// notification's) to the page: ⏯ pauses / resumes the whole workout, ⏭ / ⏮ shift
+// the running countdown by the ±step — forward = less time left, back = more (like
+// seeking in a player; past the end it moves on to the next phase). With music off
+// nothing claims the buttons, so they stay with the other apps.
+// playbackState tells Chrome the WORKOUT's state, not the music's — during a
+// "no music" part the tracks are paused, yet ⏯ must still pause the workout.
+function headsetPause() {
+  const r = wk && wk.run;
+  if (!r || !r.startedAt || r.phase === 'done') return;
+  mlog('headset ⏸');
+  if (r.pausedLeft == null && r.endTs) { pauseResume(); showStatusMsg('⏸ paused (headset)'); return; }
+  // untimed step — no countdown to stop, so at least silence the music
+  if (!musicHeld) { musicHeld = true; renderMusicHold(); updateMusic(); showStatusMsg('♪ music paused (headset)'); }
+}
+function headsetPlay() {
+  const r = wk && wk.run;
+  mlog('headset ▶');
+  if (r && r.startedAt && r.pausedLeft != null) { pauseResume(); showStatusMsg('▶ resumed (headset)'); }
+  else if (musicHeld) resumeMusic();
+  else updateMusic();
+}
+function headsetShift(dir) {   // +1 forward (less time left) · −1 back (more time left)
+  const r = wk && wk.run;
+  if (!r || !r.startedAt || (!r.endTs && r.pausedLeft == null)) return;   // untimed step / not running
+  const adj = +wk.adjSec || 30;
+  mlog('headset ' + (dir > 0 ? '⏭ −' : '⏮ +') + adj + ' s');
+  addPhase(-dir * adj);
+  if (dir > 0) tone(1250, 0, .07, .3); else tone(700, 0, .07, .3);   // you can't see the screen — a blip confirms it
+  showStatusMsg((dir > 0 ? '⏭ −' : '⏮ +') + adj + ' s (headset)');
+}
+if ('mediaSession' in navigator) {
+  const set = (act, fn) => { try { navigator.mediaSession.setActionHandler(act, fn); } catch (e) {} };   // unsupported action → skip
+  set('play', headsetPlay);
+  set('pause', headsetPause);
+  set('nexttrack', () => headsetShift(1));
+  set('previoustrack', () => headsetShift(-1));
+  set('seekforward', () => headsetShift(1));
+  set('seekbackward', () => headsetShift(-1));
+}
+let _msState = null;
+function syncMediaState() {
+  if (!('mediaSession' in navigator)) return;
+  const r = wk && wk.run;
+  const st = !(r && r.startedAt && r.phase && r.phase !== 'done') ? 'none'
+    : (r.pausedLeft != null || musicHeld) ? 'paused' : 'playing';
+  if (st === _msState) return;
+  _msState = st;
+  try { navigator.mediaSession.playbackState = st; } catch (e) {}
+}
 function copyMusicLog() {
   const files = Object.entries(musicSrc).map(([k, s]) => k + ' ' + s.st).join(' · ') || '–';
   const tracks = Object.entries(musicTracks).map(([k, a]) =>
@@ -4149,6 +4201,7 @@ function musicTarget() {
 function updateMusic() {
   const r = wk && wk.run;
   if (musicHeld && !(r && r.startedAt && r.phase && r.phase !== 'done')) { musicHeld = false; renderMusicHold(); }   // run over → the next one starts with music again
+  syncMediaState();
   const want = musicTarget();
   Object.entries(musicTracks).forEach(([stem, a]) => { if (stem !== want) { a._want = false; if (!a.paused) a.pause(); } });
   if (!want) return;

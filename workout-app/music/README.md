@@ -19,6 +19,11 @@ Any slot — work track, rest track, or one exercise's override in its ⚙
 settings — can be set to **— no music —**: that part of the workout stays
 silent (the alert beeps still sound).
 
+Headphone buttons (and the media notification), once the workout music has
+played: ⏯ pauses / resumes the whole workout, ⏭ moves the countdown forward
+by the ±step (less time left), ⏮ back (more time left) — a short blip confirms.
+With music off the buttons stay with the other apps.
+
 Notes:
 - Keep files reasonably small (a few MB). The app downloads each file whole on
   first use (Cache Storage, `workout-music-v1`) and from then on plays it from
