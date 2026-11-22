@@ -142,6 +142,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--w);color:var(--black);min
 .bike-log{font-family:'DM Mono',monospace;font-size:.74rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;max-height:14rem;overflow-y:auto;border:var(--b);border-radius:var(--r);padding:.4rem .5rem;background:var(--off);color:var(--dark);margin:0}
 .now-bike-row{padding:0 .9rem;margin-bottom:.35rem;font-family:'DM Mono',monospace;font-size:.95rem;color:var(--dark)}
 .now-bike-row b{color:var(--black);font-size:1.15rem}
+/* live cadence with the running interval's planned band in small type right under it */
+.now-rpm{display:inline-flex;flex-direction:column;align-items:center;vertical-align:top;line-height:1.15}
+.now-rpm .now-tgt{font-size:.72em}
 
 /* HEADER */
 header{
@@ -308,14 +311,7 @@ textarea::placeholder{color:var(--mid)}
   .app{padding:calc(.75rem/var(--pzc,1)) calc(.65rem/var(--pzc,1));gap:calc(.7rem/var(--pzc,1))}
   .setup-grid{grid-template-columns:1fr}
   .checks-row{gap:calc(.35rem/var(--pzc,1))}
-  .rest-bar{padding:calc(.5rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));gap:calc(.5rem/var(--pzc,1))}
-  .np-z{width:2.6em}
-  .now-prog-txt{font-size:1.15rem}
-  .now-prog-txt.hr{gap:.3rem}
-  .now-hr{font-size:1.3rem}
-  .now-prog-txt.hr #nowTime{font-size:.78rem}
-  .now-ov-txt{font-size:.6rem;padding:0 .4rem}
-  .iv-name{min-width:3.5em}
+  /* run strip + interval rows: see the second ≤400px block after their base rules */
 }
 
 /* NOTES TABS (optional — keep for multi-pane notes) */
@@ -359,6 +355,10 @@ textarea::placeholder{color:var(--mid)}
 /* sensor connected: the pulse takes over as the dominant figure, the countdown stays as a smaller companion */
 .now-prog-txt.hr{gap:.5rem}
 .now-hr{font-size:1.65rem;font-weight:500}
+/* the running interval's planned band (min–max) in small type under the live pulse — ↑ / ↓ = below / above it */
+.now-hr.tgt{display:inline-flex;flex-direction:column;align-items:center;line-height:.95;font-size:1.5rem}   /* two lines must fit the 2.5rem phase area */
+.now-tgt{font-size:.52em;font-weight:400;color:var(--dark);white-space:nowrap}
+.rest-bar.over .now-tgt{color:var(--light)}
 .now-prog-txt.hr #nowTime{font-size:.92rem;color:var(--dark)}
 .rest-bar.over .now-prog-txt.hr #nowTime{color:var(--light)}
 .np-z{position:absolute;width:3.2em;height:50%;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--dark);cursor:pointer}
@@ -400,6 +400,19 @@ textarea::placeholder{color:var(--mid)}
 .set-in{width:3.2em;font-family:'DM Mono',monospace;font-size:.85rem;text-align:center;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.28rem .15rem;outline:none;flex:0 1 auto;min-width:2em}
 .set-w{width:4.8em;min-width:2.6em}
 .iv-name{width:auto;flex:1;min-width:5em;text-align:left;font-family:'DM Sans',sans-serif;padding:.28rem .45rem}
+/* phone: run strip + interval rows — must come AFTER their base rules (same specificity → the later
+   rule wins; in the early RESPONSIVE block these overrides never applied) */
+@media(max-width:400px){
+  .rest-bar{padding:calc(.5rem/var(--pzc,1)) calc(.55rem/var(--pzc,1));gap:calc(.5rem/var(--pzc,1))}
+  .np-z{width:2.6em}
+  .now-prog-txt{font-size:1.15rem}
+  .now-prog-txt.hr{gap:.3rem}
+  .now-hr,.now-hr.tgt{font-size:1.3rem}
+  .now-hr.tgt .now-tgt{font-size:.56em}
+  .now-prog-txt.hr #nowTime{font-size:.78rem}
+  .now-ov-txt{font-size:.6rem;padding:0 .4rem}
+  .iv-name{min-width:3.5em}
+}
 .ex-flags{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);flex-shrink:0;white-space:nowrap}
 .hd-sp{flex:1}
 .ex-score-btn{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--black);background:var(--w);border:var(--b);border-radius:var(--r);padding:.14rem .4rem;cursor:pointer;flex-shrink:0;white-space:nowrap}
@@ -465,9 +478,13 @@ textarea::placeholder{color:var(--mid)}
 .wk-addrow{display:flex;gap:.5rem;margin-top:.2rem}
 .wk-addrow .btn-lib{width:auto;flex:1}
 .set-done{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.75rem;line-height:1;padding:0}
-.set-go,.set-mus{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.65rem;line-height:1;padding:0}
-.set-mus{width:auto;min-width:26px;padding:0 .25rem;font-family:'DM Mono',monospace;font-size:.6rem}
-.set-mus.on{color:var(--black)}
+.set-go,.set-mus,.set-tgt{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.65rem;line-height:1;padding:0}
+.set-mus,.set-tgt{width:auto;min-width:26px;padding:0 .25rem;font-family:'DM Mono',monospace;font-size:.6rem}
+.set-mus.on,.set-tgt.on{color:var(--black)}
+.set-tgt{white-space:nowrap}   /* target HR / cadence of a cardio interval — "❤ 140–155 · 80–90 rpm" once set */
+.tgt-row{display:flex;align-items:center;gap:.4rem;min-width:0}
+.tgt-row label{flex:1;min-width:0;font-size:.88rem;color:var(--black)}
+.tgt-row .set-in{width:4.2em;font-size:.95rem;padding:.3rem .15rem}
 /* equipment picker (⚖) — bar chips, plate/add-on −/+ steppers, inline editor */
 .set-eq{width:26px;height:26px;border:var(--b);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex-shrink:0;font-size:.8rem;line-height:1;padding:0}
 .set-eq.on{color:var(--black);border-color:var(--dark)}
@@ -493,7 +510,7 @@ textarea::placeholder{color:var(--mid)}
 .eq-ed-hdr span{font-size:.6rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .eq-ed-note{font-family:'DM Sans',sans-serif}
 .set-rep{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);flex-shrink:0}
-@media(hover:hover){.set-go:hover,.set-mus:hover{background:var(--off);color:var(--black)}}
+@media(hover:hover){.set-go:hover,.set-mus:hover,.set-tgt:hover{background:var(--off);color:var(--black)}}
 .rest-gap{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);padding:.12rem .2rem .12rem 1.55rem;display:flex;align-items:center;gap:.35rem}
 .rest-gap-in{width:3.6em;font-family:'DM Mono',monospace;font-size:.62rem;text-align:center;border:var(--b);border-radius:var(--r);background:var(--w);color:var(--black);padding:.08rem .1rem;outline:none}
 .rest-gap-in::placeholder{color:var(--muted)}
@@ -517,6 +534,9 @@ textarea::placeholder{color:var(--mid)}
 .log-int{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);border:var(--b);border-radius:var(--r);padding:.04rem .3rem;flex-shrink:0}
 .log-ex{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--dark);padding-left:.2rem;line-height:1.5}
 .log-code{font-weight:500;color:var(--black)}
+/* per-interval target band + measured HR / cadence of a cardio segment (one sub-line per repetition) */
+.log-iv{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);padding-left:.9rem;line-height:1.45;word-break:break-word}
+.log-iv.sub{padding-left:1.8rem}
 .log-note-in{width:100%;font-size:.72rem;font-style:italic;color:var(--muted);border:none;border-bottom:1px solid transparent;background:none;outline:none;padding:.08rem .2rem;flex:0 0 auto;min-height:0;resize:none;overflow:hidden;line-height:1.5;font-family:'DM Sans',sans-serif}
 .log-note-in:focus{outline:none;border-bottom:1px solid var(--black);color:var(--black)}
 .log-note-wk{margin-top:.2rem;border-top:1px solid var(--off);padding-top:.2rem}
@@ -875,6 +895,18 @@ textarea::placeholder{color:var(--mid)}
   </div>
 </div>
 
+<!-- Interval target modal — planned heart-rate band (and cadence band on the indoor bike) of one cardio interval -->
+<div class="modal-bg" id="tgtModal">
+  <div class="modal" style="max-width:26rem;gap:.6rem">
+    <h2 id="tgtTitle">Interval target</h2>
+    <div id="tgtBody" style="display:flex;flex-direction:column;gap:.45rem"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="clearIvTarget()">clear</button>
+      <button class="modal-btn primary" onclick="closeModal('tgtModal')">done</button>
+    </div>
+  </div>
+</div>
+
 <!-- Exercise bike modal (BH i.Spada / Pafers console over BLE) — raw data for calibration -->
 <div class="modal-bg" id="bikeModal">
   <div class="modal" style="max-width:38rem;gap:.6rem">
@@ -1108,7 +1140,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 12;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise · 11: exercise-bike resistance per interval (lvl) + during rests (restLvl) — older builds whitelist-copy both away (tplFromWk) on push · 12: the indoor-bike flag on a cardio workout (bike) — same whitelist problem
+const APP_SCHEMA = 13;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise · 11: exercise-bike resistance per interval (lvl) + during rests (restLvl) — older builds whitelist-copy both away (tplFromWk) on push · 12: the indoor-bike flag on a cardio workout (bike) — same whitelist problem · 13: per-interval heart-rate / cadence target bands (hrLo/hrHi/rpmLo/rpmHi) — older builds whitelist-copy them away (tplFromWk) on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1743,12 +1775,15 @@ document.addEventListener('keydown', e => {
 //     side (true = one side at a time: the work timer runs twice per round, L then R, rest after both),
 //     pauseSec (⚙ rest after any step of this exercise/segment), innerPauseSec (⚙ rest between steps INSIDE it — beats pauseSec on same-exercise transitions), sidePauseSec (⚙ L↔R switch),
 //     sets:[{reps, weight, durSec, done, snote (per-round note → log), cue (per-interval technique note, template — shown in the now-bar during that interval),
-//       restSec (rest AFTER this set/interval, template — overrides the ⚙/workout rests; editable in the ↳ gap under the row, null = inherit)}]}],
+//       restSec (rest AFTER this set/interval, template — overrides the ⚙/workout rests; editable in the ↳ gap under the row, null = inherit),
+//       hrLo/hrHi (planned heart-rate band of a cardio interval, bpm) + rpmLo/rpmHi (cadence band, indoor bike) — template, either bound may be empty,
+//       ivm (live only: what the sensors measured during this interval in THIS run — {at: run start, p: [{h:[sum,n,min,max], r:[…]} per repetition]} → log hrM/rpmM)}]}],
 //   run:{startedAt, phase:'prep'|'work'|'srest'(L↔R switch)|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft, half:'L'|'R'|null,
 //        doneAt (when the phase turned 'done' — the overall clock stops there)} | null}
 // library entry = {id, name, data: tplFromWk(), mt}   (template — no run state, no durations)
 // archive entry = logged workout, mt-stamped (LWW on sync — log notes stay editable);
 //   session ratings (numbers, all optional): energy 1–5 + focus 1–5 (strength), rpe 1–5 + hrAvg + hrMax (cardio);
+//   logged cardio intervals carry their target band (hrLo/hrHi/rpmLo/rpmHi) + measured hrM / rpmM = [[avg, min, max] | null per repetition];
 //   per-exercise entries carry tech / rir (see above); logged sets carry restSec = the EFFECTIVE
 //   rest after that step, resolved through the ⚙ hierarchy at finish time (zero rests are omitted,
 //   editable afterwards in the ✎ edit modal, carried back by "use as workout" / "→ template")
@@ -1774,13 +1809,17 @@ function tplFromWk(w) {
     type: w.type, order: w.order === 'seq' ? 'seq' : 'circuit', pauseSec: w.pauseSec, setPauseSec: w.setPauseSec ?? null, weekTarget: w.weekTarget ?? null, prepSec: w.prepSec ?? 120, sidePauseSec: w.sidePauseSec ?? 0, adjSec: w.adjSec ?? 30, restLvl: w.restLvl ?? null, bike: w.bike ? true : undefined, note: w.note || '', music: w.music ?? null, snd: w.snd ? { ...w.snd } : null,
     exercises: (w.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s))}, ex))
+      sets: (ex.sets || []).map(s => withTgt(withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s), s))}, ex))
   };
 }
 // a not-yet-trained reps/weight/time edit rides along with the template (and so with the sync);
 // only when there is one — an untouched set / exercise keeps the plain shape
 function withChg(o, s) { return s.chg ? Object.assign(o, {chg: s.chg, pw: s.pw ?? null, pr: s.pr ?? null, pd: s.pd ?? null}) : o; }
 function withExChg(o, ex) { return ex.schg ? Object.assign(o, {schg: ex.schg, psn: ex.psn ?? null}) : o; }
+// planned heart-rate / cadence band of a cardio interval — rides along only when set, so an
+// untouched set keeps the plain shape (and an existing template doesn't look "changed")
+const TGT_KEYS = ['hrLo', 'hrHi', 'rpmLo', 'rpmHi'];
+function withTgt(o, s) { TGT_KEYS.forEach(k => { if (s[k] != null) o[k] = s[k]; }); return o; }
 function applySessionData(d) {
   wk = JSON.parse(JSON.stringify(d || {}));   // deep copy — never share a reference with a stored record
   if (!wk.exercises) wk = blankWorkout();
@@ -1798,7 +1837,7 @@ function loadFromLibrary(id) {
   wk = {name: e.name, type: d.type || 'strength', order: d.order === 'seq' ? 'seq' : 'circuit', pauseSec: d.pauseSec != null ? +d.pauseSec : 105, setPauseSec: d.setPauseSec != null ? +d.setPauseSec : null, weekTarget: d.weekTarget != null ? +d.weekTarget : null, prepSec: d.prepSec != null ? +d.prepSec : 120, sidePauseSec: +d.sidePauseSec || 0, adjSec: +d.adjSec || 30, restLvl: d.restLvl ?? null, bike: !!d.bike, note: d.note || '', music: d.music ?? null, snd: d.snd ? { ...d.snd } : null,
     exercises: (d.exercises || []).map(ex => withExChg({code: ex.code || '', name: ex.name || '', note: ex.note || '', snote: '', linked: ex.linked !== false, side: !!ex.side, repeat: exRepeat(ex),
       pauseSec: ex.pauseSec ?? null, innerPauseSec: ex.innerPauseSec ?? null, sidePauseSec: ex.sidePauseSec ?? null, musTrack: ex.musTrack ?? null,
-      sets: (ex.sets || []).map(s => withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s))}, ex)),
+      sets: (ex.sets || []).map(s => withTgt(withChg({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '', iname: s.iname ?? '', cue: s.cue ?? '', mus: s.mus ?? null, restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? null}, s), s))}, ex)),
     run: null};
   migrateWkAudio();
   prefillFromLast(id);
@@ -2122,6 +2161,7 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   const mid = cardio
     ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">
     ${isBikeWk() ? `<input class="set-in set-lvl" type="text" inputmode="numeric" value="${esc(s.lvl != null ? s.lvl : '')}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">` : ''}
+    ${(() => { const t = tgtBtnText(s); return `<button class="set-tgt${t ? ' on' : ''}" onclick="openIvTarget(${ei},${si})" title="target heart rate${isBikeWk() ? ' and cadence' : ''} (min–max) for this interval — shown in small type under the live value while it runs, logged with what was measured">${t ? esc(t) : '❤'}</button>`; })()}
     <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
     : `<input class="set-in${s.pr != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
@@ -3070,8 +3110,12 @@ function initHrPanel() {
 function updateNowHr() {
   const hrEl = el('nowHr'), txtEl = el('nowTxt'); if (!hrEl || !txtEl) return;
   const show = hrState === 'connected' && hrLive != null;
-  hrEl.textContent = show ? '❤ ' + hrLive : '';
-  hrEl.style.display = show ? 'inline' : 'none';
+  // the running cardio interval's planned band rides right under the pulse, in small type
+  const s = show ? runIvSet() : null;
+  const tg = s ? tgtLiveText(s.hrLo, s.hrHi, hrLive) : '';
+  hrEl.innerHTML = show ? '❤ ' + esc(hrLive) + (tg ? `<span class="now-tgt">${esc(tg)}</span>` : '') : '';
+  hrEl.classList.toggle('tgt', !!tg);
+  hrEl.style.display = show ? (tg ? 'inline-flex' : 'inline') : 'none';
   txtEl.classList.toggle('hr', show);
   return show;
 }
@@ -3134,7 +3178,7 @@ function onHrValueChanged(e) {
   const now = Date.now();
   const runStart = wk.run && wk.run.startedAt;
   if (runStart && hrStatsFor !== runStart) { hrStats = { sum: 0, count: 0, max: 0 }; hrHistory = []; hrStatsFor = runStart; }   // new workout → fresh stats + fresh trace
-  if (runStart) { hrStats.sum += bpm; hrStats.count++; if (bpm > hrStats.max) hrStats.max = bpm; }
+  if (runStart) { hrStats.sum += bpm; hrStats.count++; if (bpm > hrStats.max) hrStats.max = bpm; ivAccum('h', bpm); }   // + the running cardio interval's own avg/min/max
   hrHistory.push({ t: now, v: bpm });
   if (!runStart) {   // an active run keeps its FULL trace (see confirmFinish → entry.hrTrace) — only idle monitoring gets pruned
     const cutoff = now - HR_HIST_MAX_MS;
@@ -3243,7 +3287,14 @@ function updateNowBike() {
   const row = el('nowBikeRow'); if (!row) return;
   const show = bikeState === 'connected' && bikeLive != null && (wk.exercises || []).some(ex => (ex.sets || []).length);   // hidden with the strip itself
   row.style.display = show ? 'block' : 'none';
-  if (show) row.innerHTML = `⚡ <b>${bikeLive.w} W</b> · ${bikeLive.rpm} rpm · ${bikeLive.kmh} km/h` + (bikeLvl != null ? ' · L' + bikeLvl : '');
+  if (show) {
+    // the running interval's cadence band in small type right under the live rpm
+    const s = isBikeWk() ? runIvSet() : null;
+    const tg = s ? tgtLiveText(s.rpmLo, s.rpmHi, bikeLive.rpm) : '';
+    const rpm = tg ? `<span class="now-rpm"><span>${bikeLive.rpm} rpm</span><span class="now-tgt">${esc(tg)}</span></span>` : bikeLive.rpm + ' rpm';
+    row.innerHTML = `⚡ <b>${bikeLive.w} W</b> · ${rpm} · ${bikeLive.kmh} km/h` + (bikeLvl != null ? ' · L' + bikeLvl : '');
+  }
+  return show;
 }
 
 function toggleBike() {
@@ -3328,6 +3379,7 @@ function onBikeFrame(e) {
     const s = bikeStats, L = bikeLive;
     s.sumW += L.w; s.count++; if (L.w > s.maxW) s.maxW = L.w;
     if (L.rpm > 0) { s.sumRpm += L.rpm; s.nRpm++; }   // cadence average skips the coasting samples
+    ivAccum('r', L.rpm);   // the running interval's own cadence avg/min/max (coasting skipped there too)
     if (prev) {
       const dt = Math.min(5000, now - prev.t);   // capped, so a reconnect gap isn't counted as riding
       s.distKm += L.kmh * dt / 3600000;
@@ -3461,6 +3513,167 @@ function copyBikeLog() {
     + (L ? `\nlast: ${L.w} W · ${L.rpm} rpm · ${L.kmh} km/h · resistance ${L.lvl}` : '');
   copyText(head + '\n' + bikeLog.join('\n'), '✓ bike data copied');
 }
+
+// ── INTERVAL TARGETS (planned heart-rate band, + cadence band on the indoor bike) ──
+// A cardio interval may carry a min–max band (either bound optional). While it runs, the band
+// sits in small type under the live value (↑ = below it, push · ↓ = above it, ease off). What the
+// sensors read during the interval is kept per repetition on the set itself (s.ivm, live only)
+// and logged as [avg, min, max] next to the band (hrM / rpmM).
+const TGT_DEF = {
+  hr:  { lo: 'hrLo',  hi: 'hrHi',  step: 5, min: 30, max: 240, start: [130, 150], unit: 'bpm' },
+  rpm: { lo: 'rpmLo', hi: 'rpmHi', step: 5, min: 10, max: 200, start: [80, 90],   unit: 'rpm' }
+};
+const tgtOk = v => v != null && v !== '' && isFinite(v);
+// "140–155" · "≥140" · "≤155" · '' (no band)
+function tgtText(lo, hi) {
+  if (tgtOk(lo) && tgtOk(hi)) return lo + '–' + hi;
+  if (tgtOk(lo)) return '≥' + lo;
+  if (tgtOk(hi)) return '≤' + hi;
+  return '';
+}
+// the band next to a live reading: ↑ = below it, ↓ = above it
+function tgtLiveText(lo, hi, v) {
+  const t = tgtText(lo, hi); if (!t) return '';
+  return (tgtOk(lo) && v < +lo ? '↑ ' : tgtOk(hi) && v > +hi ? '↓ ' : '') + t;
+}
+// row button: "❤ 140–155 · 80–90 rpm" (cadence on the indoor bike only); '' = nothing set
+function tgtBtnText(s) {
+  const h = tgtText(s.hrLo, s.hrHi), r = isBikeWk() ? tgtText(s.rpmLo, s.rpmHi) : '';
+  return [h ? '❤ ' + h : '', r ? r + ' rpm' : ''].filter(Boolean).join(' · ');
+}
+// the cardio interval whose work phase is running right now — null in rests, prep and strength
+function runIvSet() {
+  const r = wk.run;
+  if (!r || !r.startedAt || wk.type !== 'cardio' || (r.phase !== 'work' && r.phase !== 'manual')) return null;
+  return ((wk.exercises[r.ei] || {}).sets || [])[r.si] || null;
+}
+// one sensor reading → the running interval's bucket for its current repetition; a paused
+// phase and dropout zeros (no skin contact / coasting) don't count
+function ivAccum(k, v) {
+  const r = wk.run, s = runIvSet();
+  if (!s || r.pausedLeft != null || !(v > 0)) return;
+  if (!s.ivm || s.ivm.at !== r.startedAt || !Array.isArray(s.ivm.p)) s.ivm = { at: r.startedAt, p: [] };
+  const rep = r.rep || 0;
+  const b = s.ivm.p[rep] || (s.ivm.p[rep] = {});
+  const a = b[k];
+  if (!a) b[k] = [v, 1, v, v];
+  else { a[0] += v; a[1]++; if (v < a[2]) a[2] = v; if (v > a[3]) a[3] = v; }
+}
+// what the log keeps of one cardio interval: its band + [avg, min, max] per repetition (null = no reading)
+function ivLogFields(s, at) {
+  const o = {};
+  if (wk.type !== 'cardio') return o;
+  const bike = isBikeWk();
+  withTgt(o, bike ? s : { hrLo: s.hrLo, hrHi: s.hrHi });
+  const p = s.ivm && s.ivm.at === at && Array.isArray(s.ivm.p) ? s.ivm.p : [];
+  const agg = k => Array.from(p, b => b && b[k] && b[k][1] ? [Math.round(b[k][0] / b[k][1]), b[k][2], b[k][3]] : null);
+  const h = agg('h'), rr = agg('r');
+  if (h.some(Boolean)) o.hrM = h;
+  if (bike && rr.some(Boolean)) o.rpmM = rr;
+  return o;
+}
+// per-interval lines of a logged cardio segment (log panel + text export):
+//   "work — HR target 140–155 → HR avg 148 · min 132 · max 156"   (one pass)
+//   "work — HR target 140–155" + "#1 HR avg … | rpm avg …" per repetition
+function ivLogLines(e) {
+  const out = [];
+  const tri = (m, u) => Array.isArray(m) ? u + ' avg ' + m[0] + ' · min ' + m[1] + ' · max ' + m[2] : '';
+  (e.sets || []).forEach((s, i) => {
+    const ht = tgtText(s.hrLo, s.hrHi), rt = tgtText(s.rpmLo, s.rpmHi);
+    const tg = [ht ? 'HR target ' + ht : '', rt ? 'rpm target ' + rt : ''].filter(Boolean).join(' · ');
+    const hm = Array.isArray(s.hrM) ? s.hrM : [], rm = Array.isArray(s.rpmM) ? s.rpmM : [];
+    const n = Math.max(hm.length, rm.length);
+    const reps = [];
+    for (let k = 0; k < n; k++) {
+      const t = [tri(hm[k], 'HR'), tri(rm[k], 'rpm')].filter(Boolean).join(' | ');
+      if (t) reps.push((n > 1 ? '#' + (k + 1) + ' ' : '') + t);
+    }
+    if (!tg && !reps.length) return;
+    const lbl = String(s.iname || '').trim() || 'interval ' + (s.rd || i + 1);
+    if (n <= 1) out.push({ t: lbl + ' — ' + [tg, reps[0]].filter(Boolean).join(' → ') });
+    else { out.push({ t: lbl + (tg ? ' — ' + tg : '') }); reps.forEach(t => out.push({ t, sub: true })); }
+  });
+  return out;
+}
+// ❤ on an interval row → steppers for min / max (typed value as a fallback), HR zone shortcuts
+let tgtCtx = null;   // {ei, si, undo: already pushed for this opening}
+function tgtCurSet() { return tgtCtx ? ((wk.exercises[tgtCtx.ei] || {}).sets || [])[tgtCtx.si] || null : null; }
+function openIvTarget(ei, si) {
+  if (!((wk.exercises[ei] || {}).sets || [])[si]) return;
+  tgtCtx = { ei, si, undo: false };
+  renderTgtModal();
+  el('tgtModal').classList.add('open');
+}
+function renderTgtModal() {
+  const s = tgtCurSet(); if (!s) { closeModal('tgtModal'); return; }
+  const ex = wk.exercises[tgtCtx.ei];
+  el('tgtTitle').textContent = (String(s.iname || '').trim() || 'interval ' + (tgtCtx.si + 1)) + ((ex.code || ex.name) ? ' · ' + (ex.code || ex.name) : '') + ' — target';
+  const row = (kind, which) => {
+    const d = TGT_DEF[kind], v = s[d[which]], name = which === 'lo' ? 'min' : 'max';
+    return `<div class="tgt-row"><label>${name}</label>
+      <button class="eq-step" onclick="tgtStep(${jsArg(kind)},${jsArg(which)},-1)" title="${d.step} ${d.unit} lower">−</button>
+      <input class="set-in" type="text" inputmode="numeric" value="${esc(v ?? '')}" placeholder="–" onchange="tgtType(${jsArg(kind)},${jsArg(which)},this.value)" title="${name} ${d.unit} — empty = no ${which === 'lo' ? 'lower' : 'upper'} bound">
+      <button class="eq-step" onclick="tgtStep(${jsArg(kind)},${jsArg(which)},1)" title="${d.step} ${d.unit} higher">+</button>
+    </div>`;
+  };
+  // a zone from the ⚙ zones as a one-tap band: its lower bound → just under the next zone (top zone = open)
+  const z = (hrZones && hrZones.zones) || [];
+  const chips = z.map((lo, i) => {
+    if (lo == null) return '';
+    const nx = z.slice(i + 1).find(v => v != null), hi = nx != null ? nx - 1 : null;
+    const sel = +s.hrLo === lo && (hi == null ? !tgtOk(s.hrHi) : +s.hrHi === hi);
+    return `<button class="eq-chip${sel ? ' sel' : ''}" onclick="tgtZone(${i})" title="heart-rate zone ${i + 1} from your zones">Z${i + 1} ${esc(tgtText(lo, hi))}</button>`;
+  }).join('');
+  el('tgtBody').innerHTML = `
+    <div class="eq-sec">heart rate (bpm)</div>
+    ${chips ? `<div class="eq-chips">${chips}</div>` : ''}
+    ${row('hr', 'lo')}${row('hr', 'hi')}
+    ${isBikeWk() ? `<div class="eq-sec">cadence (rpm)</div>${row('rpm', 'lo')}${row('rpm', 'hi')}` : ''}
+    <div class="jb-sub">Shown in small type under the live value while this interval runs (↑ below the band, ↓ above it). The log keeps the band with the measured avg / min / max.</div>`;
+}
+// every edit goes through here: one undo step per opening, no save when nothing really changed
+function tgtChange(fn) {
+  const s = tgtCurSet(); if (!s) return;
+  const t = {}; TGT_KEYS.forEach(k => { t[k] = tgtOk(s[k]) ? +s[k] : null; });
+  const before = JSON.stringify(t);
+  fn(t);
+  if (JSON.stringify(t) === before) { renderTgtModal(); return; }
+  if (!tgtCtx.undo) { pushUndo(); tgtCtx.undo = true; }
+  TGT_KEYS.forEach(k => { if (t[k] == null) delete s[k]; else s[k] = t[k]; });
+  schedSave(); renderTgtModal(); renderMain();
+}
+const tgtClamp = (kind, v) => Math.max(TGT_DEF[kind].min, Math.min(TGT_DEF[kind].max, Math.round(v)));
+// min never above max — the bound being edited pushes the other one along
+function tgtOrder(t, d, which) {
+  if (t[d.lo] != null && t[d.hi] != null && t[d.lo] > t[d.hi]) { if (which === 'lo') t[d.hi] = t[d.lo]; else t[d.lo] = t[d.hi]; }
+}
+function tgtStep(kind, which, dir) {
+  const d = TGT_DEF[kind], f = d[which];
+  tgtChange(t => {
+    if (t[f] == null) {   // empty bound: start just beside the other bound, or at a typical value
+      const other = t[which === 'lo' ? d.hi : d.lo];
+      t[f] = other != null ? tgtClamp(kind, other + (which === 'lo' ? -2 : 2) * d.step) : d.start[which === 'lo' ? 0 : 1];
+    } else t[f] = tgtClamp(kind, t[f] + dir * d.step);
+    tgtOrder(t, d, which);
+  });
+}
+function tgtType(kind, which, v) {
+  const d = TGT_DEF[kind];
+  tgtChange(t => {
+    const n = parseInt(String(v).trim(), 10);
+    t[d[which]] = isNaN(n) ? null : tgtClamp(kind, n);
+    tgtOrder(t, d, which);
+  });
+}
+function tgtZone(i) {
+  const z = (hrZones && hrZones.zones) || [], lo = z[i]; if (lo == null) return;
+  const nx = z.slice(i + 1).find(v => v != null);
+  tgtChange(t => { t.hrLo = lo; t.hrHi = nx != null ? nx - 1 : null; });
+}
+function clearIvTarget() {
+  tgtChange(t => TGT_KEYS.forEach(k => { t[k] = null; }));
+  closeModal('tgtModal');
+}
 function tick() {
   const r = wk.run;
   if (!r || !r.startedAt) { updateNowBar(); updateMusic(); return; }   // pre-start: the strip shows ▶ start (or hides if no exercises)
@@ -3481,7 +3694,9 @@ function tick() {
 // "10 reps @ 20 kg · 2:00" for a step — what the user needs to grab/do. Both numbers carry
 // their unit, so reps and weight can't be mixed up at a glance; free text ("BW", "AMRAP",
 // "20kg") already says what it is and stays as typed
-function stepInfo(ei, si, withTime) {
+// cardio adds the interval's planned HR / cadence band — live = {hr, rpm}: bands already shown under
+// the live value (sensor connected) are left out here
+function stepInfo(ei, si, withTime, live) {
   const ex = wk.exercises[ei]; if (!ex) return '';
   const s = (ex.sets || [])[si]; if (!s) return '';
   const parts = [];
@@ -3492,6 +3707,11 @@ function stepInfo(ei, si, withTime) {
     if (rw) parts.push(rw);
   }
   if (withTime && s.durSec != null) parts.push(mmss(s.durSec));
+  if (wk.type === 'cardio') {
+    const h = tgtText(s.hrLo, s.hrHi), rp = isBikeWk() ? tgtText(s.rpmLo, s.rpmHi) : '';
+    if (h && !(live && live.hr)) parts.push('❤ ' + h);
+    if (rp && !(live && live.rpm)) parts.push(rp + ' rpm');
+  }
   return parts.join(' · ');
 }
 // what follows the running work step: switch / rest duration → the next exercise with its numbers
@@ -3594,7 +3814,7 @@ function updateNowBar() {
   updateOverallBar(started);
   const hrShown = updateNowHr();
   updateNowHrStrip();
-  updateNowBike();
+  const bikeShown = updateNowBike();
   bikeSyncLevel();   // phase changed (timer, skip, ▶ jump) → the bike follows the planned resistance
   if (!started) {   // ready to start — the whole strip starts, corners hidden
     bar.classList.remove('over');
@@ -3658,7 +3878,7 @@ function updateNowBar() {
   const setEl = el('nowSet'), nextEl = el('nowNext');
   let setTxt = '', nextTxt = '';
   if (r.phase === 'work' || r.phase === 'manual') {
-    setTxt = stepInfo(r.ei, r.si, false);   // countdown already shows the time
+    setTxt = stepInfo(r.ei, r.si, false, { hr: hrShown, rpm: bikeShown });   // countdown already shows the time; a band under a live value isn't repeated
     nextTxt = nextPreview();
   } else if (r.phase === 'srest') {
     const ex = wk.exercises[r.ei] || {};
@@ -4264,7 +4484,7 @@ function discardWorkout() {
   closeModal('finishModal');
   pushUndo();
   wk.run = null; wk.note = '';
-  wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; }); });
+  wk.exercises.forEach(ex => { ex.snote = ''; ex.tech = null; ex.rir = null; ex.sets.forEach(s => { s.done = false; s.dn = 0; s.snote = ''; delete s.ivm; }); });
   schedSave(); renderMain(); renderNotes(); updateMusic();
   showSave('✕ workout discarded (not logged) — undo ↩ restores it');
 }
@@ -4301,7 +4521,8 @@ function confirmFinish() {
     name: (wk.name || '').trim() || 'workout', type: wk.type, totalSec,
     entries: wk.exercises.map((ex, ei) => ({code: ex.code, name: ex.name, side: !!ex.side, rep: exRepeat(ex), note: (ex.snote || '').trim(),
       tech: ex.tech ?? undefined, rir: ex.rir ?? undefined,
-      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, eq: s.eq || undefined, durSec: s.durSec, iname: s.iname || undefined, lvl: isBikeWk() ? (s.lvl ?? undefined) : undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si]}))
+      sets: ex.sets.map((s, si) => ({reps: s.reps, weight: s.weight, eq: s.eq || undefined, durSec: s.durSec, iname: s.iname || undefined, lvl: isBikeWk() ? (s.lvl ?? undefined) : undefined, done: !!s.done, rd: si + 1, note: (s.snote || '').trim(), restSec: restAfter[ei][si],
+        ...ivLogFields(s, r.startedAt)}))   // cardio: target band + measured HR / cadence per repetition
         .filter(s => anyDone ? s.done : true)}))
       .filter(e => e.sets.length),
     note: (el('finNote').value || '').trim(),   // session note — typed/edited right in the finish dialog
@@ -4322,7 +4543,7 @@ function confirmFinish() {
   wk.exercises.forEach(ex => {
     const trained = !anyDone || (ex.sets || []).some(s => s.done);   // read before the done flags are reset
     ex.snote = ''; ex.tech = null; ex.rir = null;
-    ex.sets.forEach(s => { if (!anyDone || s.done) clearSetChange(s); s.done = false; s.dn = 0; s.snote = ''; });
+    ex.sets.forEach(s => { if (!anyDone || s.done) clearSetChange(s); s.done = false; s.dn = 0; s.snote = ''; delete s.ivm; });
     if (trained) clearExStructure(ex);   // this session logged the new set count → the log matches again
   });
   schedSave(); renderMain(); renderNotes(); renderLibrary(); updateMusic();   // the weekly badge counts logged sessions
@@ -4753,8 +4974,9 @@ function renderLog() {
           ? `<div class="log-set-note"><span class="log-rn">r${esc(s.rd || sIdx + 1)}</span>
              <textarea class="log-note-in" rows="1" title="round note — editable" oninput="autoResizeTA(this)" onchange="updateLogSetNote(${jsArg(a.id)},${idx},${sIdx},this.value)">${esc(s.note)}</textarea></div>`
           : '').join('');
+        const ivLines = ivLogLines(e).map(l => `<div class="log-iv${l.sub ? ' sub' : ''}" title="planned band of the interval + heart rate / cadence measured during it">${esc(l.t)}</div>`).join('');
         return `<div class="log-ex"><span class="log-code">${esc(e.code || e.name)}</span> ${esc(exStatText(e))}${ev ? ` · <span title="training volume of this exercise — Σ reps × kg${e.side ? ', both sides' : ''}">vol ${esc(fmtVol(ev))}</span>` : ''}</div>
-          ${setNotes}
+          ${ivLines}${setNotes}
           <textarea class="log-note-in" rows="1" placeholder="· note" title="note for this exercise — editable" oninput="autoResizeTA(this)" onchange="updateLogNote(${jsArg(a.id)},${idx},this.value)">${esc(e.note || '')}</textarea>`;
       }).join('');
       const trace = logHrTraceSvg(a);
@@ -5110,9 +5332,10 @@ function logEntryToWk(a) {
         linked: te ? te.linked !== false : true, side: !!e.side,
         repeat: +e.rep > 1 ? +e.rep : (te ? exRepeat(te) : 1),
         pauseSec: te ? (te.pauseSec ?? null) : null, innerPauseSec: te ? (te.innerPauseSec ?? null) : null, sidePauseSec: te ? (te.sidePauseSec ?? null) : null,
-        sets: (e.sets || []).map((s, i) => ({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '',
+        // the target band is logged → it comes back from the log (a ride logged before it existed falls back to the template)
+        sets: (e.sets || []).map((s, i) => withTgt({reps: s.reps ?? '', weight: s.weight ?? '', durSec: s.durSec ?? null, done: false, snote: '',
           iname: s.iname ?? (ts(i) ? (ts(i).iname ?? '') : ''), cue: ts(i) ? (ts(i).cue ?? '') : '', mus: ts(i) ? (ts(i).mus ?? null) : null,
-          restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? (ts(i) ? (ts(i).lvl ?? null) : null)}))};
+          restSec: s.restSec ?? null, eq: s.eq ?? null, lvl: s.lvl ?? (ts(i) ? (ts(i).lvl ?? null) : null)}, TGT_KEYS.some(k => s[k] != null) ? s : (ts(i) || {})))};
     })
   };
 }
@@ -5203,6 +5426,7 @@ function logEntryText(a) {
     lines.push('  ' + lbl + ': ' + exStatText(e, true) + (v ? ' · volume ' + fmtVol(v) : '')
       + (e.note ? ' — ' + e.note.replace(/\n+/g, ' · ') : ''));
     lines.push(...eqLogLines(e));
+    ivLogLines(e).forEach(l => lines.push((l.sub ? '      ' : '    ') + l.t));   // cardio: band + measured HR / cadence per interval
     (e.sets || []).forEach((s, i) => {
       if (s.note) lines.push('    r' + (s.rd || i + 1) + ': ' + s.note.replace(/\n+/g, ' · '));
     });
