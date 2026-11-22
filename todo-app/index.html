@@ -4286,6 +4286,13 @@ function positionNoteToc() {
 // a tap in the contents: the sections around the heading open, and the tab scrolls it to the top
 function noteJumpTo(lineIdx) {
   closeNoteToc();
+  // A field still holding the focus lets go first — typically the name, focused when the dialog opened
+  // (the contents button keeps the focus where it is, for the sake of an open line). Chrome on Android
+  // scrolls the focused field back into view after the tap, so the jump was undone unless a line had been
+  // tapped open first. An open line closes in the redraw below; the ⟨⟩ source field is focused again below.
+  const a = document.activeElement;
+  if (a && a.matches && (a.matches('input, textarea, select') || a.isContentEditable)
+      && a !== el('itemEditNote') && !(_lineEdit && a === _lineEdit.box)) a.blur();
   noteUnfoldTo(lineIdx);
   noteFoldRedraw();
   const sc = el('itemEditModal').querySelector('.modal-scroll');
