@@ -452,7 +452,7 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.exh-more:hover{color:var(--black)}}
 .exh-hint{font-size:.78rem;color:var(--muted);margin:0;line-height:1.45}
 .set-in:focus{outline:2px solid var(--black);outline-offset:1px}
-.set-in.chg{border:var(--bh)}
+.set-in.chg,.set-tgt.chg{border:var(--bh)}
 .set-chg{font-family:'DM Mono',monospace;font-size:.85rem;line-height:1;color:var(--black);flex-shrink:0;cursor:help}
 .set-x{color:var(--muted);font-size:.8rem;flex-shrink:0}
 .set-unit{color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace;flex-shrink:0;margin-left:-.05rem}
@@ -1140,7 +1140,7 @@ textarea::placeholder{color:var(--mid)}
 // merge keeps whole objects (identity normalize) → additive fields round-trip
 // losslessly; if you add a whitelisting normalizer, spread the original first
 // ({ ...it, …known }) so it never strips unknown/newer fields.
-const APP_SCHEMA = 13;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise · 11: exercise-bike resistance per interval (lvl) + during rests (restLvl) — older builds whitelist-copy both away (tplFromWk) on push · 12: the indoor-bike flag on a cardio workout (bike) — same whitelist problem · 13: per-interval heart-rate / cadence target bands (hrLo/hrHi/rpmLo/rpmHi) — older builds whitelist-copy them away (tplFromWk) on push
+const APP_SCHEMA = 14;   // 2: archive merged via LWW · 3: bodyFields collection (configurable body columns) · 4: per-step restSec + per-segment innerPauseSec — older builds whitelist-copy them away (tplFromWk) on push · 5: equipment collection (equip) + per-set eq combo — older builds strip both on push · 6: per-workout music selection (music) + per-exercise musTrack — older builds strip both on push · 7: per-workout sound override (snd) — older builds strip it on push · 8: per-week log notes (weekNotes collection) — older builds drop the whole collection on push · 9: per-set planned-change mark (chg/pw/pr) — older builds whitelist-copy it away (tplFromWk) on push and would then overwrite the untrained plan from the last logged session · 10: the same mark for a planned TIME (pd) and for added/removed sets (per-exercise schg/psn) — same whitelist problem, and without schg the log's index → set mapping reshuffles the times of a changed exercise · 11: exercise-bike resistance per interval (lvl) + during rests (restLvl) — older builds whitelist-copy both away (tplFromWk) on push · 12: the indoor-bike flag on a cardio workout (bike) — same whitelist problem · 13: per-interval heart-rate / cadence target bands (hrLo/hrHi/rpmLo/rpmHi) — older builds whitelist-copy them away (tplFromWk) on push · 14: planned-change marks for the bike level and the HR / cadence band (pl/ph/pc) — older builds whitelist-copy them away (withChg) on push
 // ── STORAGE KEYS ──────────────────────────────────────────────────────────
 const SESSION_KEY = 'workout-v1-session';
 const LIBRARY_KEY = 'workout-v1-library';
@@ -1777,6 +1777,7 @@ document.addEventListener('keydown', e => {
 //     sets:[{reps, weight, durSec, done, snote (per-round note → log), cue (per-interval technique note, template — shown in the now-bar during that interval),
 //       restSec (rest AFTER this set/interval, template — overrides the ⚙/workout rests; editable in the ↳ gap under the row, null = inherit),
 //       hrLo/hrHi (planned heart-rate band of a cardio interval, bpm) + rpmLo/rpmHi (cadence band, indoor bike) — template, either bound may be empty,
+//       chg + pw/pr/pd/pl/ph/pc (planned-change marks — the value before an untrained edit, see PLANNED CHANGES; template),
 //       ivm (live only: what the sensors measured during this interval in THIS run — {at: run start, p: [{h:[sum,n,min,max], r:[…]} per repetition]} → log hrM/rpmM)}]}],
 //   run:{startedAt, phase:'prep'|'work'|'srest'(L↔R switch)|'rest'|'manual'|'done'|null, ei, si, endTs, pausedLeft, half:'L'|'R'|null,
 //        doneAt (when the phase turned 'done' — the overall clock stops there)} | null}
@@ -1814,7 +1815,12 @@ function tplFromWk(w) {
 }
 // a not-yet-trained reps/weight/time edit rides along with the template (and so with the sync);
 // only when there is one — an untouched set / exercise keeps the plain shape
-function withChg(o, s) { return s.chg ? Object.assign(o, {chg: s.chg, pw: s.pw ?? null, pr: s.pr ?? null, pd: s.pd ?? null}) : o; }
+function withChg(o, s) {
+  if (!s.chg) return o;
+  Object.assign(o, {chg: s.chg, pw: s.pw ?? null, pr: s.pr ?? null, pd: s.pd ?? null});
+  ['pl', 'ph', 'pc'].forEach(k => { if (s[k] != null) o[k] = Array.isArray(s[k]) ? s[k].slice() : s[k]; });   // cardio marks only when present (copied — no shared reference)
+  return o;
+}
 function withExChg(o, ex) { return ex.schg ? Object.assign(o, {schg: ex.schg, psn: ex.psn ?? null}) : o; }
 // planned heart-rate / cadence band of a cardio interval — rides along only when set, so an
 // untouched set keeps the plain shape (and an existing template doesn't look "changed")
@@ -1856,12 +1862,13 @@ function prefillFromLast(tplId) {
     if (ex.schg && ex.schg > lastT) return;   // sets added/removed since — the log's index mapping is stale
     clearExStructure(ex);
     ex.sets.forEach((s, i) => {
-      if (s.chg && s.chg > lastT) return;   // planned change newer than that session — keep it
+      const newer = !!(s.chg && s.chg > lastT);
+      if (newer && PREFILL_MARKS.some(k => s[k] != null)) return;   // planned reps/weight/time newer than that session — keep it
       const ls = (le.sets || [])[i]; if (!ls) return;
       if (ls.reps != null && ls.reps !== '') s.reps = ls.reps;
       if (ls.weight) { s.weight = ls.weight; if (ls.eq) s.eq = JSON.parse(JSON.stringify(ls.eq)); }
       if (ls.durSec != null) s.durSec = ls.durSec;
-      clearSetChange(s);   // that session is the newer truth → an older mark is stale
+      if (!newer) clearSetChange(s);   // that session is the newer truth → an older mark is stale (a newer band / level mark stays)
     });
   });
 }
@@ -2160,8 +2167,8 @@ function dataRowHtml(s, ei, si, cardio, numbered) {
   // cardio is time-based: instead of reps × weight one wide interval-name field (work / rest / all-in)
   const mid = cardio
     ? `<input class="set-in iv-name" type="text" value="${esc(s.iname ?? '')}" oninput="wk.exercises[${ei}].sets[${si}].iname=this.value;schedSave()" title="interval name — shown big while it runs" placeholder="work / rest / all-in…">
-    ${isBikeWk() ? `<input class="set-in set-lvl" type="text" inputmode="numeric" value="${esc(s.lvl != null ? s.lvl : '')}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">` : ''}
-    ${(() => { const t = tgtBtnText(s); return `<button class="set-tgt${t ? ' on' : ''}" onclick="openIvTarget(${ei},${si})" title="target heart rate${isBikeWk() ? ' and cadence' : ''} (min–max) for this interval — shown in small type under the live value while it runs, logged with what was measured">${t ? esc(t) : '❤'}</button>`; })()}
+    ${isBikeWk() ? `<input class="set-in set-lvl${s.pl != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${esc(s.lvl != null ? s.lvl : '')}" onchange="setSetLvl(${ei},${si},this.value)" title="exercise-bike resistance for this interval (1–${BIKE_MAX_LVL}) — set on the bike automatically when the interval starts; empty = leave it as is" placeholder="L">` : ''}
+    ${(() => { const t = tgtBtnText(s); return `<button class="set-tgt${t ? ' on' : ''}${s.ph != null || (s.pc != null && isBikeWk()) ? ' chg' : ''}" onclick="openIvTarget(${ei},${si})" title="target heart rate${isBikeWk() ? ' and cadence' : ''} (min–max) for this interval — shown in small type under the live value while it runs, logged with what was measured">${t ? esc(t) : '❤'}</button>`; })()}
     <button class="set-mus${s.mus ? ' on' : ''}" onclick="toggleSetMusic(${ei},${si})" title="music during this interval — ♪W work track / ♪R rest track (auto from the name, tap to flip)">♪${setMusicKind(s) === 'rest' ? 'R' : 'W'}</button>`
     : `<input class="set-in${s.pr != null ? ' chg' : ''}" type="text" inputmode="numeric" value="${esc(s.reps ?? '')}" onchange="setSetVal(${ei},${si},'reps',this.value)" title="reps" placeholder="–">
     <span class="set-x">×</span>
@@ -2194,20 +2201,25 @@ function setDurInput(ei, si, inp) {
   if (r && r.phase === 'manual' && r.ei === ei && r.si === si) startNextWork();   // time filled for the waiting step → its countdown starts right away
   schedSave(); renderMain();
 }
-// ── PLANNED CHANGES (a reps/weight edit that has not been trained yet) ─────
-// A hand-typed weight/reps carries s.chg (when) + s.pw/s.pr (the value before it).
+// ── PLANNED CHANGES (an edit that has not been trained yet) ─────────────────
+// A hand-typed weight/reps/time carries s.chg (when) + s.pw/s.pr/s.pd (the value before it);
+// cardio adds the bike level (pl) and the heart-rate / cadence band (ph / pc = [lo, hi]).
 // Two reasons: prefillFromLast must NOT overwrite such a set with an older logged
 // session (that silently threw the plan away), and the strip above the workout
-// lists them so a change made days ago is not forgotten. Cleared when the set is
-// logged as done, or when a session logged AFTER the edit prefills over it.
+// lists them so a change made days ago is not forgotten — a note for the next session.
+// Cleared when the set is logged as done, or when a session logged AFTER the edit prefills over it.
+const CHG_KEY = { weight: 'pw', reps: 'pr', durSec: 'pd', lvl: 'pl', hr: 'ph', rpm: 'pc' };
+const CHG_MARKS = Object.values(CHG_KEY);
+const PREFILL_MARKS = ['pw', 'pr', 'pd'];   // the fields prefillFromLast writes — only these block it
 function stampSetChange(s, field, oldVal, newVal) {
-  const key = field === 'weight' ? 'pw' : field === 'reps' ? 'pr' : field === 'durSec' ? 'pd' : null;
-  if (!key || String(oldVal ?? '') === String(newVal ?? '')) return;
+  const key = CHG_KEY[field] || null;
+  const str = v => Array.isArray(v) ? v.map(x => x ?? '').join('–') : String(v ?? '');   // a band compares by both bounds
+  if (!key || str(oldVal) === str(newVal)) return;
   if (s[key] == null) s[key] = oldVal ?? '';                     // keep the ORIGINAL value across repeated edits
-  if (String(s[key]) === String(newVal ?? '')) delete s[key];    // edited back to where it started
-  if (s.pw == null && s.pr == null && s.pd == null) clearSetChange(s); else s.chg = Date.now();
+  if (str(s[key]) === str(newVal)) delete s[key];                // edited back to where it started
+  if (CHG_MARKS.every(k => s[k] == null)) clearSetChange(s); else s.chg = Date.now();
 }
-function clearSetChange(s) { delete s.chg; delete s.pw; delete s.pr; delete s.pd; }
+function clearSetChange(s) { delete s.chg; CHG_MARKS.forEach(k => { delete s[k]; }); }
 // adding / removing a set makes the log's index → set mapping stale, so the whole exercise
 // stops being prefilled until it is trained again; psn = the count before the first change
 function stampExStructure(ex, prevN) {
@@ -2222,6 +2234,11 @@ function setChgLabel(s) {
   if (s.pw != null) p.push(was(s.pw) + ' → ' + was(s.weight) + ' kg');
   if (s.pr != null) p.push(was(s.pr) + ' → ' + was(s.reps) + ' reps');
   if (s.pd != null) p.push(wasT(s.pd) + ' → ' + wasT(s.durSec) + ' time');
+  const lv = v => v === '' || v == null ? 'L–' : 'L' + v;
+  const band = v => (Array.isArray(v) ? tgtText(v[0], v[1]) : '') || '–';
+  if (s.pl != null) p.push(lv(s.pl) + ' → ' + lv(s.lvl));
+  if (s.ph != null) p.push('❤ ' + band(s.ph) + ' → ' + band([s.hrLo, s.hrHi]));
+  if (s.pc != null) p.push(band(s.pc) + ' → ' + band([s.rpmLo, s.rpmHi]) + ' rpm');
   return p.join(' · ');
 }
 function chgAgo(t) {
@@ -2260,7 +2277,7 @@ function pendingStripHtml() {
       + (nums.length === (ex.sets || []).length ? '' : ' (' + (wk.type === 'cardio' ? 'int ' : 'set ') + nums.join(',') + ')') + ' · ' + t));
   });
   if (!rows.length) return '';
-  return `<div class="wk-chg" title="reps/weight you changed but have not trained yet — they survive reloading the template and clear themselves once you log the set as done">
+  return `<div class="wk-chg" title="reps / weight / time${wk.type === 'cardio' ? ' / level / heart-rate &amp; cadence band' : ''} you changed but have not trained yet — they survive reloading the template and clear themselves once you log the ${wk.type === 'cardio' ? 'interval' : 'set'} as done">
     <span class="wk-chg-t">planned</span>
     ${rows.map(r => `<span class="wk-chg-i">${esc(r)}</span>`).join('')}
     <button class="btn-sm" onclick="clearPendingChanges()" title="clear the marks — the values themselves stay">✓ noted</button>
@@ -3447,7 +3464,7 @@ function setSetLvl(ei, si, v) {
   const s = ((wk.exercises[ei] || {}).sets || [])[si]; if (!s) return;
   const n = bikeParseLvl(v);
   if ((s.lvl ?? null) === n) { renderMain(); return; }   // no real change (just re-normalize the field)
-  pushUndo(); s.lvl = n; schedSave(); renderMain();
+  pushUndo(); stampSetChange(s, 'lvl', s.lvl ?? null, n); s.lvl = n; schedSave(); renderMain();   // a planned change → "planned" strip until trained
 }
 function setRestLvl(v) {
   const n = bikeParseLvl(v);
@@ -3639,6 +3656,10 @@ function tgtChange(fn) {
   fn(t);
   if (JSON.stringify(t) === before) { renderTgtModal(); return; }
   if (!tgtCtx.undo) { pushUndo(); tgtCtx.undo = true; }
+  // a planned change like a new weight in strength → the "planned" strip reminds it until it is trained
+  const b = JSON.parse(before);
+  stampSetChange(s, 'hr', [b.hrLo, b.hrHi], [t.hrLo, t.hrHi]);
+  stampSetChange(s, 'rpm', [b.rpmLo, b.rpmHi], [t.rpmLo, t.rpmHi]);
   TGT_KEYS.forEach(k => { if (t[k] == null) delete s[k]; else s[k] = t[k]; });
   schedSave(); renderTgtModal(); renderMain();
 }
