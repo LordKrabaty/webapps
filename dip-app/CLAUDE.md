@@ -204,6 +204,11 @@ Receptura tak, jak se zadává do firemního systému (ERP): tabulka **master ca
 - **Součet přesně 1:** množství v celých milióntinách (`SYS_U`, `fmtSys` — bez plovoucí čárky), **hlavní voda bere zaokrouhlení**; bez vody metoda největších zbytků. Nenulová složka, která se zaokrouhlí na 0, má varování.
 - **Varianta:** do systému se zadává varianta ★ in use. Tabulka ukazuje zobrazenou variantu; když to není ★, nad tabulkou je upozornění s odkazem na ★ (bez ★ výzva ji označit).
 - Pořadí řádků = první výskyt v receptuře (vnořené složky na místě vnořeného dipu), doplňky na lince na konci. Desetinná tečka jako jinde v appce. Vysvětlení je za `?` (klíč `sys`).
+- **⧉ kopie pro vložení do systému / Excelu** (`copySysTable`, čip v nadpisu vedle `?`): přes `copyText` dvakrát, stejná pravidla jako ⧉ u varianty (viz „Kopie varianty jako text / do Excelu“). Řádky `master card ⇥ material ⇥ množství` **s hlavičkou** (`master card ⇥ material ⇥ qty / 1`) **a řádkem součtu** — uživatel to tak chce (2026-11-23).
+  - **HTML pro Excel:** součet je **vzorec** `=C2+C3+…` (uživatel to chce; psaný, jako by tabulka začínala v A1 — Excel ho posune tam, kam se vkládá; bez názvů funkcí), množství `x:num` z `fmtSys` (desetinná tečka, přesně) s formátem `0\.000000`, karta a název `x:str` (karta `00123` si nechá nuly). Namespace `x:` na `<html>`, hlavička tučně s čarou pod, součet s čarou nad.
+  - **Prostý text** (mřížka systému, „vložit jako text“): součet jako **hodnota** — vzorec v prostém textu se při vložení neposouvá (mířil by na C2… listu, ne na vložené buňky). Řádky CRLF, množství s desetinným oddělovačem podle jazyka prohlížeče (`COPY_DEC`; systém ukazuje `0,554069`). Tabulátor / konec řádku v názvu se nahradí mezerou, text začínající `= + - @` dostane apostrof.
+  - Doplněk na lince bez množství se vynechá. Chyba výpočtu → `customAlert`, nic se nekopíruje; varování se jen připomenou ve stavové hlášce. Data ve schránce nejsou šifrovaná — výslovná akce uživatele, stejně jako ⧉ u varianty.
+  - **Neověřeno** proti Excelu (pravidla převzatá z ověřené kopie varianty) ani vložení do skutečného systému (který formát mřížka přijme).
 
 ## Síla (strength, W85) — NENÍ součást varianty
 

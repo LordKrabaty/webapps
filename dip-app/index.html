@@ -2770,8 +2770,8 @@ function sysHtml(v) {
       <select class="rc-mat ed" onchange="onSysLineMat(${jsArg(x.id)},this.value)" title="the material added on the line — counted with its ★ system product">${sysMatOptions(x.mat)}</select>
       <input class="rc-in ed" id="sysq-${esc(x.id)}" inputmode="decimal" value="${x.q != null ? esc(String(x.q)) : ''}" placeholder="0.000125" oninput="onSysLineQ(${jsArg(x.id)},this)" title="amount per 1 unit of the dip, as in the system — e.g. 0.000125 (= 125 g per t); the recipe makes up the rest" autocomplete="off">
       <button class="ib" onclick="delSysLine(${jsArg(x.id)})" title="remove the line addition">✕</button></div>`).join('');
-  return `<div class="sub-title lab-head"><span>System recipe</span><span class="head-btns">${helpBtnHtml('sys', 'how the system recipe is made')}</span></div>
-    <div class="tool-hint help-top"${helpBoxAttr('sys')}>The recipe as it is entered in the company system — from the basic materials as delivered. Every component counts as the product marked ★ in ⚗ materials (only one alternative = that one; none marked = ● and a warning), at its delivered concentration: mass × %chem ÷ delivered conc. The water it was pre-diluted with goes to the main water (the first water of the recipe). A dip used as a component is broken down into its components (the variant the recipe uses); the same material is summed. Line additions — the defoamer added on the line, in no recipe — are typed as their amount per 1 unit; the recipe makes up the rest. Amounts are per 1 unit of the dip with 6 decimals; the main water takes the rounding, so the sum is exactly 1. The system holds the variant marked ★ in use.</div>
+  return `<div class="sub-title lab-head"><span>System recipe</span><span class="head-btns"><button class="chip help-btn" onclick="copySysTable()" title="copy the table for pasting into the company system — master card, material, amount; with the header and the sum (a formula in Excel)">⧉</button>${helpBtnHtml('sys', 'how the system recipe is made')}</span></div>
+    <div class="tool-hint help-top"${helpBoxAttr('sys')}>The recipe as it is entered in the company system — from the basic materials as delivered. Every component counts as the product marked ★ in ⚗ materials (only one alternative = that one; none marked = ● and a warning), at its delivered concentration: mass × %chem ÷ delivered conc. The water it was pre-diluted with goes to the main water (the first water of the recipe). A dip used as a component is broken down into its components (the variant the recipe uses); the same material is summed. Line additions — the defoamer added on the line, in no recipe — are typed as their amount per 1 unit; the recipe makes up the rest. Amounts are per 1 unit of the dip with 6 decimals; the main water takes the rounding, so the sum is exactly 1. The system holds the variant marked ★ in use. ⧉ copies the table for pasting into the system: master card, material and amount, tab-separated, one row per line, with the header and the sum (in Excel a formula adding the amounts up), with the decimal separator of your language (0,554069).</div>
     ${note ? `<div class="lab-msg sys-var">${note}</div>` : ''}
     <table class="lab-tbl sys-tbl">
       <thead><tr><th>master card</th><th>material</th><th>qty / 1</th></tr></thead>
@@ -2793,6 +2793,38 @@ function updateSys(v) {
   body.innerHTML = html;
   const msg = el('sysMsg'), lines = (S.err ? [S.err] : []).concat(S.notes);
   if (msg) { msg.innerHTML = lines.map(esc).join('<br>'); msg.style.display = lines.length ? '' : 'none'; }
+}
+// ⧉ the table for pasting into the company system / Excel: master card · material · amount, with the header and the
+// sum row, as the table shows it. A line addition without an amount is left out (it is not in the sum either).
+// Two flavours (copyText, the same rules as ⧉ of a variant — see "Copy a variant as text"):
+//   - HTML for Excel: the sum is a FORMULA =C2+C3+… written as if the table started at A1 (Excel moves it to where it
+//     is pasted; no function names → no language of Excel), amounts x:num with a decimal point and 6 decimals,
+//     master card and material x:str (a card like 00123 keeps its zeros);
+//   - plain text (the system's grid, "paste as text"): values only — a formula in plain text would not move with the
+//     paste — tab-separated, CRLF, the decimal separator of the browser language (COPY_DEC — the system shows 0,554069).
+function copySysTable() {
+  const v = activeVar(); if (!cur || !v) return;
+  const S = sysCalc(v);
+  if (S.err) { customAlert(S.err); return; }
+  const rows = S.rows.filter(x => !x.blank), sum = rows.reduce((s, x) => s + x.u, 0);
+  const head = ['master card', 'material', 'qty / 1'];
+  // text: a tab or line break in a name would split the row; one starting like a formula gets an apostrophe
+  const cell = t => { t = String(t).replace(/[\t\r\n]+/g, ' ').trim(); return /^[=+\-@]/.test(t) ? "'" + t : t; };
+  const num = u => fmtSys(u).replace('.', COPY_DEC);
+  const txt = [head, ...rows.map(x => [cell(x.card), cell(x.name), num(x.u)]), ['', 'sum', num(sum)]]
+    .map(r => r.join('\t')).join('\r\n');
+  const B = '.5pt solid windowtext', QF = "mso-number-format:'0\\.000000'";   // \. as in XF (checked against Excel)
+  const tTd = (t, st = '') => `<td x:str style="${st}white-space:nowrap">${esc(t)}</td>`;
+  const nTd = (u, st = '', fm = '') => `<td x:num="${fmtSys(u)}"${fm ? ` x:fmla="${esc(fm)}"` : ''} style="${QF};${st}text-align:right;white-space:nowrap">${fmtSys(u)}</td>`;
+  const hb = `border-bottom:${B};`, st = `border-top:${B};`;
+  const html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table>'
+    + '<tr>' + head.map(h => `<td x:str style="${hb}white-space:nowrap"><b>${esc(h)}</b></td>`).join('') + '</tr>'
+    + rows.map(x => '<tr>' + tTd(x.card) + tTd(x.name) + nTd(x.u) + '</tr>').join('')
+    + '<tr>' + tTd('', st) + `<td x:str style="${st}white-space:nowrap"><b>sum</b></td>`
+    + nTd(sum, st, rows.length ? '=' + rows.map((_, i) => 'C' + (i + 2)).join('+') : '') + '</tr>'
+    + '</table></body></html>';
+  const w = S.notes.length;
+  copyText(txt, '⧉ system recipe copied — ' + rows.length + ' rows' + (w ? ' · ⚠ ' + w + (w === 1 ? ' warning' : ' warnings') + ' under the table' : ''), html);
 }
 function sysLine(id) { const v = activeVar(); return v && v.line ? v.line.find(x => x.id === id) || null : null; }
 function addSysLine() {
