@@ -283,6 +283,11 @@ textarea::placeholder{color:var(--mid)}
 @media(hover:hover){.notes-tab:hover:not(.active){color:var(--dark)}}
 .notes-pane{display:none;flex-direction:column;flex:1;min-height:0;gap:calc(.55rem/var(--pzc,1))}
 .notes-pane.active{display:flex}
+.main-tabs{margin-top:calc(.85rem/var(--pzc,1))}
+.main-pane{display:none}
+.main-pane.active{display:block}
+.main-pane>.sub-title:first-child{margin-top:0}
+.main-pane>.rc:first-child{margin-top:0}
 
 /* FIELD placeholder state */
 .field input:placeholder-shown:not(:focus){background:var(--off);border-color:var(--light)}
@@ -471,6 +476,10 @@ html.dark input[type="date"]{color-scheme:dark}
 .tool .rc-in{width:5.4rem}
 .tools.tools-ratio{margin-top:calc(.45rem/var(--pzc,1))}
 .tool-hint{font-size:.7rem;color:var(--muted);margin-top:calc(.35rem/var(--pzc,1));line-height:1.45}
+.help-btn{font-family:'DM Sans',sans-serif;font-size:.7rem;font-weight:600;padding:.08rem .45rem;letter-spacing:0;flex-shrink:0}
+.tools .help-btn{margin-left:auto}
+.head-btns{display:flex;align-items:center;gap:.6rem;flex-shrink:0}
+.tool-hint.help-top{margin:0 0 calc(.6rem/var(--pzc,1))}
 .sub-title{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--black);margin:calc(1.1rem/var(--pzc,1)) 0 calc(.45rem/var(--pzc,1));padding-bottom:.3rem;border-bottom:1.5px solid var(--black)}
 .par-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));column-gap:calc(1.4rem/var(--pzc,1))}
 .par{display:flex;align-items:baseline;gap:.4rem;padding:calc(.3rem/var(--pzc,1)) 0;border-bottom:1px solid var(--light);min-width:0}
@@ -657,7 +666,7 @@ html.dark input[type="date"]{color-scheme:dark}
         <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
     </div>
-    <div class="card-title"><span class="card-title-text">Lab recipe</span></div>
+    <div class="card-title"><span class="card-title-text">Recipe</span></div>
     <div id="mainBody"></div>
   </div>
 </div>
@@ -752,8 +761,8 @@ html.dark input[type="date"]{color-scheme:dark}
 <!-- Materials modal -->
 <div class="modal-bg" id="matModal">
   <div class="modal mat-modal">
-    <div class="mat-top"><h2>Materials</h2><span class="mat-count" id="matCount"></span></div>
-    <p>Raw materials for the recipes. A material can hold several alternatives — approved ones and candidates still in lab or production testing (dashed). ● marks the one mixed in production now; its price and as-delivered concentration are what the recipes use. Lab weighing names it at every component and lets you pick another one for a weighing.</p>
+    <div class="mat-top"><h2>Materials</h2><span class="head-btns"><span class="mat-count" id="matCount"></span><button class="chip help-btn" onclick="toggleHelp('mat',this)" title="how materials work" aria-expanded="false">?</button></span></div>
+    <p id="help-mat" style="display:none">Raw materials for the recipes. A material can hold several alternatives — approved ones and candidates still in lab or production testing (dashed). ● marks the one mixed in production now; its price and as-delivered concentration are what the recipes use. The Lab tab names it at every component and lets you pick another one for a weighing.</p>
     <div class="mat-bar">
       <input type="text" id="matSearch" class="lib-search" placeholder="search…" oninput="renderMaterials()" autocomplete="off">
       <select id="altFilter" class="mat-filter" onchange="setAltFilter(this.value)" title="which alternatives to show — by their approval status (kept on this device)"></select>
@@ -783,6 +792,7 @@ const LIBRARY_KEY = 'dip-app-v1-library';      // solutions (each with all its v
 const MATERIALS_KEY = 'dip-app-v1-materials';  // raw materials — synced, LWW per material
 const ACTVAR_KEY = 'dip-app-active-var';       // { solutionId: variantId } — local view state, NOT synced (see CLAUDE.md: view state must not stamp mt)
 const NOTES_TAB_KEY = 'dip-app-notes-tab';
+const MAINTAB_KEY = 'dip-app-main-tab';        // 'par' | 'lab' — tab of the middle panel, local view state, NOT synced
 const LIBORDER_KEY = 'dip-app-lib-order';    // { list:[dip ids], mt } — order of the dips in the library, synced as ONE record (LWW of the whole list)
 const LABVIEW_KEY = 'dip-app-lab-view';        // { solutionId: { str, batch } } — lab weighing override, local view state, NOT synced
 const ALTFILTER_KEY = 'dip-app-alt-filter';    // which alternatives ⚗ materials shows (by approval status) — local view state, NOT synced
@@ -796,6 +806,10 @@ let cur = null;              // live working copy of the open solution — a dee
 let activeVarMap = {};
 let labView = {};
 let notesTab = 'vars';
+// tabs of the middle panel — the variant chips and the dip / variant header stay above them (they apply to every tab).
+// Planned: production recipe, system recipe (from the basic undiluted materials) — add them here.
+const MAIN_TABS = [['par', 'Parameters'], ['lab', 'Lab']];
+let mainTab = 'par';
 let undoStack = [], redoStack = [], savedSnapshot = null;
 const UNDO_MAX = 40;
 
@@ -1961,14 +1975,28 @@ function renderMain() {
   }
   const type = dipType(cur);
   _dipChoices = dipChoices();   // the dips offered as a component — once per render, not per row
-  box.innerHTML = chipsHtml(v) + headHtml(v) + recipeHtml(v)
-    + toolsHtml(type)
-    + '<div class="sub-title lab-head"><span>Parameters</span>' + currencyChipsHtml() + '</div>' + fxRowHtml() + '<div class="par-grid" id="parGrid"></div>'
-    + labHtml(v)
-    + '<div class="sub-title">Measured</div>' + measHtml(v, type);
+  const pane = (k, html) => `<div class="main-pane${mainTab === k ? ' active' : ''}" id="mpane-${k}">${html}</div>`;
+  box.innerHTML = chipsHtml(v) + headHtml(v) + mainTabsHtml()
+    + pane('par', recipeHtml(v)
+      + toolsHtml(type)
+      + '<div class="sub-title lab-head"><span>Parameters</span>' + currencyChipsHtml() + '</div>' + fxRowHtml() + '<div class="par-grid" id="parGrid"></div>'
+      + '<div class="sub-title">Measured</div>' + measHtml(v, type))
+    + pane('lab', labHtml(v));
   _dipChoices = null;
   updateCalc();
   autoGrow(el('labPrep'));
+}
+function mainTabsHtml() {
+  return '<div class="notes-tabs main-tabs" id="mainTabs">'
+    + MAIN_TABS.map(([k, label]) => `<button class="notes-tab${mainTab === k ? ' active' : ''}" data-tab="${k}" onclick="switchMainTab(${jsArg(k)})">${esc(label)}</button>`).join('') + '</div>';
+}
+function switchMainTab(t) {
+  if (!MAIN_TABS.some(([k]) => k === t)) return;
+  mainTab = t;
+  document.querySelectorAll('#mainTabs .notes-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  document.querySelectorAll('#mainBody .main-pane').forEach(p => p.classList.toggle('active', p.id === 'mpane-' + t));
+  try { localStorage.setItem(MAINTAB_KEY, t); } catch(e) {}
+  autoGrow(el('labPrep'));   // grown while hidden = 0 → grow again now it shows
 }
 function chipsHtml(av) {
   const used = usedVarOf(cur);
@@ -1982,7 +2010,7 @@ function headHtml(v) {
       <div class="field f-sname"><label>dip</label><input type="text" id="fSolName" class="ed" value="${esc(cur.name)}" placeholder="R01" oninput="onSolField('name',this)" autocomplete="off"></div>
       <div class="field f-stype"><label>type</label><select onchange="onSolType(this.value)" title="what kind of dip — decides the parameters and ratio tools: RFL (PHR, F/R…), pre-dip (epoxy : IK) or other (solid and price only). A dip with no masses yet also gets the starting recipe of the type.">${DIP_TYPES.map(([k, l]) => `<option value="${k}"${k === type ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
       <div class="field f-sdesc"><label>description</label><input type="text" class="ed" value="${esc(cur.desc)}" placeholder="latex system, use…" oninput="onSolField('desc',this)" autocomplete="off"></div>
-      <div class="field f-sstr"><label>lab strength %</label><input type="text" inputmode="decimal" class="ed" value="${cur.labStr != null ? fmtNum(cur.labStr) : ''}" placeholder="100" oninput="onSolField('labStr',this)" title="recommended strength for lab testing — e.g. 85 = W85 (the lab line picks up more, so lab dips are diluted). The recipe and its price are always the full-strength W100 dip; change the strength for one weighing in Lab weighing." autocomplete="off"></div>
+      <div class="field f-sstr"><label>lab strength %</label><input type="text" inputmode="decimal" class="ed" value="${cur.labStr != null ? fmtNum(cur.labStr) : ''}" placeholder="100" oninput="onSolField('labStr',this)" title="recommended strength for lab testing — e.g. 85 = W85 (the lab line picks up more, so lab dips are diluted). The recipe and its price are always the full-strength W100 dip; change the strength for one weighing on the Lab tab." autocomplete="off"></div>
     </div>
     <div class="hg hg-var">
       <div class="field"><label>variant</label><input type="text" id="fVarName" class="ed" value="${esc(v.name)}" placeholder="V2" oninput="onVarField('name',this)" autocomplete="off"></div>
@@ -2108,27 +2136,41 @@ function recipeHtml(v) {
     <div class="rc-under"><button class="btn-add-row" onclick="addSection()">+ section</button>
       <label class="tool whole-mat" title="minimum maturing of the whole mixed dip (RFL) before use — e.g. 2 h">whole dip — maturing min. <input class="mat-in ed" value="${esc(v.mature)}" placeholder="—" oninput="onVarField('mature',this)" autocomplete="off"></label></div>`;
 }
+// ── HOW-IT-WORKS HELP ─────────────────────────────────────────────────────
+// Long explanations stay hidden behind a ? button (keys are fixed: 'tools', 'lab', 'mat'). Open / closed lives only
+// in memory — survives re-renders, every start begins closed.
+const helpOpen = {};
+function helpBtnHtml(key, tip) {
+  const on = !!helpOpen[key];
+  return `<button class="chip help-btn${on ? ' on' : ''}" onclick="toggleHelp(${jsArg(String(key))},this)" title="${esc(tip)}" aria-expanded="${on}">?</button>`;
+}
+function helpBoxAttr(key) { return ` id="help-${esc(key)}"${helpOpen[key] ? '' : ' style="display:none"'}`; }
+function toggleHelp(key, btn) {
+  const on = helpOpen[key] = !helpOpen[key];
+  const box = el('help-' + key); if (box) box.style.display = on ? '' : 'none';
+  if (btn) { btn.classList.toggle('on', on); btn.setAttribute('aria-expanded', String(on)); }
+}
 // the ratio tools depend on the dip type: RFL → PHR, F/R, Syn:NR, SBR:VP · pre-dip → epoxy:IK · other → none
 function toolsHtml(type) {
   const base = `<div class="tools">
       <span class="tool">scale batch to <input id="toolScale" class="rc-in" inputmode="decimal" placeholder="g" onkeydown="if(event.key==='Enter')toolScale()" autocomplete="off"><button class="btn-sm" onclick="toolScale()">scale</button></span>
       <span class="tool">set solid to <input id="toolSolid" class="rc-in" inputmode="decimal" placeholder="%" onkeydown="if(event.key==='Enter')toolSolid()" autocomplete="off"><button class="btn-sm" onclick="toolSolid()">apply</button></span>
+      ${helpBtnHtml('tools', 'how the tools work')}
     </div>`;
   const solidHint = 'Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference.';
   const shareHint = 'The shares (% in dip, % in solid, % wet — dotted underline) can be typed over the same way: the component’s mass is recalculated, the batch stays and the first water takes up the difference; the first water’s own % wet moves water from / to the other parts (the solid stays) — only if they do not have enough, it asks before changing the solid. Tip: make a new variant first (+), then adjust it.';
+  const help = txt => `<div class="tool-hint"${helpBoxAttr('tools')}>${txt}</div>`;   // hidden behind the ? until asked for
   if (type === 'predip') return base + `<div class="tools tools-ratio">
       <span class="tool">epoxy:IK to <input id="toolEpIk" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('epIk')" title="dry epoxy ÷ dry isocyanate — e.g. 0.2, or 1:5" autocomplete="off"><button class="btn-sm" onclick="toolRatio('epIk')">apply</button></span>
-    </div>
-    <div class="tool-hint">${solidHint} Epoxy:IK keeps the solid and the batch — it moves dry matter between the epoxy and the isocyanate (their dry sum stays); ammonia, nested dips and everything else stay, the first water evens out the batch. ${shareHint}</div>`;
-  if (type !== 'rfl') return base + `<div class="tool-hint">${solidHint} ${shareHint}</div>`;
+    </div>` + help(`${solidHint} Epoxy:IK keeps the solid and the batch — it moves dry matter between the epoxy and the isocyanate (their dry sum stays); ammonia, nested dips and everything else stay, the first water evens out the batch. ${shareHint}`);
+  if (type !== 'rfl') return base + help(`${solidHint} ${shareHint}`);
   return base + `
     <div class="tools tools-ratio">
       <span class="tool">PHR to <input id="toolPhr" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('phr')" title="RF resin / L (PHR) — the whole RF part (resin, formaldehyde, NaOH) against the latex part" autocomplete="off"><button class="btn-sm" onclick="toolRatio('phr')">apply</button></span>
       <span class="tool">F/R to <input id="toolFr" class="rc-in" inputmode="decimal" onkeydown="if(event.key==='Enter')toolRatio('fr')" title="F / R (mol/mol) — formaldehyde against resin, the RF solid stays" autocomplete="off"><button class="btn-sm" onclick="toolRatio('fr')">apply</button></span>
       <span class="tool">Syn:NR to <input id="toolSynNr" class="rc-in" onkeydown="if(event.key==='Enter')toolRatio('synNr')" title="dry (VP + SBR) : NR — e.g. 70:30, or just 70 (the synthetic share in %)" autocomplete="off"><button class="btn-sm" onclick="toolRatio('synNr')">apply</button></span>
       <span class="tool">SBR:VP to <input id="toolSbrVp" class="rc-in" onkeydown="if(event.key==='Enter')toolRatio('sbrVp')" title="dry SBR : VP — e.g. 40:60, or just 40 (the SBR share in %)" autocomplete="off"><button class="btn-sm" onclick="toolRatio('sbrVp')">apply</button></span>
-    </div>
-    <div class="tool-hint">Set solid keeps the batch mass: all components except the first water scale together (their ratios stay), the first water takes up the difference. PHR, F/R, Syn:NR and SBR:VP keep the solid and the batch — they move dry matter between components: PHR the whole RF part (incl. NaOH) against the latex part, F/R formaldehyde against resin, Syn:NR (VP + SBR) against NR, SBR:VP between those two; ammonia and everything else stay, the first water evens out the batch. The shares (% in dip, % in solid, % wet — dotted underline) can be typed over the same way: the component's mass is recalculated, the batch stays and the first water takes up the difference; the first water's own % wet moves water from / to the other parts (the solid stays) — only if they do not have enough, it asks before changing the solid. Tip: make a new variant first (+), then adjust it.</div>`;
+    </div>` + help(`${solidHint} PHR, F/R, Syn:NR and SBR:VP keep the solid and the batch — they move dry matter between components: PHR the whole RF part (incl. NaOH) against the latex part, F/R formaldehyde against resin, Syn:NR (VP + SBR) against NR, SBR:VP between those two; ammonia and everything else stay, the first water evens out the batch. ${shareHint}`);
 }
 function measHtml(v, type) {
   const ms = v.meas || {};
@@ -2172,7 +2214,8 @@ const LAB_T = {
     dilNo: 'Water only dilutes — {0} does not give {1}. Weigh it from the recipe above, or start from a stronger dip.',
     prep: 'preparation notes',
     prepPh: 'How to mix — e.g. add the formaldehyde slowly while stirring, temperature, order, what to watch…',
-    hint: 'The recipe above is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. After a material is the product it is weighed from — the alternative mixed in production now (● in ⚗ materials); another one can be picked for a weighing (dashed and bold = not the one in production; a candidate that is not approved yet says “lab testing” / “production testing”). It only names the product, the masses stay those of the recipe — “40 % ≠ %chem” says that product is mixed at another concentration than the recipe counts with. Name, strengths, batch, maturing and alternatives changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.',
+    helpTip: 'how the lab sheet works',
+    hint: 'The recipe (tab Parameters) is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. After a material is the product it is weighed from — the alternative mixed in production now (● in ⚗ materials); another one can be picked for a weighing (dashed and bold = not the one in production; a candidate that is not approved yet says “lab testing” / “production testing”). It only names the product, the masses stay those of the recipe — “40 % ≠ %chem” says that product is mixed at another concentration than the recipe counts with. Name, strengths, batch, maturing and alternatives changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.',
     errNoMass: 'The recipe has no mass yet.',
     errNoWater: 'Diluting needs a water row in the recipe — the first water takes up the dilution.',
     errNestWater: 'A diluted dip brings its own water — the recipe needs a water row to take it up. Or set that dip to W100.',
@@ -2215,7 +2258,8 @@ const LAB_T = {
     dilNo: 'Vodou jde jen ředit — z {0} nevznikne {1}. Navaž ho podle receptury nahoře, nebo vyjdi ze silnějšího dipu.',
     prep: 'poznámky k přípravě',
     prepPh: 'Jak míchat — např. formaldehyd přidávat pomalu za míchání, teplota, pořadí, na co si dát pozor…',
-    hint: 'Receptura nahoře je dip plné síly W100 — tak jede provoz a k němu se počítá cena. Laboratorní linka nanáší víc, proto se laboratorní dipy ředí: každá složka × síla, první voda dorovná zbytek dávky. Dip použitý jako složka může jít do směsi už naředěný (jeho W vedle názvu, předvyplněné z jeho vlastní laboratorní síly): váží se ho víc a přináší vodu, takže první vody je méně. Hotový dip jde také jen naředit vodou — z W100, nebo postupně z už naředěného (W90 → W85): složení vyjde stejné. Za surovinou je produkt, ze kterého se váží — alternativa, která se teď míchá v provozu (● v ⚗ materials); pro navážku jde vybrat jinou (čárkovaně a tučně = není to ta provozní; kandidát, který ještě není schválený, má u sebe „laboratorní test“ / „provozní test“). Jen pojmenovává produkt, hmotnosti zůstávají podle receptury — „40 % ≠ %chem“ znamená, že se ten produkt míchá při jiné koncentraci, než s jakou počítá receptura. Název, síly, dávka, zrání a alternativy změněné na tomto listu zůstávají jen na tomto zařízení a recepturu nemění; poznámky k přípravě se ukládají s variantou.',
+    helpTip: 'jak list funguje',
+    hint: 'Receptura (záložka Parameters) je dip plné síly W100 — tak jede provoz a k němu se počítá cena. Laboratorní linka nanáší víc, proto se laboratorní dipy ředí: každá složka × síla, první voda dorovná zbytek dávky. Dip použitý jako složka může jít do směsi už naředěný (jeho W vedle názvu, předvyplněné z jeho vlastní laboratorní síly): váží se ho víc a přináší vodu, takže první vody je méně. Hotový dip jde také jen naředit vodou — z W100, nebo postupně z už naředěného (W90 → W85): složení vyjde stejné. Za surovinou je produkt, ze kterého se váží — alternativa, která se teď míchá v provozu (● v ⚗ materials); pro navážku jde vybrat jinou (čárkovaně a tučně = není to ta provozní; kandidát, který ještě není schválený, má u sebe „laboratorní test“ / „provozní test“). Jen pojmenovává produkt, hmotnosti zůstávají podle receptury — „40 % ≠ %chem“ znamená, že se ten produkt míchá při jiné koncentraci, než s jakou počítá receptura. Název, síly, dávka, zrání a alternativy změněné na tomto listu zůstávají jen na tomto zařízení a recepturu nemění; poznámky k přípravě se ukládají s variantou.',
     errNoMass: 'Receptura zatím nemá žádnou hmotnost.',
     errNoWater: 'K ředění je v receptuře potřeba řádek s vodou — ředění bere první voda.',
     errNestWater: 'Naředěný dip přináší vlastní vodu — receptura potřebuje řádek s vodou, který ji vyrovná. Nebo nastav ten dip na W100.',
@@ -2429,7 +2473,8 @@ function labHtml(v) {
   const have = lt('dilHave',
     `<input id="labDilHave" class="lab-nw lab-dh" inputmode="decimal" value="${labDilHave() != null ? fmtNum(labDilHave()) : ''}" placeholder="1000" oninput="onLabDil('dhave',this)" title="${T('dilHaveTip')}" autocomplete="off">`,
     '<span id="ldFrom2"></span>', '<b class="dn" id="ldAdd"></b>', '<b class="dn" id="ldGet"></b>', '<span id="ldTo2"></span>');
-  return `<div class="sub-title lab-head"><span>${T('title')}</span><span class="lab-lang" title="${T('langTip')}">${lang('en', 'EN')}${lang('cs', 'CZ')}</span></div>
+  return `<div class="sub-title lab-head"><span>${T('title')}</span><span class="head-btns"><span class="lab-lang" title="${T('langTip')}">${lang('en', 'EN')}${lang('cs', 'CZ')}</span>${helpBtnHtml('lab', lt('helpTip'))}</span></div>
+    <div class="tool-hint help-top"${helpBoxAttr('lab')}>${T('hint')}</div>
     <div class="lab-ctl">
       <span class="tool">${T('strength')} <input id="labStrIn" class="rc-in" inputmode="decimal" value="${fmtNum(st.str)}" placeholder="${fmtNum(st.rec)}" oninput="onLabStr(this)" onblur="labInBlur()" title="${T('strengthTip')}" autocomplete="off"></span>
       <span class="tool">${T('batch')} <input id="labBatchIn" class="rc-in" inputmode="decimal" value="${st.batch != null ? fmtNum(st.batch) : ''}" oninput="onLabBatch(this)" title="${T('batchTip')}" autocomplete="off"> g</span>
@@ -2455,8 +2500,7 @@ function labHtml(v) {
       <div class="lab-dil-r" id="ldR2">${have}</div>
       <div class="lab-dil-r lab-dil-msg" id="ldMsg" style="display:none"></div>
     </div>
-    <div class="field lab-prep"><label>${T('prep')}</label><textarea id="labPrep" class="prep-note ed" placeholder="${T('prepPh')}" oninput="onVarField('prep',this);autoGrow(this)">${esc(v.prep)}</textarea></div>
-    <div class="tool-hint">${T('hint')}</div>`;
+    <div class="field lab-prep"><label>${T('prep')}</label><textarea id="labPrep" class="prep-note ed" placeholder="${T('prepPh')}" oninput="onVarField('prep',this);autoGrow(this)">${esc(v.prep)}</textarea></div>`;
 }
 // numbers and prefilled values of the lab sheet — the inputs are never re-rendered while typing
 function updateLab(v, c, st) {
@@ -2507,7 +2551,7 @@ function parHtml(c, labStr, type) {
   const ratio = ratioText;
   const solid = [
     P('solid', pct(c.tsc), { key: true, tip: 'TSC = Σ % in dip — the full-strength W100 dip' }),
-    ...(Math.abs(labStr - 100) > 1e-9 ? [P('solid lab W' + fmtNum(labStr), pct(c.tsc != null ? c.tsc * labStr / 100 : null), { tip: 'solid of the diluted lab dip — see Lab weighing' })] : []),
+    ...(Math.abs(labStr - 100) > 1e-9 ? [P('solid lab W' + fmtNum(labStr), pct(c.tsc != null ? c.tsc * labStr / 100 : null), { tip: 'solid of the diluted lab dip — see the Lab tab' })] : []),
     P('solid w/o NH₃', pct(c.tscNoNH3), { tip: 'TSC without the ammonia — incl. the ammonia inside nested dips' })
   ];
   // shown in another currency → the tip says what it was converted with (" · converted from € — 1 € = …")
@@ -2640,7 +2684,7 @@ function renderGeneral() {
 }
 function switchNotesTab(t) {
   notesTab = t;
-  document.querySelectorAll('.notes-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  document.querySelectorAll('#panel-notes .notes-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
   document.querySelectorAll('#panel-notes .notes-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + t));
   try { localStorage.setItem(NOTES_TAB_KEY, t); } catch(e) {}
   growAll();
@@ -3805,6 +3849,7 @@ function init() {
   initListDnd(el('varsBody'), { grip: '.var-grip', item: '.var-item', onDrop: moveVarTo });
   initListDnd(el('libList'), { grip: '.lib-grip', item: '.lib-item', group: e => e.dataset.grp, onDrop: moveDipTo });
   try { const t = localStorage.getItem(NOTES_TAB_KEY); if (t === 'vars' || t === 'gen') notesTab = t; } catch(e) {}
+  try { const t = localStorage.getItem(MAINTAB_KEY); if (MAIN_TABS.some(([k]) => k === t)) mainTab = t; } catch(e) {}
   const restored = loadSession();
   if (!restored) renderAll();
   switchNotesTab(notesTab);

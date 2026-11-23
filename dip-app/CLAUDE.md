@@ -6,6 +6,21 @@ Výpočet a evidence impregnačních roztoků (RFL, pre-dipy a jiné): laborator
 
 Roztok = **dip** (`Dips`, `+ new dip`, `dip note`…), **nikdy „solution“** — uživatel to slovo nechce. V kódu zůstávají identifikátory `solution` / `normSolution` / `loadSolution` (nejsou vidět).
 
+## Prostřední panel — záložky
+
+Panel „Recipe“ má nahoře čipy variant a hlavičku dipu / varianty (název, typ, popis, lab síla, varianta, system code, datum) — platí pro všechny záložky. Pod nimi záložky (`MAIN_TABS`, komponenta `.notes-tabs` / `.notes-tab` s třídou `main-tabs`, panely `.main-pane#mpane-<klíč>`, přepínač `switchMainTab`):
+
+- **Parameters** (`par`) — receptura W100 (upravitelné hmotnosti), nástroje (scale / set solid / poměry), parametry s měnou, měřené hodnoty (Measured — „není součást lab listu“, viz „Jazyk lab listu“).
+- **Lab** (`lab`) — lab list (navážka při lab síle, ředění, poznámky k přípravě).
+
+Vykreslují se **vždy oba panely** (`renderMain`), skrytý jen `display:none` → `updateCalc` / `updateLab` plní i neviditelný a nic dalšího nemusí hlídat, kterou záložku uživatel vidí. Po zobrazení záložky se znovu přeroste `#labPrep` (auto-grow na skrytém poli vyjde na nulu). Zvolená záložka = lokální stav zobrazení (`dip-app-main-tab`). `switchNotesTab` hledá jen `#panel-notes .notes-tab` — sdílí třídu se záložkami prostředního panelu, globální selektor by je přepínal taky. Texty, které dřív odkazovaly na recepturu „nahoře“ / na „Lab weighing“, teď říkají záložku.
+
+**Plánované další záložky:** production recipe (provozní míchání) a system recipe (receptura zadaná v systému ze základních neředěných surovin) — přidat do `MAIN_TABS` a do `renderMain` jako další `pane(…)`.
+
+## Dlouhé vysvětlivky „jak to funguje" — za tlačítkem ?
+
+Uživatel nechce v appce dlouhé odstavce nápovědy (nepřehledné). Vysvětlení, jak něco funguje, je **skryté za čipem `?`** a ukáže se až po kliknutí (rozbalí se na místě, druhé kliknutí zavře): nástroje pod recepturou (`?` vpravo v řádku scale / set solid), lab list (`?` v nadpisu vedle EN / CZ, text hned pod nadpisem) a ⚗ materials (`?` vedle počtu). Helpery `helpBtnHtml(key, tip)` + `helpBoxAttr(key)` + `toggleHelp(key, btn)`; stav otevření jen v paměti (`helpOpen`, přežije re-render, po startu vše zavřené, nic se neukládá). **Novou delší nápovědu dávej stejně** — inline nech jen krátké hlášky a tooltipy. Výjimka: texty o bezpečnosti v ⚙ syncu a v okně záchranného klíče zůstávají vidět.
+
 ## ⚠ Žádná firemní data v repu
 
 Repo je veřejné (GitHub Pages). **Ceny, spotřeby, kódy receptur, DPU ani seznam surovin z `_inbox-webapps/` nikdy nehardcoduj do `index.html`.** Appka startuje jen s vodou (`id: 1`); suroviny a receptury se do ní dostanou importem JSON (⇩) nebo ručně a dál jedou **end-to-end šifrovaně** přes gist (viz „Šifrovaný sync" níže).
@@ -83,6 +98,7 @@ Když si nejsi jistý, upozorni radši zbytečně. Drobné úpravy výpočtů / 
 | `dip-app-active-var` — zobrazená varianta per roztok | — | **nesynchronizuje se** (stav zobrazení nesmí razítkovat `mt`) |
 | `dip-app-alt-filter` — které alternativy ⚗ materials ukazuje (podle stavu schválení) | — | **nesynchronizuje se** (stav zobrazení) |
 | `dip-app-lab-lang` — jazyk lab listu (`en` / `cs`) | — | **nesynchronizuje se** (stav zobrazení zařízení) |
+| `dip-app-main-tab` — záložka prostředního panelu (`par` / `lab`) | — | **nesynchronizuje se** (stav zobrazení zařízení) |
 | `dip-app-currency` — měna zobrazení cen + kurzy `{ cur, rates:{ CZK:{r,d}, USD:{r,d} } }` | — | **nesynchronizuje se** (stav zobrazení zařízení) |
 | `dip-app-lab-view` — přepisy na lab listu per roztok `{ str, batch, title, mat:{<secId>|all: text}, nest:{<rowId>: W}, alt:{<rowId>: altId}, dfrom, dhave }` | — | **nesynchronizuje se** (pracovní nastavení navážky, ne data) |
 
@@ -210,7 +226,7 @@ Receptura varianty je **vždy plná síla W100** — tak jede provoz a z ní se 
 
 Lab list je pracovní list laboranta, který neumí dobře anglicky → jeho texty jdou přepnout do češtiny: čipy **EN / CZ** v nadpisu sekce (`setLabLang`, `labLang`, uloženo v `dip-app-lab-lang` na zařízení, nesynchronizuje se). Je to **výslovně zadaná výjimka** z pravidla „appky anglicky“ (kořenový CLAUDE.md) a platí **jen pro sekci Lab weighing** — zbytek appky (receptura, parametry, ⚗ materials, sync) zůstává anglicky.
 
-- **Slovník `LAB_T = { en: {…}, cs: {…} }`** + `lt(klíč, …argumenty)` (`{0}`, `{1}`… = argumenty; chybějící český text spadne na anglický). Přeložené je vše, co sekce ukazuje: nadpis, popisky (síla W, dávka, složka, navážka (g), zrání min., celkem · sušina, ředění, poznámky k přípravě), hlášky (`labCalc` vrací `err` už v jazyce listu, hlášky ředění), nápověda pod listem, tooltipy a stav alternativy za názvem (`labAltLabel`: „laboratorní test“ / „provozní test“).
+- **Slovník `LAB_T = { en: {…}, cs: {…} }`** + `lt(klíč, …argumenty)` (`{0}`, `{1}`… = argumenty; chybějící český text spadne na anglický). Přeložené je vše, co sekce ukazuje: nadpis, popisky (síla W, dávka, složka, navážka (g), zrání min., celkem · sušina, ředění, poznámky k přípravě), hlášky (`labCalc` vrací `err` už v jazyce listu, hlášky ředění), nápověda (za `?` v nadpisu, `helpTip`), tooltipy a stav alternativy za názvem (`labAltLabel`: „laboratorní test“ / „provozní test“).
 - **Nový text na lab listu vždy přes `lt()`** — přidat klíč do `en` i `cs`; nikdy nepsat řetězec natvrdo do `labHtml` / `updateLab` / `labCalc` / `updateLabDil`.
 - Texty slovníku jsou prosté konstanty **bez HTML a bez uživatelských dat**; do atributů a HTML jdou přes `esc()` (`T()` v `labHtml`). Kde věta obsahuje prvky (ředění: vstup + čísla), dosazují se jako argumenty — pořadí slov se v jazycích liší (`dilHave`, `dilFor`).
 - **Nepřekládá se:** `%chem`, `W85`, názvy surovin, částí a dipů (data uživatele), `Δ vs calc.` u měřených hodnot (není součást listu). Čísla se v obou jazycích zobrazují s desetinnou tečkou; zadat jde tečka i čárka (`parseNum`).
@@ -258,4 +274,4 @@ Receptura je kompaktní: `.rc` má `width:fit-content`, sloupec názvu max 15rem
 
 ## Plánováno (zatím ne)
 
-Provozní míchání, přepis na hmotnostní zlomky základních surovin (bez ředění).
+Provozní míchání, přepis na hmotnostní zlomky základních surovin (bez ředění) — jako záložky prostředního panelu „production recipe“ a „system recipe“ (viz „Prostřední panel — záložky“).
