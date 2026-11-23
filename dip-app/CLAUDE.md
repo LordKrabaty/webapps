@@ -12,14 +12,15 @@ Panel „Recipe“ má nahoře čipy variant a hlavičku dipu / varianty (název
 
 - **Parameters** (`par`) — receptura W100 (upravitelné hmotnosti), nástroje (scale / set solid / poměry), parametry s měnou, měřené hodnoty (Measured — „není součást lab listu“, viz „Jazyk lab listu“).
 - **Lab** (`lab`) — lab list (navážka při lab síle, ředění, poznámky k přípravě).
+- **System** (`sys`) — systémová receptura (viz „Systémová receptura“ níže).
 
 Vykreslují se **vždy oba panely** (`renderMain`), skrytý jen `display:none` → `updateCalc` / `updateLab` plní i neviditelný a nic dalšího nemusí hlídat, kterou záložku uživatel vidí. Po zobrazení záložky se znovu přeroste `#labPrep` (auto-grow na skrytém poli vyjde na nulu). Zvolená záložka = lokální stav zobrazení (`dip-app-main-tab`). `switchNotesTab` hledá jen `#panel-notes .notes-tab` — sdílí třídu se záložkami prostředního panelu, globální selektor by je přepínal taky. Texty, které dřív odkazovaly na recepturu „nahoře“ / na „Lab weighing“, teď říkají záložku.
 
-**Plánované další záložky:** production recipe (provozní míchání) a system recipe (receptura zadaná v systému ze základních neředěných surovin) — přidat do `MAIN_TABS` a do `renderMain` jako další `pane(…)`.
+**Plánovaná další záložka:** production recipe (provozní míchání) — přidat do `MAIN_TABS` a do `renderMain` jako další `pane(…)`.
 
 ## Dlouhé vysvětlivky „jak to funguje" — za tlačítkem ?
 
-Uživatel nechce v appce dlouhé odstavce nápovědy (nepřehledné). Vysvětlení, jak něco funguje, je **skryté za čipem `?`** a ukáže se až po kliknutí (rozbalí se na místě, druhé kliknutí zavře): nástroje pod recepturou (`?` vpravo v řádku scale / set solid), lab list (`?` v nadpisu vedle EN / CZ, text hned pod nadpisem) a ⚗ materials (`?` vedle počtu). Helpery `helpBtnHtml(key, tip)` + `helpBoxAttr(key)` + `toggleHelp(key, btn)`; stav otevření jen v paměti (`helpOpen`, přežije re-render, po startu vše zavřené, nic se neukládá). **Novou delší nápovědu dávej stejně** — inline nech jen krátké hlášky a tooltipy. Výjimka: texty o bezpečnosti v ⚙ syncu a v okně záchranného klíče zůstávají vidět.
+Uživatel nechce v appce dlouhé odstavce nápovědy (nepřehledné). Vysvětlení, jak něco funguje, je **skryté za čipem `?`** a ukáže se až po kliknutí (rozbalí se na místě, druhé kliknutí zavře): nástroje pod recepturou (`?` vpravo v řádku scale / set solid), lab list (`?` v nadpisu vedle EN / CZ, text hned pod nadpisem) ⚗ materials (`?` vedle počtu) a systémová receptura (`?` v nadpisu). Helpery `helpBtnHtml(key, tip)` + `helpBoxAttr(key)` + `toggleHelp(key, btn)`; stav otevření jen v paměti (`helpOpen`, přežije re-render, po startu vše zavřené, nic se neukládá). **Novou delší nápovědu dávej stejně** — inline nech jen krátké hlášky a tooltipy. Výjimka: texty o bezpečnosti v ⚙ syncu a v okně záchranného klíče zůstávají vidět.
 
 ## ⚠ Žádná firemní data v repu
 
@@ -98,17 +99,17 @@ Když si nejsi jistý, upozorni radši zbytečně. Drobné úpravy výpočtů / 
 | `dip-app-active-var` — zobrazená varianta per roztok | — | **nesynchronizuje se** (stav zobrazení nesmí razítkovat `mt`) |
 | `dip-app-alt-filter` — které alternativy ⚗ materials ukazuje (podle stavu schválení) | — | **nesynchronizuje se** (stav zobrazení) |
 | `dip-app-lab-lang` — jazyk lab listu (`en` / `cs`) | — | **nesynchronizuje se** (stav zobrazení zařízení) |
-| `dip-app-main-tab` — záložka prostředního panelu (`par` / `lab`) | — | **nesynchronizuje se** (stav zobrazení zařízení) |
+| `dip-app-main-tab` — záložka prostředního panelu (`par` / `lab` / `sys`) | — | **nesynchronizuje se** (stav zobrazení zařízení) |
 | `dip-app-currency` — měna zobrazení cen + kurzy `{ cur, rates:{ CZK:{r,d}, USD:{r,d} } }` | — | **nesynchronizuje se** (stav zobrazení zařízení) |
 | `dip-app-lab-view` — přepisy na lab listu per roztok `{ str, batch, title, mat:{<secId>|all: text}, nest:{<rowId>: W}, alt:{<rowId>: altId}, dfrom, dhave }` | — | **nesynchronizuje se** (pracovní nastavení navážky, ne data) |
 
 ```
 solution { id, name, desc, type, labStr, note, vars:[variant], used?, mt }   // type = 'rfl'|'predip'|'other'; labStr = doporučená síla pro lab (85 = W85), null = W100; used = id varianty ★ in use (jen když je nastavená)
-variant  { id, name, code, date, from, mature, prep, note, secs:[section], meas:{phRF, ph, solid} }   // hmotnosti = vždy W100; mature = min. zrání celého namíchaného roztoku; prep = poznámky k přípravě (lab list)
+variant  { id, name, code, date, from, mature, prep, note, secs:[section], meas:{phRF, ph, solid}, line? }   // hmotnosti = vždy W100; mature = min. zrání celého namíchaného roztoku; prep = poznámky k přípravě (lab list); line = doplňky na lince pro systémovou recepturu [{ id, mat, q }] (jen když nějaké jsou)
 section  { id, kind:'rf'|'latex'|'add'|'other', kname, name, mature, note, rows:[row] }   // kname = vlastní druh (jen u 'other')   // mature = min. zrání téhle části (text, „30 min")
 row      { id, mat, nm, role, conc, m }        // nm/role = snapshot pro smazanou surovinu
 row      { id, dip, dv, nm, role:'dip', conc, m }   // vnořený dip: dip = id roztoku, dv = id jeho varianty; nm/conc = snapshot (viz níže)
-material { id, name, role, work, cons, note, alts:[alt], act, mt }   // cons = spotřeba t / rok suroviny jako celku
+material { id, name, role, work, cons, note, alts:[alt], act, sys?, mt }   // cons = spotřeba t / rok suroviny jako celku; sys = id alternativy ★ zadané v systému (jen když je nastavená)
 alt      { id, name, producer, card, status, conc, price, share, fF, fR, vp, note }   // card = kmenová karta (číslo položky), per alternativa; status = 'approved'|'lab'|'prod'; share = podíl na spotřebě suroviny v %
 ```
 
@@ -191,6 +192,18 @@ V nabídce suroviny je na konci skupina **Dips** (`value="d:<id>"`): celý jiný
 - Poměrové nástroje vnořený dip **neškálují** (role `dip` není v žádné skupině); `% in dip / solid / wet` a set solid / scale ano (počítají s jeho sušinou). Smazání dipu, který je složkou jinde, se v potvrzení zmíní.
 - Nová varianta = kopie aktivní se **stejnými id řádků** → `varDiff()` páruje řádky podle id. Neměnit id řádků při kopii.
 - Normalizéry (`normSolution` … `normAlt`) jsou preserve-unknown (`{ ...x, …}`).
+
+## Systémová receptura (záložka System)
+
+Receptura tak, jak se zadává do firemního systému (ERP): tabulka **master card** (kmenová karta = `alt.card`, v systému „Zdroj“) · **material** (název alternativy, jinak suroviny; v systému „Název zdroje“) · **qty / 1** (množství na 1 jednotku dipu, 6 desetinných míst, v systému „Mn. [TMJ]“). Jen výpočet (`sysCalc` → `updateSys`, volá se z `updateCalc`); uložené jsou jen ★ u alternativy a doplňky na lince.
+
+- **Produkt = alternativa ★** (`material.sys`, `sysAlt`): v systému je u suroviny vždy jen jedna. ★ / ☆ v ⚗ materials vedle ● (`setSysAlt`), **jen když má surovina víc alternativ** — jediná je ta systémová automaticky. Klik na označenou ★ zruší. Bez označení se počítá ● a tabulka varuje („no ★ system product marked — ● counted“). Smazání alternativy ★ zruší, `normMaterial` neplatné `sys` zahodí. Hlavička suroviny ukáže „★ system …“, když se liší od ●. Aditivní pole → `APP_SCHEMA` beze změny.
+- **Suroviny jak se dodávají:** složka receptury (W100) → hmotnost produktu = `m × %chem ÷ dodaná konc. produktu ★`; voda, kterou byla předředěná (`m − to`), jde do **hlavní vody** (materiál první vody receptury, jinak jakákoli vodní surovina). Chybí %chem nebo dodaná konc. → počítá se, jak je (varování); %chem vyšší než dodaná konc. → varování (voda vyjde menší, pod nulu = chyba).
+- **Vnořený dip se rozpadne** na své složky (varianta, kterou receptura používá — `nestedOf`, stejně jako výpočet), rekurzivně, poměrem `m ÷ Σm vnořeného`; stejná surovina se sečte (klíč = id suroviny). Varování, když receptura používá jinou variantu vnořeného dipu, než je jeho ★ in use, nebo když vnořený dip chybí / je cyklický (pak zůstane jako jeden řádek bez karty). Doplňky na lince vnořeného dipu se nepočítají.
+- **Doplňky na lince** (`variant.line = [{ id, mat, q }]`, data varianty — synchronizují se, undo, kopírují se do nové varianty): odpěňovač, který se dává až na lince a v recepturách není. Zadává se rovnou jako množství na 1 jednotku (`0.000125`), receptura tvoří zbytek (`× (1 − Σq)`); stejná surovina jako v receptuře se sečte, řádek má štítek „line“. **V tabulce je jako běžná surovina** (master card, název) před řádkem sum — hned po výběru suroviny, ještě bez množství (pak `—` + varování „line addition without an amount“). Nabídka = suroviny bez vody, nový doplněk předvybere první odpěňovač (role `defoamer`). Σq ≥ 1 = chyba, q mimo (0, 1) se vynechá s varováním. Pole se při psaní nepřekresluje (přepočítá se jen tabulka). `matUsage` je při mazání suroviny zmíní.
+- **Součet přesně 1:** množství v celých milióntinách (`SYS_U`, `fmtSys` — bez plovoucí čárky), **hlavní voda bere zaokrouhlení**; bez vody metoda největších zbytků. Nenulová složka, která se zaokrouhlí na 0, má varování.
+- **Varianta:** do systému se zadává varianta ★ in use. Tabulka ukazuje zobrazenou variantu; když to není ★, nad tabulkou je upozornění s odkazem na ★ (bez ★ výzva ji označit).
+- Pořadí řádků = první výskyt v receptuře (vnořené složky na místě vnořeného dipu), doplňky na lince na konci. Desetinná tečka jako jinde v appce. Vysvětlení je za `?` (klíč `sys`).
 
 ## Síla (strength, W85) — NENÍ součást varianty
 

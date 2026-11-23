@@ -470,6 +470,17 @@ html.dark input[type="date"]{color-scheme:dark}
 .lab-mat.diff{border:1.5px dashed var(--black);font-weight:500}
 .sec-mat-w{display:flex;align-items:center;gap:.3rem;font-size:.72rem;font-style:italic;color:var(--muted);white-space:nowrap}
 .sec-mat{width:4.8rem;font-size:.76rem;padding:.12rem .3rem}
+/* system recipe (tab System) — the recipe as entered in the company system */
+.sys-tbl th:nth-child(2){text-align:left}
+.sys-tbl td.sys-card{font-family:'DM Mono',monospace;font-size:.78rem;white-space:nowrap}
+.sys-nm{display:block;max-width:min(20rem,50vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sys-tag{font-size:.62rem;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-left:.35rem}
+.sys-tbl tr.sys-warn .sys-nm{text-decoration:underline dotted}
+.sys-lines{display:flex;flex-direction:column;align-items:flex-start;gap:calc(.35rem/var(--pzc,1));margin-top:calc(1.1rem/var(--pzc,1))}
+.sys-lines .lab-dil-t{align-self:stretch}
+.sys-line{display:flex;align-items:center;gap:.4rem;max-width:100%}
+.sys-line .rc-mat{width:auto;max-width:min(16rem,55vw);border-bottom:1px dotted var(--mid)}
+.sys-line .rc-in{width:6.8rem;flex-shrink:0}
 .lab-msg{font-size:.78rem;color:var(--dark);margin-top:calc(.55rem/var(--pzc,1));line-height:1.6;border-left:2px solid var(--black);padding-left:calc(.6rem/var(--pzc,1))}
 .tools{display:flex;flex-wrap:wrap;gap:calc(.5rem/var(--pzc,1)) calc(1.2rem/var(--pzc,1));margin-top:calc(.8rem/var(--pzc,1));align-items:center}
 .tool{display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:var(--dark)}
@@ -792,7 +803,7 @@ const LIBRARY_KEY = 'dip-app-v1-library';      // solutions (each with all its v
 const MATERIALS_KEY = 'dip-app-v1-materials';  // raw materials — synced, LWW per material
 const ACTVAR_KEY = 'dip-app-active-var';       // { solutionId: variantId } — local view state, NOT synced (see CLAUDE.md: view state must not stamp mt)
 const NOTES_TAB_KEY = 'dip-app-notes-tab';
-const MAINTAB_KEY = 'dip-app-main-tab';        // 'par' | 'lab' — tab of the middle panel, local view state, NOT synced
+const MAINTAB_KEY = 'dip-app-main-tab';        // 'par' | 'lab' | 'sys' — tab of the middle panel, local view state, NOT synced
 const LIBORDER_KEY = 'dip-app-lib-order';    // { list:[dip ids], mt } — order of the dips in the library, synced as ONE record (LWW of the whole list)
 const LABVIEW_KEY = 'dip-app-lab-view';        // { solutionId: { str, batch } } — lab weighing override, local view state, NOT synced
 const ALTFILTER_KEY = 'dip-app-alt-filter';    // which alternatives ⚗ materials shows (by approval status) — local view state, NOT synced
@@ -807,8 +818,8 @@ let activeVarMap = {};
 let labView = {};
 let notesTab = 'vars';
 // tabs of the middle panel — the variant chips and the dip / variant header stay above them (they apply to every tab).
-// Planned: production recipe, system recipe (from the basic undiluted materials) — add them here.
-const MAIN_TABS = [['par', 'Parameters'], ['lab', 'Lab']];
+// Planned: production recipe — add it here.
+const MAIN_TABS = [['par', 'Parameters'], ['lab', 'Lab'], ['sys', 'System']];
 let mainTab = 'par';
 let undoStack = [], redoStack = [], savedSnapshot = null;
 const UNDO_MAX = 40;
@@ -1629,8 +1640,11 @@ function normMaterial(m) {
     alts.forEach((a, i) => { if (old[i] != null) a.share = round2(Math.max(0, old[i]) / sum * 100); });
   }
   alts.forEach(a => { delete a.cons; });
-  return { ...m, id: numId(m.id), name: String(m.name ?? ''), role: m.role || 'other', work: numOrNull(m.work), cons,
+  const out = { ...m, id: numId(m.id), name: String(m.name ?? ''), role: m.role || 'other', work: numOrNull(m.work), cons,
     note: String(m.note ?? ''), alts, act: alts.some(a => a.id === m.act) ? m.act : alts[0].id, mt: +m.mt || 0 };
+  // `sys` = id of the alternative entered in the company system (★) — only when set and still there
+  if (!alts.some(a => a.id === out.sys)) delete out.sys;
+  return out;
 }
 function normRow(r) {
   r = r || {};
@@ -1670,6 +1684,9 @@ function normVariant(v) {
   const out = { ...rest, id: numId(v.id), name: String(v.name ?? ''), code: String(v.code ?? ''), date: String(v.date ?? ''),
     from: refId(v.from), mature: String(v.mature ?? ''), prep: String(v.prep ?? ''), note: String(v.note ?? ''),
     secs: (Array.isArray(v.secs) ? v.secs : []).map(normSection), meas: { ...(v.meas || {}) } };
+  // `line` = line additions of the system recipe (the defoamer added on the line) — only when there are some
+  if (Array.isArray(v.line) && v.line.length) out.line = v.line.map(x => { x = x && typeof x === 'object' ? x : {}; return { ...x, id: numId(x.id), mat: refId(x.mat), q: numOrNull(x.q) }; });
+  else delete out.line;
   const k = legacyStr(v);
   if (k != null) undiluteVariant(out, k);
   // maturing out of the legacy section notes (a section without the `mature` field). The latex part does not
@@ -1981,7 +1998,8 @@ function renderMain() {
       + toolsHtml(type)
       + '<div class="sub-title lab-head"><span>Parameters</span>' + currencyChipsHtml() + '</div>' + fxRowHtml() + '<div class="par-grid" id="parGrid"></div>'
       + '<div class="sub-title">Measured</div>' + measHtml(v, type))
-    + pane('lab', labHtml(v));
+    + pane('lab', labHtml(v))
+    + pane('sys', sysHtml(v));
   _dipChoices = null;
   updateCalc();
   autoGrow(el('labPrep'));
@@ -2137,7 +2155,7 @@ function recipeHtml(v) {
       <label class="tool whole-mat" title="minimum maturing of the whole mixed dip (RFL) before use — e.g. 2 h">whole dip — maturing min. <input class="mat-in ed" value="${esc(v.mature)}" placeholder="—" oninput="onVarField('mature',this)" autocomplete="off"></label></div>`;
 }
 // ── HOW-IT-WORKS HELP ─────────────────────────────────────────────────────
-// Long explanations stay hidden behind a ? button (keys are fixed: 'tools', 'lab', 'mat'). Open / closed lives only
+// Long explanations stay hidden behind a ? button (keys are fixed: 'tools', 'lab', 'mat', 'sys'). Open / closed lives only
 // in memory — survives re-renders, every start begins closed.
 const helpOpen = {};
 function helpBtnHtml(key, tip) {
@@ -2619,6 +2637,7 @@ function updateCalc() {
   const st = labState(), diluted = Math.abs(st.str - 100) > 1e-9;
   const pg = el('parGrid'); if (pg) pg.innerHTML = parHtml(c, st.str, dipType(cur));
   updateLab(v, c, st);
+  updateSys(v);
   const lr = el('labRec');
   if (lr) lr.innerHTML = st.over ? `<button class="btn-sm" onclick="resetLabStr()" title="${esc(lt('recResetTip'))}">${esc(lt('recReset', fmtNum(st.rec)))}</button>`
     : cur.labStr > 0 ? esc(lt('recIs')) : '';
@@ -2633,6 +2652,176 @@ function updateCalc() {
   setText('measD', ms != null && calcS != null ? (ms - calcS >= 0 ? '+' : '') + (ms - calcS).toFixed(2) + '%' : '—');
   updateVarMeta();
   updateHeaderSub();
+}
+
+// ── SYSTEM RECIPE (tab System) ────────────────────────────────────────────
+// The recipe as it is entered in the company system (see CLAUDE.md "System recipe"): nested dips broken down into
+// their components (the same material summed), every material as delivered — its ★ system alternative — with the
+// water it was pre-diluted with moved to the main water, + line additions (variant.line). Amount per 1 unit of the
+// dip, 6 decimals, the sum exactly 1: the main water takes the rounding (no water → largest remainders).
+const SYS_U = 1e6;   // 6 decimals → integer millionths
+// the alternative entered in the system: ★, the only one, or (none marked) ● — `assumed` then
+function sysAlt(m) {
+  if (!m) return { a: null, assumed: false };
+  const s = m.alts.find(a => a.id === m.sys);
+  if (s) return { a: s, assumed: false };
+  return { a: actAlt(m), assumed: m.alts.length > 1 };
+}
+function fmtSys(u) { const a = Math.abs(u); return (u < 0 ? '-' : '') + Math.floor(a / SYS_U) + '.' + String(a % SYS_U).padStart(6, '0'); }
+function sysCalc(v) {
+  const items = new Map(), notes = new Set(), T = sumMass(v);
+  const item = (key, mat, nm) => {
+    let it = items.get(key);
+    if (!it) { const sa = sysAlt(mat); it = { key, mat, alt: sa.a, assumed: sa.assumed, nm, m: 0, q: 0, line: false, flags: new Set() }; items.set(key, it); }
+    return it;
+  };
+  if (!(T > 0)) return { err: 'The recipe has no mass yet.', rows: [], notes: [] };
+  // the main water — takes the dilution water and the rounding: the first water of the recipe, else any water material
+  const fw = firstWater(v), wMat = (fw && matById(fw.mat)) || materials.find(m => m.role === 'water') || null;
+  let dil = 0;
+  const walk = (vv, f, stack) => vv.secs.forEach(sec => sec.rows.forEach(r => {
+    const m = (+r.m || 0) * f; if (!(m > 0)) return;
+    if (isDipRow(r)) {
+      const n = nestedOf(r), name = rowName(r), tot = n ? sumMass(n.v) : 0;
+      if (!n || stack.has(n.sol.id) || !(tot > 0)) {
+        notes.add(name + ': ' + (!n ? 'the dip is missing' : stack.has(n.sol.id) ? 'circular' : 'no mass') + ' — not broken down');
+        const it = item('d' + r.dip, null, name); it.m += m; it.flags.add('dip'); return;
+      }
+      const used = usedVarOf(n.sol);
+      if (!n.exact) notes.add(name + ': the variant used was deleted — ' + (n.v.name || '—') + ' is counted');
+      else if (used && used !== n.v) notes.add((n.sol.name || 'untitled') + ': the recipe uses ' + (n.v.name || '—') + ', ★ in use is ' + (used.name || '—'));
+      walk(n.v, m / tot, new Set([...stack, n.sol.id]));
+      return;
+    }
+    const mat = matById(r.mat);
+    if (!mat) { const it = item('n' + (r.nm || ''), null, r.nm || '—'); it.m += m; it.flags.add('gone'); return; }
+    const it = item('m' + mat.id, mat);
+    if (mat.role === 'water') { it.m += m; return; }
+    const ac = it.alt && it.alt.conc > 0 ? it.alt.conc : null, rc = r.conc > 0 ? r.conc : null;
+    if (ac == null || rc == null) { it.m += m; it.flags.add('conc'); return; }   // nothing to undilute with → as it is
+    if (rc > ac + 1e-9) it.flags.add('over');
+    const raw = m * rc / ac;
+    it.m += raw; dil += m - raw;
+  }));
+  walk(v, 1, topStack());
+  let wIt = wMat ? items.get('m' + wMat.id) || null : null;
+  if (Math.abs(dil) > 1e-9) {
+    if (!wMat) return { err: 'A material is pre-diluted in the recipe, but there is no water material to count the water with.', rows: [], notes: [...notes] };
+    wIt = item('m' + wMat.id, wMat); wIt.m += dil;
+  }
+  // line additions: typed per 1 unit of the dip, the recipe makes up the rest
+  let A = 0;
+  (v.line || []).forEach(x => {
+    const mat = matById(x.mat); if (!mat) return;
+    // picked but no amount yet → already in the table (with its master card), the amount shown as —
+    if (x.q == null) { const it = item('m' + mat.id, mat); it.line = true; it.flags.add('noq'); return; }
+    if (!(x.q > 0 && x.q < 1)) { notes.add('Line addition ' + (mat.name || 'unnamed') + ': the amount must be between 0 and 1 — left out'); return; }
+    const it = item('m' + mat.id, mat); it.q += x.q; it.line = true; A += x.q;
+  });
+  if (A >= 1) return { err: 'The line additions add up to 1 or more — nothing is left for the recipe.', rows: [], notes: [...notes] };
+  const list = [...items.values()];
+  const exact = list.map(it => it.m / T * (1 - A) + it.q);
+  const units = exact.map(x => Math.round(x * SYS_U));
+  const wi = wIt ? list.indexOf(wIt) : -1;
+  if (wi >= 0) units[wi] = SYS_U - units.reduce((s, u, i) => i === wi ? s : s + u, 0);
+  else {   // no water: largest remainders
+    const fl = exact.map(x => Math.floor(x * SYS_U));
+    let left = SYS_U - fl.reduce((s, u) => s + u, 0);
+    exact.map((x, i) => [x * SYS_U - fl[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { fl[i]++; left--; } });
+    fl.forEach((u, i) => { units[i] = u; });
+  }
+  if (wi >= 0 && units[wi] < 0) return { err: 'The water comes out below zero — a %chem in the recipe is higher than the delivered concentration of its product (see below).', rows: [], notes: [...notes, ...overNotes(list)] };
+  const rows = list.map((it, i) => {
+    const name = (it.alt && it.alt.name.trim()) || (it.mat ? it.mat.name || 'unnamed' : it.nm || '—');
+    const card = it.alt ? it.alt.card.trim() : '';
+    const warn = [];
+    if (it.flags.has('dip')) warn.push('not broken down');
+    if (it.flags.has('gone')) warn.push('not in ⚗ materials (deleted)');
+    if (it.mat && !card) warn.push('no master card');
+    if (it.assumed) warn.push('no ★ system product marked — ● counted');
+    if (it.flags.has('conc')) warn.push('%chem or delivered conc. missing — counted as delivered');
+    if (it.flags.has('over')) warn.push('%chem higher than delivered conc. ' + fmtNum(it.alt.conc) + ' %');
+    if (it.flags.has('noq')) warn.push('line addition without an amount');
+    if (exact[i] > 0 && units[i] === 0) warn.push('rounds to 0');
+    const tip = [it.mat && it.mat.name && it.mat.name !== name ? 'material: ' + it.mat.name : '', it.alt && it.alt.producer.trim() ? it.alt.producer.trim() : '', it.line ? 'line addition' + (it.m > 0 ? ' + in the recipe' : '') : '', ...warn].filter(Boolean).join(' · ');
+    return { name, card, u: units[i], line: it.line, blank: it.flags.has('noq') && !(exact[i] > 0), warn, tip };
+  });
+  const byWarn = new Map();   // "no master card: A, B" — one line per kind of problem
+  rows.forEach(x => x.warn.forEach(w => { if (!byWarn.has(w)) byWarn.set(w, []); byWarn.get(w).push(x.name); }));
+  return { rows, notes: [...notes, ...[...byWarn].map(([w, names]) => w.charAt(0).toUpperCase() + w.slice(1) + ': ' + names.join(', '))] };
+}
+function overNotes(list) { return list.filter(it => it.flags.has('over')).map(it => (it.mat ? it.mat.name : it.nm) + ': %chem higher than delivered conc.'); }
+function sysMatOptions(sel) {
+  let h = '<option value="">— choose material —</option>';
+  ROLES.forEach(([k, label]) => {
+    if (k === 'water') return;
+    const ms = materials.filter(m => roleKey(m.role) === k).sort(byName);
+    if (ms.length) h += `<optgroup label="${esc(label)}">` + ms.map(m => `<option value="${esc(m.id)}"${m.id === sel ? ' selected' : ''}>${esc(m.name || 'unnamed')}</option>`).join('') + '</optgroup>';
+  });
+  if (sel != null && !matById(sel)) h += `<option value="${esc(sel)}" selected>? (deleted)</option>`;
+  return h;
+}
+function sysHtml(v) {
+  const used = usedVarOf(cur);
+  const note = v === used ? ''
+    : used ? `This is ${esc(v.name || '—')} — the system holds the variant in use, ★ ${esc(used.name || '—')}. <button class="rc-open" onclick="selectVariant(${jsArg(used.id)})">show ★ ${esc(used.name || '—')}</button>`
+    : 'No variant is marked ★ in use — mark the one entered in the system (☆ in Variants).';
+  const lines = (v.line || []).map(x => `<div class="sys-line">
+      <select class="rc-mat ed" onchange="onSysLineMat(${jsArg(x.id)},this.value)" title="the material added on the line — counted with its ★ system product">${sysMatOptions(x.mat)}</select>
+      <input class="rc-in ed" id="sysq-${esc(x.id)}" inputmode="decimal" value="${x.q != null ? esc(String(x.q)) : ''}" placeholder="0.000125" oninput="onSysLineQ(${jsArg(x.id)},this)" title="amount per 1 unit of the dip, as in the system — e.g. 0.000125 (= 125 g per t); the recipe makes up the rest" autocomplete="off">
+      <button class="ib" onclick="delSysLine(${jsArg(x.id)})" title="remove the line addition">✕</button></div>`).join('');
+  return `<div class="sub-title lab-head"><span>System recipe</span><span class="head-btns">${helpBtnHtml('sys', 'how the system recipe is made')}</span></div>
+    <div class="tool-hint help-top"${helpBoxAttr('sys')}>The recipe as it is entered in the company system — from the basic materials as delivered. Every component counts as the product marked ★ in ⚗ materials (only one alternative = that one; none marked = ● and a warning), at its delivered concentration: mass × %chem ÷ delivered conc. The water it was pre-diluted with goes to the main water (the first water of the recipe). A dip used as a component is broken down into its components (the variant the recipe uses); the same material is summed. Line additions — the defoamer added on the line, in no recipe — are typed as their amount per 1 unit; the recipe makes up the rest. Amounts are per 1 unit of the dip with 6 decimals; the main water takes the rounding, so the sum is exactly 1. The system holds the variant marked ★ in use.</div>
+    ${note ? `<div class="lab-msg sys-var">${note}</div>` : ''}
+    <table class="lab-tbl sys-tbl">
+      <thead><tr><th>master card</th><th>material</th><th>qty / 1</th></tr></thead>
+      <tbody id="sysBody"></tbody>
+    </table>
+    <div class="lab-msg" id="sysMsg" style="display:none"></div>
+    <div class="sys-lines">
+      <div class="lab-dil-t">line additions — added on the line, in no recipe</div>
+      ${lines}
+      <button class="btn-add-row" onclick="addSysLine()">+ line addition</button>
+    </div>`;
+}
+// the table is recomputed on every edit (it has no inputs); the line addition inputs are never re-rendered while typing
+function updateSys(v) {
+  const body = el('sysBody'); if (!body) return;
+  const S = sysCalc(v);
+  const html = S.err ? '' : S.rows.map(x => `<tr${x.warn.length ? ' class="sys-warn"' : ''}><td class="sys-card">${esc(x.card || '—')}</td><td><span class="sys-nm"${x.tip ? ` title="${esc(x.tip)}"` : ''}>${esc(x.name)}${x.line ? '<span class="sys-tag">line</span>' : ''}${x.warn.length ? ' ⚠' : ''}</span></td><td class="n">${x.blank ? '—' : fmtSys(x.u)}</td></tr>`).join('')
+    + `<tr class="lab-total"><td></td><td><span class="sys-nm">sum</span></td><td class="n">${fmtSys(S.rows.reduce((s, x) => s + x.u, 0))}</td></tr>`;
+  body.innerHTML = html;
+  const msg = el('sysMsg'), lines = (S.err ? [S.err] : []).concat(S.notes);
+  if (msg) { msg.innerHTML = lines.map(esc).join('<br>'); msg.style.display = lines.length ? '' : 'none'; }
+}
+function sysLine(id) { const v = activeVar(); return v && v.line ? v.line.find(x => x.id === id) || null : null; }
+function addSysLine() {
+  const v = activeVar(); if (!v) return;
+  pushUndo();
+  const d = materials.filter(m => m.role === 'defoamer').sort(byName)[0];   // what is usually added on the line
+  const x = { id: uid(), mat: d ? d.id : null, q: null };
+  (v.line = v.line || []).push(x);
+  renderMain(); schedSave();
+  const i = el('sysq-' + x.id); if (i) i.focus();
+}
+function delSysLine(id) {
+  const v = activeVar(); if (!v || !v.line) return;
+  pushUndo();
+  v.line = v.line.filter(x => x.id !== id);
+  if (!v.line.length) delete v.line;
+  renderMain(); schedSave();
+}
+function onSysLineMat(id, val) {
+  const x = sysLine(id); if (!x) return;
+  pushUndo();
+  x.mat = val === '' ? null : refId(Number(val));
+  updateCalc(); schedSave();
+}
+function onSysLineQ(id, inp) {
+  const x = sysLine(id); if (!x) return;
+  coalesceUndo();
+  x.q = numOrNull(inp.value);
+  updateCalc(); schedSave();
 }
 
 // ── NOTES PANEL: variants + solution note ─────────────────────────────────
@@ -3581,7 +3770,7 @@ function openMaterials(focusId) {
 function matUsage(id) {   // stored dips using the material → ["R01 (W85, W100)", …]
   const out = [];
   library.forEach(s => {
-    const vs = s.vars.filter(v => v.secs.some(sec => sec.rows.some(r => r.mat === id)));
+    const vs = s.vars.filter(v => v.secs.some(sec => sec.rows.some(r => r.mat === id)) || (v.line || []).some(x => x.mat === id));
     if (vs.length) out.push((s.name || 'untitled') + ' (' + vs.map(v => v.name || '—').join(', ') + ')');
   });
   return out;
@@ -3591,6 +3780,8 @@ function matMetaText(m) {
   if (m.role !== 'water') parts.push(w != null ? fmtNum(w) + '%' : '? %');
   if (a && a.name && a.name !== m.name) parts.push(a.name);
   if (a && a.card && a.card.trim()) parts.push('card ' + a.card.trim());
+  const sa = m.alts.find(x => x.id === m.sys);
+  if (sa && sa !== a) parts.push('★ system ' + altLabel(sa) + (sa.card.trim() ? ' (card ' + sa.card.trim() + ')' : ''));
   const nt = m.alts.filter(x => !altApproved(x)).length;
   if (m.alts.length > 1) parts.push(m.alts.length + ' alternatives' + (nt ? ', ' + nt + ' not approved yet' : ''));
   else if (nt) parts.push(altStatusName(m.alts[0]));
@@ -3728,7 +3919,7 @@ function matHtml(m) {
         <div class="mf"><label>t / year</label><input type="text" inputmode="decimal" value="${esc(m.cons ?? '')}" oninput="matField(${jsArg(m.id)},'cons',this.value)" title="yearly consumption of this material — all its alternatives together; each alternative takes its share of it (share % below)" autocomplete="off"></div>
       </div>
       <div class="mf"><label>note</label><input type="text" value="${esc(m.note)}" oninput="matField(${jsArg(m.id)},'note',this.value)" autocomplete="off"></div>
-      <div class="alt-title">alternatives — ● = mixed in production now · dashed = not approved yet</div>
+      <div class="alt-title">alternatives — ● = mixed in production now${m.alts.length > 1 ? ' · ★ = entered in the company system' : ''} · dashed = not approved yet</div>
       ${shown.map(a => altHtml(m, a)).join('')}
       ${hid ? `<div class="alt-hidden">${hid} more ${hid === 1 ? 'alternative is' : 'alternatives are'} not shown — the filter is “${esc(ALT_FILTER_NAME[altFilter])}”. <button class="rc-open" onclick="setAltFilter('all')">show all</button></div>` : ''}
       <div class="mat-actions"><button class="btn-sm" onclick="addAlt(${jsArg(m.id)})">+ alternative</button><button class="btn-sm danger" onclick="deleteMaterial(${jsArg(m.id)})">delete material</button></div>
@@ -3744,14 +3935,16 @@ function altStatusOptions(a) {   // + the stored one, when a newer build knows a
     + (ALT_STATUS_NAME[s] ? '' : `<option value="${esc(s)}" selected>${esc(s)}</option>`);
 }
 function altHtml(m, a) {
-  const on = a.id === m.act, water = m.role === 'water';
+  const on = a.id === m.act, water = m.role === 'water', sys = a.id === m.sys;
+  // ★ only with more alternatives — the only one is the one in the system anyway
+  const star = m.alts.length < 2 ? '' : `<button class="var-star${sys ? ' on' : ''}" onclick="setSysAlt(${jsArg(m.id)},${jsArg(a.id)})" title="${sys ? '★ entered in the company system (the System tab counts with it) — click to unmark' : 'mark as the one entered in the company system (one per material)'}">${sys ? '★' : '☆'}</button>`;
   const f = (key, label, ph, tip, sub = '') => `<div class="mf${key === 'card' ? ' mf-wide' : ''}"><label>${label}</label><input type="text"${ALT_TEXT.includes(key) ? '' : ' inputmode="decimal"'} value="${esc(a[key] ?? '')}" placeholder="${esc(ph || '')}" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},${jsArg(String(key))},this.value)"${tip ? ` title="${esc(tip)}"` : ''} autocomplete="off">${sub}</div>`;
   // under the price: € / kg of solid; with more alternatives a what-if — switch N % of the consumption to this one
   const dry = water ? '' : `<div class="mf-sub" id="altD-${esc(a.id)}" title="${esc('€ per kg of solid = € / kg ÷ conc. % — compares alternatives with a different concentration; % = vs ● (mixed in production now)')}">${esc(altDryText(m, a))}</div>`;
   const [swT, swTip] = altSwitchInfo(m, a);
   const sw = water || m.alts.length < 2 ? '' : `<div class="mf"><label>switch %</label><input type="text" inputmode="decimal" value="${esc(altSwitch[a.id] ?? '')}" placeholder="100" oninput="onAltSwitch(${jsArg(m.id)},${jsArg(a.id)},this.value)" title="${esc('what if this % of the yearly consumption (t / year, as solid) went to this alternative — the line below = change of the yearly cost vs now (● or the shares). Only a calculation, not saved.')}" autocomplete="off"><div class="mf-sub" id="altS-${esc(a.id)}" title="${esc(swTip)}">${esc(swT)}</div></div>`;
   return `<div class="alt${on ? ' on' : ''}${altApproved(a) ? '' : ' test'}">
-      <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${jsArg(m.id)},${jsArg(a.id)})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>
+      <div class="alt-top"><button class="alt-radio" onclick="setActAlt(${jsArg(m.id)},${jsArg(a.id)})" title="${on ? 'mixed in production now' : 'switch production to this alternative'}"></button>${star}
         <input class="alt-name" type="text" value="${esc(a.name)}" placeholder="product name" oninput="altField(${jsArg(m.id)},${jsArg(a.id)},'name',this.value)" autocomplete="off">
         <button class="ib" onclick="deleteAlt(${jsArg(m.id)},${jsArg(a.id)})" title="remove alternative"${m.alts.length < 2 ? ' disabled' : ''}>✕</button></div>
       <div class="alt-fields">
@@ -3800,6 +3993,17 @@ function setActAlt(mid, aid) {
   m.act = aid;
   if (touchMaterial(m, before)) { renderMaterials(); showSave('production now uses ' + (actAlt(m).name || 'the selected alternative')); }
 }
+// ★ the alternative entered in the company system — one per material, data of the material (synced); a click on the
+// marked one unmarks it
+function setSysAlt(mid, aid) {
+  const m = matById(mid); if (!m || !m.alts.some(a => a.id === aid)) return;
+  const before = JSON.stringify(m);
+  if (m.sys === aid) delete m.sys; else m.sys = aid;
+  if (!touchMaterial(m, before)) return;
+  renderMaterials();
+  const a = m.alts.find(x => x.id === m.sys);
+  showSave(a ? '★ in the system: ' + altLabel(a) : '☆ no system product marked');
+}
 function addAlt(mid) {
   const m = matById(mid); if (!m) return;
   const before = JSON.stringify(m), a = actAlt(m);
@@ -3813,6 +4017,7 @@ async function deleteAlt(mid, aid) {
   const before = JSON.stringify(m);
   m.alts = m.alts.filter(x => x.id !== aid);
   if (m.act === aid) m.act = m.alts[0].id;
+  if (m.sys === aid) delete m.sys;
   touchMaterial(m, before); renderMaterials();
 }
 function addMaterial() {
