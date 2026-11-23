@@ -2233,6 +2233,8 @@ const LAB_T = {
     prep: 'preparation notes',
     prepPh: 'How to mix — e.g. add the formaldehyde slowly while stirring, temperature, order, what to watch…',
     helpTip: 'how the lab sheet works',
+    copyTip: 'copy the sheet — for Excel (the sums are formulas) or as text; in the language of the sheet',
+    copied: '⧉ lab sheet copied — paste into Excel or as text',
     hint: 'The recipe (tab Parameters) is the full-strength W100 dip — production runs it and the price is W100. The lab line picks up more, so lab dips are diluted: every component × strength, the first water takes up the rest of the batch. A dip used as a component can go in already diluted (its W next to the name, prefilled from its own lab strength): it weighs more and brings water, so the first water is lower. A finished dip can also just be diluted with water — from W100, or stepwise from one already diluted (W90 → W85): it ends up with the same composition. After a material is the product it is weighed from — the alternative mixed in production now (● in ⚗ materials); another one can be picked for a weighing (dashed and bold = not the one in production; a candidate that is not approved yet says “lab testing” / “production testing”). It only names the product, the masses stay those of the recipe — “40 % ≠ %chem” says that product is mixed at another concentration than the recipe counts with. Name, strengths, batch, maturing and alternatives changed on this sheet stay on this device only and do not change the recipe; the preparation notes are saved with the variant.',
     errNoMass: 'The recipe has no mass yet.',
     errNoWater: 'Diluting needs a water row in the recipe — the first water takes up the dilution.',
@@ -2277,6 +2279,8 @@ const LAB_T = {
     prep: 'poznámky k přípravě',
     prepPh: 'Jak míchat — např. formaldehyd přidávat pomalu za míchání, teplota, pořadí, na co si dát pozor…',
     helpTip: 'jak list funguje',
+    copyTip: 'zkopírovat list — do Excelu (součty jsou vzorce) nebo jako text; v jazyce listu',
+    copied: '⧉ list zkopírován — vlož do Excelu nebo jako text',
     hint: 'Receptura (záložka Parameters) je dip plné síly W100 — tak jede provoz a k němu se počítá cena. Laboratorní linka nanáší víc, proto se laboratorní dipy ředí: každá složka × síla, první voda dorovná zbytek dávky. Dip použitý jako složka může jít do směsi už naředěný (jeho W vedle názvu, předvyplněné z jeho vlastní laboratorní síly): váží se ho víc a přináší vodu, takže první vody je méně. Hotový dip jde také jen naředit vodou — z W100, nebo postupně z už naředěného (W90 → W85): složení vyjde stejné. Za surovinou je produkt, ze kterého se váží — alternativa, která se teď míchá v provozu (● v ⚗ materials); pro navážku jde vybrat jinou (čárkovaně a tučně = není to ta provozní; kandidát, který ještě není schválený, má u sebe „laboratorní test“ / „provozní test“). Jen pojmenovává produkt, hmotnosti zůstávají podle receptury — „40 % ≠ %chem“ znamená, že se ten produkt míchá při jiné koncentraci, než s jakou počítá receptura. Název, síly, dávka, zrání a alternativy změněné na tomto listu zůstávají jen na tomto zařízení a recepturu nemění; poznámky k přípravě se ukládají s variantou.',
     errNoMass: 'Receptura zatím nemá žádnou hmotnost.',
     errNoWater: 'K ředění je v receptuře potřeba řádek s vodou — ředění bere první voda.',
@@ -2491,7 +2495,7 @@ function labHtml(v) {
   const have = lt('dilHave',
     `<input id="labDilHave" class="lab-nw lab-dh" inputmode="decimal" value="${labDilHave() != null ? fmtNum(labDilHave()) : ''}" placeholder="1000" oninput="onLabDil('dhave',this)" title="${T('dilHaveTip')}" autocomplete="off">`,
     '<span id="ldFrom2"></span>', '<b class="dn" id="ldAdd"></b>', '<b class="dn" id="ldGet"></b>', '<span id="ldTo2"></span>');
-  return `<div class="sub-title lab-head"><span>${T('title')}</span><span class="head-btns"><span class="lab-lang" title="${T('langTip')}">${lang('en', 'EN')}${lang('cs', 'CZ')}</span>${helpBtnHtml('lab', lt('helpTip'))}</span></div>
+  return `<div class="sub-title lab-head"><span>${T('title')}</span><span class="head-btns"><span class="lab-lang" title="${T('langTip')}">${lang('en', 'EN')}${lang('cs', 'CZ')}</span><button class="chip help-btn" onclick="copyLabSheet()" title="${T('copyTip')}">⧉</button>${helpBtnHtml('lab', lt('helpTip'))}</span></div>
     <div class="tool-hint help-top"${helpBoxAttr('lab')}>${T('hint')}</div>
     <div class="lab-ctl">
       <span class="tool">${T('strength')} <input id="labStrIn" class="rc-in" inputmode="decimal" value="${fmtNum(st.str)}" placeholder="${fmtNum(st.rec)}" oninput="onLabStr(this)" onblur="labInBlur()" title="${T('strengthTip')}" autocomplete="off"></span>
@@ -2563,6 +2567,78 @@ function updateLab(v, c, st) {
     s.classList.toggle('diff', !!labAltOver(r, m));
     s.title = labAltTip(r, m);
   });
+}
+// ⧉ the lab sheet for Excel / as text — the same rules as ⧉ of the system recipe (copySysTable) and of a variant
+// (varTable), in the language of the sheet: title (name + strength, variant · code), column heads, per part its name
+// with its sum, the components (name · product picked for the weighing, a nested dip with its W) and its maturing;
+// the total and the maturing of the whole dip. HTML for Excel: the sums are FORMULAS (a part = its components, the
+// total = the parts; written as if the table started at A1, no function names), grams x:num as 0.0, %chem x:num
+// (General); plain text: values only, the decimal separator of the browser language. The dilution block and the
+// preparation notes are not copied.
+function labCopyName(r) {
+  if (isDipRow(r)) return rowName(r) + ' W' + fmtNum(nestStr(r));
+  const m = matById(r.mat); if (!m) return rowName(r);
+  // the product after the name, as the sheet shows it (labAltHtml) + the concentration flag
+  const a = labAlt(r, m), ok = !a || altApproved(a), nm = a ? (a.name.trim() || a.producer.trim()) : '';
+  const prod = m.alts.length > 1 ? labAltLabel(a) : (nm && nm !== m.name.trim()) || !ok ? (ok ? nm : labAltLabel(a)) : '';
+  const flag = labAltFlag(r, m);
+  return rowName(r) + (prod ? ' · ' + prod : '') + (flag ? ' (' + flag + ')' : '');
+}
+function labTable(v) {
+  const st = labState(), L = labCalc(v, st.str, st.batch, nestStr);
+  if (L.err) return { err: L.err };
+  const c = calcVariant(v);
+  // a row = { k: look, c: [3 cells] }; a cell = { t } text or { n, d, fm } number (d = decimals, none = General; fm = formula)
+  const T = t => ({ t: String(t ?? '') }), N = (n, d, fm) => ({ n, d, fm });
+  const chem = r => {
+    if (rowRole(r) === 'water') return null;
+    if (isDipRow(r)) { const cr = c.rows[r.id], x = (cr ? cr.conc : r.conc); return x != null ? N(+(x * nestStr(r) / 100).toFixed(2)) : T('?'); }
+    return r.conc != null ? N(r.conc) : T('?');
+  };
+  const grid = [{ k: 'title', c: [T((labTitle().trim() || lt('titlePh')) + ' W' + fmtNum(st.str)), T([v.name, v.code].filter(Boolean).join(' · ')), null] },
+    { k: 'head', c: [T(lt('thComp')), T(lt('thChem')), T(lt('thWeigh'))] }];
+  const parts = [];
+  let total = 0;
+  v.secs.forEach(s => {
+    const si = grid.length, rows = [];
+    let sum = 0;
+    grid.push(null);   // the part's row — its sum is known after its components
+    s.rows.forEach(r => {
+      const g = L.m[r.id] || 0; sum += g;
+      rows.push('C' + (grid.length + 1));
+      grid.push({ c: [T(labCopyName(r)), chem(r), N(g, 1)] });
+    });
+    grid[si] = { k: 'sec', c: [T(s.name || '—'), null, N(sum, 1, rows.length ? '=' + rows.join('+') : '')] };
+    parts.push('C' + (si + 1)); total += sum;
+    const mt = labMat(s.id).trim(); if (mt) grid.push({ c: [T(lt('matPart') + ' ' + mt), null, null] });
+  });
+  grid.push({ k: 'total', c: [T(lt('total', fmtNum(st.str), pct(c.tsc != null ? c.tsc * st.str / 100 : null))), null, N(total, 1, parts.length ? '=' + parts.join('+') : '')] });
+  const ma = labMat('all').trim(); if (ma) grid.push({ c: [T(lt('matAll') + ' ' + ma), null, null] });
+  // plain text: a tab or line break would split the row; text that starts like a formula gets an apostrophe
+  const shown = x => x.d != null ? x.n.toFixed(x.d) : xlNum(x.n);
+  const txt = x => {
+    if (!x) return '';
+    if (x.n != null) return shown(x).replace('.', COPY_DEC);
+    const t = x.t.replace(/[\t\r\n]+/g, ' ').trim(); return /^[=+\-@]/.test(t) ? "'" + t : t;
+  };
+  const text = grid.map(r => r.c.map(txt).join('\t').replace(/\t+$/, '')).join('\r\n');
+  const B = '.5pt solid windowtext', RS = { head: 'border-bottom:' + B + ';', total: 'border-top:' + B + ';' };
+  const td = (x, k) => {
+    const rs = RS[k] || '', b = s => (k ? '<b>' + s + '</b>' : s);
+    if (!x) return `<td style="${rs}white-space:nowrap"></td>`;
+    if (x.n == null) return `<td x:str style="${rs}white-space:nowrap">${b(esc(x.t))}</td>`;
+    const f = x.d != null ? `mso-number-format:'0${x.d ? '\\.' + '0'.repeat(x.d) : ''}';` : '';
+    return `<td x:num="${xlNum(x.n)}"${x.fm ? ` x:fmla="${esc(x.fm)}"` : ''} style="${f}${rs}text-align:right;white-space:nowrap">${b(esc(shown(x)))}</td>`;
+  };
+  const html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table>'
+    + grid.map(r => '<tr>' + r.c.map(x => td(x, r.k)).join('') + '</tr>').join('') + '</table></body></html>';
+  return { text, html };
+}
+function copyLabSheet() {
+  const v = activeVar(); if (!cur || !v) return;
+  const t = labTable(v);
+  if (t.err) { customAlert(t.err); return; }
+  copyText(t.text, lt('copied'), t.html);
 }
 function parHtml(c, labStr, type) {
   const P = (label, val, o = {}) => `<div class="par${o.out ? ' out' : ''}${o.key ? ' key' : ''}"${o.tip ? ` title="${esc(o.tip)}"` : ''}><span class="par-l">${label}${o.t ? ` <span class="par-t">${o.t}</span>` : ''}</span><span class="par-v">${val}</span></div>`;
