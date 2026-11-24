@@ -2,7 +2,7 @@
 
 A web app for tracking tea brewing sessions.
 
-- Steep timers
+- Steep timers — click a row (cooling, rinse, steep) to start / pause it; **Ctrl+S** starts the next one
 - Tea library with session logs
 - Favourites (library + archive) in one starred list
 - Seller notes: what to buy where, shop link, teas bought there

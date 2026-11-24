@@ -250,6 +250,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:non
 .steep-row.rinse-row.active{border-style:solid;border-color:var(--black)}
 .steep-row.cool-row{background:var(--off);border-style:dashed;border-color:var(--mid)}
 .steep-row.cool-row.active{border-style:solid;border-color:var(--black)}
+.steep-row.timer-row{cursor:pointer}
 .progress-bar-wrap{grid-column:1/-1;height:2px;background:var(--light);overflow:hidden;display:none;margin-top:-2px}
 .progress-bar-wrap.visible{display:block}
 .progress-bar{height:100%;background:var(--black);transition:width 1s linear}
@@ -2082,6 +2083,9 @@ function renderSteeps(){
   const sieveOn=el('chkSieve').classList.contains('checked');
   const coverOn=el('chkCover').classList.contains('checked');
   const noTherm=!el('chkThermometer').classList.contains('checked');
+  // a click anywhere on a timer row starts / pauses it like ▶ (inputs and buttons keep their own action)
+  const rowToggles=(row,fn)=>{row.classList.add('timer-row');row.addEventListener('click',e=>{if(e.target.closest('button,input,select,textarea,a'))return;fn();});};
+  const playTitle='start / pause · Ctrl+S starts the next timer';
   const tagsHtml=`<div class="steep-tags"><span class="${sieveOn?'steep-tag-on':'steep-tag-off'}">sieve</span><span class="steep-tag-sep"> · </span><span class="${coverOn?'steep-tag-on':'steep-tag-off'}">cover</span></div>`;
   if(warmOn){
     const warmRow=document.createElement('div');
@@ -2124,11 +2128,12 @@ function renderSteeps(){
       <div class="steep-time-input" style="text-align:center;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--muted);border-color:transparent;background:transparent">${timeLabel}</div>
       <div class="steep-temp-input" style="text-align:center;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--muted);border-color:transparent;background:transparent">${isNaN(parseInt(gTemp))?'—':gTemp}</div>
       <div class="timer-display ${coolState.state==='running'?'running':coolState.state==='done'?'done-time':''}" id="timer-cool">${isDisabled?'–':esc(fmtTime(coolState.remaining))}</div>
-      <button class="btn-play ${coolState.state==='running'?'is-running':coolState.state==='done'?'is-done':''}" onclick="toggleCoolTimer()" ${isDisabled?'disabled':''}>${isDisabled?'–':icon}</button>
+      <button class="btn-play ${coolState.state==='running'?'is-running':coolState.state==='done'?'is-done':''}" onclick="toggleCoolTimer()" ${isDisabled?'disabled':`title="${playTitle}"`}>${isDisabled?'–':icon}</button>
       ${coolState.state!=='idle'?`<button class="btn-del" onclick="resetCoolTimer()" title="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.1L1 10"/></svg></button>`:'<div></div>'}
       <div class="progress-bar-wrap ${coolState.state!=='idle'?'visible':''}" id="prog-wrap-cool">
         <div class="progress-bar" id="prog-cool" style="width:${pct}%"></div>
       </div>`;
+    if(!isDisabled)rowToggles(coolRow,toggleCoolTimer);
     list.appendChild(coolRow);
   }
   if(rinseOn){
@@ -2148,11 +2153,12 @@ function renderSteeps(){
       <input class="steep-time-input" type="number" min="3" max="120" value="${rsec}" onchange="updateRinseTime(this.value)" />
       <div class="steep-temp-input" style="text-align:center;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--muted);border-color:transparent;background:transparent">${rT}</div>
       <div class="timer-display ${rs.state==='running'?'running':rs.state==='done'?'done-time':''}" id="timer-rinse">${esc(fmtTime(rs.remaining))}</div>
-      <button class="btn-play ${rs.state==='running'?'is-running':rs.state==='done'?'is-done':''}" onclick="toggleRinseTimer()">${icon}</button>
+      <button class="btn-play ${rs.state==='running'?'is-running':rs.state==='done'?'is-done':''}" onclick="toggleRinseTimer()" title="${playTitle}">${icon}</button>
       <div></div>
       <div class="progress-bar-wrap ${rs.state!=='idle'?'visible':''}" id="prog-wrap-rinse">
         <div class="progress-bar" id="prog-rinse" style="width:${pct}%"></div>
       </div>`;
+    rowToggles(row,toggleRinseTimer);
     list.appendChild(row);
   }
   steeps.forEach((s,idx)=>{
@@ -2172,13 +2178,14 @@ function renderSteeps(){
       <input class="steep-time-input" type="number" min="5" max="999" value="${esc(s.sec)}" onchange="updateSteepTime(${jsArg(s.id)},this.value)" />
       <input class="steep-temp-input" type="number" min="40" max="100" step="5" value="${esc(s.temp)}" placeholder="${gTemp||' '}" onchange="updateSteepTemp(${jsArg(s.id)},this.value)" />
       <div class="timer-display ${s.state==='running'?'running':s.state==='done'?'done-time':''}" id="timer-${esc(s.id)}">${esc(fmtTime(s.remaining))}</div>
-      <button class="btn-play ${s.state==='running'?'is-running':s.state==='done'?'is-done':''}" onclick="toggleTimer(${jsArg(s.id)})">${icon}</button>
+      <button class="btn-play ${s.state==='running'?'is-running':s.state==='done'?'is-done':''}" onclick="toggleTimer(${jsArg(s.id)})" title="${playTitle}">${icon}</button>
       ${s.state==='idle'
         ?`<button class="btn-del" onclick="removeSteep(${jsArg(s.id)})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
         :`<button class="btn-del" onclick="resetSteep(${jsArg(s.id)})" title="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.1L1 10"/></svg></button>`}
       <div class="progress-bar-wrap ${s.state!=='idle'?'visible':''}" id="prog-wrap-${esc(s.id)}">
         <div class="progress-bar" id="prog-${esc(s.id)}" style="width:${pct}%"></div>
       </div>`;
+    rowToggles(row,()=>toggleTimer(s.id));
     list.appendChild(row);
   });
 }
@@ -2479,6 +2486,35 @@ function resetAllSteeps(){
   renderSteeps();
 }
 function clearAllTimers(){Object.values(timers).forEach(t=>clearInterval(t));timers={};if(rinseTimer){clearInterval(rinseTimer);rinseTimer=null;}if(coolTimer){clearInterval(coolTimer);coolTimer=null;}}
+
+// Ctrl+S — start the next timer of the brew, in list order (cooling → rinse → steeps).
+// "Next" = the one after the last timer used (running / paused / done), so a skipped
+// cooling or rinse doesn't get in the way; a paused last timer resumes. While a timer
+// is running the shortcut does nothing — a double press must not skip a steep.
+function timerSequence(){
+  const seq=[];
+  if(!el('chkThermometer').classList.contains('checked')){
+    const r=coolWaitSecPoured(el('tempRange').value,coolPours);
+    if(r!==null&&r>0)seq.push({name:'cooling',state:coolState.state,go:toggleCoolTimer});
+  }
+  if(el('chkRinse').classList.contains('checked'))seq.push({name:'rinse',state:rinseState.state,go:toggleRinseTimer});
+  steeps.forEach((s,i)=>seq.push({name:'steep '+(i+1),state:s.state,go:()=>toggleTimer(s.id)}));
+  return seq;
+}
+function startNextTimer(){
+  // commit a steep time being edited first (its onchange fires on blur)
+  const a=document.activeElement;
+  if(a&&a!==document.body&&a.closest&&a.closest('#steepList'))a.blur();
+  const seq=timerSequence();
+  const running=seq.find(t=>t.state==='running');
+  if(running){showStatusMsg(running.name+' is running');return;}
+  let last=-1;
+  seq.forEach((t,i)=>{if(t.state!=='idle')last=i;});
+  const next=last>=0&&seq[last].state==='paused'?seq[last]:seq.slice(last+1).find(t=>t.state==='idle');
+  if(!next){showStatusMsg(seq.length?'no next timer — + adds a steep':'no timers');return;}
+  next.go();
+  showStatusMsg('▶ '+next.name,1500);
+}
 async function newSession(){
   if(!await customConfirm('Open a blank card? Unsaved changes will be lost.','open'))return;
   clearAllTimers();
@@ -4231,6 +4267,12 @@ document.addEventListener('keydown',e=>{
     const active=document.activeElement;
     const isInput=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA');
     if(!isInput){e.preventDefault();undo();}
+  }
+  // Ctrl+S → next timer (also from a text field — the browser's "save page" is never wanted here)
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&!e.shiftKey&&(e.key||'').toLowerCase()==='s'){
+    e.preventDefault();
+    if(e.repeat||document.querySelector('.modal-bg.open'))return;
+    startNextTimer();
   }
 });
 </script>
